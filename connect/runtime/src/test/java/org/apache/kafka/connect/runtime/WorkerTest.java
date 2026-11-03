@@ -72,6 +72,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.sink.ShareSinkTask;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -1390,6 +1391,44 @@ public class WorkerTest {
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
     }
 
+    @Test
+    public void testShareConsumerConfigsPreserveCompatibleSettingsAndValidateCanonicalGroupPolicy() {
+        setup(false);
+        Map<String, String> props = new HashMap<>(workerProps);
+        props.put("consumer.max.poll.records", "25");
+        props.put("consumer.security.protocol", "SSL");
+        WorkerConfig workerConfig = new StandaloneConfig(props);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        connectorProps.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "orders-share");
+        ConnectorConfig shareConfig = new ConnectorConfig(plugins, connectorProps);
+
+        assertThrows(ConnectException.class, () -> Worker.shareConsumerConfigs(CONNECTOR_ID,
+                "share-client", workerConfig, shareConfig, SampleSinkConnector.class,
+                noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+        Map<String, Object> consumerProps = Worker.shareConsumerConfigs(CONNECTOR_ID,
+                "share-client", workerConfig, shareConfig, SampleSinkConnector.class,
+                allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+
+        assertEquals("orders-share", consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG));
+        assertEquals("share-client", consumerProps.get(ConsumerConfig.CLIENT_ID_CONFIG));
+        assertEquals("25", consumerProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+        assertEquals("SSL", consumerProps.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertEquals("explicit", consumerProps.get(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG));
+        assertEquals("record_limit", consumerProps.get(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG));
+        assertEquals(CLUSTER_ID, consumerProps.get("metrics.context.connect.kafka.cluster.id"));
+        assertFalse(consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+        assertFalse(consumerProps.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertFalse(consumerProps.containsKey(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG));
+
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX
+                + ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
+        ConnectorConfig incompatible = new ConnectorConfig(plugins, connectorProps);
+        ConfigException failure = assertThrows(ConfigException.class, () -> Worker.shareConsumerConfigs(CONNECTOR_ID,
+                "share-client", workerConfig, incompatible, SampleSinkConnector.class,
+                allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+        assertTrue(failure.getMessage().contains(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testAdminConfigsClientOverridesWithAllPolicy(boolean enableTopicCreation) {
@@ -2143,7 +2182,7 @@ public class WorkerTest {
     }
 
     @Test
-    public void testShareSinkTaskBuilderRejectsOrdinaryConsumerFallback() {
+    public void testShareSinkTaskBuilderRequiresDurableTaskCapability() {
         setup(false);
         mockKafkaClusterId();
         connectorProps.put("consumer.type", " share ");
@@ -2157,10 +2196,66 @@ public class WorkerTest {
                 null, TASK_ID, ClusterConfigState.EMPTY, taskStatusListener, TargetState.STARTED,
                 connectorConfig, null, null, null, null, null, null, null, null, null));
 
-        assertTrue(failure.getMessage().contains("Share sink runtime"));
         assertTrue(failure.getMessage().contains("ShareSinkTask"));
         assertTrue(failure.getMessage().contains("durable"));
         assertTrue(sinkTaskMockedConstruction.constructed().isEmpty());
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testShareSinkStopTimeoutRetainsTaskUntilBothLanesRetire() {
+        setup(false);
+        ShareSinkTask task = mock(TestShareSinkTask.class);
+        mockKafkaClusterId();
+        mockVersionedTaskIsolation(SampleSinkConnector.class, TestShareSinkTask.class, null, sinkConnector, task);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG,
+                ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG,
+                ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
+        mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
+        mockExecutorFakeSubmit(WorkerTask.class);
+        AtomicReference<ShareSinkExecutionRegistry.Reservation> reservation = new AtomicReference<>();
+        try (MockedConstruction<WorkerShareSinkTask> shareTasks = Mockito.mockConstruction(WorkerShareSinkTask.class,
+                context -> Mockito.withSettings().defaultAnswer(this::workerTaskMethod), (mock, context) -> {
+                    workerTaskConstructor(mock, context);
+                    ShareSinkExecutionRegistry.Reservation acquired =
+                            (ShareSinkExecutionRegistry.Reservation) context.arguments().get(context.arguments().size() - 1);
+                    reservation.set(acquired);
+                    when(mock.reservation()).thenReturn(acquired);
+                    when(mock.awaitStop(anyLong())).thenReturn(false);
+                })) {
+            connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+            connectorProps.put(TOPICS_CONFIG, "orders");
+            connectorProps.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, "share");
+            connectorProps.put(SinkConnectorConfig.SHARE_PROCESSING_MAX_AGE_MS_CONFIG, "120000");
+            connectorProps.put(SinkConnectorConfig.SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG, "1000");
+            Map<String, String> taskProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestShareSinkTask.class.getName());
+            worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                    noneConnectorClientConfigOverridePolicy, null);
+            worker.herder = herder;
+            worker.start();
+            assertTrue(worker.startSinkTask(TASK_ID, ClusterConfigState.EMPTY, connectorProps, taskProps,
+                    taskStatusListener, TargetState.STARTED));
+            WorkerShareSinkTask runtime = shareTasks.constructed().get(0);
+
+            worker.stopAndAwaitTask(TASK_ID);
+            assertEquals(Set.of(TASK_ID), worker.taskIds());
+            verify(runtime).cancel();
+            verify(runtime, never()).removeMetrics();
+            ConnectorTaskId anotherTask = new ConnectorTaskId(TASK_ID.connector(), 1);
+            assertFalse(worker.startSinkTask(anotherTask, ClusterConfigState.EMPTY, connectorProps, taskProps,
+                    taskStatusListener, TargetState.STARTED));
+            verify(plugins).newTask(TestShareSinkTask.class);
+
+            reservation.get().pluginExited(true);
+            assertEquals(Set.of(TASK_ID), worker.taskIds());
+            verify(runtime, never()).removeMetrics();
+            reservation.get().controllerExited(true);
+            assertTrue(reservation.get().released().toCompletableFuture().isDone());
+            assertTrue(worker.taskIds().isEmpty());
+            verify(runtime).removeMetrics();
+            worker.stop();
+        }
         verifyKafkaClusterId();
     }
 
@@ -3665,6 +3760,12 @@ public class WorkerTest {
      */
     private static void workerTaskConstructor(WorkerTask<?, ?> mock, MockedConstruction.Context context) {
         for (Object argument : context.arguments()) {
+            if (argument instanceof WorkerShareSinkTask.Resources resources) {
+                List<AutoCloseable> owned = List.of(resources.keyConverter(), resources.valueConverter(),
+                        resources.headerConverter(), resources.transformationChain(),
+                        resources.retryWithToleranceOperator(), resources.errorMetrics());
+                owned.forEach(resource -> Utils.closeQuietly(resource, "share worker task resource"));
+            }
             if (argument instanceof AutoCloseable) {
                 Utils.closeQuietly((AutoCloseable) argument, "worker task client");
             }
@@ -3731,6 +3832,25 @@ public class WorkerTest {
         public void stop() {
         }
 
+    }
+
+    private static class TestShareSinkTask extends ShareSinkTask {
+        @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+        }
+
+        @Override
+        public void stop() {
+        }
     }
 
 }

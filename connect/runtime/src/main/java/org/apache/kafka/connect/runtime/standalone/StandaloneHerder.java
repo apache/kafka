@@ -240,6 +240,7 @@ public final class StandaloneHerder extends AbstractHerder {
                     callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
                     return;
                 }
+                validateSinkConsumerChange(connName, config, configState);
                 worker.stopAndAwaitConnector(connName);
                 created = false;
             } else {

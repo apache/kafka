@@ -45,12 +45,14 @@ import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigO
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -918,6 +920,64 @@ public class StandaloneHerderTest {
         ArgumentCaptor<NotFoundException> exceptionCaptor = ArgumentCaptor.forClass(NotFoundException.class);
         verify(patchCallback).onCompletion(exceptionCaptor.capture(), isNull());
         assertEquals("Connector " + CONNECTOR_NAME + " not found", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testShareConsumerChangesRequireStoppedConnectorWithoutTasks() throws Exception {
+        initialize(true);
+        doReturn(ConnectorType.SINK).when(herder).connectorType(anyMap());
+        doAnswer(invocation -> {
+            Callback<ConfigInfos> callback = invocation.getArgument(1);
+            callback.onCompletion(null, new ConfigInfos(CONNECTOR_NAME, 0, List.of(), List.of()));
+            return null;
+        }).when(herder).validateConnectorConfig(anyMap(), any());
+        Map<String, String> original = connectorConfig(SourceSink.SINK);
+        original.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.SHARE_CONSUMER_TYPE);
+        original.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "original-share-group");
+        herder.configState = shareConsumerSnapshot(original, TargetState.STARTED, 0);
+
+        Map<String, String> ordinary = new HashMap<>(original);
+        ordinary.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.CONSUMER_TYPE_DEFAULT);
+        FutureCallback<Herder.Created<ConnectorInfo>> put = new FutureCallback<>();
+        herder.putConnectorConfig(CONNECTOR_NAME, ordinary, true, put);
+        ExecutionException putError = assertThrows(ExecutionException.class, () -> put.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertEquals(409, assertInstanceOf(ConnectRestException.class, putError.getCause()).statusCode());
+
+        herder.configState = shareConsumerSnapshot(original, TargetState.STOPPED, 1);
+        doReturn(new ConnectorInfo(CONNECTOR_NAME, original, List.of(new ConnectorTaskId(CONNECTOR_NAME, 0)), ConnectorType.SINK))
+                .when(herder).connectorInfo(CONNECTOR_NAME);
+        Map<String, String> patch = Map.of(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "replacement-share-group");
+        FutureCallback<Herder.Created<ConnectorInfo>> rejectedPatch = new FutureCallback<>();
+        herder.patchConnectorConfig(CONNECTOR_NAME, patch, rejectedPatch);
+        ExecutionException patchError = assertThrows(ExecutionException.class,
+                () -> rejectedPatch.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertEquals(409, assertInstanceOf(ConnectRestException.class, patchError.getCause()).statusCode());
+        assertEquals(original, herder.configState.connectorConfig(CONNECTOR_NAME));
+        verify(worker, never()).stopAndAwaitConnector(CONNECTOR_NAME);
+
+        herder.configState = shareConsumerSnapshot(original, TargetState.STOPPED, 0);
+        Map<String, String> updated = new HashMap<>(original);
+        updated.putAll(patch);
+        doAnswer(invocation -> {
+            Callback<TargetState> callback = invocation.getArgument(5);
+            callback.onCompletion(null, TargetState.STOPPED);
+            return true;
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(updated), any(), eq(herder), eq(TargetState.STOPPED), any());
+        FutureCallback<Herder.Created<ConnectorInfo>> accepted = new FutureCallback<>();
+        herder.putConnectorConfig(CONNECTOR_NAME, updated, TargetState.STOPPED, null, true, accepted);
+        assertEquals(updated, accepted.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS).result().config());
+        assertEquals(updated, herder.configState.connectorConfig(CONNECTOR_NAME));
+        verify(worker).stopAndAwaitConnector(CONNECTOR_NAME);
+        verify(worker).startConnector(eq(CONNECTOR_NAME), eq(updated), any(), eq(herder), eq(TargetState.STOPPED), any());
+        verify(worker).isRunning(CONNECTOR_NAME);
+        verify(worker, times(2)).metrics();
+        verify(worker, times(3)).configTransformer();
+    }
+
+    private ClusterConfigState shareConsumerSnapshot(Map<String, String> config, TargetState targetState, int taskCount) {
+        return new ClusterConfigState(1, null, Map.of(CONNECTOR_NAME, taskCount), Map.of(CONNECTOR_NAME, config),
+                Map.of(CONNECTOR_NAME, targetState), Map.of(), Map.of(), Map.of(),
+                Map.of(CONNECTOR_NAME, new AppliedConnectorConfig(config)), Set.of(), Set.of());
     }
 
     @Test

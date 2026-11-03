@@ -50,6 +50,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.sink.ShareSinkTask;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -408,9 +410,38 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Map<String, ConfigValue> result = configDef.validateAll(config);
         SinkConnectorConfig.validate(config, result);
         if (SinkConnectorConfig.isShareMode(config)) {
-            result.get(SinkConnectorConfig.CONSUMER_TYPE_CONFIG).addErrorMessage(ShareConsumerSettings.RUNTIME_UNAVAILABLE_MESSAGE);
+            Class<?> taskClass = connector.taskClass();
+            if (taskClass == null || !ShareSinkTask.class.isAssignableFrom(taskClass)) {
+                result.get(SinkConnectorConfig.CONSUMER_TYPE_CONFIG).addErrorMessage(
+                        "Share mode requires a ShareSinkTask with durable completion of every supplied record before put returns");
+            }
         }
         return result;
+    }
+
+    protected String shareSinkGroupId(String connName, Map<String, String> config) {
+        return ShareConsumerSettings.resolveGroupId(connName, config);
+    }
+
+    protected boolean validateSinkConsumerChange(String connName, Map<String, String> config, ClusterConfigState configState) {
+        Map<String, String> previous = configState.connectorConfig(connName);
+        if (previous == null || (!previous.containsKey(SinkConnectorConfig.CONSUMER_TYPE_CONFIG)
+                && !config.containsKey(SinkConnectorConfig.CONSUMER_TYPE_CONFIG))) {
+            return false;
+        }
+        WorkerConfigTransformer transformer = worker.configTransformer();
+        Map<String, String> updated = transformer == null ? config : transformer.transform(config);
+        boolean previousShare = SinkConnectorConfig.isShareMode(previous) && connectorType(previous) == ConnectorType.SINK;
+        boolean updatedShare = SinkConnectorConfig.isShareMode(updated) && connectorType(updated) == ConnectorType.SINK;
+        if (previousShare == updatedShare && (!previousShare
+                || shareSinkGroupId(connName, previous).equals(shareSinkGroupId(connName, updated)))) {
+            return false;
+        }
+        if (configState.targetState(connName) != TargetState.STOPPED || configState.taskCount(connName) != 0) {
+            throw new ConnectRestException(409,
+                    "Connector " + connName + " must be STOPPED with no tasks before changing its consumer type or share group identity");
+        }
+        return true;
     }
 
     protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {

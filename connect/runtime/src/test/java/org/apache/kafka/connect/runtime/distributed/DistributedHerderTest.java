@@ -34,6 +34,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.RestartPlan;
 import org.apache.kafka.connect.runtime.RestartRequest;
+import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -59,6 +60,7 @@ import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.sink.ShareSinkTask;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
@@ -1312,6 +1314,15 @@ public class DistributedHerderTest {
                 List.of(),
                 nameConfig.errorMessages()
         );
+
+        config.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.SHARE_CONSUMER_TYPE);
+        config.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "connect-test-group");
+        config.put(SinkConnectorConfig.SHARE_PROCESSING_MAX_AGE_MS_CONFIG, "30000");
+        config.put(SinkConnectorConfig.SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG, "1000");
+        doReturn(ShareSinkTask.class).when(connectorMock).taskClass();
+        validatedConfigs = herder.validateSinkConnectorConfig(connectorMock, SinkConnectorConfig.configDef(), config);
+        assertEquals(List.of("Share group connect-test-group conflicts with Connect worker group connect-test-group"),
+                validatedConfigs.get(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG).errorMessages());
     }
 
     @Test
@@ -2825,6 +2836,67 @@ public class DistributedHerderTest {
         assertTrue(patchCallback.isDone());
         ExecutionException exception = assertThrows(ExecutionException.class, patchCallback::get);
         assertInstanceOf(NotFoundException.class, exception.getCause());
+    }
+
+    @Test
+    public void testShareConsumerChangesRequireStoppedConnectorWithoutTasks() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        when(herder.connectorType(anyMap())).thenReturn(ConnectorType.SINK);
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        Map<String, String> original = new HashMap<>(CONN1_CONFIG);
+        original.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        original.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.SHARE_CONSUMER_TYPE);
+        original.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "original-share-group");
+        ClusterConfigState active = shareConsumerSnapshot(original, TargetState.STARTED, 0);
+        expectConfigRefreshAndSnapshot(active);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectMemberPoll();
+        herder.tick();
+        expectMemberEnsureActive();
+        doAnswer(invocation -> {
+            Callback<ConfigInfos> callback = invocation.getArgument(1);
+            callback.onCompletion(null, CONN1_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(anyMap(), any());
+
+        Map<String, String> ordinary = new HashMap<>(original);
+        ordinary.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.CONSUMER_TYPE_DEFAULT);
+        FutureCallback<Herder.Created<ConnectorInfo>> put = new FutureCallback<>();
+        herder.putConnectorConfig(CONN1, ordinary, true, put);
+        herder.tick();
+        ExecutionException putError = assertThrows(ExecutionException.class, () -> put.get(10, TimeUnit.SECONDS));
+        assertEquals(409, assertInstanceOf(ConnectRestException.class, putError.getCause()).statusCode());
+
+        ClusterConfigState stoppedWithTasks = shareConsumerSnapshot(original, TargetState.STOPPED, 1);
+        when(configBackingStore.snapshot()).thenReturn(stoppedWithTasks);
+        herder.configState = stoppedWithTasks;
+        Map<String, String> patch = Map.of(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "replacement-share-group");
+        FutureCallback<Herder.Created<ConnectorInfo>> rejectedPatch = new FutureCallback<>();
+        herder.patchConnectorConfig(CONN1, patch, rejectedPatch);
+        herder.tick();
+        ExecutionException patchError = assertThrows(ExecutionException.class, () -> rejectedPatch.get(10, TimeUnit.SECONDS));
+        assertEquals(409, assertInstanceOf(ConnectRestException.class, patchError.getCause()).statusCode());
+        assertEquals(original, herder.configState.connectorConfig(CONN1));
+        verify(configBackingStore, never()).putConnectorConfig(anyString(), anyMap(), any());
+        verify(worker, never()).stopAndAwaitConnector(CONN1);
+
+        ClusterConfigState stopped = shareConsumerSnapshot(original, TargetState.STOPPED, 0);
+        when(configBackingStore.snapshot()).thenReturn(stopped);
+        herder.configState = stopped;
+        FutureCallback<Herder.Created<ConnectorInfo>> acceptedPatch = new FutureCallback<>();
+        herder.patchConnectorConfig(CONN1, patch, acceptedPatch);
+        herder.tick();
+        Map<String, String> updated = new HashMap<>(original);
+        updated.putAll(patch);
+        assertEquals(updated, acceptedPatch.get(10, TimeUnit.SECONDS).result().config());
+        verify(configBackingStore).putConnectorConfig(CONN1, updated, null);
+    }
+
+    private ClusterConfigState shareConsumerSnapshot(Map<String, String> config, TargetState targetState, int taskCount) {
+        return new ClusterConfigState(1, null, Map.of(CONN1, taskCount), Map.of(CONN1, config),
+                Map.of(CONN1, targetState), Map.of(), Map.of(), Map.of(),
+                Map.of(CONN1, new AppliedConnectorConfig(config)), Set.of(), Set.of());
     }
 
     @Test

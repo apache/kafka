@@ -19,4 +19,5 @@ org.apache.kafka.connect.integration.ErrantRecordSinkConnector
 org.apache.kafka.connect.integration.MonitorableSinkConnector
 org.apache.kafka.connect.integration.TestableSinkConnector
 org.apache.kafka.connect.runtime.SampleSinkConnector
+org.apache.kafka.connect.runtime.AbstractHerderTest$SampleShareSinkConnector
 org.apache.kafka.connect.integration.ConnectWorkerIntegrationTest$EmptyTaskConfigsConnector

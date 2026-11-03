@@ -29,7 +29,9 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -45,6 +48,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -76,6 +80,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.sink.ShareSinkTask;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -123,7 +128,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -162,6 +169,7 @@ public final class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
+    private final ShareSinkExecutionRegistry shareSinkExecutionRegistry = new ShareSinkExecutionRegistry();
     private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter = Optional.empty();
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
@@ -676,7 +684,7 @@ public final class Worker {
             TaskStatus.Listener statusListener,
             TaskBuilder<?, ?> taskBuilder
     ) {
-        final WorkerTask<?, ?> workerTask;
+        WorkerTask<?, ?> workerTask = null;
         final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
         try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             log.info("Creating task {}", id);
@@ -684,7 +692,15 @@ public final class Worker {
             if (tasks.containsKey(id))
                 throw new ConnectException("Task already exists in this worker: " + id);
 
+            ShareSinkExecutionRegistry.Reservation shareReservation;
+            try {
+                shareReservation = reserveShareSinkExecution(id, connProps, taskBuilder);
+            } catch (RuntimeException e) {
+                taskStatusListener.onFailure(id, e);
+                return false;
+            }
             connectorStatusMetricsGroup.recordTaskAdded(id);
+            AtomicReference<WorkerTask<?, ?>> retainedTask = trackTaskRetirement(id, taskBuilder);
 
             final ClassLoader connectorLoader;
             Plugin<Converter> keyConverterPlugin = null;
@@ -692,8 +708,10 @@ public final class Worker {
             Plugin<HeaderConverter> headerConverterPlugin = null;
             try {
                 connectorLoader = connectorClassLoader(connProps);
+                taskBuilder.withClassLoader(connectorLoader);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
+                    taskBuilder.withConnectorConfig(connConfig);
 
                     int maxTasks = connConfig.tasksMax();
                     int numTasks = configState.taskCount(id.connector());
@@ -701,54 +719,142 @@ public final class Worker {
 
                     final TaskConfig taskConfig = new TaskConfig(taskProps);
                     final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
+                    requireShareTaskCapability(taskClass, shareReservation);
                     final Task task = plugins.newTask(taskClass);
+                    taskBuilder.withTask(task);
                     log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
                     // By maintaining connector's specific class loader for this thread here, we first
                     // search for converters within the connector dependencies.
                     // If any of these aren't found, that means the connector didn't configure specific converters,
                     // so we should instantiate based upon the worker configuration
-                    keyConverterPlugin = newConverterPlugin(id, connConfig, true);
-                    valueConverterPlugin = newConverterPlugin(id, connConfig, false);
-                    headerConverterPlugin = newHeaderConverterPlugin(id, connConfig);
+                    keyConverterPlugin = newConverterPlugin(id, connConfig, true, taskBuilder);
+                    taskBuilder.withKeyConverterPlugin(keyConverterPlugin);
+                    valueConverterPlugin = newConverterPlugin(id, connConfig, false, taskBuilder);
+                    taskBuilder.withValueConverterPlugin(valueConverterPlugin);
+                    headerConverterPlugin = newHeaderConverterPlugin(id, connConfig, taskBuilder);
+                    taskBuilder.withHeaderConverterPlugin(headerConverterPlugin);
                     workerTask = taskBuilder
-                        .withTask(task)
                         .withConnectorConfig(connConfig)
-                        .withKeyConverterPlugin(keyConverterPlugin)
-                        .withValueConverterPlugin(valueConverterPlugin)
-                        .withHeaderConverterPlugin(headerConverterPlugin)
                         .withClassLoader(connectorLoader)
                         .build();
 
+                    retainedTask.set(workerTask);
                     workerTask.initialize(taskConfig);
                 }
+                WorkerTask<?, ?> existing = tasks.putIfAbsent(id, workerTask);
+                if (existing != null)
+                    throw new ConnectException("Task already exists in this worker: " + id);
+
+                executor.submit(plugins.withClassLoader(connectorLoader, workerTask));
             } catch (Throwable t) {
-                Utils.closeQuietly(keyConverterPlugin, "key converter");
-                Utils.closeQuietly(valueConverterPlugin, "value converter");
-                Utils.closeQuietly(headerConverterPlugin, "header converter");
+                cleanupTaskStartup(taskBuilder, workerTask, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, t);
                 log.error("Failed to start task {}", id, t);
-                connectorStatusMetricsGroup.recordTaskRemoved(id);
+                if (shareReservation == null) {
+                    connectorStatusMetricsGroup.recordTaskRemoved(id);
+                }
                 taskStatusListener.onFailure(id, t);
                 return false;
             }
-
-            WorkerTask<?, ?> existing = tasks.putIfAbsent(id, workerTask);
-            if (existing != null)
-                throw new ConnectException("Task already exists in this worker: " + id);
-
-            executor.submit(plugins.withClassLoader(connectorLoader, workerTask));
-            if (workerTask instanceof WorkerSourceTask) {
-                sourceTaskOffsetCommitter.ifPresent(committer -> committer.schedule(id, (WorkerSourceTask) workerTask));
+            if (workerTask instanceof WorkerSourceTask sourceTask) {
+                sourceTaskOffsetCommitter.ifPresent(committer -> committer.schedule(id, sourceTask));
             }
             return true;
         }
+    }
+
+    private ShareSinkExecutionRegistry.Reservation reserveShareSinkExecution(ConnectorTaskId id,
+                                                                            Map<String, String> connProps,
+                                                                            TaskBuilder<?, ?> builder) {
+        ShareSinkExecutionRegistry.Reservation reservation = builder instanceof SinkTaskBuilder
+                && SinkConnectorConfig.isShareMode(connProps) ? shareSinkExecutionRegistry.reserve(id) : null;
+        builder.shareReservation = reservation;
+        return reservation;
+    }
+
+    private AtomicReference<WorkerTask<?, ?>> trackTaskRetirement(ConnectorTaskId id, TaskBuilder<?, ?> builder) {
+        AtomicReference<WorkerTask<?, ?>> retainedTask = new AtomicReference<>();
+        if (builder.shareReservation != null) {
+            builder.shareReservation.onRetirement(() -> retireShareTask(id, retainedTask.get(), builder));
+        }
+        return retainedTask;
+    }
+
+    private void retireShareTask(ConnectorTaskId id, WorkerTask<?, ?> task, TaskBuilder<?, ?> builder) {
+        if (task != null) {
+            task.removeMetrics();
+        }
+        connectorStatusMetricsGroup.recordTaskRemoved(id);
+        if (task != null) {
+            tasks.remove(id, task);
+        }
+        builder.releaseStartupReferences();
+    }
+
+    private static void requireShareTaskCapability(Class<? extends Task> taskClass,
+                                                    ShareSinkExecutionRegistry.Reservation reservation) {
+        if (reservation != null && !ShareSinkTask.class.isAssignableFrom(taskClass)) {
+            throw new ConnectException("Share sinks require ShareSinkTask with a synchronous durable-write contract");
+        }
+    }
+
+    private void cleanupTaskStartup(TaskBuilder<?, ?> builder,
+                                    WorkerTask<?, ?> workerTask,
+                                    Plugin<Converter> keyConverter,
+                                    Plugin<Converter> valueConverter,
+                                    Plugin<HeaderConverter> headerConverter,
+                                    Throwable failure) {
+        ShareSinkExecutionRegistry.Reservation reservation = builder.shareReservation;
+        if (reservation == null) {
+            Utils.closeQuietly(keyConverter, "key converter");
+            Utils.closeQuietly(valueConverter, "value converter");
+            Utils.closeQuietly(headerConverter, "header converter");
+            return;
+        }
+        reservation.markOrphan();
+        try (LoaderSwap loaderSwap = builder.classLoader == null ? null : plugins.withClassLoader(builder.classLoader)) {
+            cleanupShareTaskStartup(builder, workerTask, keyConverter, valueConverter, headerConverter, failure);
+        } catch (Throwable cleanupFailure) {
+            if (cleanupFailure != failure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            reservation.pluginExited(false);
+            reservation.controllerExited(false);
+        }
+    }
+
+    private void cleanupShareTaskStartup(TaskBuilder<?, ?> builder,
+                                         WorkerTask<?, ?> workerTask,
+                                         Plugin<Converter> keyConverter,
+                                         Plugin<Converter> valueConverter,
+                                         Plugin<HeaderConverter> headerConverter,
+                                         Throwable failure) {
+        ShareSinkExecutionRegistry.Reservation reservation = builder.shareReservation;
+        if (workerTask instanceof WorkerShareSinkTask shareTask) {
+            shareTask.abortBeforeStart();
+            return;
+        }
+        AtomicReference<Throwable> cleanupFailure = new AtomicReference<>();
+        if (builder.task != null) {
+            Utils.closeQuietly(builder.task::stop, "share sink task", cleanupFailure);
+        }
+        builder.closeStartupResources(failure);
+        Utils.closeQuietly(keyConverter, "key converter", cleanupFailure);
+        Utils.closeQuietly(valueConverter, "value converter", cleanupFailure);
+        Utils.closeQuietly(headerConverter, "header converter", cleanupFailure);
+        if (cleanupFailure.get() != null && cleanupFailure.get() != failure) {
+            failure.addSuppressed(cleanupFailure.get());
+        }
+        reservation.controllerExited(true);
+        reservation.pluginExited(builder.startupCleanupComplete && cleanupFailure.get() == null);
     }
 
     /**
      * Instantiate the key or value converter for a task, and wrap it in a {@link Plugin}.
      * If wrapping fails, close the raw converter.
      */
-    private Plugin<Converter> newConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig, boolean isKey) {
+    private Plugin<Converter> newConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig, boolean isKey,
+                                                TaskBuilder<?, ?> builder) {
         String connectorConverterClassConfig = isKey ? ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG : WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
         String connectorConverterVersionConfig = isKey ? ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG : ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG;
         String workerConverterClassConfig = isKey ? WorkerConfig.KEY_CONVERTER_CLASS_CONFIG : WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
@@ -766,7 +872,7 @@ public final class Worker {
         try {
             return metrics.wrap(converter, id, isKey);
         } catch (Throwable t) {
-            Utils.closeQuietly(converter, converterName);
+            closeUnwrappedPlugin(converter, converterName, builder, t);
             throw t;
         }
     }
@@ -775,7 +881,8 @@ public final class Worker {
      * Instantiate the header converter for a task, and wrap it in a {@link Plugin}.
      * If wrapping fails, close the raw converter.
      */
-    private Plugin<HeaderConverter> newHeaderConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig) {
+    private Plugin<HeaderConverter> newHeaderConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                            TaskBuilder<?, ?> builder) {
         HeaderConverter converter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
         if (converter == null) {
             converter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
@@ -787,8 +894,25 @@ public final class Worker {
         try {
             return metrics.wrap(converter, id);
         } catch (Throwable t) {
-            Utils.closeQuietly(converter, "header converter");
+            closeUnwrappedPlugin(converter, "header converter", builder, t);
             throw t;
+        }
+    }
+
+    private void closeUnwrappedPlugin(AutoCloseable plugin, String name, TaskBuilder<?, ?> builder, Throwable failure) {
+        if (builder.shareReservation == null) {
+            Utils.closeQuietly(plugin, name);
+            return;
+        }
+        builder.shareReservation.markOrphan();
+        AtomicReference<Throwable> cleanupFailure = new AtomicReference<>();
+        Utils.closeQuietly(plugin, name, cleanupFailure);
+        if (cleanupFailure.get() != null) {
+            builder.startupCleanupComplete = false;
+            builder.failedStartupResources.add(plugin);
+            if (cleanupFailure.get() != failure) {
+                failure.addSuppressed(cleanupFailure.get());
+            }
         }
     }
 
@@ -984,6 +1108,45 @@ public final class Worker {
         return consumerProps;
     }
 
+    static Map<String, Object> shareConsumerConfigs(String connName,
+                                                    String defaultClientId,
+                                                    WorkerConfig config,
+                                                    ConnectorConfig connConfig,
+                                                    Class<? extends Connector> connectorClass,
+                                                    ConnectorClientConfigOverridePolicy overridePolicy,
+                                                    String clusterId) {
+        Map<String, Object> commonProps = new HashMap<>();
+        commonProps.put(ConsumerConfig.CLIENT_ID_CONFIG, defaultClientId);
+        commonProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
+        commonProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        commonProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        ConnectUtils.addMetricsContextProperties(commonProps, config, clusterId);
+
+        String groupId = ShareConsumerSettings.resolveGroupId(connName, connConfig.originals());
+        Map<String, Object> connectorOverrides = new HashMap<>(
+                connConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX));
+        Map<String, String> errors = ShareConsumerSettings.validationErrors(connectorOverrides, groupId);
+        if (!errors.isEmpty()) {
+            Map.Entry<String, String> error = errors.entrySet().iterator().next();
+            throw new ConfigException(error.getKey(), connectorOverrides.get(error.getKey()), error.getValue());
+        }
+        if (connConfig.originals().containsKey(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG)) {
+            connectorOverrides.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        }
+        validateClientConfigOverrides(connName, connectorClass, ConnectorType.SINK,
+                ConnectorClientConfigRequest.ClientType.CONSUMER, overridePolicy, connectorOverrides);
+        Map<String, Object> consumerProps = ShareConsumerSettings.create(connName, connConfig.originals(), commonProps,
+                config.originalsWithPrefix("consumer."), connectorOverrides);
+        Map<String, Object> nativeConfig = ConsumerConfig.configDef().parse(consumerProps);
+        for (String key : List.of(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG)) {
+            Class<?> deserializer = (Class<?>) nativeConfig.get(key);
+            if (deserializer == null || !ByteArrayDeserializer.class.isAssignableFrom(deserializer)) {
+                throw new ConfigException(key, consumerProps.get(key), "Share sinks require ByteArrayDeserializer");
+            }
+        }
+        return consumerProps;
+    }
+
     static Map<String, Object> adminConfigs(String connName,
                                             String defaultClientId,
                                             WorkerConfig config,
@@ -1033,6 +1196,17 @@ public final class Worker {
                                                                       ConnectorClientConfigRequest.ClientType clientType,
                                                                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         Map<String, Object> clientOverrides = connConfig.originalsWithPrefix(clientConfigPrefix);
+        validateClientConfigOverrides(connName, connectorClass, connectorType, clientType,
+                connectorClientConfigOverridePolicy, clientOverrides);
+        return clientOverrides;
+    }
+
+    private static void validateClientConfigOverrides(String connName,
+                                                     Class<? extends Connector> connectorClass,
+                                                     ConnectorType connectorType,
+                                                     ConnectorClientConfigRequest.ClientType clientType,
+                                                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                                     Map<String, Object> clientOverrides) {
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName,
             connectorType,
@@ -1047,7 +1221,6 @@ public final class Worker {
         if (errorConfigs.size() > 0) {
             throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
         }
-        return clientOverrides;
     }
 
     private String taskTransactionalId(ConnectorTaskId id) {
@@ -1139,11 +1312,21 @@ public final class Worker {
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
-            WorkerTask<?, ?> task = tasks.remove(taskId);
+            WorkerTask<?, ?> task = tasks.get(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
                 return;
             }
+
+            if (task instanceof WorkerShareSinkTask shareTask) {
+                if (!task.awaitStop(timeout) || !shareTask.reservation().released().toCompletableFuture().isDone()) {
+                    log.error("Share task {} did not retire all execution resources", task.id());
+                    shareTask.reservation().markOrphan();
+                    task.cancel();
+                }
+                return;
+            }
+            tasks.remove(taskId, task);
 
             if (!task.awaitStop(timeout)) {
                 log.error("Graceful stop of task {} failed.", task.id());
@@ -1888,7 +2071,7 @@ public final class Worker {
 
     private static void ensureSinkModeSupported(Map<String, String> connectorConfig) {
         if (SinkConnectorConfig.isShareMode(connectorConfig)) {
-            throw new BadRequestException(ShareConsumerSettings.RUNTIME_UNAVAILABLE_MESSAGE);
+            throw new BadRequestException(ShareConsumerSettings.OFFSET_APIS_UNSUPPORTED_MESSAGE);
         }
     }
 
@@ -1909,6 +2092,11 @@ public final class Worker {
         private Plugin<Converter> valueConverterPlugin = null;
         private Plugin<HeaderConverter> headerConverterPlugin = null;
         private ClassLoader classLoader = null;
+        private ShareSinkExecutionRegistry.Reservation shareReservation;
+        private volatile boolean startupCleanupComplete = true;
+        private boolean startupResourcesClosed;
+        private final List<AutoCloseable> startupResources = new ArrayList<>();
+        private final List<AutoCloseable> failedStartupResources = new ArrayList<>();
 
         public TaskBuilder(ConnectorTaskId id,
                            ClusterConfigState configState,
@@ -1950,6 +2138,37 @@ public final class Worker {
             return this;
         }
 
+        private void releaseStartupReferences() {
+            task = null;
+            connectorConfig = null;
+            keyConverterPlugin = null;
+            valueConverterPlugin = null;
+            headerConverterPlugin = null;
+            classLoader = null;
+            startupResources.clear();
+            failedStartupResources.clear();
+        }
+
+        private void closeStartupResources(Throwable failure) {
+            if (startupResourcesClosed) {
+                return;
+            }
+            startupResourcesClosed = true;
+            AtomicReference<Throwable> cleanupFailure = new AtomicReference<>();
+            for (int i = startupResources.size() - 1; i >= 0; i--) {
+                Utils.closeQuietly(startupResources.get(i), "share task startup resource", cleanupFailure);
+            }
+            if (cleanupFailure.get() != null) {
+                startupCleanupComplete = false;
+                if (cleanupFailure.get() != failure) {
+                    failure.addSuppressed(cleanupFailure.get());
+                }
+            }
+        }
+
+        ShareSinkExecutionRegistry.Reservation reservation() {
+            return shareReservation;
+        }
 
         public WorkerTask<T, R> build() {
             Objects.requireNonNull(task, "Task cannot be null");
@@ -1959,22 +2178,46 @@ public final class Worker {
             Objects.requireNonNull(headerConverterPlugin.get(), "Header converter used by task cannot be null");
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
+            if (shareReservation != null) {
+                startupCleanupComplete = false;
+            }
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
+            if (shareReservation != null) {
+                startupResources.add(errorHandlingMetrics);
+            }
             final Class<? extends Connector> connectorClass = connectorClass(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
+            if (shareReservation != null) {
+                startupResources.add(retryWithToleranceOperator);
+            }
+            TransformationChain<T, R> transformationChain = null;
+            try {
+                transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins, id, metrics), retryWithToleranceOperator);
+                if (shareReservation != null) {
+                    startupResources.add(transformationChain);
+                    startupCleanupComplete = true;
+                }
+                log.info("Initializing: {}", transformationChain);
 
-            TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins, id, metrics), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
+                TaskPluginsMetadata taskPluginsMetadata = new TaskPluginsMetadata(
+                        connectorClass, task, keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get(), transformationChain.transformationChainInfo(), plugins);
 
-            TaskPluginsMetadata taskPluginsMetadata = new TaskPluginsMetadata(
-                    connectorClass, task, keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get(), transformationChain.transformationChainInfo(), plugins);
-
-            return doBuild(task, id, configState, statusListener, initialState,
-                connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
-                retryWithToleranceOperator, transformationChain,
-                errorHandlingMetrics, connectorClass, taskPluginsMetadata);
+                return doBuild(task, id, configState, statusListener, initialState,
+                    connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
+                    retryWithToleranceOperator, transformationChain,
+                    errorHandlingMetrics, connectorClass, taskPluginsMetadata);
+            } catch (Throwable t) {
+                if (shareReservation != null) {
+                    shareReservation.markOrphan();
+                    if (transformationChain == null) {
+                        startupCleanupComplete = false;
+                    }
+                    closeStartupResources(t);
+                }
+                throw t;
+            }
         }
 
         abstract WorkerTask<T, R> doBuild(
@@ -2023,7 +2266,16 @@ public final class Worker {
                 Class<? extends Connector> connectorClass,
                 TaskPluginsMetadata taskPluginsMetadata
         ) {
-            ensureSinkModeSupported(connectorConfig.originalsStrings());
+            if (SinkConnectorConfig.isShareMode(connectorConfig.originalsStrings())) {
+                if (!(task instanceof ShareSinkTask shareTask)) {
+                    throw new ConnectException("Share sinks require ShareSinkTask with a synchronous durable-write contract");
+                }
+                SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
+                return buildShareTask(shareTask, id, configState, statusListener, initialState, connectorConfig,
+                        keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
+                        retryWithToleranceOperator, transformationChain, errorHandlingMetrics, connectorClass,
+                        taskPluginsMetadata, sinkConfig);
+            }
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get());
@@ -2037,6 +2289,57 @@ public final class Worker {
                     valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain, consumer, classLoader, time,
                     retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
                     () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), taskPluginsMetadata, plugins.safeLoaderSwapper());
+        }
+
+        private WorkerTask<ConsumerRecord<byte[], byte[]>, SinkRecord> buildShareTask(
+                ShareSinkTask shareTask,
+                ConnectorTaskId id,
+                ClusterConfigState configState,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                ConnectorConfig connectorConfig,
+                Plugin<Converter> keyConverterPlugin,
+                Plugin<Converter> valueConverterPlugin,
+                Plugin<HeaderConverter> headerConverterPlugin,
+                ClassLoader classLoader,
+                RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+                TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
+                ErrorHandlingMetrics errorHandlingMetrics,
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata taskPluginsMetadata,
+                SinkConnectorConfig sinkConfig) {
+            if (reservation() == null) {
+                throw new ConnectException("Share sink startup requires an execution reservation");
+            }
+            SinkConnectorConfig.validate(connectorConfig.originalsStrings());
+            Map<String, Object> consumerProps = shareConsumerConfigs(id.connector(), "connector-share-consumer-" + id,
+                    config, connectorConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
+            Map<String, Object> nativeConfig = ConsumerConfig.configDef().parse(consumerProps);
+            ShareSinkConsumerController.Settings controllerSettings = new ShareSinkConsumerController.Settings(
+                    sinkConfig.getLong(SinkConnectorConfig.SHARE_PROCESSING_MAX_AGE_MS_CONFIG),
+                    1_000, ((Number) nativeConfig.get(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG)).longValue(),
+                    ((Number) nativeConfig.get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)).longValue(),
+                    ((Number) nativeConfig.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG)).intValue(),
+                    ((Number) nativeConfig.get(ConsumerConfig.FETCH_MAX_BYTES_CONFIG)).longValue());
+            Supplier<ShareConsumer<byte[], byte[]>> consumerFactory = () -> {
+                try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader);
+                     LoggingContext loggingContext = LoggingContext.forTask(id)) {
+                    return new KafkaShareConsumer<>(consumerProps);
+                }
+            };
+            try {
+                WorkerShareSinkTask.Resources resources = new WorkerShareSinkTask.Resources(config, configState, metrics,
+                        keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
+                        transformationChain, retryWithToleranceOperator, herder.statusBackingStore(),
+                        () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), taskPluginsMetadata,
+                        plugins.safeLoaderSwapper());
+                return new WorkerShareSinkTask(id, shareTask, statusListener, initialState, resources, consumerFactory,
+                        controllerSettings, sinkConfig.getLong(SinkConnectorConfig.SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG),
+                        classLoader, time, reservation());
+            } catch (Throwable t) {
+                ((TaskBuilder<?, ?>) this).startupCleanupComplete = false;
+                throw t;
+            }
         }
     }
 

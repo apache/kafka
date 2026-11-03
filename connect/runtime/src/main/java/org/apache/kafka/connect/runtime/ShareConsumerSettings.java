@@ -29,8 +29,8 @@ import java.util.Map;
 import java.util.Objects;
 
 final class ShareConsumerSettings {
-    static final String RUNTIME_UNAVAILABLE_MESSAGE = "Share sink runtime and offset APIs are not supported yet; "
-            + "ShareSinkTask requires a durable-write share runtime";
+    static final String OFFSET_APIS_UNSUPPORTED_MESSAGE = "Share sink offset APIs are not supported; "
+            + "share acknowledgements cannot be reset as consumer offsets";
     private static final ConfigDef CONSUMER_CONFIG_DEF = ConsumerConfig.configDef();
     private static final List<String> UNSUPPORTED_CONFIGS = List.of(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
