@@ -88,9 +88,9 @@ import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.MockTime;
@@ -584,7 +584,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
-        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
+        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName()).remove(TestJaasConfig.USERNAME);
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
@@ -642,7 +642,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
             System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         createAndCheckClientConnectionFailure(securityProtocol, "0");
         server.verifyAuthenticationMetrics(0, 2);
 
@@ -693,7 +693,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
                 System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         updateTokenCredentialCache(tokenId, tokenHmac);
         // initial authentication must succeed
         createClientConnection(securityProtocol, "0");
@@ -2037,7 +2037,7 @@ public class SaslAuthenticatorTest {
 
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
+            credentialCache.createCache(saslMechanism);
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
@@ -2066,7 +2066,7 @@ public class SaslAuthenticatorTest {
 
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
+            credentialCache.createCache(saslMechanism);
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
@@ -2477,7 +2477,7 @@ public class SaslAuthenticatorTest {
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
                 ScramCredential credential = formatter.generateCredential(password, 4096);
-                credentialCache.cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
+                credentialCache.cache(scramMechanism.mechanismName()).put(username, credential);
             }
         }
     }

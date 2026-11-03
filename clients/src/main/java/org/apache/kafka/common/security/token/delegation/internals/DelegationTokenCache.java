@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.token.delegation.internals;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
@@ -28,45 +27,38 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class DelegationTokenCache {
 
-    private final CredentialCache credentialCache = new CredentialCache();
+    private final CredentialCache credentialCache;
 
     //Cache to hold all the tokens
-    private final Map<String, TokenInformation> tokenCache = new ConcurrentHashMap<>();
+    private final Map<String, DelegationToken> tokenCache = new ConcurrentHashMap<>();
 
     //Cache to hold hmac->tokenId mapping. This is required for renew, expire requests
     private final Map<String, String> hmacTokenIdCache = new ConcurrentHashMap<>();
 
-    //Cache to hold tokenId->hmac mapping. This is required for removing entry from hmacTokenIdCache using tokenId.
-    private final Map<String, String> tokenIdHmacCache = new ConcurrentHashMap<>();
-
     public DelegationTokenCache(Collection<String> scramMechanisms) {
         //Create caches for scramMechanisms
-        ScramCredentialUtils.createCache(credentialCache, scramMechanisms);
+        this.credentialCache = new CredentialCache(scramMechanisms);
     }
 
     public ScramCredential credential(String mechanism, String tokenId) {
-        CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism, ScramCredential.class);
+        CredentialCache.Cache cache = credentialCache.cache(mechanism);
         return cache == null ? null : cache.get(tokenId);
     }
 
     public String owner(String tokenId) {
-        TokenInformation tokenInfo = tokenCache.get(tokenId);
-        return tokenInfo == null ? null : tokenInfo.owner().getName();
+        DelegationToken token = tokenCache.get(tokenId);
+        return token == null ? null : token.tokenInfo().owner().getName();
     }
 
     public void updateCache(DelegationToken token, Map<String, ScramCredential> scramCredentialMap) {
-        //Update TokenCache
-        String tokenId =  token.tokenInfo().tokenId();
-        addToken(tokenId, token.tokenInfo());
-        String hmac = token.hmacAsBase64String();
+        //Update TokenCache and hmac-id cache
+        addToken(token);
         //Update Scram Credentials
-        updateCredentials(tokenId, scramCredentialMap);
-        //Update hmac-id cache
-        hmacTokenIdCache.put(hmac, tokenId);
-        tokenIdHmacCache.put(tokenId, hmac);
+        updateCredentials(token.tokenInfo().tokenId(), scramCredentialMap);
     }
 
     public void removeCache(String tokenId) {
@@ -74,44 +66,41 @@ public class DelegationTokenCache {
         updateCredentials(tokenId, new HashMap<>());
     }
 
-    public String tokenIdForHmac(String base64hmac) {
-        return hmacTokenIdCache.get(base64hmac);
-    }
-
     public TokenInformation tokenForHmac(String base64hmac) {
         String tokenId = hmacTokenIdCache.get(base64hmac);
-        return tokenId == null ? null : tokenCache.get(tokenId);
+        DelegationToken token = tokenId == null ? null : tokenCache.get(tokenId);
+        return token == null ? null : token.tokenInfo();
     }
 
-    public TokenInformation addToken(String tokenId, TokenInformation tokenInfo) {
-        return tokenCache.put(tokenId, tokenInfo);
+    public void addToken(DelegationToken token) {
+        String tokenId = token.tokenInfo().tokenId();
+        tokenCache.put(tokenId, token);
+        hmacTokenIdCache.put(token.hmacAsBase64String(), tokenId);
     }
 
     public void removeToken(String tokenId) {
-        TokenInformation tokenInfo = tokenCache.remove(tokenId);
-        if (tokenInfo != null) {
-            String hmac = tokenIdHmacCache.remove(tokenInfo.tokenId());
-            if (hmac != null) {
-                hmacTokenIdCache.remove(hmac);
-            }
+        DelegationToken token = tokenCache.remove(tokenId);
+        if (token != null) {
+            hmacTokenIdCache.remove(token.hmacAsBase64String());
         }
     }
 
     public Collection<TokenInformation> tokens() {
-        return tokenCache.values();
+        return tokenCache.values().stream().map(DelegationToken::tokenInfo).collect(Collectors.toList());
     }
 
     public TokenInformation token(String tokenId) {
-        return tokenCache.get(tokenId);
+        DelegationToken token = tokenCache.get(tokenId);
+        return token == null ? null : token.tokenInfo();
     }
 
-    public CredentialCache.Cache<ScramCredential> credentialCache(String mechanism) {
-        return credentialCache.cache(mechanism, ScramCredential.class);
+    public CredentialCache.Cache credentialCache(String mechanism) {
+        return credentialCache.cache(mechanism);
     }
 
     private void updateCredentials(String tokenId, Map<String, ScramCredential> scramCredentialMap) {
         for (String mechanism : ScramMechanism.mechanismNames()) {
-            CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism, ScramCredential.class);
+            CredentialCache.Cache cache = credentialCache.cache(mechanism);
             if (cache != null) {
                 ScramCredential credential = scramCredentialMap.get(mechanism);
                 if (credential == null) {
