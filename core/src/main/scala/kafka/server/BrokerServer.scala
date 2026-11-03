@@ -48,7 +48,7 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, MetadataVersion, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, QuotaConfig}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
@@ -312,7 +312,7 @@ class BrokerServer(
         metrics,
         s"broker-${config.nodeId}-",
         () => lifecycleManager.brokerEpoch,
-        () => metadataCache.metadataVersion().alterPartitionRequestHeaderVersion
+        () => requestHeaderVersion(_.alterPartitionRequestHeaderVersion)
       )
       alterPartitionManager.start()
 
@@ -416,7 +416,7 @@ class BrokerServer(
         time,
         () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager,
-        () => metadataCache.metadataVersion().allocateProducerIdsRequestHeaderVersion
+        () => requestHeaderVersion(_.allocateProducerIdsRequestHeaderVersion)
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
@@ -671,6 +671,15 @@ class BrokerServer(
         fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
+    }
+  }
+
+  private def requestHeaderVersion(headerVersion: MetadataVersion => Short): Short = {
+    try {
+      headerVersion(metadataCache.metadataVersion())
+    } catch {
+      // The metadata version is unknown until the first metadata image is loaded.
+      case _: IllegalStateException => headerVersion(MetadataVersion.MINIMUM_VERSION)
     }
   }
 
