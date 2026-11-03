@@ -1994,7 +1994,6 @@ org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImplTe
 org.apache.kafka.coordinator.group.streams.assignor.ProcessStateTest:
 - shouldAddActiveTaskToMember
 - shouldAddStandbyTaskToMember
-- shouldCompareBasedOnLoadAndCapacity
 - shouldIncreaseCapacity
 - shouldReturnAllAssignedTasks
 - shouldReturnFalseIfTaskIsNotAssigned
