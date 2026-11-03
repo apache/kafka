@@ -22,7 +22,9 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -30,9 +32,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class AdminClientTestUtils {
@@ -216,5 +220,20 @@ public class AdminClientTestUtils {
      */
     public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
+    }
+
+    /**
+     * Returns the current leader of the given partition, or empty if the partition has no leader.
+     * This does not wait for a leader to be elected; wrap it in {@link org.apache.kafka.test.TestUtils#waitForCondition}
+     * when the test needs to wait for a specific leader.
+     */
+    public static Optional<Integer> currentLeader(Admin admin, TopicPartition topicPartition) throws ExecutionException, InterruptedException {
+        return admin.describeTopics(List.of(topicPartition.topic())).allTopicNames().get()
+                .get(topicPartition.topic()).partitions().stream()
+                .filter(p -> p.partition() == topicPartition.partition())
+                .findFirst()
+                .map(TopicPartitionInfo::leader)
+                .filter(leader -> leader.id() != Node.noNode().id())
+                .map(Node::id);
     }
 }
