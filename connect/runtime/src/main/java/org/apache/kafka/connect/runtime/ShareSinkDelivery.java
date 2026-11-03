@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -40,7 +41,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 // Complete on the plugin lane; acknowledge its receipt on the consumer owner.
 final class ShareSinkDelivery {
@@ -123,6 +126,22 @@ final class ShareSinkDelivery {
             this.partitions = partitions;
         }
 
+        boolean matchesOriginals(List<ConsumerRecord<byte[], byte[]>> expected) {
+            if (originals.size() != expected.size()) {
+                return false;
+            }
+            for (int i = 0; i < originals.size(); i++) {
+                if (originals.get(i) != expected.get(i)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        Optional<AcknowledgementResult> acknowledgementResult() {
+            return Optional.ofNullable(acknowledgementResult);
+        }
+
         AcknowledgementResult acknowledge(ShareConsumer<byte[], byte[]> consumer, Duration timeout) {
             if (acknowledgementResult != null) {
                 return acknowledgementResult;
@@ -132,14 +151,26 @@ final class ShareSinkDelivery {
             if (timeout.isNegative() || timeout.toMillis() < 0) {
                 throw new IllegalArgumentException("Acknowledgement timeout must not be negative");
             }
+            return acknowledge(consumer, original -> consumer.acknowledge(original, AcknowledgeType.ACCEPT), () -> timeout);
+        }
+
+        AcknowledgementResult acknowledge(ShareConsumer<byte[], byte[]> consumer,
+                                          Consumer<ConsumerRecord<byte[], byte[]>> stage,
+                                          Supplier<Duration> commitTimeout) {
+            if (acknowledgementResult != null) {
+                return acknowledgementResult;
+            }
+            Objects.requireNonNull(consumer, "consumer");
+            Objects.requireNonNull(stage, "stage");
+            Objects.requireNonNull(commitTimeout, "commitTimeout");
             try {
                 if (originals.isEmpty()) {
                     acknowledgementResult = AcknowledgementResult.fromResponses(partitions, Map.of());
                 } else {
                     for (ConsumerRecord<byte[], byte[]> original : originals) {
-                        consumer.acknowledge(original, AcknowledgeType.ACCEPT);
+                        stage.accept(original);
                     }
-                    acknowledgementResult = AcknowledgementResult.fromResponses(partitions, consumer.commitSync(timeout));
+                    acknowledgementResult = AcknowledgementResult.fromResponses(partitions, consumer.commitSync(commitTimeout.get()));
                 }
             } catch (RuntimeException failure) {
                 acknowledgementResult = AcknowledgementResult.unknown(partitions, failure);
@@ -217,6 +248,20 @@ final class ShareSinkDelivery {
 
         Map<TopicPartition, AcknowledgementStatus> statuses() {
             return statuses;
+        }
+
+        AcknowledgementResult withExpectedTopicIds(Map<TopicPartition, Uuid> expected) {
+            Map<TopicPartition, AcknowledgementStatus> checkedStatuses = new HashMap<>(statuses);
+            Map<TopicPartition, RuntimeException> checkedCauses = new HashMap<>(causes);
+            expected.forEach((partition, topicId) -> {
+                TopicIdPartition identity = new TopicIdPartition(topicId, partition);
+                if (!responses.containsKey(identity)) {
+                    checkedStatuses.put(partition, AcknowledgementStatus.UNKNOWN);
+                    checkedCauses.computeIfAbsent(partition,
+                            ignored -> new ConnectException("Share acknowledgement identity was not confirmed for " + partition));
+                }
+            });
+            return new AcknowledgementResult(checkedStatuses, checkedCauses, responses);
         }
 
         Optional<RuntimeException> cause(TopicPartition partition) {
