@@ -48,10 +48,13 @@ final class ShareSinkConsumerController implements Runnable {
     private final long incarnation;
     private final Settings settings;
     private final Time time;
+    private final long generation;
+    private final Runnable failureListener;
     private final Object monitor = new Object();
     private final CountDownLatch terminated = new CountDownLatch(1);
     private volatile ShareConsumer<byte[], byte[]> consumer;
     private volatile boolean stopRequested;
+    private boolean drainRequested;
     private boolean started;
     private boolean signalled;
     private boolean cleanupComplete;
@@ -67,14 +70,22 @@ final class ShareSinkConsumerController implements Runnable {
                                 long incarnation,
                                 Settings settings,
                                 Time time) {
+        this(consumerFactory, topics, incarnation, 1, settings, time, () -> { });
+    }
+
+    ShareSinkConsumerController(Supplier<ShareConsumer<byte[], byte[]>> consumerFactory,
+                                List<String> topics, long incarnation, long generation,
+                                Settings settings, Time time, Runnable failureListener) {
         this.consumerFactory = Objects.requireNonNull(consumerFactory);
         this.topics = List.copyOf(topics);
-        if (topics.isEmpty() || incarnation <= 0) {
+        if (topics.isEmpty() || incarnation <= 0 || generation <= 0) {
             throw new IllegalArgumentException("Topics and a positive task incarnation are required");
         }
         this.incarnation = incarnation;
         this.settings = Objects.requireNonNull(settings);
         this.time = Objects.requireNonNull(time);
+        this.generation = generation;
+        this.failureListener = Objects.requireNonNull(failureListener);
     }
 
     // The worker invokes run only after serial plugin initialization succeeds.
@@ -94,6 +105,11 @@ final class ShareSinkConsumerController implements Runnable {
             consumer.subscribe(topics);
             while (!stopRequested) {
                 if (active == null) {
+                    synchronized (monitor) {
+                        if (drainRequested) {
+                            break;
+                        }
+                    }
                     acquireUnit();
                 } else {
                     progressUnit();
@@ -120,7 +136,7 @@ final class ShareSinkConsumerController implements Runnable {
                 if (failure != null) {
                     throw new ConnectException("Share consumer controller failed", failure);
                 }
-                if (stopRequested || terminated.getCount() == 0) {
+                if (stopRequested || terminated.getCount() == 0 || (drainRequested && active == null)) {
                     return null;
                 }
                 if (handoff != null) {
@@ -142,7 +158,7 @@ final class ShareSinkConsumerController implements Runnable {
             if (result != null) {
                 return result.completed == completed;
             }
-            result = new Result(completed, null);
+            result = new Result(completed, null, null);
             monitor.notifyAll();
             return true;
         }
@@ -154,7 +170,7 @@ final class ShareSinkConsumerController implements Runnable {
             if (!acceptsResult(unit) || result != null) {
                 return false;
             }
-            result = new Result(null, error);
+            result = new Result(null, error, null);
             monitor.notifyAll();
             return true;
         }
@@ -162,6 +178,31 @@ final class ShareSinkConsumerController implements Runnable {
 
     private boolean acceptsResult(Unit unit) {
         return !stopRequested && failure == null && active != null && active.unit == unit && handoff == null;
+    }
+
+    boolean publishRetry(Unit unit, long delayMs) {
+        if (delayMs < 0) {
+            throw new IllegalArgumentException("Retry delay must not be negative");
+        }
+        synchronized (monitor) {
+            if (!acceptsResult(unit) || result != null) {
+                return false;
+            }
+            result = new Result(null, null, delayMs);
+            monitor.notifyAll();
+            return true;
+        }
+    }
+
+    void requestDrain() {
+        synchronized (monitor) {
+            drainRequested = true;
+            if (handoff != null || (active != null && active.dispatchPending)
+                    || (result != null && result.retryDelayMs != null)) {
+                stopRequested = true;
+            }
+            monitor.notifyAll();
+        }
     }
 
     void requestStop() {
@@ -214,7 +255,12 @@ final class ShareSinkConsumerController implements Runnable {
         if (records.isEmpty() || stopRequested) {
             return;
         }
-        Unit unit = new Unit(new AttemptId(incarnation, ++sequence, 1), records, beforePoll, settings);
+        synchronized (monitor) {
+            if (drainRequested) {
+                return;
+            }
+        }
+        Unit unit = new Unit(new AttemptId(incarnation, generation, ++sequence, 1), records, beforePoll, settings);
         ActiveUnit acquired = new ActiveUnit(unit, lockDuration(), beforePoll);
         synchronized (monitor) {
             active = acquired;
@@ -239,13 +285,39 @@ final class ShareSinkConsumerController implements Runnable {
             if (completed.failure != null) {
                 throw completed.failure;
             }
-            acknowledge(current, completed.completed);
+            if (completed.retryDelayMs != null) {
+                synchronized (monitor) {
+                    if (drainRequested) {
+                        stopRequested = true;
+                        result = null;
+                        monitor.notifyAll();
+                        return;
+                    }
+                    current.unit = new Unit(current.unit, Math.addExact(current.unit.id.attempt, 1));
+                    current.retryStartedMs = now();
+                    current.retryDelayMs = completed.retryDelayMs;
+                    current.dispatchPending = true;
+                    result = null;
+                }
+            } else {
+                acknowledge(current, completed.completed);
+            }
+        } else if (current.dispatchPending && remaining(current.retryStartedMs, current.retryDelayMs) <= 0) {
+            synchronized (monitor) {
+                handoff = current.unit;
+                current.dispatchPending = false;
+                monitor.notifyAll();
+            }
         } else if (renewalDelay(current) <= 0) {
             renew(current);
         } else {
             synchronized (monitor) {
                 if (result == null && !stopRequested && !signalled) {
-                    monitor.wait(Math.max(1, renewalDelay(current)));
+                    long delay = renewalDelay(current);
+                    if (current.dispatchPending) {
+                        delay = Math.min(delay, remaining(current.retryStartedMs, current.retryDelayMs));
+                    }
+                    monitor.wait(Math.max(1, delay));
                 }
                 signalled = false;
             }
@@ -383,7 +455,9 @@ final class ShareSinkConsumerController implements Runnable {
     }
 
     private void fail(RuntimeException error) {
+        boolean notifyFailure;
         synchronized (monitor) {
+            notifyFailure = failure == null;
             if (failure == null) {
                 failure = error;
             } else if (failure != error) {
@@ -391,6 +465,13 @@ final class ShareSinkConsumerController implements Runnable {
             }
             handoff = null;
             monitor.notifyAll();
+        }
+        if (notifyFailure) {
+            try {
+                failureListener.run();
+            } catch (RuntimeException listenerError) {
+                error.addSuppressed(listenerError);
+            }
         }
     }
 
@@ -435,7 +516,7 @@ final class ShareSinkConsumerController implements Runnable {
         }
     }
 
-    record AttemptId(long incarnation, long unit, long attempt) {
+    record AttemptId(long incarnation, long generation, long unit, long attempt) {
     }
 
     static final class Unit {
@@ -475,6 +556,14 @@ final class ShareSinkConsumerController implements Runnable {
             this.records.forEach(originals::add);
             this.originals = List.copyOf(originals);
             this.retainedBytes = bytes;
+        }
+
+        private Unit(Unit previous, long attempt) {
+            this.id = new AttemptId(previous.id.incarnation, previous.id.generation, previous.id.unit, attempt);
+            this.records = previous.records;
+            this.originals = previous.originals;
+            this.startedMs = previous.startedMs;
+            this.retainedBytes = previous.retainedBytes;
         }
 
         private void verifyReattachment(ConsumerRecords<byte[], byte[]> returned) {
@@ -523,7 +612,10 @@ final class ShareSinkConsumerController implements Runnable {
     }
 
     private static final class ActiveUnit {
-        private final Unit unit;
+        private Unit unit;
+        private boolean dispatchPending;
+        private long retryStartedMs;
+        private long retryDelayMs;
         private int lockDurationMs;
         private long leaseStartedMs;
         private long pollStartedMs;
@@ -537,6 +629,6 @@ final class ShareSinkConsumerController implements Runnable {
         }
     }
 
-    private record Result(ShareSinkDelivery.CompletedDelivery completed, RuntimeException failure) {
+    private record Result(ShareSinkDelivery.CompletedDelivery completed, RuntimeException failure, Long retryDelayMs) {
     }
 }

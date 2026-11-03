@@ -169,6 +169,27 @@ class ShareSinkConsumerControllerTest {
         }
     }
 
+    @Test
+    void drainsAnUnfinishedRetryWithoutDispatchingOrAcknowledgingIt() throws Exception {
+        try (Harness harness = new Harness("retry-drain")) {
+            ShareSinkConsumerController.Unit unit = harness.controller.awaitUnit();
+            assertNotNull(unit);
+            assertTrue(harness.controller.publishRetry(unit, 1_000));
+
+            harness.controller.requestDrain();
+
+            assertTrue(harness.controller.awaitStopped(TEST_TIMEOUT));
+            assertTrue(harness.controller.cleanupComplete());
+            assertTrue(harness.controller.failure().isEmpty());
+            assertTrue(harness.controller.lastAcknowledgement().isEmpty());
+            assertEquals(2, harness.polls.get());
+            assertEquals(1, harness.commits.get());
+            verify(harness.consumer, never()).acknowledge(any(), eq(AcknowledgeType.ACCEPT));
+            assertFalse(harness.controller.publishResult(unit,
+                    new ShareSinkDelivery(unit.records(), ignored -> ShareSinkDelivery.ConversionResult.filtered()).complete(harness.task)));
+        }
+    }
+
     private static void await(CountDownLatch latch) throws InterruptedException {
         assertTrue(latch.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
     }
