@@ -160,12 +160,12 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (nullIndexListSize > length / Integer.BYTES) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.");
         }
-        Set<Integer> nullIndexList = new HashSet<>(nullIndexListSize);
+        Set<Integer> nullIndexes = new HashSet<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
-            nullIndexList.add(dis.readInt());
+            nullIndexes.add(dis.readInt());
             nullIndexListSize--;
         }
-        return nullIndexList;
+        return nullIndexes;
     }
 
     @Override
@@ -180,23 +180,23 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
-            Set<Integer> nullIndexList = null;
+            Set<Integer> nullIndexes = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 if (primitiveSize == null) {
                     throw new SerializationException("Data is encoded as constant size entries, but configured inner deserializer is not a known fixed-size deserializer.");
                 }
                 // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
-                nullIndexList = deserializeNullIndexList(dis, data.length);
+                nullIndexes = deserializeNullIndexList(dis, data.length);
             }
             final int size = readListSize(dis, data.length);
-            if (nullIndexList != null && size - nullIndexList.size() > dis.available() / primitiveSize) {
+            if (nullIndexes != null && size - nullIndexes.size() > dis.available() / primitiveSize) {
                 throw new SerializationException("Corrupted byte[]. The declared number of list entries cannot be larger than the number of entries the remaining bytes can hold.");
             }
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
                 int entrySize = readEntrySize(dis, serStrategy, data.length);
 
-                if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
+                if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexes != null && nullIndexes.contains(i))) {
                     deserializedList.add(null);
                     continue;
                 }
