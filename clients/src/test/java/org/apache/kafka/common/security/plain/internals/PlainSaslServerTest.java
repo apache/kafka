@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PlainSaslServerTest {
@@ -38,6 +39,7 @@ public class PlainSaslServerTest {
     private static final String USER_B = "userB";
     private static final String PASSWORD_B = "passwordB";
 
+    private PlainServerCallbackHandler callbackHandler;
     private PlainSaslServer saslServer;
 
     @BeforeEach
@@ -48,7 +50,7 @@ public class PlainSaslServerTest {
         options.put("user_" + USER_B, PASSWORD_B);
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), options);
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
-        PlainServerCallbackHandler callbackHandler = new PlainServerCallbackHandler();
+        callbackHandler = new PlainServerCallbackHandler();
         callbackHandler.configure(null, "PLAIN", jaasContext.configurationEntries());
         saslServer = new PlainSaslServer(callbackHandler);
     }
@@ -68,6 +70,19 @@ public class PlainSaslServerTest {
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A)));
+    }
+
+    @Test
+    public void unknownUserOrInvalidPassword() throws Exception {
+        Exception e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("", "unknownUser", PASSWORD_A)));
+        assertEquals("Authentication failed: Invalid username or password", e.getMessage());
+
+        e = assertThrows(SaslAuthenticationException.class, () ->
+            saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_B)));
+        assertEquals("Authentication failed: Invalid username or password", e.getMessage());
+
+        assertFalse(callbackHandler.authenticate("unknownUser", new char[] {'\0'}));
     }
 
     @Test
