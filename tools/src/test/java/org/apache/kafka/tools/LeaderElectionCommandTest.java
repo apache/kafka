@@ -18,11 +18,11 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -387,22 +388,16 @@ public class LeaderElectionCommandTest {
         );
     }
 
-    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
-        int leader = AdminUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000);
-        assertEquals(expectedLeader, leader);
+    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> AdminClientTestUtils.currentLeader(client, topicPartition).equals(Optional.of(expectedLeader)),
+                "Timed out waiting for leader " + expectedLeader + " of " + topicPartition
+        );
     }
 
     private void assertNoLeader(Admin client, TopicPartition topicPartition) throws InterruptedException {
         TestUtils.waitForCondition(
-                () -> {
-                    TopicDescription desc = client.describeTopics(List.of(topicPartition.topic()))
-                            .allTopicNames().get().get(topicPartition.topic());
-                    return desc.partitions().stream()
-                            .filter(p -> p.partition() == topicPartition.partition())
-                            .findFirst()
-                            .map(p -> p.leader() == null || p.leader().id() == Node.noNode().id())
-                            .orElse(false);
-                },
+                () -> AdminClientTestUtils.currentLeader(client, topicPartition).isEmpty(),
                 "Timed out waiting for no leader for " + topicPartition
         );
     }

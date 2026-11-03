@@ -1008,6 +1008,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG);
     }
 
+    public int messageMaxArrayLength() {
+        return getInt(ServerConfigs.MESSAGE_MAX_ARRAY_LENGTH_CONFIG);
+    }
+
     public int fetchMaxBytes() {
         return getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG);
     }

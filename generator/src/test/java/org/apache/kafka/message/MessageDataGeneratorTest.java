@@ -135,7 +135,7 @@ public class MessageDataGeneratorTest {
                 "  ]",
                 "}");
         String source = generateMessageSource(spec);
-        int occurrences = source.split("if \\(arrayLength > MessageUtil.MAX_ARRAY_LENGTH\\) \\{", -1).length - 1;
+        int occurrences = source.split("if \\(arrayLength > MessageUtil.maxArrayLength\\(\\)\\) \\{", -1).length - 1;
         assertEquals(3, occurrences,
                 "Expected the cap check for all 3 array fields (Foo, Bar, Value), but found " + occurrences);
     }

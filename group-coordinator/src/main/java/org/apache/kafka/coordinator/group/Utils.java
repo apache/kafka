@@ -190,7 +190,7 @@ public class Utils {
     }
 
     /**
-     * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
+     * Converts a ConsumerProtocolAssignment to a map of topic id and partition set.
      *
      * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
      * @param metadataImage              The Metadata image.

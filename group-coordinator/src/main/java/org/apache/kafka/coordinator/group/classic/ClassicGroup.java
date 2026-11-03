@@ -1172,9 +1172,10 @@ public class ClassicGroup implements Group {
             try {
                 Set<String> allSubscribedTopics = new HashSet<>();
                 members.values().forEach(member -> {
-                    // The consumer protocol is parsed with V0 which is the based prefix of all versions.
-                    // This way the consumer group manager does not depend on any specific existing or
-                    // future versions of the consumer protocol. VO must prefix all new versions.
+                    // The consumer protocol is parsed with V0 which is the base prefix of all
+                    // versions. This way the consumer group manager does not depend on any specific
+                    // existing or future versions of the consumer protocol. V0 must prefix all new
+                    // versions.
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(
@@ -1240,7 +1241,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Complete all the awaiting join future with the given error.
+     * Complete all the awaiting join futures with the given error.
      *
      * @param error  the error to complete the future with.
      */
@@ -1270,7 +1271,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Complete all the awaiting sync future with the give error.
+     * Complete all the awaiting sync futures with the given error.
      *
      * @param error  the error to complete the future with.
      */
@@ -1416,7 +1417,7 @@ public class ClassicGroup implements Group {
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
             String memberId = classicGroupMember.memberId();
             if (joiningMember != null && memberId.equals(joiningMember.memberId())) {
-                // If the downgraded is triggered by the joining static member replacing
+                // If the downgrade is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
                 ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());

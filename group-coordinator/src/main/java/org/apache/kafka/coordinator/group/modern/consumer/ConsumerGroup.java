@@ -247,8 +247,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
      * @return A ConsumerGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
@@ -598,7 +597,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Compute the preferred (server side) assignor for the group while
      * taking into account the updated member. The computation relies
-     * on {{@link ConsumerGroup#serverAssignors}} persisted structure
+     * on {@link ConsumerGroup#serverAssignors} persisted structure
      * but it does not update it.
      *
      * @param oldMember The old member.
@@ -641,8 +640,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param memberId          The member id.
      * @param groupInstanceId   The group instance id.
      * @param memberEpoch       The member epoch.
-     * @param isTransactional   Whether the offset commit is transactional or not. It has no
-     *                          impact when a consumer group is used.
+     * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
      * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException     If the member is not found.
