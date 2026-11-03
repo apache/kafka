@@ -43,6 +43,21 @@ public class ByteBufferAccessorTest {
         assertEquals("Error reading byte array of -1 byte(s): only 0 byte(s) available",
             assertThrows(RuntimeException.class,
                 () -> accessor.readArray(-1)).getMessage());
+    }
+
+    @Test
+    public void testReadByteBuffer() {
+        ByteBuffer buf = ByteBuffer.allocate(1024);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        final byte[] testArray = new byte[] {0x4b, 0x61, 0x46};
+        accessor.writeByteArray(testArray);
+        accessor.writeInt(12345);
+        accessor.flip();
+        final ByteBuffer res = accessor.readByteBuffer(3);
+        final byte[] resArray = new byte[3];
+        res.get(resArray);
+        assertArrayEquals(testArray, resArray);
+        assertEquals(12345, accessor.readInt());
         assertEquals("Error reading byte buffer of -1 byte(s): length cannot be negative",
             assertThrows(RuntimeException.class,
                 () -> accessor.readByteBuffer(-1)).getMessage());
