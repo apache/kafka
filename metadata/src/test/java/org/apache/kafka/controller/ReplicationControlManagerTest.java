@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.PolicyViolationException;
@@ -175,6 +176,7 @@ public class ReplicationControlManagerTest {
             private MetadataVersion metadataVersion = MetadataVersion.latestTesting();
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
+            private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
             private final Map<String, Object> staticConfig = new HashMap<>();
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
@@ -202,11 +204,17 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+            Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+                this.maxRecordsPerBatch = maxRecordsPerBatch;
+                return this;
+            }
+
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
                     mockTime,
                     isElrEnabled,
+                    maxRecordsPerBatch,
                     staticConfig);
             }
         }
@@ -232,6 +240,7 @@ public class ReplicationControlManagerTest {
             Optional<CreateTopicPolicy> createTopicPolicy,
             MockTime time,
             boolean isElrEnabled,
+            int maxRecordsPerBatch,
             Map<String, Object> staticConfig
         ) {
             this.time = time;
@@ -274,7 +283,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
-                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+                setMaxRecordsPerBatch(maxRecordsPerBatch).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -2648,6 +2657,45 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}},
             INVALID_REPLICA_ASSIGNMENT.code());
+    }
+
+    @Test
+    public void testIsLogDirNameTooLong() {
+        assertFalse(ReplicationControlManager.isLogDirNameTooLong("a".repeat(249), 100_000));
+        assertTrue(ReplicationControlManager.isLogDirNameTooLong("a".repeat(249), 100_001));
+        assertFalse(ReplicationControlManager.isLogDirNameTooLong("a".repeat(248), 1_000_000));
+        assertTrue(ReplicationControlManager.isLogDirNameTooLong("a".repeat(248), 1_000_001));
+        assertFalse(ReplicationControlManager.isLogDirNameTooLong("foo", Integer.MAX_VALUE));
+    }
+
+    @Test
+    public void testCreateTopicFailsIfLogDirNameIsTooLong() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+            setMaxRecordsPerBatch(200_000).
+            build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult result = ctx.createTestTopic("a".repeat(249), 100_001, (short) 1, INVALID_PARTITIONS.code());
+        assertEquals("The log directory name for partition 100000 would be 256 characters, which is " +
+            "longer than the max allowed length 255.", result.errorMessage());
+    }
+
+    @Test
+    public void testCreatePartitionsFailsIfLogDirNameIsTooLong() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        String topicName = "a".repeat(249);
+        ctx.createTestTopic(topicName, 1, (short) 1, NONE.code());
+        CreatePartitionsTopic topic = new CreatePartitionsTopic().
+            setName(topicName).
+            setCount(100_001).
+            setAssignments(null);
+        InvalidPartitionsException e = assertThrows(InvalidPartitionsException.class, () ->
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), topic, new ArrayList<>()));
+        assertEquals("The log directory name for partition 100000 would be 256 characters, which is " +
+            "longer than the max allowed length 255.", e.getMessage());
     }
 
     @Test

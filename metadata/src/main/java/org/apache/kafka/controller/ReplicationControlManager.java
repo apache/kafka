@@ -149,6 +149,8 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
+    private static final int MAX_LOG_DIR_NAME_LENGTH = 255;
+
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
@@ -823,6 +825,9 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
+        if (isLogDirNameTooLong(topic.name(), numPartitions)) {
+            return new ApiError(Errors.INVALID_PARTITIONS, logDirNameTooLongMessage(topic.name(), numPartitions));
+        }
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
@@ -1223,6 +1228,21 @@ public class ReplicationControlManager {
             Arrays.toString(oldRegistration.replicas), Arrays.toString(newRegistration.replicas),
             oldRegistration.partitionEpoch, newRegistration.partitionEpoch,
             oldRegistration.leaderEpoch, newRegistration.leaderEpoch);
+    }
+
+    static boolean isLogDirNameTooLong(String topicName, int numPartitions) {
+        return logDirNameLength(topicName, numPartitions - 1) > MAX_LOG_DIR_NAME_LENGTH;
+    }
+
+    private static int logDirNameLength(String topicName, int partitionId) {
+        return topicName.length() + 1 + String.valueOf(partitionId).length();
+    }
+
+    private static String logDirNameTooLongMessage(String topicName, int numPartitions) {
+        int lastPartitionId = numPartitions - 1;
+        return "The log directory name for partition " + lastPartitionId + " would be " +
+            logDirNameLength(topicName, lastPartitionId) + " characters, which is longer than the max allowed length " +
+            MAX_LOG_DIR_NAME_LENGTH + ".";
     }
 
     /**
@@ -1972,6 +1992,8 @@ public class ReplicationControlManager {
             throw new InvalidPartitionsException("The topic " + topic.name() + " currently " +
                 "has " + topicInfo.parts.size() + " partition(s); " + topic.count() +
                 " would not be an increase.");
+        } else if (isLogDirNameTooLong(topic.name(), topic.count())) {
+            throw new InvalidPartitionsException(logDirNameTooLongMessage(topic.name(), topic.count()));
         }
         int additional = topic.count() - topicInfo.parts.size();
         if (topic.assignments() != null) {

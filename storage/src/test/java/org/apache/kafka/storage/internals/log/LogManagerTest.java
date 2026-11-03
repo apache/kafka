@@ -82,6 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -137,6 +138,40 @@ public class LogManagerTest {
                 Utils.delete(dir);
             }
         }
+    }
+
+    @Test
+    public void testCreateLogWithTooLongDirNameDoesNotMarkLogDirsOffline() throws Exception {
+        logManager.shutdown();
+        LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(2);
+        logManager = new LogManager(List.of(logDir.getAbsoluteFile(), logDir2.getAbsoluteFile()),
+                List.of(),
+                new MockConfigRepository(),
+                LOG_CONFIG,
+                new CleanerConfig(false),
+                1,
+                1000L,
+                10000L,
+                10000L,
+                1000L,
+                5 * 60 * 1000,
+                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                time.scheduler,
+                new BrokerTopicStats(),
+                logDirFailureChannel,
+                time,
+                false,
+                INITIAL_TASK_DELAY_MS,
+                LogCleaner::new);
+        logManager.startup(Set.of());
+        String topic = "a".repeat(249);
+
+        assertNotNull(logManager.getOrCreateLog(new TopicPartition(topic, 99_999), Optional.empty()));
+        assertThrows(KafkaStorageException.class,
+            () -> logManager.getOrCreateLog(new TopicPartition(topic, 100_000), Optional.empty()));
+        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath()));
+        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir2.getAbsolutePath()));
     }
 
     /**
