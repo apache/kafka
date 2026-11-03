@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -49,6 +51,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SessionKeySchemaTest {
@@ -376,4 +379,13 @@ public class SessionKeySchemaTest {
         return results;
     }
 
+
+    @Test
+    public void shouldThrowOnTooShortSessionKey() {
+        final SerializationException exception = assertThrows(
+            SerializationException.class,
+            () -> SessionKeySchema.from(Bytes.wrap(new byte[4]))
+        );
+        assertEquals("Invalid session key: expected at least 16 bytes, but got 4", exception.getMessage());
+    }
 }
