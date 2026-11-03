@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1098,6 +1099,51 @@ public class DescribeConsumerGroupTest {
                         && Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(partition1content)
                         && Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(partition2content);
             }, "Expected 3 data rows excluding the header and no error in describe groups when a broker shutdown.");
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeConsumerGroupWithDeletedTopic(ClusterInstance clusterInstance) throws Exception {
+        this.clusterInstance = clusterInstance;
+        String topic = TOPIC_PREFIX + "alive";
+        String deletedTopic = TOPIC_PREFIX + "deleted";
+        String group = GROUP_PREFIX + UUID.randomUUID();
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        clusterInstance.createTopic(deletedTopic, 1, (short) 1);
+        sendRecords(topic, 0, 5);
+
+        List<String> cgcArgs = List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups");
+
+        // A classic consumer does not rejoin the group until it polls again, so the group
+        // still has the deleted topic in its assignment after the topic is deleted.
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(composeConfigs(group, GroupProtocol.CLASSIC.name, Map.of(
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                 ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false")));
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
+        ) {
+            consumer.subscribe(Set.of(topic, deletedTopic));
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.assignment().size() == 2;
+            }, "Expected the consumer to be assigned both topics.");
+
+            clusterInstance.deleteTopic(deletedTopic);
+
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 3 || !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                // GROUP, TOPIC, PARTITION, CURRENT-OFFSET, LOG-END-OFFSET, LAG
+                List<String> aliveTopicContent = List.of(group, topic, "0", "-", "5", "-");
+                List<String> deletedTopicContent = List.of(group, deletedTopic, "0", "-", "-", "-");
+
+                return checkArgsHeaderOutput(cgcArgs, lines[0])
+                        && Arrays.stream(lines[1].trim().split("\\s+")).toList().subList(0, 6).equals(aliveTopicContent)
+                        && Arrays.stream(lines[2].trim().split("\\s+")).toList().subList(0, 6).equals(deletedTopicContent);
+            }, "Expected 2 data rows excluding the header and no error in describe groups when a topic is deleted.");
         }
     }
 
