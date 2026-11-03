@@ -200,14 +200,6 @@ public class ProcessState {
         return this.load < 1.0;
     }
 
-    public int compareTo(final ProcessState other) {
-        int loadCompare = Double.compare(this.load, other.load());
-        if (loadCompare == 0) {
-            return Integer.compare(other.capacity, this.capacity);
-        }
-        return loadCompare;
-    }
-
     public boolean hasTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
     }
