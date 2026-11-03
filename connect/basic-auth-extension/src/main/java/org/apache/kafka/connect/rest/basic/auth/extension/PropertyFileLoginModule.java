@@ -99,8 +99,7 @@ public class PropertyFileLoginModule implements LoginModule {
         }
 
         String username = ((NameCallback) callbacks[0]).getName();
-        char[] passwordChars = ((PasswordCallback) callbacks[1]).getPassword();
-        String password = passwordChars != null ? new String(passwordChars) : null;
+        char[] password = ((PasswordCallback) callbacks[1]).getPassword();
         Properties credentialProperties = CREDENTIAL_PROPERTIES.get(fileName);
 
         if (credentialProperties.isEmpty()) {
@@ -111,7 +110,7 @@ public class PropertyFileLoginModule implements LoginModule {
         } else if (username == null) {
             log.trace("No credentials were provided or the provided credentials were malformed");
             authenticated = false;
-        } else if (password != null && password.equals(credentialProperties.get(username))) {
+        } else if (passwordMatches(password, credentialProperties.getProperty(username))) {
             log.trace("Credentials provided for user '{}' match those present in the credential properties file '{}'",
                 username,
                 fileName);
@@ -129,6 +128,10 @@ public class PropertyFileLoginModule implements LoginModule {
         }
 
         return authenticated;
+    }
+
+    private static boolean passwordMatches(char[] password, String expectedPassword) {
+        return password != null && expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
     }
 
     @Override
