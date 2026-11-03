@@ -625,10 +625,10 @@ public class LocalLog {
         }
     }
 
-    public List<AbortedTxn> collectAbortedTransactions(long logStartOffset, long baseOffset, long upperBoundOffset) {
-        Optional<LogSegment> segmentEntry = segments.floorSegment(baseOffset);
+    public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
+        Optional<LogSegment> segmentEntry = segments.floorSegment(startOffset);
         List<AbortedTxn> allAbortedTxns = new ArrayList<>();
-        segmentEntry.ifPresent(logSegment -> collectAbortedTransactions(logStartOffset, upperBoundOffset, logSegment, allAbortedTxns::addAll));
+        segmentEntry.ifPresent(logSegment -> collectAbortedTransactions(startOffset, upperBoundOffset, logSegment, allAbortedTxns::addAll));
         return allAbortedTxns;
     }
 

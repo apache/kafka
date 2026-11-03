@@ -1674,7 +1674,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
-        return localLog.collectAbortedTransactions(logStartOffset, startOffset, upperBoundOffset);
+        return localLog.collectAbortedTransactions(startOffset, upperBoundOffset);
     }
 
     /**

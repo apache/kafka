@@ -728,13 +728,7 @@ public class Cleaner {
         logger.info("Building offset map for log {} for {} segments in offset range [{}, {}).", log.name(), dirty.size(), start, end);
 
         CleanedTransactionMetadata transactionMetadata = new CleanedTransactionMetadata();
-        // collectAbortedTransactions uses the log start offset, not start, as its lower bound, so it also returns
-        // aborted transactions that ended before start. This pass may not read their ABORT markers (reading begins at
-        // the offset index entry at or below start), and seeding them would make every later transactional batch of
-        // those producers, including committed ones, count as aborted and leave its keys out of the offset map.
-        List<AbortedTxn> abortedTransactions = log.collectAbortedTransactions(start, end).stream()
-            .filter(txn -> txn.lastOffset() >= start)
-            .toList();
+        List<AbortedTxn> abortedTransactions = log.collectAbortedTransactions(start, end);
         transactionMetadata.addAbortedTransactions(abortedTransactions);
 
         // Add all the cleanable dirty segments. We must take at least map.slots * load_factor,
