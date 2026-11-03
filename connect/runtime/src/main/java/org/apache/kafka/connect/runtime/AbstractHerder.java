@@ -407,6 +407,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = configDef.validateAll(config);
         SinkConnectorConfig.validate(config, result);
+        if (SinkConnectorConfig.isShareMode(config)) {
+            result.get(SinkConnectorConfig.CONSUMER_TYPE_CONFIG).addErrorMessage(ShareConsumerSettings.RUNTIME_UNAVAILABLE_MESSAGE);
+        }
         return result;
     }
 
@@ -682,6 +685,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private ConfigInfos validateClientOverrides(
             Map<String, String> connectorProps,
+            Map<String, ConfigValue> validatedConnectorConfig,
             org.apache.kafka.connect.health.ConnectorType connectorType,
             Class<? extends Connector> connectorClass,
             Function<String, TemporaryStage> reportStage,
@@ -709,7 +713,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.PRODUCER,
-                        connectorClientConfigOverridePolicyPlugin);
+                        connectorClientConfigOverridePolicyPlugin,
+                        null);
             }
         }
         if (connectorUsesAdmin(connectorType, connectorProps)) {
@@ -723,7 +728,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.ADMIN,
-                        connectorClientConfigOverridePolicyPlugin);
+                        connectorClientConfigOverridePolicyPlugin,
+                        null);
             }
         }
         if (connectorUsesConsumer(connectorType, connectorProps)) {
@@ -737,7 +743,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.CONSUMER,
-                        connectorClientConfigOverridePolicyPlugin);
+                        connectorClientConfigOverridePolicyPlugin,
+                        connectorType == org.apache.kafka.connect.health.ConnectorType.SINK
+                                && SinkConnectorConfig.isShareMode(connectorProps) && connectorProps.containsKey(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG)
+                                ? validatedConnectorConfig.get(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG) : null);
             }
         }
         return mergeConfigInfos(connType,
@@ -885,7 +894,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             // the order of operations here is important, converter validations can add error messages to the connector config
             // which are collected and converted to ConfigInfos in validateConnectorPluginSpecifiedConfigs
             ConfigInfos converterConfigInfo = validateAllConverterConfigs(connectorProps, validatedConnectorConfig, connectorLoader, reportStage);
-            ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, connectorType, connector.getClass(), reportStage, doLog);
+            ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, validatedConnectorConfig, connectorType, connector.getClass(), reportStage, doLog);
             ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
 
             return redactResolvedValues(
@@ -963,7 +972,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                                       Class<? extends Connector> connectorClass,
                                                       org.apache.kafka.connect.health.ConnectorType connectorType,
                                                       ConnectorClientConfigRequest.ClientType clientType,
-                                                      Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin) {
+                                                      Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin,
+                                                      ConfigValue groupIdAlias) {
         Map<String, Object> clientConfigs = new HashMap<>();
         for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
             String configName = rawClientConfig.getKey();
@@ -974,9 +984,24 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 : rawConfigValue;
             clientConfigs.put(configName, parsedConfigValue);
         }
+        if (groupIdAlias != null) {
+            // The canonical share identity is also a consumer group override.
+            clientConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, groupIdAlias.value());
+        }
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);
         List<ConfigValue> configValues = connectorClientConfigOverridePolicyPlugin.get().validate(connectorClientConfigRequest);
+        if (groupIdAlias != null && configValues != null) {
+            configValues.stream()
+                    .filter(value -> ConsumerConfig.GROUP_ID_CONFIG.equals(value.name()))
+                    .flatMap(value -> value.errorMessages().stream())
+                    .forEach(groupIdAlias::addErrorMessage);
+            if (!connectorConfig.originalsWithPrefix(prefix).containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
+                configValues = configValues.stream()
+                        .filter(value -> !ConsumerConfig.GROUP_ID_CONFIG.equals(value.name()))
+                        .collect(Collectors.toList());
+            }
+        }
 
         return prefixedConfigInfos(configDef.configKeys(), configValues, prefix);
     }

@@ -97,6 +97,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.logging.log4j.Level;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.AdditionalAnswers;
@@ -2138,6 +2139,62 @@ public class WorkerTest {
 
         verify(admin).listConsumerGroupOffsets(eq(SinkUtils.consumerGroupId(CONNECTOR_ID)), any(ListConsumerGroupOffsetsOptions.class));
         verify(admin, timeout(1000)).close();
+        verifyKafkaClusterId();
+    }
+
+    @Test
+    public void testShareSinkTaskBuilderRejectsOrdinaryConsumerFallback() {
+        setup(false);
+        mockKafkaClusterId();
+        connectorProps.put("consumer.type", " share ");
+        when(connectorConfig.originalsStrings()).thenReturn(connectorProps);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy, null);
+
+        Worker.SinkTaskBuilder builder = worker.new SinkTaskBuilder(
+                TASK_ID, ClusterConfigState.EMPTY, taskStatusListener, TargetState.STARTED);
+        ConnectException failure = assertThrows(ConnectException.class, () -> builder.doBuild(
+                null, TASK_ID, ClusterConfigState.EMPTY, taskStatusListener, TargetState.STARTED,
+                connectorConfig, null, null, null, null, null, null, null, null, null));
+
+        assertTrue(failure.getMessage().contains("Share sink runtime"));
+        assertTrue(failure.getMessage().contains("ShareSinkTask"));
+        assertTrue(failure.getMessage().contains("durable"));
+        assertTrue(sinkTaskMockedConstruction.constructed().isEmpty());
+        verifyKafkaClusterId();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"fetch", "alter", "replace", "reset"})
+    @SuppressWarnings("unchecked")
+    public void testShareSinkOffsetOperationsRejectOrdinaryConsumerHistory(String operation) {
+        setup(false);
+        mockKafkaClusterId();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        connectorProps.put("consumer.type", "share");
+        Function<Map<String, Object>, Admin> adminFactory = mock(Function.class);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy, adminFactory);
+
+        FutureCallback<?> callback;
+        if ("fetch".equals(operation)) {
+            FutureCallback<ConnectorOffsets> offsetsCallback = new FutureCallback<>();
+            worker.sinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps, offsetsCallback);
+            callback = offsetsCallback;
+        } else {
+            FutureCallback<Message> offsetsCallback = new FutureCallback<>();
+            worker.modifySinkConnectorOffsets(CONNECTOR_ID, sinkConnector, connectorProps,
+                    "reset".equals(operation) ? null : Map.of(), "replace".equals(operation),
+                    Thread.currentThread().getContextClassLoader(), offsetsCallback);
+            callback = offsetsCallback;
+        }
+
+        ExecutionException failure = assertThrows(ExecutionException.class, () -> callback.get(1000, TimeUnit.MILLISECONDS));
+        assertInstanceOf(BadRequestException.class, failure.getCause());
+        assertTrue(failure.getCause().getMessage().contains("offset APIs are not supported"));
+        verify(adminFactory, never()).apply(anyMap());
+        verify(executorService, never()).submit(any(Runnable.class));
+        verify(sinkConnector, never()).alterOffsets(anyMap(), anyMap());
         verifyKafkaClusterId();
     }
 

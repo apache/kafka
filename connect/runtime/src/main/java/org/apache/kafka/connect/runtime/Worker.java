@@ -75,6 +75,7 @@ import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -1323,6 +1324,12 @@ public final class Worker {
      */
     void sinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
                               Callback<ConnectorOffsets> cb) {
+        try {
+            ensureSinkModeSupported(connectorConfig);
+        } catch (ConnectException e) {
+            cb.onCompletion(e, null);
+            return;
+        }
         Map<String, Object> adminConfig = adminConfigs(
                 connName,
                 "connector-worker-adminclient-" + connName,
@@ -1459,6 +1466,12 @@ public final class Worker {
      */
     void modifySinkConnectorOffsets(String connName, Connector connector, Map<String, String> connectorConfig,
                                     Map<Map<String, ?>, Map<String, ?>> offsets, boolean replaceAllOffsets, ClassLoader connectorLoader, Callback<Message> cb) {
+        try {
+            ensureSinkModeSupported(connectorConfig);
+        } catch (ConnectException e) {
+            cb.onCompletion(e, null);
+            return;
+        }
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
                 Timer timer = time.timer(Duration.ofMillis(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS));
@@ -1873,6 +1886,12 @@ public final class Worker {
         return connectorStatusMetricsGroup;
     }
 
+    private static void ensureSinkModeSupported(Map<String, String> connectorConfig) {
+        if (SinkConnectorConfig.isShareMode(connectorConfig)) {
+            throw new BadRequestException(ShareConsumerSettings.RUNTIME_UNAVAILABLE_MESSAGE);
+        }
+    }
+
     WorkerMetricsGroup workerMetricsGroup() {
         return workerMetricsGroup;
     }
@@ -2004,6 +2023,7 @@ public final class Worker {
                 Class<? extends Connector> connectorClass,
                 TaskPluginsMetadata taskPluginsMetadata
         ) {
+            ensureSinkModeSupported(connectorConfig.originalsStrings());
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get());
