@@ -149,6 +149,7 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
+    // The file name limit on most filesystems.
     private static final int MAX_LOG_DIR_NAME_LENGTH = 255;
 
     static class Builder {
@@ -825,9 +826,7 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
-        if (isLogDirNameTooLong(topic.name(), numPartitions)) {
-            return new ApiError(Errors.INVALID_PARTITIONS, logDirNameTooLongMessage(topic.name(), numPartitions));
-        }
+        validateLogDirNameLength(topic.name(), numPartitions);
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
@@ -1230,19 +1229,22 @@ public class ReplicationControlManager {
             oldRegistration.leaderEpoch, newRegistration.leaderEpoch);
     }
 
-    static boolean isLogDirNameTooLong(String topicName, int numPartitions) {
-        return logDirNameLength(topicName, numPartitions - 1) > MAX_LOG_DIR_NAME_LENGTH;
-    }
-
-    private static int logDirNameLength(String topicName, int partitionId) {
-        return topicName.length() + 1 + String.valueOf(partitionId).length();
-    }
-
-    private static String logDirNameTooLongMessage(String topicName, int numPartitions) {
+    /**
+     * Validates that the log directory name of the last partition, "topic-partitionId", fits in the
+     * 255 character file name limit. The brokers can never create a longer directory.
+     *
+     * @param topicName the topic name.
+     * @param numPartitions the total number of partitions of the topic.
+     * @throws InvalidPartitionsException if the log directory name would be too long.
+     */
+    static void validateLogDirNameLength(String topicName, int numPartitions) {
         int lastPartitionId = numPartitions - 1;
-        return "The log directory name for partition " + lastPartitionId + " would be " +
-            logDirNameLength(topicName, lastPartitionId) + " characters, which is longer than the max allowed length " +
-            MAX_LOG_DIR_NAME_LENGTH + ".";
+        int logDirNameLength = topicName.length() + 1 + String.valueOf(lastPartitionId).length();
+        if (logDirNameLength > MAX_LOG_DIR_NAME_LENGTH) {
+            throw new InvalidPartitionsException("The log directory name for partition " + lastPartitionId +
+                " would be " + logDirNameLength + " characters, which is longer than the max allowed length " +
+                MAX_LOG_DIR_NAME_LENGTH + ".");
+        }
     }
 
     /**
@@ -1992,9 +1994,8 @@ public class ReplicationControlManager {
             throw new InvalidPartitionsException("The topic " + topic.name() + " currently " +
                 "has " + topicInfo.parts.size() + " partition(s); " + topic.count() +
                 " would not be an increase.");
-        } else if (isLogDirNameTooLong(topic.name(), topic.count())) {
-            throw new InvalidPartitionsException(logDirNameTooLongMessage(topic.name(), topic.count()));
         }
+        validateLogDirNameLength(topic.name(), topic.count());
         int additional = topic.count() - topicInfo.parts.size();
         if (topic.assignments() != null) {
             if (topic.assignments().size() != additional) {

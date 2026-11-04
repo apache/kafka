@@ -155,6 +155,7 @@ import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymous
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -2660,12 +2661,14 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testIsLogDirNameTooLong() {
-        assertFalse(ReplicationControlManager.isLogDirNameTooLong("a".repeat(249), 100_000));
-        assertTrue(ReplicationControlManager.isLogDirNameTooLong("a".repeat(249), 100_001));
-        assertFalse(ReplicationControlManager.isLogDirNameTooLong("a".repeat(248), 1_000_000));
-        assertTrue(ReplicationControlManager.isLogDirNameTooLong("a".repeat(248), 1_000_001));
-        assertFalse(ReplicationControlManager.isLogDirNameTooLong("foo", Integer.MAX_VALUE));
+    public void testValidateLogDirNameLength() {
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("a".repeat(249), 100_000));
+        assertThrows(InvalidPartitionsException.class,
+            () -> ReplicationControlManager.validateLogDirNameLength("a".repeat(249), 100_001));
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("a".repeat(248), 1_000_000));
+        assertThrows(InvalidPartitionsException.class,
+            () -> ReplicationControlManager.validateLogDirNameLength("a".repeat(248), 1_000_001));
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("foo", Integer.MAX_VALUE));
     }
 
     @Test

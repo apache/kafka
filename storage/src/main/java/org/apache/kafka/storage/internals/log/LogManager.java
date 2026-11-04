@@ -1378,6 +1378,8 @@ public class LogManager {
     public File createLogDirectory(File logDir, String logDirName) {
         String logDirPath = logDir.getAbsolutePath();
         if (isLogDirOnline(logDirPath)) {
+            // A name longer than the file name limit can never be created, so fail only this partition
+            // instead of marking the log directory offline.
             if (logDirName.length() > MAX_LOG_DIR_NAME_LENGTH) {
                 throw new KafkaStorageException("Can not create log " + logDirName + " in dir " + logDirPath +
                         " because the directory name is longer than " + MAX_LOG_DIR_NAME_LENGTH + " characters");
