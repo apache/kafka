@@ -483,6 +483,19 @@ org.apache.kafka.server.util.JsonTest:
 - testJsonValueEquals
 - testJsonValueHashCode
 - testJsonValueToString
+org.apache.kafka.server.util.MirrorUtilsTest:
+- testCompilePatternListMatchesWildcard
+- testCompilePatternListSingleItem
+- testCompilePatternListWithBlankStrings
+- testCompilePatternListWithEmptyList
+- testCompilePatternListWithMultiplePatterns
+- testCompilePatternListWithRegexPatterns
+- testCompilePatternListWithWhitespace
+- testCompilePatternWithBlankString
+- testCompilePatternWithEmptyString
+- testCompilePatternWithNull
+- testCompilePatternWithValidPattern
+- testCompilePatternWithWhitespace
 org.apache.kafka.server.util.ShutdownableThreadTest:
 - testIsThreadStarted
 - testShutdownWhenCalledAfterThreadStart
