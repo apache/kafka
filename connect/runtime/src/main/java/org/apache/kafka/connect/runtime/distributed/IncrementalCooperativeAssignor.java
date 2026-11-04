@@ -536,6 +536,17 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         delay = 0;
     }
 
+    void reset() {
+        previousAssignment = ConnectorsAndTasks.EMPTY;
+        previousRevocation.connectors().clear();
+        previousRevocation.tasks().clear();
+        revokedInPrevious = false;
+        previousGenerationId = -1;
+        previousMembers = Set.of();
+        numSuccessiveRevokingRebalances = 0;
+        resetDelay();
+    }
+
     private Set<String> candidateWorkersForReassignment(List<WorkerLoad> completeWorkerAssignment) {
         return completeWorkerAssignment.stream()
                 .filter(WorkerLoad::isEmpty)
