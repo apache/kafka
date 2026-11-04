@@ -67,8 +67,8 @@ import java.util.stream.Collectors;
  *     tasks together are dealt in proportion to the member counts.</li>
  *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, preferring one that
  *     makes the task more rack-diverse and has a member below the per-member task quota. They are then moved between
- *     processes as long as a move reduces the skew of the per-member task load and keeps the rack diversity of the
- *     task.</li>
+ *     processes as long as a move reduces the skew of the per-member task load and does not lower the rack
+ *     diversity of the task.</li>
  *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
  *     process's tasks over its stream threads: stateful active tasks, then standby tasks, then stateless active
  *     tasks. Each round levels the members' total task counts. A stateful task stays on the member that currently
@@ -507,8 +507,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * The processes holding each stateful task, to tell whether moving a standby keeps the rack diversity of its task:
-     * the distinct values of no tag key among the holders may drop. A missing value counts as no value.
+     * The processes holding each stateful task, to tell whether moving a standby lowers the rack diversity of its task:
+     * the first tag key, in {@code rack.aware.assignment.tags} order, whose distinct values among the holders change
+     * may not lose one. A missing value counts as no value.
      */
     private static final class RackDiversity {
         private final List<String> tagKeys;
@@ -526,7 +527,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
         }
 
-        /** Whether moving the standby of the task from the source to the destination keeps its distinct values. */
+        /** Whether moving the standby of the task from the source to the destination does not lower its rack diversity. */
         private boolean keptByMove(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
             for (final String key : tagKeys) {
                 final String sourceValue = source.clientTags.get(key);
@@ -543,6 +544,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
                         sourceValueStays |= Objects.equals(value, sourceValue);
                         destinationValueNew &= !Objects.equals(value, destinationValue);
                     }
+                }
+                // The first key whose distinct values change decides: a gain allows the move, a loss blocks it.
+                if (sourceValueStays && destinationValueNew) {
+                    return true;
                 }
                 if (!sourceValueStays && !destinationValueNew) {
                     return false;
