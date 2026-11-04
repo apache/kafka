@@ -3760,7 +3760,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testCleanupExpiredOffsetsWithNonEmptyRecords() {
+    public void testOffsetsExpiredSensorWithNonEmptyRecords() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         Group group = mock(Group.class);
 
