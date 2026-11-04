@@ -494,9 +494,10 @@ public class AssignmentInfo {
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
-            final String topic = topicIndexDict.get(in.readInt());
+            final int topicIndex = in.readInt();
+            final String topic = topicIndexDict.get(topicIndex);
             if (topic == null) {
-                throw new TaskAssignmentException("Corrupted user data byte[]. Topic index is not in the topic dictionary.");
+                throw new TaskAssignmentException("Corrupted user data byte[]. Topic index " + topicIndex + " is not in the topic dictionary.");
             }
             partitions.add(new TopicPartition(topic, in.readInt()));
         }
