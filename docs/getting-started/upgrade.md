@@ -32,6 +32,7 @@ type: docs
 
 ### Notable changes in 4.5.0
 
+  * `kafka-features.sh upgrade --release-version` no longer upgrades `kraft.version` from 0, since that turns a static controller quorum into a dynamic one and cannot be undone. Use `kafka-features.sh upgrade --feature kraft.version=1` to make the quorum dynamic. For further details, please refer to [KAFKA-21426](https://issues.apache.org/jira/browse/KAFKA-21426).
   * `ssl.principal.mapping.rules` now builds the principal name from the same full match that is used to check the rule. Previously, a rule that is not anchored with both `^` and `$`, or that uses alternation, could build the name from a shorter match or apply the replacement twice. For example, `RULE:CN=(.*?),OU=(.*?)/$1/` mapped `CN=bob,OU=eng` to `bobeng` instead of `bob`. Rules anchored with `^` and `$`, such as the documented examples, are not affected. If you use such rules, check that ACLs, quotas and `super.users` refer to the corrected principal names before upgrading.
 
 ## Upgrading to 4.4.0
