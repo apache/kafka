@@ -84,7 +84,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
 
     /**
-     * The metadata hash which is computed based on the all subscribed topics.
+     * The metadata hash which is computed based on all the subscribed topics.
      */
     protected final TimelineLong metadataHash;
 
@@ -135,6 +135,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -246,7 +247,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * Returns the target assignment of the member.
      *
-     * @return The ConsumerGroupMemberAssignment or an EMPTY one if it does not
+     * @param memberId The member id.
+     *
+     * @return The member's target assignment or an EMPTY one if it does not
      *         exist.
      */
     public Assignment targetAssignment(String memberId) {
@@ -443,6 +446,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * Compute the subscription type of the group.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
+     * @param numberOfMembers           The number of members in the group.
      *
      * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
@@ -474,10 +478,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * Gets or creates a member.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
-     * @return A ConsumerGroupMember.
+     * @return The member.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public abstract T getOrMaybeCreateMember(String memberId, boolean createIfNotExists) throws UnknownMemberIdException;
