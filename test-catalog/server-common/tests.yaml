@@ -278,6 +278,8 @@ org.apache.kafka.server.mirror.MirrorPartitionStateTest:
 - testAllStatesAreCoveredByTable
 - testFromValue
 - testFromValueInvalid
+- testNameOf
+- testNameOfUnrecognizedValue
 - testRoundTrip
 - testValue
 org.apache.kafka.server.mutable.BoundedListTest:

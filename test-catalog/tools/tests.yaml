@@ -253,6 +253,8 @@ org.apache.kafka.tools.DumpLogSegmentsTest:
 - testDumpIndexMismatches
 - testDumpMetadataRecords
 - testDumpMetadataSnapshot
+- testDumpMirrorState
+- testDumpMirrorStateContinuesAfterInvalidRecords
 - testDumpProducerIdSnapshot
 - testDumpProducerIdSnapshotCorrupt
 - testDumpProducerIdSnapshotWithBatchMetadata
@@ -271,6 +273,11 @@ org.apache.kafka.tools.DumpLogSegmentsTest:
 - testIndexSanityCheck
 - testInvalidDecoderClass
 - testLegacyRecordBatchOutputFormat
+- testMirrorStateMessageParser
+- testMirrorStateMessageParserMalformedRecord
+- testMirrorStateMessageParserMissingKey
+- testMirrorStateMessageParserUnknownType
+- testMirrorStateMessageParserUnsupportedVersion
 - testOffsetsMessageParser
 - testPrintDataLog
 - testPrintDataLogPartialBatches
