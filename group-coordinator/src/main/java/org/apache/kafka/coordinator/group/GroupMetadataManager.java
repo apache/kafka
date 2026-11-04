@@ -4432,8 +4432,9 @@ public class GroupMetadataManager {
 
         String targetAssignmentUpdateKey = groupTargetAssignmentUpdateKey(group.groupId());
         if (executor.isScheduled(targetAssignmentUpdateKey)) {
-            // There is already an async assignor run in progress. We must not start another run
-            // until it has completed, regardless of whether the next run will be sync or async.
+            // There is already an async assignor run in progress. We must not start another run,
+            // sync or async, until it has completed or been cancelled, otherwise the older run's
+            // result could be installed after the newer run's result.
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
