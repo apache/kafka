@@ -294,8 +294,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
     /**
      * Places the standby tasks that make their task more rack-diverse, each on the least loaded process among the
-     * most diverse ones, and returns the number placed per task. As in the sticky assignor, a process takes them
-     * while one of its members is below the per-member task quota.
+     * most diverse ones, and returns the number placed per task. A process takes them while one of its members is
+     * below the per-member task quota.
      */
     private static Map<TaskId, Integer> assignRackAwareStandbyReplicaTasks(final Collection<ProcessTasks> processes,
                                                                           final SortedSet<TaskId> statefulTasks,
@@ -371,9 +371,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
      *
      * @param rackDiversity The rack diversity of the tasks, or {@code null} without {@code rack.aware.assignment.tags}.
      */
-    private static void balanceTasksOverProcesses(final Collection<ProcessTasks> processes,
-                                                  final Function<ProcessTasks, SortedSet<TaskId>> tasksToBalance,
-                                                  final RackDiversity rackDiversity) {
+    static void balanceTasksOverProcesses(final Collection<ProcessTasks> processes,
+                                          final Function<ProcessTasks, SortedSet<TaskId>> tasksToBalance,
+                                          final RackDiversity rackDiversity) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -448,10 +448,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * The per-member quota on active plus standby tasks of the {@link StickyTaskAssignor}: the tasks left over the
-     * members left, rounded up, where a member that reaches it leaves with its tasks. The members of a process are
-     * levelled once the placement is final, so the member that takes the n-th task of a process with c members reaches
-     * ceil(n / c).
+     * The per-member quota on active plus standby tasks: the tasks left over the members left, rounded up, where a
+     * member that reaches it leaves with its tasks. The members of a process are levelled once the placement is final,
+     * so the member that takes the n-th task of a process with c members reaches ceil(n / c).
      */
     private static final class TaskQuota {
         private int members;
@@ -511,11 +510,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * the first tag key, in {@code rack.aware.assignment.tags} order, whose distinct values among the holders change
      * may not lose one. A missing value counts as no value.
      */
-    private static final class RackDiversity {
+    static final class RackDiversity {
         private final List<String> tagKeys;
         private final Map<TaskId, List<ProcessTasks>> holders = new HashMap<>();
 
-        private RackDiversity(final Collection<ProcessTasks> processes, final List<String> tagKeys) {
+        RackDiversity(final Collection<ProcessTasks> processes, final List<String> tagKeys) {
             this.tagKeys = tagKeys;
             for (final ProcessTasks process : processes) {
                 for (final TaskId task : process.statefulActiveTasks) {
@@ -566,18 +565,18 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * The tasks placed on one process, and the members the process contributes. The assignment across processes
      * works on this level; the tasks are spread over the members only once the placement is final.
      */
-    private static final class ProcessTasks {
+    static final class ProcessTasks {
         private final String processId;
         private final TreeSet<String> memberIds = new TreeSet<>();
-        private final SortedSet<TaskId> statefulActiveTasks = new TreeSet<>();
+        final SortedSet<TaskId> statefulActiveTasks = new TreeSet<>();
         private final SortedSet<TaskId> statelessActiveTasks = new TreeSet<>();
-        private final SortedSet<TaskId> standbyTasks = new TreeSet<>();
+        final SortedSet<TaskId> standbyTasks = new TreeSet<>();
         // The member of this process that currently holds a task in any role, so that a stateful task can stay on
         // the member that has its state, as the classic client does through the offset sums each thread reports.
         private final Map<TaskId, String> currentOwner = new HashMap<>();
         private Map<String, String> clientTags = Map.of();
 
-        private ProcessTasks(final String processId) {
+        ProcessTasks(final String processId) {
             this.processId = processId;
         }
 
@@ -589,9 +588,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return clientTags;
         }
 
-        private void addMember(final String memberId,
-                               final Map<String, String> memberClientTags,
-                               final MemberAssignmentState currentAssignment) {
+        void addMember(final String memberId,
+                       final Map<String, String> memberClientTags,
+                       final MemberAssignmentState currentAssignment) {
             // The members of a process report the same client tags; the smallest member ID wins if they do not.
             if (memberIds.isEmpty() || memberId.compareTo(memberIds.first()) < 0) {
                 clientTags = memberClientTags;

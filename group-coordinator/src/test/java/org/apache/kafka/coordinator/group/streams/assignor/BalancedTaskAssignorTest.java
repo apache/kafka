@@ -21,6 +21,8 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor.ProcessTasks;
+import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor.RackDiversity;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,12 @@ public class BalancedTaskAssignorTest {
 
     private static final String SUBTOPOLOGY_1 = "test-subtopology1";
     private static final String SUBTOPOLOGY_2 = "test-subtopology2";
+    private static final List<String> CLUSTER_AND_ZONE = List.of("cluster", "zone");
+    private static final Set<TaskId> THREE_TASKS = Set.of(
+        new TaskId(SUBTOPOLOGY_1, 0),
+        new TaskId(SUBTOPOLOGY_1, 1),
+        new TaskId(SUBTOPOLOGY_1, 2)
+    );
 
     private final BalancedTaskAssignor assignor = new BalancedTaskAssignor();
 
@@ -427,6 +435,48 @@ public class BalancedTaskAssignorTest {
     }
 
     @Test
+    public void shouldMoveAStandbyWhenTheFirstTagKeyGainsAValueAlthoughALaterKeyLosesOne() {
+        // Process B holds the standbys of tasks 0 to 2, whose actives are on process A. Moving the standby of task 0
+        // to the empty process D adds cluster c2 and drops zone z2; cluster ranks first, so it moves.
+        final ProcessTasks a = taggedProcess("A", "c1", "z1");
+        final ProcessTasks b = taggedProcess("B", "c1", "z2");
+        final ProcessTasks d = taggedProcess("D", "c2", "z1");
+        a.statefulActiveTasks.addAll(THREE_TASKS);
+        b.standbyTasks.addAll(THREE_TASKS);
+        final List<ProcessTasks> processes = List.of(a, b, d);
+
+        BalancedTaskAssignor.balanceTasksOverProcesses(
+            processes,
+            process -> process.standbyTasks,
+            new RackDiversity(processes, CLUSTER_AND_ZONE)
+        );
+
+        assertEquals(Set.of(new TaskId(SUBTOPOLOGY_1, 1), new TaskId(SUBTOPOLOGY_1, 2)), b.standbyTasks);
+        assertEquals(Set.of(new TaskId(SUBTOPOLOGY_1, 0)), d.standbyTasks);
+    }
+
+    @Test
+    public void shouldNotMoveAStandbyWhenTheFirstTagKeyLosesAValueAlthoughALaterKeyGainsOne() {
+        // Process B holds the standbys of tasks 0 to 2, whose actives are on process A. Moving one to the empty
+        // process E adds zone z2 and drops cluster c2; cluster ranks first, so nothing moves.
+        final ProcessTasks a = taggedProcess("A", "c1", "z1");
+        final ProcessTasks b = taggedProcess("B", "c2", "z1");
+        final ProcessTasks e = taggedProcess("E", "c1", "z2");
+        a.statefulActiveTasks.addAll(THREE_TASKS);
+        b.standbyTasks.addAll(THREE_TASKS);
+        final List<ProcessTasks> processes = List.of(a, b, e);
+
+        BalancedTaskAssignor.balanceTasksOverProcesses(
+            processes,
+            process -> process.standbyTasks,
+            new RackDiversity(processes, CLUSTER_AND_ZONE)
+        );
+
+        assertEquals(THREE_TASKS, b.standbyTasks);
+        assertEquals(Set.of(), e.standbyTasks);
+    }
+
+    @Test
     public void shouldDistributeStatelessTasksToBalanceTotalTaskLoad() {
         // Stateful placement leaves process1 (two members) and process2 (one member) at a load of one task per
         // member. The stateless tasks are then dealt by active load, so process1 gets two of them and process2 one.
@@ -637,6 +687,13 @@ public class BalancedTaskAssignorTest {
             Map.of(),
             Map.of()
         );
+    }
+
+    /** A process with one member and the given cluster and zone tags. */
+    private static ProcessTasks taggedProcess(final String processId, final String cluster, final String zone) {
+        final ProcessTasks process = new ProcessTasks(processId);
+        process.addMember(processId + "_member", Map.of("cluster", cluster, "zone", zone), member(processId));
+        return process;
     }
 
     private static TopologyDescriber statefulTopology(final int numTasks, final String... subtopologies) {
