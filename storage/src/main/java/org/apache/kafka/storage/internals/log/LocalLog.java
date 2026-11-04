@@ -625,6 +625,11 @@ public class LocalLog {
         }
     }
 
+    /**
+     * Collect the aborted transactions that may have data in [startOffset, upperBoundOffset): those ending at or after
+     * startOffset and starting before upperBoundOffset, scanning the transaction indexes from the segment containing
+     * startOffset.
+     */
     public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
         Optional<LogSegment> segmentEntry = segments.floorSegment(startOffset);
         List<AbortedTxn> allAbortedTxns = new ArrayList<>();
