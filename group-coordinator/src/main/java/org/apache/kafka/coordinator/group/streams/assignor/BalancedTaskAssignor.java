@@ -288,7 +288,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
         balanceTasksOverProcesses(
             processes,
             process -> process.standbyTasks,
-            rackAware ? new RackDiversity(processes, rackAwareAssignmentTags) : null
+            rackAware ? new RackDiversity(processes, statefulTasks.size(), rackAwareAssignmentTags) : null
         );
     }
 
@@ -313,7 +313,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
         final RackAwareStandbyPicker<ProcessTasks> picker = new RackAwareStandbyPicker<>(
             rackAwareAssignmentTags,
             processes,
-            ProcessTasks::clientTags,
+            process -> process.clientTags,
             ProcessTasks::assignedTaskLoad,
             quota::hasRoom
         );
@@ -389,7 +389,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
                     while (shouldMoveATask(source, destination) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         if (!destination.hasTask(taskToMove)
-                            && (rackDiversity == null || rackDiversity.keptByMove(taskToMove, source, destination))) {
+                            && (rackDiversity == null || rackDiversity.wouldNotDecrease(taskToMove, source, destination))) {
                             sourceIterator.remove();
                             destinationTasks.add(taskToMove);
                             if (rackDiversity != null) {
@@ -512,10 +512,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
      */
     static final class RackDiversity {
         private final List<String> tagKeys;
-        private final Map<TaskId, List<ProcessTasks>> holders = new HashMap<>();
+        private final Map<TaskId, List<ProcessTasks>> holders;
 
-        RackDiversity(final Collection<ProcessTasks> processes, final List<String> tagKeys) {
+        RackDiversity(final Collection<ProcessTasks> processes, final int numStatefulTasks, final List<String> tagKeys) {
             this.tagKeys = tagKeys;
+            this.holders = Utils.newHashMap(numStatefulTasks);
             for (final ProcessTasks process : processes) {
                 for (final TaskId task : process.statefulActiveTasks) {
                     holders.computeIfAbsent(task, taskId -> new ArrayList<>()).add(process);
@@ -526,8 +527,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
         }
 
-        /** Whether moving the standby of the task from the source to the destination does not lower its rack diversity. */
-        private boolean keptByMove(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
+        /** Whether moving the task's standby from source to destination would not decrease its rack diversity. */
+        private boolean wouldNotDecrease(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
             for (final String key : tagKeys) {
                 final String sourceValue = source.clientTags.get(key);
                 final String destinationValue = destination.clientTags.get(key);
@@ -582,10 +583,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         private String processId() {
             return processId;
-        }
-
-        private Map<String, String> clientTags() {
-            return clientTags;
         }
 
         void addMember(final String memberId,

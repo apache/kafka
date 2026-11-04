@@ -448,7 +448,7 @@ public class BalancedTaskAssignorTest {
         BalancedTaskAssignor.balanceTasksOverProcesses(
             processes,
             process -> process.standbyTasks,
-            new RackDiversity(processes, CLUSTER_AND_ZONE)
+            new RackDiversity(processes, THREE_TASKS.size(), CLUSTER_AND_ZONE)
         );
 
         assertEquals(Set.of(new TaskId(SUBTOPOLOGY_1, 1), new TaskId(SUBTOPOLOGY_1, 2)), b.standbyTasks);
@@ -469,7 +469,7 @@ public class BalancedTaskAssignorTest {
         BalancedTaskAssignor.balanceTasksOverProcesses(
             processes,
             process -> process.standbyTasks,
-            new RackDiversity(processes, CLUSTER_AND_ZONE)
+            new RackDiversity(processes, THREE_TASKS.size(), CLUSTER_AND_ZONE)
         );
 
         assertEquals(THREE_TASKS, b.standbyTasks);
