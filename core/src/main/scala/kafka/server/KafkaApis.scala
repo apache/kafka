@@ -876,12 +876,17 @@ class KafkaApis(val requestChannel: RequestChannel,
                   .setLastStableOffset(partitionData.lastStableOffset)
                   .setLogStartOffset(partitionData.logStartOffset)
                   .setAbortedTransactions(partitionData.abortedTransactions)
-                  .setRecords(new LazyDownConversionRecords(tp.topicPartition, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+                  .setRecords(new LazyDownConversionRecords(tp.topicPartition, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time,
+                    logConfig.map(_.maxDecompressedMessageBytes).getOrElse(Records.SOFT_MAX_ARRAY_LENGTH)))
                   .setPreferredReadReplica(partitionData.preferredReadReplica())
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
                   FetchResponse.partitionResponse(tp, Errors.UNSUPPORTED_COMPRESSION_TYPE)
+                case e: RecordSizeLimitExceededException =>
+                  warn(s"Failed to down-convert records from partition $tp to message format version $magic " +
+                    s"for fetch request from $clientId", e)
+                  FetchResponse.partitionResponse(tp, Errors.INVALID_RECORD)
               }
             }
           case None =>

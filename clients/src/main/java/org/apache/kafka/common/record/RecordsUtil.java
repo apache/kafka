@@ -18,11 +18,14 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class RecordsUtil {
@@ -39,9 +42,13 @@ public class RecordsUtil {
      * (via classes like FileChannelRecordBatch) before this method is called. This is the case in the broker (we
      * only load records into the heap when down converting), but it's not for the producer. However, down converting
      * in the producer is very uncommon and the extra complexity to handle that case is not worth it.
+     *
+     * Any record whose declared (decompressed) body size exceeds {@code maxRecordBodySize} is rejected with a
+     * {@link RecordSizeLimitExceededException} before its body buffer is allocated. Pass
+     * {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the array-length ceiling.
      */
     protected static ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
-                                                                 long firstOffset, Time time) {
+                                                                 long firstOffset, Time time, int maxRecordBodySize) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
@@ -61,12 +68,7 @@ public class RecordsUtil {
                 totalSizeEstimate += batch.sizeInBytes();
                 recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
             } else {
-                List<Record> records = new ArrayList<>();
-                for (Record record : batch) {
-                    // See the method javadoc for an explanation
-                    if (toMagic > RecordBatch.MAGIC_VALUE_V1 || batch.isCompressed() || record.offset() >= firstOffset)
-                        records.add(record);
-                }
+                List<Record> records = recordsToConvert(batch, toMagic, firstOffset, maxRecordBodySize);
                 if (records.isEmpty())
                     continue;
                 final long baseOffset;
@@ -100,6 +102,24 @@ public class RecordsUtil {
         RecordValidationStats stats = new RecordValidationStats(temporaryMemoryBytes, numRecordsConverted,
                 time.nanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
+    }
+
+    private static List<Record> recordsToConvert(RecordBatch batch, byte toMagic, long firstOffset, int maxRecordBodySize) {
+        // Like the regular iterator, skip empty v2 batches without opening a decompression stream
+        Integer count = batch.countOrNull();
+        if (count != null && count == 0)
+            return Collections.emptyList();
+
+        List<Record> records = new ArrayList<>();
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                // See the javadoc of downConvert for an explanation
+                if (toMagic > RecordBatch.MAGIC_VALUE_V1 || batch.isCompressed() || record.offset() >= firstOffset)
+                    records.add(record);
+            }
+        }
+        return records;
     }
 
     /**
