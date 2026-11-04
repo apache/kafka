@@ -2785,6 +2785,7 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':mirror-coordinator')
     implementation project(':share-coordinator')
     implementation project(':raft')
     implementation libs.argparse4j
