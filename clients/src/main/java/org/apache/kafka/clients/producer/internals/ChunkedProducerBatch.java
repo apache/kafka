@@ -106,12 +106,14 @@ public class ChunkedProducerBatch extends ProducerBatch {
             // compressor flush in closeForRecordAppends may fall back to the heap once more, which is bounded since
             // nothing is appended after it. Closing is idempotent, and matches how the extension path closes a
             // batch on pool exhaustion.
-            log.debug("Closing batch for {} to record appends so it is sent early: the buffer pool was "
-                    + "exhausted and the batch's stream fell back to {} heap-allocated chunk(s) beyond buffer.memory. "
-                    + "recordCount={}, attachedCapacity={}, estimatedSizeInBytes={}, compressionRatioEstimate={}",
-                    topicPartition, stream().fallbackAllocations(), recordCount, stream().attachedCapacity(),
-                    recordsBuilder.estimatedSizeInBytes(),
-                    CompressionRatioEstimator.estimation(topicPartition.topic(), recordsBuilder.compression().type()));
+            if (log.isDebugEnabled()) {
+                log.debug("Closing batch for {} to record appends so it is sent early: the buffer pool was "
+                        + "exhausted and the batch's stream fell back to {} heap-allocated chunk(s) beyond buffer.memory. "
+                        + "recordCount={}, attachedCapacity={}, estimatedSizeInBytes={}, compressionRatioEstimate={}",
+                        topicPartition, stream().fallbackAllocations(), recordCount, stream().attachedCapacity(),
+                        recordsBuilder.estimatedSizeInBytes(),
+                        CompressionRatioEstimator.estimation(topicPartition.topic(), recordsBuilder.compression().type()));
+            }
             closeForRecordAppends();
         }
         return future;

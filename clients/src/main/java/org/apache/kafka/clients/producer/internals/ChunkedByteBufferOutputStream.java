@@ -395,23 +395,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Test-only. Throws if {@code requiredBytes} cannot be written to this stream.
-     * This only checks the attached chunks, it does not make room.
-     *
-     * @throws IllegalStateException if the attached chunks have less free space than required
-     */
-    void throwIfInsufficientRemaining(int requiredBytes) {
-        ensureNotDeallocated();
-        // A single write can be split across several chunks, so the required bytes needn't be
-        // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates. Automatic growth (growable
-        // streams only) lives in ensureCapacityFor; this method only checks the currently attached chunks.
-        if (requiredBytes > remaining())
-            throw new IllegalStateException("required " + requiredBytes
-                + " bytes but only " + remaining() + " remaining across the attached chunks");
-    }
-
-    /**
      * Returns all pool-allocated chunks to the buffer pool. Called at batch completion.
      */
     void deallocate(BufferPool pool) {

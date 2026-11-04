@@ -279,6 +279,7 @@ public class BufferPool {
         int chunkSize = poolableSize();
         int numChunks = numChunksFor(totalSize, chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
+        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, memoryRequired);
 
         // Chunks taken from the free list. The remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
@@ -376,6 +377,7 @@ public class BufferPool {
         int chunkSize = poolableSize();
         int numChunks = numChunksFor(totalSize, chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
+        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, memoryRequired);
         List<ByteBuffer> pooled;
 
         lock.lock();
@@ -406,13 +408,8 @@ public class BufferPool {
      * @throws IllegalArgumentException if {@code totalSize <= 0}
      */
     public List<ByteBuffer> tryAllocateChunksUpTo(int totalSize) {
-        if (allocationMode != AllocationMode.INCREMENTAL)
-            throw new IllegalStateException("allocateChunks() and tryAllocateChunks() are not supported in "
-                + allocationMode + " allocation mode; use allocate()");
-        if (totalSize <= 0)
-            throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
         int chunkSize = poolableSize();
-        int numChunks = (int) Math.min(((long) totalSize + chunkSize - 1L) / chunkSize, totalMemory / chunkSize);
+        int numChunks = (int) Math.min(numChunksFor(totalSize, chunkSize), totalMemory / chunkSize);
         List<ByteBuffer> pooled = new ArrayList<>();
         int granted;
 
@@ -435,17 +432,16 @@ public class BufferPool {
 
     /**
      * Validates a chunk request and returns the number of whole chunks it needs. Shared by
-     * {@link #allocateChunks} and {@link #tryAllocateChunks}.
+     * {@link #allocateChunks}, {@link #tryAllocateChunks} and {@link #tryAllocateChunksUpTo}; the all-or-nothing
+     * callers check the request against the pool size themselves.
      */
     private int numChunksFor(int totalSize, int chunkSize) {
         if (allocationMode != AllocationMode.INCREMENTAL)
-            throw new IllegalStateException("allocateChunks() and tryAllocateChunks() are not supported in "
+            throw new IllegalStateException("chunk allocation is not supported in "
                 + allocationMode + " allocation mode; use allocate()");
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
-        int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
-        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, (long) numChunks * chunkSize);
-        return numChunks;
+        return (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
     }
 
     /**

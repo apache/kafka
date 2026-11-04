@@ -118,6 +118,7 @@ public class BufferPoolChunkAllocationTest {
     public void testRejectsRequestExceedingTotalMemory() {
         BufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(129, 100));
+        assertThrows(IllegalArgumentException.class, () -> p.tryAllocateChunks(129));
     }
 
     @Test
@@ -125,6 +126,7 @@ public class BufferPoolChunkAllocationTest {
         BufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(0, 100));
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(-1, 100));
+        assertThrows(IllegalArgumentException.class, () -> p.tryAllocateChunksUpTo(0));
     }
 
     /**

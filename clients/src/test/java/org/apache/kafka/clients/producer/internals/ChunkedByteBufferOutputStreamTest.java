@@ -88,7 +88,6 @@ public class ChunkedByteBufferOutputStreamTest {
             assertThrows(IllegalStateException.class, stream::attachedCapacity);
             assertThrows(IllegalStateException.class, stream::initialCapacity);
             assertThrows(IllegalStateException.class, () -> stream.position(1));
-            assertThrows(IllegalStateException.class, () -> stream.throwIfInsufficientRemaining(1));
             assertThrows(IllegalStateException.class, () -> stream.write(1));
             assertThrows(IllegalStateException.class, () -> stream.write(new byte[]{4}, 0, 1));
             assertThrows(IllegalStateException.class, () -> stream.write(ByteBuffer.wrap(new byte[]{5})));
@@ -177,28 +176,11 @@ public class ChunkedByteBufferOutputStreamTest {
             assertEquals(2 * chunkSize, stream.remaining());
             stream.write(new byte[3], 0, 3);
             assertEquals(2 * chunkSize - 3, stream.remaining());
+            // position equals bytes written: querying remaining() never skips the tail of the current chunk
+            assertEquals(3, stream.position());
             stream.write(new byte[chunkSize], 0, chunkSize); // crosses into chunk 2
             assertEquals(chunkSize - 3, stream.remaining());
-
-            stream.deallocate();
-        }
-    }
-
-    @Test
-    public void testThrowIfInsufficientRemainingDoesNotWasteCurrentChunk() throws Exception {
-        int chunkSize = 8;
-        BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, false)) {
-            stream.write(new byte[]{1, 2, 3}, 0, 3);
-
-            // Requesting more than the current chunk's free bytes (5) but no more than the total
-            // free bytes across chunks (13) must not skip ahead: the bytes left in the current chunk
-            // stay writable.
-            stream.throwIfInsufficientRemaining(chunkSize + 1);
-            assertEquals(2 * chunkSize - 3, stream.remaining());
-            stream.write(new byte[]{4, 5}, 0, 2);
-            assertEquals(5, stream.position());
-            assertEquals(2 * chunkSize - 5, stream.remaining());
+            assertEquals(3 + chunkSize, stream.position());
 
             stream.deallocate();
         }
