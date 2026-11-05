@@ -4712,7 +4712,9 @@ public class GroupMetadataManager {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
-        String targetAssignmentUpdateKey = groupTargetAssignmentUpdateKey(group.groupId());
+        String groupId = group.groupId();
+
+        String targetAssignmentUpdateKey = groupTargetAssignmentUpdateKey(groupId);
         if (executor.isScheduled(targetAssignmentUpdateKey)) {
             // There is already an async assignor run in progress. We must not start another run,
             // sync or async, until it has completed or been cancelled, otherwise the older run's
@@ -4722,14 +4724,14 @@ public class GroupMetadataManager {
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
             group.assignmentTimestamp(),
-            shareGroupAssignmentIntervalMs(group.groupId()),
+            shareGroupAssignmentIntervalMs(groupId),
             time.milliseconds()
         );
         if (!canComputeNextTargetAssignment) {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
-        boolean offloadAssignor = shareGroupAssignorOffloadEnable(group.groupId());
+        boolean offloadAssignor = shareGroupAssignorOffloadEnable(groupId);
 
         UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
             new UpdatedMembersAndTargetAssignmentView<>(
@@ -4741,7 +4743,7 @@ public class GroupMetadataManager {
         updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
         ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
-            group.groupId(),
+            groupId,
             ShareGroupStatePartitionMetadataInfo.EMPTY
         );
 
@@ -4770,22 +4772,22 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms after building the group spec in {}ms: {}.",
-                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs, groupSpecTimeMs, assignmentResult.targetAssignment());
+                    groupId, groupEpoch, shareGroupAssignor.name(), assignorTimeMs, groupSpecTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms after building the group spec in {}ms.",
-                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs, groupSpecTimeMs);
+                    groupId, groupEpoch, shareGroupAssignor.name(), assignorTimeMs, groupSpecTimeMs);
             }
 
             return assignmentResult;
         };
 
         if (offloadAssignor) {
-            inflightOffloadedAssignorEpochs.put(group.groupId(), groupEpoch);
+            inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
             executor.schedule(
                 targetAssignmentUpdateKey,
                 buildTargetAssignment::get,
                 (result, exception) -> handleOffloadedShareTargetAssignmentResult(
-                    group.groupId(),
+                    groupId,
                     groupEpoch,
                     result,
                     exception
@@ -4793,7 +4795,7 @@ public class GroupMetadataManager {
             );
 
             log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
-                group.groupId(), groupEpoch, shareGroupAssignor);
+                groupId, groupEpoch, shareGroupAssignor);
 
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         } else {
@@ -4803,11 +4805,11 @@ public class GroupMetadataManager {
             } catch (PartitionAssignorException ex) {
                 String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                     groupEpoch, ex.getMessage());
-                log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
+                log.error("[GroupId {}] {}.", groupId, msg, ex);
                 throw new UnknownServerException(msg, ex);
             }
 
-            new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
+            new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, groupId)
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
                 .withUnchangedStaticMembers()
