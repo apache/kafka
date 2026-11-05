@@ -157,6 +157,20 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testAssignmentIntervalResolvedThroughDynamicConfigProviderIsClamped(): Unit = withProviderFile("interval=999999") { file =>
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+
+    val update = new Properties
+    putFileProvider(update, "file")
+    update.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, s"$${file:${file.toAbsolutePath}:interval}")
+    config.dynamicConfig.updateBrokerConfig(0, update)
+
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT,
+      config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+  }
+
+  @Test
   def testStaticConfigProviderDoesNotBlockDynamicUpdatesWithRestrictiveAllowlist(): Unit = withProviderFile("threads=10") { file =>
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     putFileProvider(props, "file")
@@ -241,7 +255,7 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testDynamicStringConfigCannotUseStaticOnlyConfigProvider(): Unit = withProviderFile("alg=HTTPS_FROM_FILE") { file =>
+  def testDynamicStringConfigIsNotResolvedByStaticOnlyConfigProvider(): Unit = withProviderFile("alg=HTTPS_FROM_FILE") { file =>
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     putFileProvider(props, "file")
     val config = KafkaConfig(props)

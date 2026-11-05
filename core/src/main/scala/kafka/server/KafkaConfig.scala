@@ -99,6 +99,7 @@ object KafkaConfig extends Logging {
    */
   def fromResolvedProps(props: java.util.Map[_, _], doLog: Boolean): KafkaConfig =
     new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props),
+      // A non-empty configProviderProps whose config.providers is empty makes AbstractConfig instantiate no provider.
       Some(util.Map.of[String, AnyRef](AbstractConfig.CONFIG_PROVIDERS_CONFIG, "")))
 
   def configType(configName: String): Option[ConfigDef.Type] =
