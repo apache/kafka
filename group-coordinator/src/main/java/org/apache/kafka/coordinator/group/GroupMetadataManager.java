@@ -4504,8 +4504,7 @@ public class GroupMetadataManager {
         if (offloadAssignor) {
             Map<String, String> previousStaticMembers = Map.copyOf(updatedMembersAndTargetAssignment.staticMembers());
 
-            inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
-            executor.schedule(
+            if (executor.schedule(
                 targetAssignmentUpdateKey,
                 buildTargetAssignment::get,
                 (result, exception) -> handleOffloadedConsumerTargetAssignmentResult(
@@ -4515,10 +4514,16 @@ public class GroupMetadataManager {
                     result,
                     exception
                 )
-            );
+            )) {
+                inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
 
-            log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
-                groupId, groupEpoch, preferredServerAssignor);
+                log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
+                    groupId, groupEpoch, preferredServerAssignor);
+            } else {
+                // Unreachable because we return early above when an async assignor run is already in progress.
+                log.error("[GroupId {}] Failed to schedule computing a new target assignment for epoch {} with '{}' assignor because another run is already scheduled.",
+                    groupId, groupEpoch, preferredServerAssignor);
+            }
 
             // fromLastTargetAssignment looks up the assignment by instance id, so it's fine not to
             // use updatedMembersAndTargetAssignment.
