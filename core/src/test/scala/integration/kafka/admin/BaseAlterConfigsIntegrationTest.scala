@@ -97,9 +97,9 @@ abstract class BaseAlterConfigsIntegrationTest extends IntegrationTestHarness {
 
   private def describeConfig(admin: Admin, resource: ConfigResource, name: String) = admin.describeConfigs(List(resource).asJava).all.get.get(resource).get(name)
 
-  private def brokerId = servers.head.config.brokerId
+  private def brokerId = brokers.head.config.brokerId
 
   protected def brokerResource = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId))
 
-  protected def brokerConfig: KafkaConfig = servers.head.config
+  protected def brokerConfig: KafkaConfig = brokers.head.config
 }

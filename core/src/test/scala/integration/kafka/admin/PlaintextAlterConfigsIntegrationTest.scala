@@ -65,42 +65,42 @@ class PlaintextAlterConfigsIntegrationTest extends BaseAlterConfigsIntegrationTe
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForPerBrokerIntConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForPerBrokerIntConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerConfigs.NUM_IO_THREADS_CONFIG, "10")
     assertEquals(10, brokerConfig.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForClusterWideIntConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForClusterWideIntConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(new ConfigResource(ConfigResource.Type.BROKER, ""), ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, ServerConfigs.NUM_IO_THREADS_CONFIG, "10")
     assertEquals(10, brokerConfig.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForLongConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForLongConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "86400000")
     assertEquals(86400000L, brokerConfig.getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForDoubleConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForDoubleConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, "0.75")
     assertEquals(0.75, brokerConfig.getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForBooleanConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForBooleanConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG, "true")
     assertTrue(brokerConfig.getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterConfigsWithConfigProvidersForListConfig(): Unit = {
+  def testAlterConfigsWithConfigProvidersForListConfig(quorum: String): Unit = {
     checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "compact,delete")
     assertEquals(List("compact", "delete").asJava, brokerConfig.getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG))
   }
