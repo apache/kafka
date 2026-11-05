@@ -4430,7 +4430,9 @@ public class GroupMetadataManager {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
-        String targetAssignmentUpdateKey = groupTargetAssignmentUpdateKey(group.groupId());
+        String groupId = group.groupId();
+
+        String targetAssignmentUpdateKey = groupTargetAssignmentUpdateKey(groupId);
         if (executor.isScheduled(targetAssignmentUpdateKey)) {
             // There is already an async assignor run in progress. We must not start another run,
             // sync or async, until it has completed or been cancelled, otherwise the older run's
@@ -4440,19 +4442,20 @@ public class GroupMetadataManager {
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
             group.assignmentTimestamp(),
-            consumerGroupAssignmentIntervalMs(group.groupId()),
+            consumerGroupAssignmentIntervalMs(groupId),
             time.milliseconds()
         );
         if (!canComputeNextTargetAssignment) {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
-        boolean offloadAssignor = consumerGroupAssignorOffloadEnable(group.groupId());
+        boolean offloadAssignor = consumerGroupAssignorOffloadEnable(groupId);
 
         String preferredServerAssignor = group.computePreferredServerAssignor(
             member,
             updatedMember
         ).orElse(defaultConsumerGroupAssignor.name());
+        ConsumerGroupPartitionAssignor assignor = consumerGroupAssignors.get(preferredServerAssignor);
 
         UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment =
             new UpdatedMembersAndTargetAssignmentView<>(
@@ -4480,7 +4483,7 @@ public class GroupMetadataManager {
         Supplier<TargetAssignmentBuilder.TargetAssignmentResult> buildTargetAssignment = () -> {
             long assignorStartTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                new TargetAssignmentBuilder(groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                new TargetAssignmentBuilder(groupEpoch, assignor)
                     .withTime(time)
                     .withMetadataImage(metadataImage)
                     .withGroupSpec(groupSpec)
@@ -4489,10 +4492,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms after building the group spec in {}ms: {}.",
-                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, groupSpecTimeMs, assignmentResult.targetAssignment());
+                    groupId, groupEpoch, preferredServerAssignor, assignorTimeMs, groupSpecTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms after building the group spec in {}ms.",
-                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, groupSpecTimeMs);
+                    groupId, groupEpoch, preferredServerAssignor, assignorTimeMs, groupSpecTimeMs);
             }
 
             return assignmentResult;
@@ -4501,12 +4504,12 @@ public class GroupMetadataManager {
         if (offloadAssignor) {
             Map<String, String> previousStaticMembers = Map.copyOf(updatedMembersAndTargetAssignment.staticMembers());
 
-            inflightOffloadedAssignorEpochs.put(group.groupId(), groupEpoch);
+            inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
             executor.schedule(
                 targetAssignmentUpdateKey,
                 buildTargetAssignment::get,
                 (result, exception) -> handleOffloadedConsumerTargetAssignmentResult(
-                    group.groupId(),
+                    groupId,
                     groupEpoch,
                     previousStaticMembers,
                     result,
@@ -4515,7 +4518,7 @@ public class GroupMetadataManager {
             );
 
             log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
-                group.groupId(), groupEpoch, preferredServerAssignor);
+                groupId, groupEpoch, preferredServerAssignor);
 
             // fromLastTargetAssignment looks up the assignment by instance id, so it's fine not to
             // use updatedMembersAndTargetAssignment.
@@ -4527,11 +4530,11 @@ public class GroupMetadataManager {
             } catch (PartitionAssignorException ex) {
                 String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                     groupEpoch, ex.getMessage());
-                log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
+                log.error("[GroupId {}] {}.", groupId, msg, ex);
                 throw new UnknownServerException(msg, ex);
             }
 
-            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, group.groupId())
+            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, groupId)
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
                 .withUnchangedStaticMembers()
