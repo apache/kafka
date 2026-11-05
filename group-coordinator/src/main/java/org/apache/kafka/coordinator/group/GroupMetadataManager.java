@@ -1512,6 +1512,12 @@ public class GroupMetadataManager {
         }
         consumerGroup.createConsumerGroupRecords(records);
 
+        // Any in-flight assignor run belongs to a previous consumer group whose writes were reverted.
+        // We cannot rely on the group epoch to detect the stale run because the group epoch is reset
+        // to the generation of the classic group, which can take any value, so we cancel it
+        // unconditionally.
+        cancelTargetAssignmentUpdate(classicGroup.groupId());
+
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
         // classic group, thus these timers will fail the group type check and do nothing.
         consumerGroup.members().forEach((memberId, member) ->
