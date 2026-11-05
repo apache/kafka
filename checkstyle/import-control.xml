@@ -110,6 +110,7 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow class="org.apache.kafka.common.requests.ApiVersionsResponse" />
+      <allow class="org.apache.logging.log4j.Level" />
     </subpackage>
 
     <subpackage name="resource">
