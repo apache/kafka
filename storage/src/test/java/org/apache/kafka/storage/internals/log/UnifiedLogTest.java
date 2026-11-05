@@ -4472,6 +4472,35 @@ public class UnifiedLogTest {
         assertEquals(Optional.empty(), log.firstUnstableOffset());
     }
 
+    @Test
+    public void testCollectAbortedTransactionsFromStartOffset() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024 * 5)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        short epoch = 0;
+        long pid1 = 1L;
+        long pid2 = 2L;
+        Consumer<Integer> appendPid1 = LogTestUtils.appendTransactionalAsLeader(log, pid1, epoch, mockTime);
+        Consumer<Integer> appendPid2 = LogTestUtils.appendTransactionalAsLeader(log, pid2, epoch, mockTime);
+
+        appendPid1.accept(2); // 0-1
+        appendPid2.accept(2); // 2-3
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 4
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3); // 5-7
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 8
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3); // 9-11
+
+        AbortedTxn abortedPid1 = new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(4L).setLastStableOffset(2L);
+        AbortedTxn abortedPid2 = new AbortedTxn().setProducerId(pid2).setFirstOffset(2L).setLastOffset(8L).setLastStableOffset(9L);
+        assertEquals(List.of(abortedPid1, abortedPid2), log.collectAbortedTransactions(0L, 12L));
+        // The transaction of pid1 ended at offset 4, the one of pid2 spans offset 6
+        assertEquals(List.of(abortedPid2), log.collectAbortedTransactions(6L, 12L));
+        assertEquals(List.of(), log.collectAbortedTransactions(9L, 12L));
+    }
+
     private void createEmptyLogs(File dir, int... offsets) throws IOException {
         for (int offset : offsets) {
             Files.createFile(LogFileUtils.logFile(dir, offset).toPath());
