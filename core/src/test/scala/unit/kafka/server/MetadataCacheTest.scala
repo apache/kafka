@@ -982,14 +982,15 @@ class MetadataCacheTest {
     assertTrue(fencedBroker.isFenced)
   }
 
-  @Test def testGetPartitionLeaderEndpointForKnownPartitionWithoutEndpoint(): Unit = {
-    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetPartitionLeaderEndpointForKnownPartitionWithoutEndpoint(cache: MetadataCache): Unit = {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val topic = "topic"
     val topicId = Uuid.randomUuid
     val records = Seq(new RegisterBrokerRecord()
       .setBrokerId(0)
-      .setBrokerEpoch(0L)
+      .setBrokerEpoch(brokerEpoch)
       .setRack(null)
       .setFenced(false)
       .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint()
@@ -1006,7 +1007,8 @@ class MetadataCacheTest {
         .setLeader(0)
         .setLeaderEpoch(0)
         .setPartitionEpoch(0)
-        .setIsr(util.List.of(0)).setReplicas(util.List.of(0)),
+        .setIsr(util.List.of(0))
+        .setReplicas(util.List.of(0)),
       new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(1)
@@ -1019,15 +1021,17 @@ class MetadataCacheTest {
         .setTopicId(topicId)
         .setPartitionId(2)
         .setLeader(LeaderConstants.NO_LEADER)
-        .setLeaderEpoch(0).setPartitionEpoch(0)
-        .setIsr(util.List.of).setReplicas(util.List.of(0)))
-    MetadataCacheTest.updateCache(metadataCache, records)
-    assertEquals(Optional.of(new Node(0, "foo0", 9092)), metadataCache.getPartitionLeaderEndpoint(topic, 0, listenerName))
-    assertEquals(Optional.of(Node.noNode), metadataCache.getPartitionLeaderEndpoint(topic, 0, ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
-    assertEquals(Optional.of(Node.noNode), metadataCache.getPartitionLeaderEndpoint(topic, 1, listenerName))
-    assertEquals(Optional.of(Node.noNode), metadataCache.getPartitionLeaderEndpoint(topic, 2, listenerName))
-    assertEquals(Optional.empty, metadataCache.getPartitionLeaderEndpoint(topic, 3, listenerName))
-    assertEquals(Optional.empty, metadataCache.getPartitionLeaderEndpoint("missing-topic", 0, listenerName))
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+        .setIsr(util.List.of)
+        .setReplicas(util.List.of(0)))
+    MetadataCacheTest.updateCache(cache, records)
+    assertEquals(Optional.of(new Node(0, "foo0", 9092)), cache.getPartitionLeaderEndpoint(topic, 0, listenerName))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 0, ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 1, listenerName))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 2, listenerName))
+    assertEquals(Optional.empty, cache.getPartitionLeaderEndpoint(topic, 3, listenerName))
+    assertEquals(Optional.empty, cache.getPartitionLeaderEndpoint("missing-topic", 0, listenerName))
   }
 
   val oldRequestControllerEpoch: Int = 122
