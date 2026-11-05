@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.BootstrapConfiguration;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
@@ -41,6 +42,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,15 +54,16 @@ public class AdminMetadataManagerTest {
     private final MockTime time = new MockTime();
     private final LogContext logContext = new LogContext();
     private final long refreshBackoffMs = 100;
+    private final long refreshBackoffMaxMs = 1000;
     private final long metadataExpireMs = 60000;
     private final AdminMetadataManager mgr = new AdminMetadataManager(
-            logContext, refreshBackoffMs, metadataExpireMs, false);
+            logContext, refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, false);
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testSetUsingBootstrapControllers(boolean usingBootstrapControllers) {
         AdminMetadataManager manager = new AdminMetadataManager(
-                logContext, refreshBackoffMs, metadataExpireMs, usingBootstrapControllers);
+                logContext, refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, usingBootstrapControllers);
         assertEquals(usingBootstrapControllers, manager.usingBootstrapControllers());
     }
 
@@ -98,6 +101,59 @@ public class AdminMetadataManagerTest {
 
         time.sleep(refreshBackoffMs);
         assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
+    }
+
+    @Test
+    public void testMetadataRefreshBackoffIncreasesForEquivalentResponses() {
+        fetchAndRequestUpdate(mockCluster());
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+
+        // Each response with the same nodes increases the backoff, up to the maximum
+        long expectedBackoffMs = refreshBackoffMs;
+        for (int i = 0; i < 5; i++) {
+            expectedBackoffMs = Math.min(expectedBackoffMs * 2, refreshBackoffMaxMs);
+            fetchAndRequestUpdate(mockCluster());
+            assertEquals(expectedBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
+                expectedBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
+        }
+    }
+
+    @Test
+    public void testMetadataRefreshBackoffResetsWhenNodesChange() {
+        fetchAndRequestUpdate(mockCluster());
+        fetchAndRequestUpdate(mockCluster());
+        assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
+            2 * refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
+
+        Cluster cluster = mockCluster();
+        fetchAndRequestUpdate(new Cluster("mockClusterId", List.of(cluster.nodeById(0), cluster.nodeById(1)),
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), cluster.nodeById(0)));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+    }
+
+    @Test
+    public void testMetadataRefreshBackoffResetsAfterUpdateFailure() {
+        fetchAndRequestUpdate(mockCluster());
+        fetchAndRequestUpdate(mockCluster());
+        assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
+            2 * refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
+
+        mgr.transitionToUpdatePending(time.milliseconds());
+        mgr.updateFailed(new RuntimeException());
+        mgr.requestUpdate();
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+    }
+
+    @Test
+    public void testMetadataRefreshBackoffResetsAfterMetadataExpiry() {
+        fetchAndRequestUpdate(mockCluster());
+        fetchAndRequestUpdate(mockCluster());
+        assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
+            2 * refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
+
+        time.sleep(metadataExpireMs);
+        fetchAndRequestUpdate(mockCluster());
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
     }
 
     @Test
@@ -219,6 +275,12 @@ public class AdminMetadataManagerTest {
         RequestHeader header = RequestHeader.parse(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
         return ApiVersionsRequest.parse(new ByteBufferAccessor(buffer), header.apiVersion());
+    }
+
+    private void fetchAndRequestUpdate(Cluster cluster) {
+        mgr.transitionToUpdatePending(time.milliseconds());
+        mgr.update(cluster, time.milliseconds());
+        mgr.requestUpdate();
     }
 
     private static Cluster mockCluster() {
