@@ -4374,10 +4374,6 @@ public class GroupMetadataManager {
         return currentTimeMs >= assignmentTimestampMs + assignmentIntervalMs;
     }
 
-    public static String groupTargetAssignmentUpdateKey(String groupId) {
-        return groupId + "-assignor";
-    }
-
     /**
      * Cancels any stale offloaded target assignment updates for a group.
      * Must be called whenever the group epoch is bumped.
@@ -10418,6 +10414,19 @@ public class GroupMetadataManager {
      */
     static String consumerGroupSyncKey(String groupId, String memberId) {
         return "sync-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a group target assignment update key for the executor.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the target assignment update key.
+     */
+    static String groupTargetAssignmentUpdateKey(String groupId) {
+        return groupId + "-assignor";
     }
 
     // Visibility for testing
