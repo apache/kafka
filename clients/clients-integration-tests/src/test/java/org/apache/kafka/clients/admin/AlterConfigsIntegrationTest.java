@@ -27,9 +27,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 
@@ -42,6 +44,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
@@ -174,6 +177,65 @@ public class AlterConfigsIntegrationTest {
             "compact,delete"
         );
         assertEquals(List.of("compact", "delete"), brokerConfig().getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG));
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG, value = "file"),
+        @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG + ".file.class",
+            value = "org.apache.kafka.common.config.provider.FileConfigProvider")
+    })
+    public void testStaticConfigProviderDoesNotBlockDynamicUpdateThroughBroker() throws Exception {
+        checkUnrelatedDynamicUpdateApplied(new ConfigResource(ConfigResource.Type.BROKER, ""), false);
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG, value = "file"),
+        @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG + ".file.class",
+            value = "org.apache.kafka.common.config.provider.FileConfigProvider")
+    })
+    public void testStaticConfigProviderDoesNotBlockDynamicUpdateThroughController() throws Exception {
+        checkUnrelatedDynamicUpdateApplied(new ConfigResource(ConfigResource.Type.BROKER, ""), true);
+    }
+
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG, value = "file"),
+            @ClusterConfigProperty(key = CONFIG_PROVIDERS_CONFIG + ".file.class",
+                value = "org.apache.kafka.common.config.provider.FileConfigProvider")
+        })
+    public void testStaticConfigProviderDoesNotBlockFileReloadForPerBrokerUpdate() throws Exception {
+        checkUnrelatedDynamicUpdateApplied(brokerResource(), true);
+    }
+
+    private void checkUnrelatedDynamicUpdateApplied(ConfigResource target, boolean usingBootstrapControllers) throws Exception {
+        String previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        try {
+            System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none");
+            try (Admin admin = clusterInstance.admin(Map.of(), usingBootstrapControllers)) {
+                admin.incrementalAlterConfigs(Map.of(target, List.of(
+                    new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "2222"), AlterConfigOp.OpType.SET)
+                ))).all().get();
+            }
+            TestUtils.waitForCondition(
+                () -> clusterInstance.firstNonFatalException().isPresent() ||
+                    brokerConfig().getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG) == 2222,
+                ServerConfigs.MESSAGE_MAX_BYTES_CONFIG + " was neither applied nor reported as a fault"
+            );
+            Optional<FaultHandlerException> fault = clusterInstance.firstNonFatalException();
+            assertTrue(fault.isEmpty(), () -> "Unexpected metadata publishing fault: " + fault.get());
+            assertEquals(2222, brokerConfig().getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG));
+            try (Admin admin = clusterInstance.admin()) {
+                assertEquals("file", describeConfig(admin, brokerResource(), CONFIG_PROVIDERS_CONFIG).value());
+            }
+        } finally {
+            if (previous == null) {
+                System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+            } else {
+                System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous);
+            }
+        }
     }
 
     private void checkAlterConfigs(Map<String, Object> adminConfig, Class<? extends Throwable> expectedCause, String value, boolean placeholder) {

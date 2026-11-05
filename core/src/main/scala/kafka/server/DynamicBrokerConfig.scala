@@ -26,7 +26,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.Logging
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SslConfigs}
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -309,7 +309,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         r match {
           case reconfigurable: ListenerReconfigurable =>
             val kafkaProps = validatedKafkaProps(newProps, perBrokerConfig = true)
-            val newConfig = KafkaConfig(kafkaProps.asJava, doLog = false, enforceProviderAllowlist = true)
+            val newConfig = KafkaConfig.fromResolvedProps(kafkaProps.asJava, doLog = false)
             processListenerReconfigurable(reconfigurable, newConfig, Collections.emptyMap(), validateOnly = false, reloadOnly = true)
           case reconfigurable =>
             trace(s"Files will not be reloaded without config change for $reconfigurable")
@@ -348,17 +348,41 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
     val propsResolved = JDynamicBrokerConfig.resolveVariableConfigs(propsOverride)
     JDynamicBrokerConfig.validateConfigs(propsOverride, propsResolved, perBrokerConfig)
+    val resolvedOverride = withProviderConfigs(propsResolved.asScala, propsOverride.asScala)
+    if (perBrokerConfig)
+      mergedProps(resolvedConfigs(dynamicDefaultConfigs), resolvedOverride)
+    else
+      mergedProps(resolvedOverride, resolvedConfigs(dynamicBrokerConfigs))
+  }
+
+  /**
+   * Merge the static configs with the resolved dynamic layers in increasing precedence.
+   */
+  private def mergedProps(resolvedDefaultConfigs: mutable.Map[String, String],
+                          resolvedBrokerConfigs: mutable.Map[String, String]): mutable.Map[String, String] = {
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
-    if (perBrokerConfig) {
-      overrideProps(newProps, dynamicDefaultConfigs)
-      overrideProps(newProps, propsResolved.asScala)
-    } else {
-      overrideProps(newProps, propsResolved.asScala)
-      overrideProps(newProps, dynamicBrokerConfigs)
-    }
+    overrideProps(newProps, resolvedDefaultConfigs)
+    overrideProps(newProps, resolvedBrokerConfigs)
     newProps
   }
+
+  /**
+   * Resolve a dynamic layer with its own config providers, subject to the allowlist, keeping its provider configs.
+   */
+  private def resolvedConfigs(configs: mutable.Map[String, String]): mutable.Map[String, String] = {
+    val props = new Properties
+    configs.foreachEntry((k, v) => props.put(k, v))
+    withProviderConfigs(JDynamicBrokerConfig.resolveVariableConfigs(props).asScala, configs)
+  }
+
+  private def withProviderConfigs(resolved: mutable.Map[String, String],
+                                  original: mutable.Map[String, String]): mutable.Map[String, String] = {
+    original.foreachEntry((k, v) => if (isConfigProviderConfig(k)) resolved.put(k, v))
+    resolved
+  }
+
+  private def isConfigProviderConfig(name: String): Boolean = name.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)
 
   private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = inReadLock(lock, () => {
     val newProps = validatedKafkaProps(props, perBrokerConfig)
@@ -425,11 +449,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def updateCurrentConfig(doLog: Boolean): Unit = {
-    val newProps = mutable.Map[String, String]()
-    newProps ++= staticBrokerConfigs
-    overrideProps(newProps, dynamicDefaultConfigs)
-    overrideProps(newProps, dynamicBrokerConfigs)
-    KafkaConfig.clampDynamicConfigs(newProps.asJava)
+    val newProps = mergedProps(resolvedConfigs(dynamicDefaultConfigs), resolvedConfigs(dynamicBrokerConfigs))
+    val propsForClamping = new util.HashMap[String, String](newProps.filterNot { case (k, _) => isConfigProviderConfig(k) }.asJava)
+    KafkaConfig.clampDynamicConfigs(propsForClamping)
+    propsForClamping.forEach((k, v) => newProps(k) = v)
 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
@@ -443,7 +466,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean, doLog: Boolean = false): (KafkaConfig, List[BrokerReconfigurable]) = {
-    val newConfig = KafkaConfig(newProps.asJava, doLog, enforceProviderAllowlist = true)
+    val newConfig = KafkaConfig.fromResolvedProps(newProps.asJava, doLog)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {

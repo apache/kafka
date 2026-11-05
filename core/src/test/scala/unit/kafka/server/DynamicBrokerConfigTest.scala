@@ -17,12 +17,6 @@
 
 package kafka.server
 
-import java.io.File
-import java.{lang, util}
-import java.nio.file.Files
-import java.util.{Optional, Properties, Map => JMap}
-import java.util.concurrent.{CompletionStage, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -54,6 +48,12 @@ import org.mockito.ArgumentMatchers.{anySet, anyString}
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.io.File
+import java.nio.file.{Files, Path}
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{CompletionStage, TimeUnit}
+import java.util.{Optional, Properties, Map => JMap}
+import java.{lang, util}
 import scala.collection.Set
 import scala.jdk.CollectionConverters._
 
@@ -119,28 +119,129 @@ class DynamicBrokerConfigTest {
       config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
   }
 
-  @Test
-  def testAssignmentIntervalResolvedThroughConfigProviderIsApplied(): Unit = {
-    val providerFile = Files.createTempFile("provider", ".properties")
+  private def withProviderFile(content: String)(body: Path => Unit): Unit = {
+    val file = Files.createTempFile("provider", ".properties")
     try {
-      Files.writeString(providerFile, "interval=2000")
+      Files.writeString(file, content)
+      body(file)
+    } finally Files.deleteIfExists(file)
+  }
 
-      val props = TestUtils.createBrokerConfig(0, port = 8181)
-      val config = KafkaConfig(props)
-      val dynamicConfig = config.dynamicConfig
-      dynamicConfig.initialize(None)
-
-      val props1 = new Properties
-      props1.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
-      props1.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
-      props1.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
-        "${file:" + providerFile.toAbsolutePath + ":interval}")
-      dynamicConfig.updateBrokerConfig(0, props1)
-
-      assertEquals(2000, config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+  private def withAutomaticConfigProviders(value: String)(body: => Unit): Unit = {
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, value)
+      body
     } finally {
-      Files.deleteIfExists(providerFile)
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
     }
+  }
+
+  private def putFileProvider(props: Properties, name: String): Unit = {
+    props.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, name)
+    props.put(s"${AbstractConfig.CONFIG_PROVIDERS_CONFIG}.$name.class", classOf[FileConfigProvider].getName)
+  }
+
+  @Test
+  def testAssignmentIntervalResolvedThroughDynamicConfigProviderIsApplied(): Unit = withProviderFile("interval=2000") { file =>
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+
+    val update = new Properties
+    putFileProvider(update, "file")
+    update.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, s"$${file:${file.toAbsolutePath}:interval}")
+    config.dynamicConfig.updateBrokerConfig(0, update)
+
+    assertEquals(2000, config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+  }
+
+  @Test
+  def testStaticConfigProviderDoesNotBlockDynamicUpdatesWithRestrictiveAllowlist(): Unit = withProviderFile("threads=10") { file =>
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    putFileProvider(props, "file")
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, s"$${file:${file.toAbsolutePath}:threads}")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+    assertEquals(10, config.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
+
+    withAutomaticConfigProviders("none") {
+      val update = new Properties
+      update.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "2222")
+      config.dynamicConfig.validate(update, perBrokerConfig = false)
+      config.dynamicConfig.updateDefaultConfig(update)
+      assertEquals(2222, config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG))
+      assertEquals(10, config.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
+    }
+  }
+
+  @Test
+  def testDynamicConfigProviderRespectsAllowlist(): Unit = withProviderFile("bytes=2222") { file =>
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+
+    withAutomaticConfigProviders("none") {
+      val update = new Properties
+      putFileProvider(update, "file")
+      update.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, s"$${file:${file.toAbsolutePath}:bytes}")
+      assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(update, perBrokerConfig = true))
+      config.dynamicConfig.updateBrokerConfig(0, update)
+      assertEquals(ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG))
+    }
+  }
+
+  @Test
+  def testDynamicLayersResolveTheirOwnConfigProviders(): Unit = withProviderFile("threads=10\nbytes=2222") { file =>
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    config.dynamicConfig.initialize(None)
+
+    val defaults = new Properties
+    putFileProvider(defaults, "file")
+    defaults.put(ServerConfigs.NUM_IO_THREADS_CONFIG, s"$${file:${file.toAbsolutePath}:threads}")
+    config.dynamicConfig.updateDefaultConfig(defaults)
+
+    val perBroker = new Properties
+    putFileProvider(perBroker, "file2")
+    perBroker.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, s"$${file2:${file.toAbsolutePath}:bytes}")
+    config.dynamicConfig.updateBrokerConfig(0, perBroker)
+
+    assertEquals(10, config.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
+    assertEquals(2222, config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG))
+  }
+
+  @Test
+  def testConfigProvidersRemainInEffectiveConfigAfterUpdate(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    putFileProvider(props, "file")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    val defaults = new Properties
+    defaults.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "2222")
+    config.dynamicConfig.updateDefaultConfig(defaults)
+    assertEquals(util.List.of("file"), config.getList(AbstractConfig.CONFIG_PROVIDERS_CONFIG))
+
+    val perBroker = new Properties
+    putFileProvider(perBroker, "file2")
+    config.dynamicConfig.updateBrokerConfig(0, perBroker)
+    assertEquals(util.List.of("file2"), config.getList(AbstractConfig.CONFIG_PROVIDERS_CONFIG))
+    assertEquals(classOf[FileConfigProvider].getName, config.originals.get(s"${AbstractConfig.CONFIG_PROVIDERS_CONFIG}.file2.class"))
+  }
+
+  @Test
+  def testDynamicStringConfigCannotUseStaticOnlyConfigProvider(): Unit = withProviderFile("alg=HTTPS_FROM_FILE") { file =>
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    putFileProvider(props, "file")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    val key = s"listener.name.plaintext.${SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG}"
+    val value = s"$${file:${file.toAbsolutePath}:alg}"
+    val update = new Properties
+    update.put(key, value)
+    config.dynamicConfig.updateBrokerConfig(0, update)
+
+    assertEquals(value, config.originals.get(key))
   }
 
   @Test
