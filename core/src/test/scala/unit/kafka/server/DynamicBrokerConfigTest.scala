@@ -229,6 +229,18 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testDynamicIntConfigCannotUseStaticOnlyConfigProvider(): Unit = withProviderFile("bytes=2222") { file =>
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    putFileProvider(props, "file")
+    val config = KafkaConfig(props)
+    config.dynamicConfig.initialize(None)
+
+    val update = new Properties
+    update.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, s"$${file:${file.toAbsolutePath}:bytes}")
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(update, perBrokerConfig = true))
+  }
+
+  @Test
   def testDynamicStringConfigCannotUseStaticOnlyConfigProvider(): Unit = withProviderFile("alg=HTTPS_FROM_FILE") { file =>
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     putFileProvider(props, "file")

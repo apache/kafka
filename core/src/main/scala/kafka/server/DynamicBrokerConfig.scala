@@ -368,7 +368,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   /**
-   * Resolve a dynamic layer with its own config providers, subject to the allowlist, keeping its provider configs.
+   * Resolves the given cluster default or per-broker configs with the config providers declared in them.
+   * Their config.providers* entries are returned unchanged.
    */
   private def resolvedConfigs(configs: mutable.Map[String, String]): mutable.Map[String, String] = {
     val props = new Properties
