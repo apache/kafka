@@ -2149,13 +2149,10 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);
         assertTrue(transactionManager.hasError());
 
-        try {
-            // make sure the produce was expired.
-            responseFuture.get();
-            fail("Expected to get a ExecutionException from the response");
-        } catch (ExecutionException e) {
-            assertInstanceOf(ProducerFencedException.class, e.getCause());
-        }
+        // make sure the produce was expired.
+        ExecutionException e = assertThrows(ExecutionException.class, responseFuture::get,
+                "Expected to get a ExecutionException from the response");
+        assertInstanceOf(ProducerFencedException.class, e.getCause());
 
         // make sure the exception was thrown directly from the follow-up calls.
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());

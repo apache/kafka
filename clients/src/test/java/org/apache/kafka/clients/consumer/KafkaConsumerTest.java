@@ -618,14 +618,12 @@ public class KafkaConsumerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try {
-            newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            fail("should have caught an exception and returned");
-        } catch (KafkaException e) {
-            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            assertEquals("Failed to construct kafka consumer", e.getMessage());
-        }
+        KafkaException e = assertThrows(KafkaException.class,
+                () -> newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()),
+                "should have caught an exception and returned");
+        assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
+        assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+        assertEquals("Failed to construct kafka consumer", e.getMessage());
     }
 
     @ParameterizedTest

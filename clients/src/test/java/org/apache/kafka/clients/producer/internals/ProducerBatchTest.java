@@ -53,7 +53,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerBatchTest {
 
@@ -81,12 +80,9 @@ public class ProducerBatchTest {
         assertEquals(1, callback.invocations);
 
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have thrown");
-        } catch (ExecutionException e) {
-            assertEquals(exception, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, future::get,
+                "Future should have thrown");
+        assertEquals(exception, e.getCause());
     }
 
     @Test
@@ -104,12 +100,9 @@ public class ProducerBatchTest {
 
         assertEquals(1, callback.invocations);
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have thrown");
-        } catch (ExecutionException e) {
-            assertEquals(exception, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, future::get,
+                "Future should have thrown");
+        assertEquals(exception, e.getCause());
     }
 
     @Test
