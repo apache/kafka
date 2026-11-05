@@ -544,4 +544,9 @@ public class MockController implements Controller {
     public CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(ControllerRequestContext context, AssignReplicasToDirsRequestData request) {
         throw new java.lang.UnsupportedOperationException("not implemented");
     }
+
+    @Override
+    public CompletableFuture<Void> forceRenounce() {
+        return CompletableFuture.completedFuture(null);
+    }
 }

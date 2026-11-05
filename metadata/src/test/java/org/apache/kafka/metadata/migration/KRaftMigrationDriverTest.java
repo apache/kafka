@@ -144,6 +144,7 @@ public class KRaftMigrationDriverTest {
             .setZkRecordConsumer(new NoOpRecordConsumer())
             .setInitialZkLoadHandler(metadataPublisher -> { })
             .setFaultHandler(new MockFaultHandler("test"))
+            .setMigrationConflictFaultHandler(new MockFaultHandler("test migration conflict"))
             .setQuorumFeatures(QUORUM_FEATURES)
             .setConfigSchema(KafkaConfigSchema.EMPTY)
             .setControllerMetrics(metrics)
@@ -407,6 +408,58 @@ public class KRaftMigrationDriverTest {
             } else {
                 Assertions.assertNull(faultHandler.firstException());
             }
+        }
+    }
+
+    @Test
+    public void testMigrationWithMigrationConflictException() throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient(),
+                CapturingMigrationClient.EMPTY_BATCH_SUPPLIER) {
+            @Override
+            public ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state) {
+                throw new MigrationConflictException("Some conflict exception");
+            }
+        };
+        MockFaultHandler faultHandler = new MockFaultHandler("testMigrationWithMigrationConflictException");
+        MockFaultHandler migrationConflictFaultHandler = new MockFaultHandler("testMigrationWithMigrationConflictException-conflict");
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setFaultHandler(faultHandler)
+            .setMigrationConflictFaultHandler(migrationConflictFaultHandler)
+            .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+            setupDeltaForMigration(delta, true);
+
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Notify the driver that it is the leader
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            // Publish metadata of all the ZK brokers being ready
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+
+            // claimControllerLeadership succeeds, but the subsequent setMigrationRecoveryState call always throws, so
+            // the driver marks itself inactive and notifies the migration conflict fault handler instead of reaching DUAL_WRITE.
+            TestUtils.waitForCondition(() -> migrationConflictFaultHandler.firstException() != null,
+                "Waiting for the migration conflict fault handler to be called");
+            assertEquals(MigrationConflictException.class, migrationConflictFaultHandler.firstException().getCause().getClass());
+            assertEquals(MigrationDriverState.INACTIVE, driver.migrationState().get(1, TimeUnit.MINUTES));
+
+            // The conflict is not be reported to the ordinary fault handler.
+            Assertions.assertNull(faultHandler.firstException());
         }
     }
 
