@@ -23,9 +23,9 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState, MetadataCache}
+import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderConstants, LeaderRecoveryState, MetadataCache}
 import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
 import java.util.Arrays.asList
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -980,6 +980,58 @@ class MetadataCacheTest {
     val fencedBroker = cluster.nodeById(broker1)
     assertNotNull(fencedBroker)
     assertTrue(fencedBroker.isFenced)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetPartitionLeaderEndpointForKnownPartitionWithoutEndpoint(cache: MetadataCache): Unit = {
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val topic = "topic"
+    val topicId = Uuid.randomUuid
+    val records = Seq(new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setBrokerEpoch(brokerEpoch)
+      .setRack(null)
+      .setFenced(false)
+      .setEndPoints(new BrokerEndpointCollection(Seq(new BrokerEndpoint()
+        .setHost("foo0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(listenerName.value)).iterator.asJava)),
+      new TopicRecord()
+        .setName(topic)
+        .setTopicId(topicId),
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+        .setIsr(util.List.of(0))
+        .setReplicas(util.List.of(0)),
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(1)
+        .setLeader(1)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+        .setIsr(util.List.of(1))
+        .setReplicas(util.List.of(1)),
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(2)
+        .setLeader(LeaderConstants.NO_LEADER)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+        .setIsr(util.List.of)
+        .setReplicas(util.List.of(0)))
+    MetadataCacheTest.updateCache(cache, records)
+    assertEquals(Optional.of(new Node(0, "foo0", 9092)), cache.getPartitionLeaderEndpoint(topic, 0, listenerName))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 0, ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 1, listenerName))
+    assertEquals(Optional.of(Node.noNode), cache.getPartitionLeaderEndpoint(topic, 2, listenerName))
+    assertEquals(Optional.empty, cache.getPartitionLeaderEndpoint(topic, 3, listenerName))
+    assertEquals(Optional.empty, cache.getPartitionLeaderEndpoint("missing-topic", 0, listenerName))
   }
 
   val oldRequestControllerEpoch: Int = 122
