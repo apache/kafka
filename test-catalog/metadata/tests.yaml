@@ -301,11 +301,13 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testBuilderRequiresPositiveMaxRecordsPerBatch
 - testCancelReassignPartitions
 - testCreatePartitions
+- testCreatePartitionsFailsIfLogDirNameIsTooLong
 - testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown
 - testCreatePartitionsFailsWithManualAssignmentWithAllFenced
 - testCreatePartitionsISRInvariants
 - testCreatePartitionsWithMutationQuotaExceeded
 - testCreatePartitionsWithOverSizedBatch
+- testCreateTopicFailsIfLogDirNameIsTooLong
 - testCreateTopicWithCollisionChars
 - testCreateTopics
 - testCreateTopicsISRInvariants
@@ -352,6 +354,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testTotalNumberOfPartitionsValidationDoesNotOverflow
 - testValidateBadManualPartitionAssignments
 - testValidateGoodManualPartitionAssignments
+- testValidateLogDirNameLength
 - testValidateNewTopicNames
 org.apache.kafka.controller.ResultOrErrorTest:
 - testEquals
