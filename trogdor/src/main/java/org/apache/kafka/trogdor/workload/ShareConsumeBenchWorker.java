@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.workload;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -60,10 +61,13 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -72,6 +76,10 @@ public class ShareConsumeBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ShareConsumeBenchWorker.class);
 
     private static final int THROTTLE_PERIOD_MS = 100;
+
+    private static final int ALTER_CONFIGS_ATTEMPTS = 5;
+    private static final long ALTER_CONFIGS_BACKOFF_MS = 2000;
+    private static final long ALTER_CONFIGS_BACKOFF_JITTER_MS = 100;
 
     private final String id;
     private final ShareConsumeBenchSpec spec;
@@ -140,11 +148,70 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         return new AlterConfigOp(new ConfigEntry(name, value), AlterConfigOp.OpType.SET);
     }
 
+    /**
+     * Sets the configs unless the resource already has them, retrying on failure. Every consumer of a share group sets
+     * up the same DLQ, so the later ones find the configs already in place and leave them alone instead of all
+     * rewriting the same group config at once. The broker has been seen to reject such concurrent writes with an
+     * UnknownServerException.
+     */
     private static void alterConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops) throws Exception {
+        alterConfigs(adminClient, resource, ops, Time.SYSTEM);
+    }
+
+    // Package-private so that a test can pass a MockTime and not wait for the real backoff.
+    static void alterConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops, Time time) throws Exception {
+        Exception failure = null;
+        for (int attempt = 1; attempt <= ALTER_CONFIGS_ATTEMPTS; attempt++) {
+            try {
+                // Another consumer can set the configs between this describe and the alter below. That is harmless:
+                // every consumer sets the same values, so a second write changes nothing, and if the broker fails it
+                // because it overlaps with the other write, the next attempt's describe sees the values and stops.
+                // The describe only makes the concurrent writes rarer, it is not a lock.
+                if (hasConfigs(adminClient, resource, ops)) {
+                    log.info("{} already has the configs {}, leaving them alone (attempt {}/{}).",
+                        resource, ops, attempt, ALTER_CONFIGS_ATTEMPTS);
+                    return;
+                }
+                adminClient.incrementalAlterConfigs(Map.of(resource, ops)).all().get(60, TimeUnit.SECONDS);
+                log.info("Altered configs {} of {} (attempt {}/{}).", ops, resource, attempt, ALTER_CONFIGS_ATTEMPTS);
+                return;
+            } catch (Exception e) {
+                failure = e;
+                if (attempt < ALTER_CONFIGS_ATTEMPTS) {
+                    long backoffMs = ALTER_CONFIGS_BACKOFF_MS
+                        + ThreadLocalRandom.current().nextLong(ALTER_CONFIGS_BACKOFF_JITTER_MS + 1);
+                    log.warn("Failed to alter configs {} of {} (attempt {}/{}), retrying in {} ms.",
+                        ops, resource, attempt, ALTER_CONFIGS_ATTEMPTS, backoffMs, e);
+                    time.sleep(backoffMs);
+                } else {
+                    log.warn("Failed to alter configs {} of {} (attempt {}/{}), giving up.",
+                        ops, resource, attempt, ALTER_CONFIGS_ATTEMPTS, e);
+                }
+            }
+        }
+        throw new RuntimeException("Failed to alter configs " + ops + " of " + resource + " after "
+                + ALTER_CONFIGS_ATTEMPTS + " attempts: " + failure, failure);
+    }
+
+    private static boolean hasConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops) {
         try {
-            adminClient.incrementalAlterConfigs(Map.of(resource, ops)).all().get(60, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to alter configs " + ops + " of " + resource, e);
+            Config config = adminClient.describeConfigs(List.of(resource)).all().get(60, TimeUnit.SECONDS).get(resource);
+            if (config == null) {
+                return false;
+            }
+            for (AlterConfigOp op : ops) {
+                ConfigEntry entry = config.get(op.configEntry().name());
+                if (entry == null || !op.configEntry().value().equals(entry.value())) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException | TimeoutException e) {
+            // Not being able to read the configs just means they have to be set.
+            return false;
         }
     }
 
