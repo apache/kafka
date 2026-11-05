@@ -27,7 +27,7 @@ import org.apache.kafka.server.common.TransactionVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
-import org.mockito.Mockito.{mock, verify, when}
+import org.mockito.Mockito.{mock, never, verify, when}
 
 class TransactionMarkerRequestCompletionHandlerTest {
 
@@ -183,6 +183,40 @@ class TransactionMarkerRequestCompletionHandlerTest {
   def shouldRemoveTopicPartitionFromWaitingSetOnUnsupportedForMessageFormat(): Unit = {
     mockCache()
     verifyCompleteDelayedOperationOnError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)
+  }
+
+  @Test
+  def shouldHandleRemainingEntriesWhenOneEntryFails(): Unit = {
+    mockCache()
+
+    val otherTransactionalId = "txnId2"
+    val otherProducerId = 1L
+    val otherTopicPartition = new TopicPartition("topic2", 0)
+    val otherTxnMetadata = new TransactionMetadata(otherTransactionalId, otherProducerId, otherProducerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(otherTopicPartition), 0L, 0L, TransactionVersion.TV_2)
+    when(txnStateManager.getTransactionState(ArgumentMatchers.eq(otherTransactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, otherTxnMetadata))))
+
+    val entries = util.List.of(
+      pendingCompleteTxnAndMarkers.get(0),
+      new PendingCompleteTxnAndMarkerEntry(
+        new PendingCompleteTxn(otherTransactionalId, coordinatorEpoch, otherTxnMetadata, otherTxnMetadata.prepareComplete(42)),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(otherProducerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(otherTopicPartition), 0)))
+    val multiEntryHandler = new TransactionMarkerRequestCompletionHandler(brokerId, txnStateManager, markerChannelManager, entries)
+
+    // The first entry fails with a fatal error, the second one succeeds.
+    val pidMap = new util.HashMap[lang.Long, util.Map[TopicPartition, Errors]]()
+    pidMap.put(producerId, util.Map.of(topicPartition, Errors.CORRUPT_MESSAGE))
+    pidMap.put(otherProducerId, util.Map.of(otherTopicPartition, Errors.NONE))
+    val response = new WriteTxnMarkersResponse(pidMap)
+
+    assertThrows(classOf[IllegalStateException], () => multiEntryHandler.onComplete(new ClientResponse(new RequestHeader(
+      ApiKeys.PRODUCE, 0, "client", 1), null, null, 0, 0, false, null, null, response)))
+
+    assertEquals(util.Set.of(topicPartition), txnMetadata.topicPartitions)
+    assertTrue(otherTxnMetadata.topicPartitions.isEmpty)
+    verify(markerChannelManager).maybeWriteTxnCompletion(otherTransactionalId)
+    verify(markerChannelManager, never()).maybeWriteTxnCompletion(transactionalId)
   }
 
   private def verifyRetriesPartitionOnError(error: Errors): Unit = {
