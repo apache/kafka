@@ -568,7 +568,7 @@ public class GroupMetadataManager {
      *   <li>finish after another epoch bump, which we cannot reliably detect on completion of the
      *       assignor run. Instead, when bumping the group epoch, we check the assignment epoch of
      *       the in-flight assignor run if it exists and cancel the run if its assignment epoch is
-     *       greater than the unbumped group epoch.</li>
+     *       greater than or equal to the new group epoch, i.e. the bump retreads an epoch.</li>
      * </ul>
      */
     private final Map<String, Integer> inflightOffloadedAssignorEpochs;
