@@ -969,6 +969,7 @@ org.apache.kafka.coordinator.group.OffsetMetadataManagerTest:
 - testOffsetCommitsSensor
 - testOffsetDeletionsSensor
 - testOffsetsExpiredSensor
+- testOffsetsExpiredSensorWithNonEmptyRecords
 - testOnTopicsDeletedWithMatchingTopicId
 - testOnTopicsDeletedWithMismatchedTopicId
 - testOnTopicsDeletedWithMixedTopicIds
