@@ -20,9 +20,10 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
@@ -308,6 +309,130 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
+  def testClassicHeartbeatTriggersRebalanceWithOnlyClassicMembers(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topics.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+    createTopic(
+      topic = "bar",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2))
+    )
+
+    // The joining request with a consumer group member 2 is accepted. Member 2 subscribes to a
+    // different topic so that member 1 keeps its partitions.
+    val memberId2 = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("bar"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    ).memberId
+
+    // Member 1 rejoins and syncs to catch up with the new target assignment.
+    val rejoinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      memberId = memberId1,
+      metadata = metadata(List(0, 1, 2))
+    )
+    assertEquals(Errors.NONE.code, rejoinGroupResponseData.errorCode)
+    assertEquals(2, rejoinGroupResponseData.generationId)
+
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = 2,
+      expectedAssignment = assignment(List(0, 1, 2))
+    )
+
+    // Member 2 leaves the group. The group is not downgraded because the migration policy
+    // does not allow it, so all the remaining members use the classic protocol. The new target
+    // assignment has not been computed yet.
+    leaveGroupWithNewProtocol(
+      groupId = groupId,
+      memberId = memberId2
+    )
+
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+
+    // Member 1 heartbeats until the new target assignment is computed and it is told to
+    // rebalance. When assignment batching is enabled, this waits for the assignment interval.
+    var heartbeatResponseData: HeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      heartbeatResponseData = connectAndReceive[HeartbeatResponse](
+        new HeartbeatRequest.Builder(
+          new HeartbeatRequestData()
+            .setGroupId(groupId)
+            .setGenerationId(2)
+            .setMemberId(memberId1)
+        ).build()
+      ).data
+      heartbeatResponseData.errorCode == Errors.REBALANCE_IN_PROGRESS.code
+    }, msg = s"Member 1 was not told to rebalance. Last response $heartbeatResponseData.")
+
+    // Member 1 rejoins and syncs. The group is stable again.
+    val rejoinGroupResponseData2 = sendJoinRequest(
+      groupId = groupId,
+      memberId = memberId1,
+      metadata = metadata(List(0, 1, 2))
+    )
+    assertEquals(Errors.NONE.code, rejoinGroupResponseData2.errorCode)
+    assertEquals(3, rejoinGroupResponseData2.generationId)
+
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = 3,
+      expectedAssignment = assignment(List(0, 1, 2))
+    )
+
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
           .setGroupType(Group.GroupType.CONSUMER.toString)
       ),
       listGroups(
