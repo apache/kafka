@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -152,8 +154,10 @@ public class FeatureCommand {
                 .help("DEPRECATED -- The level to which we should upgrade the metadata. For example, 3.3-IV3.")
                 .action(store());
         upgradeParser.addArgument("--release-version")
-                .help("The release version to update all features to. For example, 3.9-IV0 will set metadata.version=21 and kraft.version=1." +
-                      " Use the version-mapping command to learn which features will be set for any given version.")
+                .help("The release version to update features to. kraft.version is left unchanged when it is currently 0 " +
+                      "so that a static controller quorum is not converted to a dynamic quorum. " +
+                      "Use --feature kraft.version=1 to perform that conversion. " +
+                      "Use the version-mapping command to learn which features will be set for any given version.")
                 .action(store());
         upgradeParser.addArgument("--feature")
                 .help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
@@ -310,9 +314,14 @@ public class FeatureCommand {
             } catch (Throwable e) {
                 throw new TerseException(e.getMessage());
             }
+            short currentKraftVersion = upgradeType == FeatureUpdate.UpgradeType.UPGRADE
+                    ? finalizedKraftVersion(admin) : 0;
             try {
                 for (Feature feature : Feature.PRODUCTION_FEATURES) {
                     short featureLevel = feature.defaultLevel(metadataVersion);
+                    if (omitStaticKraftVersionUpgrade(currentKraftVersion, feature, upgradeType)) {
+                        continue;
+                    }
                     // Don't send a request to upgrade a feature to 0.
                     if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
                         updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
@@ -346,6 +355,30 @@ public class FeatureCommand {
         }
 
         update(op, admin, updates, namespace.getBoolean("dry_run"));
+    }
+
+    private static short finalizedKraftVersion(Admin admin) throws TerseException {
+        try {
+            FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
+            FinalizedVersionRange kraftRange = featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME);
+            return kraftRange == null ? 0 : kraftRange.maxVersionLevel();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TerseException("Interrupted while describing features.");
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            throw new TerseException("Failed to describe features: " + cause.getMessage());
+        }
+    }
+
+    private static boolean omitStaticKraftVersionUpgrade(
+            short currentKraftVersion,
+            Feature feature,
+            FeatureUpdate.UpgradeType upgradeType
+    ) {
+        return upgradeType == FeatureUpdate.UpgradeType.UPGRADE
+                && currentKraftVersion == 0
+                && KRaftVersion.FEATURE_NAME.equals(feature.featureName());
     }
 
     static void handleDisable(Namespace namespace, Admin adminClient) throws TerseException {
