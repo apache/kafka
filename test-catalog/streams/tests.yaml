@@ -3551,6 +3551,7 @@ org.apache.kafka.streams.processor.internals.assignment.AssignmentInfoTest:
 - shouldNotEncodeAndDecodeNamedTopologiesWithOlderVersion
 - shouldThrowForUnknownVersion1
 - shouldThrowForUnknownVersion2
+- shouldThrowOnTopicIndexNotInDictionary
 - shouldUseLatestSupportedVersionByDefault
 org.apache.kafka.streams.processor.internals.assignment.AssignorConfigurationTest:
 - configsShouldRejectZeroWarmups
