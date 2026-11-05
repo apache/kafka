@@ -718,6 +718,7 @@ org.apache.kafka.tools.consumer.ConsoleConsumerOptionsTest:
 - shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningUsingCommandProperty
 - shouldExitOnOffsetWithoutPartition
 - shouldExitOnUnrecognizedNewConsumerOption
+- shouldLoadMirrorStateMessageFormatter
 - shouldParseConfigsFromFileDeprecated
 - shouldParseConfigsFromFileUsingCommandConfig
 - shouldParseGroupIdFromBeginningGivenTogether
@@ -789,6 +790,10 @@ org.apache.kafka.tools.consumer.DefaultMessageFormatterTest:
 - testDefaultMessageFormatter
 org.apache.kafka.tools.consumer.GroupMetadataMessageFormatterTest:
 - testMessageFormatter
+org.apache.kafka.tools.consumer.MirrorStateMessageFormatterTest:
+- testMalformedRecord
+- testMessageFormatter
+- testUnsupportedValueVersion
 org.apache.kafka.tools.consumer.NoOpMessageFormatterTest:
 - testNoOpMessageFormatter
 org.apache.kafka.tools.consumer.OffsetMessageFormatterTest:
