@@ -48,6 +48,7 @@ import java.util.Map;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.StringToClassMapItem;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -120,7 +121,14 @@ public class ConnectorsResource {
         description = "Connector names retrieved successfully. When expand is supplied, connector details are returned keyed by connector name",
         content = @Content(
             mediaType = MediaType.APPLICATION_JSON,
-            schema = @Schema(oneOf = {String[].class, Object.class})
+            schema = @Schema(oneOf = {String[].class, Object.class}),
+            additionalPropertiesSchema = @Schema(
+                type = "object",
+                properties = {
+                    @StringToClassMapItem(key = "info", value = ConnectorInfo.class),
+                    @StringToClassMapItem(key = "status", value = ConnectorStateInfo.class)
+                }
+            )
         )
     )
     public Response listConnectors(
