@@ -31,7 +31,7 @@ import java.util.Set;
 public class ConsumerMetadata extends Metadata {
     private final boolean includeInternalTopics;
     private final boolean allowAutoTopicCreation;
-    private final SubscriptionState subscription;
+    private final ConsumerSubscriptionState subscription;
     private final Set<String> transientTopics;
 
     public ConsumerMetadata(long refreshBackoffMs,
@@ -39,7 +39,7 @@ public class ConsumerMetadata extends Metadata {
                             long metadataExpireMs,
                             boolean includeInternalTopics,
                             boolean allowAutoTopicCreation,
-                            SubscriptionState subscription,
+                            ConsumerSubscriptionState subscription,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
@@ -50,7 +50,7 @@ public class ConsumerMetadata extends Metadata {
     }
 
     public ConsumerMetadata(ConsumerConfig config,
-                            SubscriptionState subscriptions,
+                            ConsumerSubscriptionState subscriptions,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners) {
         this(config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),

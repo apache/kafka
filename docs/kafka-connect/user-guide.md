@@ -43,7 +43,7 @@ The first parameter is the configuration for the worker. This includes settings 
   * `bootstrap.servers` \- List of Kafka servers used to bootstrap connections to Kafka
   * `key.converter` \- Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.
   * `value.converter` \- Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.
-  * `plugin.path` (default `null`) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in `connect-file-4.3.0.jar`, because these connectors are not included by default to the `CLASSPATH` or the `plugin.path` of the Connect worker (see plugin.path property for examples).
+  * `plugin.path` (default `null`) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in `connect-file-4.4.0.jar`, because these connectors are not included by default to the `CLASSPATH` or the `plugin.path` of the Connect worker (see plugin.path property for examples).
 
 
 
@@ -293,7 +293,7 @@ The REST API is used not only by users to monitor / manage Kafka Connect. In dis
 The following are the currently supported REST API endpoints:
 
   * `GET /connectors` \- return a list of active connectors
-  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value)
+  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value). The JSON object may also optionally contain a JSON array `initial_offsets` field, in the same format as the `PATCH /connectors/{name}/offsets` request body; these replace (not merge with) any existing offsets for the connector name, and an invalid payload fails the request without creating the connector (see [KIP-995](https://cwiki.apache.org/confluence/display/KAFKA/KIP-995%3A+Allow+users+to+specify+initial+offsets+while+creating+connectors))
   * `GET /connectors/{name}` \- get information about a specific connector
   * `GET /connectors/{name}/config` \- get the configuration parameters for a specific connector
   * `PUT /connectors/{name}/config` \- update the configuration parameters for a specific connector

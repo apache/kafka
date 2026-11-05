@@ -20,7 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -482,7 +482,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                        final Deserializer<V> valueDeserializer,
                        final Time time,
                        final KafkaClient client,
-                       final SubscriptionState subscriptions,
+                       final ShareSubscriptionState subscriptions,
                        final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
                 logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
@@ -702,8 +702,8 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the consumer
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the consumer
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link ConsumerConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -713,7 +713,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *                The value must be non-negative. Specifying a timeout of zero means do not
      *                wait for the initial request to complete if it hasn't already.
      *
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      *
      * @throws IllegalArgumentException if the {@code timeout} is negative
      * @throws IllegalStateException if telemetry is not enabled
@@ -840,11 +840,6 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
-    }
-
-    // Functions below are for testing only
-    String clientId() {
-        return delegate.clientId();
     }
 
     Metrics metricsRegistry() {

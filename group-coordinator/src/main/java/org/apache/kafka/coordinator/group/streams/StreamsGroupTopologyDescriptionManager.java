@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
@@ -62,7 +63,7 @@ import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPO
  * and the per-group re-solicitation back-off. The push-RPC chain (validate → convert →
  * plugin → metadata write → back-off mutation, see {@link #pushTopology}) and the periodic
  * cleanup cycle's body (list eligible groups → mark uncertain → plugin delete → finalize, see
- * {@link #runCleanupCycle}) both live here now, reading and writing group state through
+ * {@link #runCleanupCycle}) both live here, reading and writing group state through
  * {@link TopologyDescriptionRuntime} so the same chains run unchanged on any host that supplies
  * an implementation of that interface. {@code GroupCoordinatorService} still owns the broker
  * timer and starts the cycle via {@link #startCleanupCycle}, which wraps the supplied cycle body
@@ -396,7 +397,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         recordPluginDeleteOutcome(stillEligible.size(), failures.size());
         // Shutdown can have started between the plugin call and this follow-up write.
         if (!running.get()) return CompletableFuture.completedFuture(null);
-        Set<String> toFinalize = new LinkedHashSet<>(stillEligible.size());
+        Set<String> toFinalize = Utils.newLinkedHashSet(stillEligible.size());
         for (String groupId : stillEligible) {
             if (failures.containsKey(groupId)) continue;
             clearBackoffGroup(groupId);
@@ -477,8 +478,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             try {
                 return maybeSetTopologyDescriptionRequired(result, groupId, apiVersion, memberEpoch);
             } catch (Throwable t) {
-                log.warn("Failed to apply topology-description post-processing on the "
-                    + "streams group heartbeat response for group {}; returning the response unmodified.",
+                log.warn("[GroupId {}] Failed to apply topology-description post-processing on the "
+                    + "streams group heartbeat response; returning the response unmodified.",
                     groupId, t);
                 return result;
             }
@@ -602,11 +603,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * Drop the back-off entry for a group unconditionally. Currently called when a group is
-     * removed via explicit DeleteGroups and on a post-plugin write failing with
-     * GroupIdNotFoundException. NOTE: groups removed by other lifecycle paths (session expiry,
-     * partition unload, tombstone-via-replay) are not yet wired to this, so their back-off
-     * entries can leak until the group id is reused. Delegates to
+     * Drop the back-off entry for a group unconditionally. Called once the plugin delete has
+     * succeeded for the group, by the cleanup cycle, the DeleteGroups flow and the classic-join
+     * conversion. NOTE: groups removed by other lifecycle paths (session expiry, partition
+     * unload, tombstone-via-replay) are not yet wired to this, so their back-off entries can
+     * leak until the group id is reused. Delegates to
      * {@link StreamsGroupTopologyDescriptionBackoff#clearGroup}.
      */
     private void clearBackoffGroup(String groupId) {
@@ -624,9 +625,9 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * exceptional future.
      *
      * <p>Pure plugin invocation: does not read group state, does not touch the back-off
-     * map, and does not record metrics. The service layer pre-filters the input, records
-     * delete-success / delete-error sensors on the returned failure count, and is
-     * responsible for invoking {@link #clearBackoffGroup} for the groups it chose to clear.
+     * map, and does not record metrics. The callers pre-filter the input, record the
+     * delete-success and delete-error sensors on the returned failure count, and invoke
+     * {@link #clearBackoffGroup} for the groups whose delete succeeded.
      */
     private CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
         if (plugin.isEmpty() || groupIds.isEmpty()) {
@@ -922,7 +923,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     ) {
         if (throwable != null) {
             Throwable cause = Errors.maybeUnwrapException(throwable);
-            log.warn("Topology description plugin getTopology failed for group {}.",
+            log.warn("[GroupId {}] Topology description plugin getTopology failed.",
                 describedGroup.groupId(), cause != null ? cause : throwable);
             recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);

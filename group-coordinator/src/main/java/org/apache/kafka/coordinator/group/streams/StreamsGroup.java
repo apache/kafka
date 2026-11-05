@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -57,7 +58,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -193,7 +193,7 @@ public class StreamsGroup implements Group {
     private final TimelineInteger failedDescriptionTopologyEpoch;
 
     /**
-     * The metadata hash which is computed based on the all subscribed topics.
+     * The metadata hash which is computed based on all the subscribed topics.
      */
     protected final TimelineLong metadataHash;
 
@@ -224,6 +224,15 @@ public class StreamsGroup implements Group {
      * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
      */
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
+
+    /**
+     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
+     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
+     * since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written in the heartbeat
+     * path, dropped when the member is removed and lost on coordinator failover. It is not persisted, so that it can
+     * never outlive the client that sent it.
+     */
+    private final Map<String, Integer> heartbeatVersions = new HashMap<>();
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
@@ -265,10 +274,11 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * The last used assignment configurations for this streams group.
+     * The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT} if the
+     * group metadata record has none.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
-    private final TimelineHashMap<String, String> lastAssignmentConfigs;
+    private final TimelineObject<AssignmentConfigsImpl> lastAssignmentConfigs;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -331,7 +341,7 @@ public class StreamsGroup implements Group {
         this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
     }
 
     /**
@@ -353,6 +363,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -360,6 +371,7 @@ public class StreamsGroup implements Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -589,6 +601,7 @@ public class StreamsGroup implements Group {
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
+        heartbeatVersions.remove(memberId);
     }
 
     /**
@@ -599,6 +612,20 @@ public class StreamsGroup implements Group {
      */
     public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
         taskOffsets.put(memberId, memberOffsets);
+    }
+
+    /**
+     * Records the version of the latest streams group heartbeat of a member.
+     */
+    public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
+        heartbeatVersions.put(memberId, heartbeatVersion);
+    }
+
+    /**
+     * @return An immutable view of the latest heartbeat version of each member, keyed by member ID.
+     */
+    public Map<String, Integer> heartbeatVersions() {
+        return Collections.unmodifiableMap(heartbeatVersions);
     }
 
     /**
@@ -694,6 +721,7 @@ public class StreamsGroup implements Group {
      * @param memberId The member ID.
      * @return A boolean indicating whether the member exists or not.
      */
+    @Override
     public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
@@ -701,6 +729,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The number of members.
      */
+    @Override
     public int numMembers() {
         return members.size();
     }
@@ -739,9 +768,9 @@ public class StreamsGroup implements Group {
      * associated with that static member instance ID.
      *
      * @param memberId The member id.
-     * @param instanceId The instance id.                   
-     * 
-     * @return The StreamsGroupMemberAssignment for the resolved member ID, or {@link TasksTuple#EMPTY}
+     * @param instanceId The instance id.
+     *
+     * @return The target assignment for the resolved member ID, or {@link TasksTuple#EMPTY}
      *         if no assignment exists or no static member exists for {@code instanceId}.
      */
     public TasksTuple targetAssignment(String memberId, Optional<String> instanceId) {
@@ -785,7 +814,7 @@ public class StreamsGroup implements Group {
     /**
      * Returns the current process ID of a task or null if the task does not have one.
      *
-     * @param subtopologyId  The topic ID.
+     * @param subtopologyId  The subtopology ID.
      * @param taskId         The task ID.
      * @return The process ID or null.
      */
@@ -803,7 +832,7 @@ public class StreamsGroup implements Group {
     /**
      * Returns the current process IDs of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId The topic ID.
+     * @param subtopologyId The subtopology ID.
      * @param taskId        The task ID.
      * @return The process IDs or empty set.
      */
@@ -819,11 +848,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current process ID of a task or empty set if the task does not have one.
+     * Returns the current process IDs of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId The topic ID.
-     * @param taskId        The process ID.
-     * @return The member IDs or empty set.
+     * @param subtopologyId The subtopology ID.
+     * @param taskId        The task ID.
+     * @return The process IDs or empty set.
      */
     public Set<String> currentWarmupTaskProcessIds(
         String subtopologyId, int taskId
@@ -955,7 +984,7 @@ public class StreamsGroup implements Group {
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
+        Map<String, Long> topicHash = Utils.newHashMap(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(__ ->
                 topicHash.put(
@@ -1277,9 +1306,9 @@ public class StreamsGroup implements Group {
     /**
      * Removes the task process IDs based on the provided assignment.
      *
-     * @param assignment    The assignment.
-     * @param expectedProcessId The expected process ID.
-     * package-private for testing.
+     * @param assignment            The assignment.
+     * @param currentTasksProcessId The current process ID of each task, which is updated.
+     * @param expectedProcessId     The expected process ID.
      */
     private void removeTaskProcessIds(
         Map<String, Map<Integer, Integer>> assignment,
@@ -1315,9 +1344,9 @@ public class StreamsGroup implements Group {
     /**
      * Removes the task process IDs based on the provided assignment.
      *
-     * @param assignment    The assignment.
-     * @param processIdToRemove The expected process ID.
-     * package-private for testing.
+     * @param assignment            The assignment.
+     * @param currentTasksProcessId The current process IDs of each task, which is updated.
+     * @param processIdToRemove     The process ID to remove.
      */
     private void removeTaskProcessIdsFromSet(
         Map<String, Set<Integer>> assignment,
@@ -1348,7 +1377,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Adds the partition epoch based on the provided assignment.
+     * Adds the process ID of the tasks based on the provided assignment.
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
@@ -1550,10 +1579,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The assignment configurations for this streams group.
+     * @return The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT}
+     *         if the group metadata record has none.
      */
-    public Map<String, String> lastAssignmentConfigs() {
-        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
+    public AssignmentConfigsImpl lastAssignmentConfigs() {
+        return lastAssignmentConfigs.get();
     }
 
     /**
@@ -1561,11 +1591,8 @@ public class StreamsGroup implements Group {
      *
      * @param lastAssignmentConfigs The last assignment configurations to set.
      */
-    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
-        this.lastAssignmentConfigs.clear();
-        if (lastAssignmentConfigs != null) {
-            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
-        }
+    public void setLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.set(Objects.requireNonNull(lastAssignmentConfigs));
     }
 
     /**

@@ -257,6 +257,26 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldForwardProcessingThreadsPausedToSchedulingTaskManager() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, null, true);
+
+        taskManager.setProcessingThreadsPaused(true);
+        verify(schedulingTaskManager).setProcessingPaused(true);
+
+        taskManager.setProcessingThreadsPaused(false);
+        verify(schedulingTaskManager).setProcessingPaused(false);
+    }
+
+    @Test
+    public void shouldNotForwardProcessingThreadsPausedWithoutProcessingThreads() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, null, false);
+
+        taskManager.setProcessingThreadsPaused(true);
+
+        verifyNoInteractions(schedulingTaskManager);
+    }
+
+    @Test
     public void shouldLockCommittableTasksOnCorruptionWithProcessingThreads() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)

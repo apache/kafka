@@ -42,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class CompositeReadOnlySessionStoreTest {
 
@@ -128,10 +127,11 @@ public class CompositeReadOnlySessionStoreTest {
     @Test
     public void shouldThrowInvalidStateStoreExceptionIfSessionFetchThrows() {
         underlyingSessionStore.setOpen(false);
-        try {
-            sessionStore.fetch("key");
-            fail("Should have thrown InvalidStateStoreException with session store");
-        } catch (final InvalidStateStoreException e) { }
+        assertThrows(
+            InvalidStateStoreException.class,
+            () -> sessionStore.fetch("key"),
+            "Should have thrown InvalidStateStoreException with session store"
+        );
     }
 
     @Test

@@ -302,6 +302,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
                 resetOffsetsIfNeededAndInitializeMetadata(offsetResetter);
                 initializeTopology();
+                // Processor.init() can write to transactional stores; without a commit those
+                // bytes never drain while processing is paused on the uncommitted-bytes limit.
+                if (stateMgr.approximateNumUncommittedBytes() > 0) {
+                    commitNeeded = true;
+                }
                 processorContext.initialize();
                 if (!eosEnabled) {
                     maybeCheckpoint();

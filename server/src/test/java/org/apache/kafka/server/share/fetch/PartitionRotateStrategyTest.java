@@ -18,8 +18,6 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.PartitionRotateMetadata;
 import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 
 import org.junit.jupiter.api.Test;
@@ -38,49 +36,28 @@ public class PartitionRotateStrategyTest {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         List<TopicIdPartition> partitions = createPartitions(3);
 
-        List<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
+        // The partition read first moves to the end, the others keep their order.
+        List<TopicIdPartition> result = strategy.rotate(partitions);
         assertEquals(3, result.size());
         validateRotatedListEquals(partitions, result, 1);
 
-        // Session epoch is greater than the number of partitions.
-        result = strategy.rotate(partitions, new PartitionRotateMetadata(5));
-        assertEquals(3, result.size());
+        // Rotating the result again moves the next partition to the end.
+        result = strategy.rotate(result);
         validateRotatedListEquals(partitions, result, 2);
-
-        // Session epoch is at Integer.MAX_VALUE.
-        result = strategy.rotate(partitions, new PartitionRotateMetadata(Integer.MAX_VALUE));
-        assertEquals(3, result.size());
-        validateRotatedListEquals(partitions, result, 1);
-
-        // No rotation at same size as epoch.
-        result = strategy.rotate(partitions, new PartitionRotateMetadata(3));
-        assertEquals(3, result.size());
-        validateRotatedListEquals(partitions, result, 0);
     }
 
     @Test
-    public void testRoundRobinStrategyWithSpecialSessionEpochs() {
+    public void testRoundRobinStrategyWithSinglePartition() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
-
-        List<TopicIdPartition> partitions = createPartitions(3);
-        List<TopicIdPartition> result = strategy.rotate(
-            partitions,
-            new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
-        assertEquals(3, result.size());
-        validateRotatedListEquals(partitions, result, 0);
-
-        result = strategy.rotate(
-            partitions,
-            new PartitionRotateMetadata(ShareRequestMetadata.FINAL_EPOCH));
-        assertEquals(3, result.size());
-        validateRotatedListEquals(partitions, result, 0);
+        List<TopicIdPartition> partitions = createPartitions(1);
+        assertEquals(partitions, strategy.rotate(partitions));
     }
 
     @Test
     public void testRoundRobinStrategyWithEmptyPartitions() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         // Empty partitions.
-        List<TopicIdPartition> result = strategy.rotate(new ArrayList<>(), new PartitionRotateMetadata(5));
+        List<TopicIdPartition> result = strategy.rotate(new ArrayList<>());
         // The result should be empty.
         assertTrue(result.isEmpty());
     }

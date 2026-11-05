@@ -20,7 +20,6 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * The task assignment for a streams group.
@@ -36,7 +35,7 @@ public class GroupAssignment {
     public GroupAssignment(
         Map<String, MemberAssignment> members
     ) {
-        this.members = Objects.requireNonNull(members);
+        this.members = Map.copyOf(members);
     }
 
     /**

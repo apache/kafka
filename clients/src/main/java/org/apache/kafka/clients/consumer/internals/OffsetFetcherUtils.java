@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
  */
 class OffsetFetcherUtils {
     private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptionState;
+    private final ConsumerSubscriptionState subscriptionState;
     private final Time time;
     private final long retryBackoffMs;
     private final ApiVersions apiVersions;
@@ -72,7 +72,7 @@ class OffsetFetcherUtils {
 
     OffsetFetcherUtils(LogContext logContext,
                        ConsumerMetadata metadata,
-                       SubscriptionState subscriptionState,
+                       ConsumerSubscriptionState subscriptionState,
                        Time time,
                        long retryBackoffMs,
                        ApiVersions apiVersions) {
@@ -83,7 +83,7 @@ class OffsetFetcherUtils {
 
     OffsetFetcherUtils(LogContext logContext,
                        ConsumerMetadata metadata,
-                       SubscriptionState subscriptionState,
+                       ConsumerSubscriptionState subscriptionState,
                        Time time,
                        long retryBackoffMs,
                        ApiVersions apiVersions,
@@ -186,7 +186,7 @@ class OffsetFetcherUtils {
         return partitionsByNode;
     }
 
-    Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
+    Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
         return positionsValidator.refreshAndGetPartitionsToValidate(apiVersions);
     }
 
@@ -304,7 +304,7 @@ class OffsetFetcherUtils {
     /**
      * The {@code LIST_OFFSETS} lag lookup is serialized, so if there's an inflight request it must finish before
      * another request can be issued. This serialization mechanism is controlled by the 'end offset requested'
-     * flag in {@link SubscriptionState}.
+     * flag in {@link ConsumerSubscriptionState}.
      *
      * @return {@code true} if the partition's end offset can be requested, {@code false} if there's already an
      *         in-flight request
@@ -368,9 +368,9 @@ class OffsetFetcherUtils {
 
 
     void onSuccessfulResponseForValidatingPositions(
-            final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+            final Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> fetchPositions,
             final OffsetsForLeaderEpochUtils.OffsetForEpochResult offsetsResult) {
-        List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
+        List<ConsumerSubscriptionState.LogTruncation> truncations = new ArrayList<>();
         if (!offsetsResult.partitionsToRetry().isEmpty()) {
             subscriptionState.setNextAllowedRetry(offsetsResult.partitionsToRetry(),
                     time.milliseconds() + retryBackoffMs);
@@ -383,8 +383,8 @@ class OffsetFetcherUtils {
         // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
         // its offset if reset policy is configured, or throw out of range exception.
         offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
-            SubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
-            Optional<SubscriptionState.LogTruncation> truncationOpt =
+            ConsumerSubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
+            Optional<ConsumerSubscriptionState.LogTruncation> truncationOpt =
                     subscriptionState.maybeCompleteValidation(topicPartition, requestPosition,
                             respEndOffset);
             truncationOpt.ifPresent(truncations::add);
@@ -395,7 +395,7 @@ class OffsetFetcherUtils {
         }
     }
 
-    void onFailedResponseForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+    void onFailedResponseForValidatingPositions(final Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> fetchPositions,
                                                 final RuntimeException error) {
         subscriptionState.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
         metadata.requestUpdate(false);
@@ -405,10 +405,10 @@ class OffsetFetcherUtils {
         }
     }
 
-    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
+    private LogTruncationException buildLogTruncationException(List<ConsumerSubscriptionState.LogTruncation> truncations) {
         Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
         Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
-        for (SubscriptionState.LogTruncation truncation : truncations) {
+        for (ConsumerSubscriptionState.LogTruncation truncation : truncations) {
             truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
                     divergentOffsets.put(truncation.topicPartition, divergentOffset));
             truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
@@ -419,7 +419,7 @@ class OffsetFetcherUtils {
     // Visible for testing
     void resetPositionIfNeeded(TopicPartition partition, AutoOffsetResetStrategy requestedResetStrategy,
                                ListOffsetData offsetData) {
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                 offsetData.offset,
                 Optional.empty(), // This will ensure we skip validation
                 metadata.currentLeader(partition));
@@ -427,8 +427,8 @@ class OffsetFetcherUtils {
         subscriptionState.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
-    static Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
-            Map<TopicPartition, SubscriptionState.FetchPosition> partitionMap) {
+    static Map<Node, Map<TopicPartition, ConsumerSubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
+            Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> partitionMap) {
         return partitionMap.entrySet()
                 .stream()
                 .filter(entry -> entry.getValue().currentLeader.leader.isPresent())

@@ -335,7 +335,10 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     public long approximateNumUncommittedBytes() {
-        return super.approximateNumUncommittedBytes() + writeBatch.getDataSize();
+        // an empty WriteBatch still reports its fixed header, which no commit can release; counting it would
+        // keep the uncommitted-bytes limit exceeded after every commit when the limit is below that baseline
+        final long batchBytes = writeBatch.count() > 0 ? writeBatch.getDataSize() : 0;
+        return super.approximateNumUncommittedBytes() + batchBytes;
     }
 
     @Override
