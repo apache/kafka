@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.MirrorVersion;
+import org.apache.kafka.test.TestUtils;
 
 import net.sourceforge.argparse4j.inf.Namespace;
 
@@ -45,6 +50,48 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class FeatureCommandTest {
 
     private final List<Feature> testingFeatures = Arrays.stream(Feature.FEATURES).toList();
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_4_5_IV1,
+        features = {@ClusterFeature(feature = Feature.MIRROR_VERSION, version = 0)}
+    )
+    public void testMirrorVersionCanBeEnabledAndDisabled(ClusterInstance cluster) throws Exception {
+        assertMirrorFeatureLevel(cluster, (short) 0);
+        String output = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(),
+                "upgrade", "--feature", "mirror.version=1"))
+        );
+        assertEquals("mirror.version was upgraded to 1.", output);
+        assertMirrorFeatureLevel(cluster, (short) 1);
+
+        output = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(),
+                "disable", "--feature", "mirror.version"))
+        );
+        assertEquals("mirror.version was disabled.", output);
+        assertMirrorFeatureLevel(cluster, (short) 0);
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_5_IV0)
+    public void testMirrorVersionRequiresNewMetadataVersion(ClusterInstance cluster) throws Exception {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(),
+                "upgrade", "--feature", "mirror.version=1"))
+        );
+        assertTrue(output.contains("depends on metadata.version level " + MetadataVersion.IBP_4_5_IV1.featureLevel()), output);
+        assertMirrorFeatureLevel(cluster, (short) 0);
+    }
+
+    private static void assertMirrorFeatureLevel(ClusterInstance cluster, short expectedLevel) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            TestUtils.waitForCondition(() -> {
+                FinalizedVersionRange version = admin.describeFeatures().featureMetadata().get()
+                    .finalizedFeatures().get(MirrorVersion.FEATURE_NAME);
+                return (version == null ? 0 : version.maxVersionLevel()) == expectedLevel;
+            }, "Expected mirror.version=" + expectedLevel);
+        }
+    }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV3)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -71,16 +118,20 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "2", "0",
+                "mirror.version", "0", "1", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
-                "streams.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(5))
         );
         assertFeatureOutput(
-                "transaction.version", "0", "2", "0",
+                "streams.version", "0", "1", "0",
                 outputWithoutEpoch(features.get(6))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(7))
         );
     }
 
@@ -110,16 +161,20 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "2", "0",
+                "mirror.version", "0", "1", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
-                "streams.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(5))
         );
         assertFeatureOutput(
-                "transaction.version", "0", "2", "0",
+                "streams.version", "0", "1", "0",
                 outputWithoutEpoch(features.get(6))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(7))
         );
     }
 
@@ -166,16 +221,20 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "2", "0",
+                "mirror.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(
-                "streams.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(5))
         );
         assertFeatureOutput(
-                "transaction.version", "0", "2", "0",
+                "streams.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(7))
         );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -259,16 +318,20 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "2", "0",
+                "mirror.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(
-                "streams.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(5))
         );
         assertFeatureOutput(
-                "transaction.version", "0", "2", "0",
+                "streams.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(7))
         );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -403,6 +466,7 @@ public class FeatureCommandTest {
                 "group.version was downgraded to 0.\n" +
                 "kraft.version was downgraded to 0.\n" +
                 "metadata.version was downgraded to 18.\n" +
+                "mirror.version was downgraded to 0.\n" +
                 "share.version was downgraded to 0.\n" +
                 "streams.version was downgraded to 0.\n" +
                 "transaction.version was downgraded to 0.", commandOutput);
