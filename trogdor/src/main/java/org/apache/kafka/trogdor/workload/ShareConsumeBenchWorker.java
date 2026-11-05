@@ -29,6 +29,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
@@ -77,9 +80,10 @@ public class ShareConsumeBenchWorker implements TaskWorker {
 
     private static final int THROTTLE_PERIOD_MS = 100;
 
-    private static final int ALTER_CONFIGS_ATTEMPTS = 5;
+    private static final int ALTER_CONFIGS_ATTEMPTS = 3;
     private static final long ALTER_CONFIGS_BACKOFF_MS = 2000;
     private static final long ALTER_CONFIGS_BACKOFF_JITTER_MS = 100;
+    private static final long ADMIN_REQUEST_TIMEOUT_SECONDS = 25;
 
     private final String id;
     private final ShareConsumeBenchSpec spec;
@@ -172,10 +176,16 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                         resource, ops, attempt, ALTER_CONFIGS_ATTEMPTS);
                     return;
                 }
-                adminClient.incrementalAlterConfigs(Map.of(resource, ops)).all().get(60, TimeUnit.SECONDS);
+                adminClient.incrementalAlterConfigs(Map.of(resource, ops)).all().get(ADMIN_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 log.info("Altered configs {} of {} (attempt {}/{}).", ops, resource, attempt, ALTER_CONFIGS_ATTEMPTS);
                 return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while altering configs " + ops + " of " + resource, e);
             } catch (Exception e) {
+                if (!isRetriable(e)) {
+                    throw new RuntimeException("Failed to alter configs " + ops + " of " + resource + ": " + e, e);
+                }
                 failure = e;
                 if (attempt < ALTER_CONFIGS_ATTEMPTS) {
                     long backoffMs = ALTER_CONFIGS_BACKOFF_MS
@@ -193,9 +203,21 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                 + ALTER_CONFIGS_ATTEMPTS + " attempts: " + failure, failure);
     }
 
-    private static boolean hasConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops) {
+    /**
+     * Errors such as an invalid config, an unsupported version or missing authorization will not go away by retrying.
+     * The broker's UnknownServerException is the failure seen for concurrent writes, so that one is retried.
+     */
+    private static boolean isRetriable(Exception e) {
+        Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
+        if (cause instanceof ApiException) {
+            return cause instanceof RetriableException || cause instanceof UnknownServerException;
+        }
+        return true;
+    }
+
+    private static boolean hasConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops) throws InterruptedException {
         try {
-            Config config = adminClient.describeConfigs(List.of(resource)).all().get(60, TimeUnit.SECONDS).get(resource);
+            Config config = adminClient.describeConfigs(List.of(resource)).all().get(ADMIN_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS).get(resource);
             if (config == null) {
                 return false;
             }
@@ -206,9 +228,6 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                 }
             }
             return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
         } catch (ExecutionException | TimeoutException e) {
             // Not being able to read the configs just means they have to be set.
             return false;

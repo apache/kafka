@@ -24,6 +24,9 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
@@ -34,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -54,10 +58,10 @@ class ShareConsumeBenchWorkerTest {
     private static final String VALUE = "dlq.topic";
     private static final List<AlterConfigOp> OPS = List.of(
         new AlterConfigOp(new ConfigEntry(NAME, VALUE), AlterConfigOp.OpType.SET));
-    // The backoff between attempts is 2000 ms plus a random 0 to 100 ms, and there are 5 attempts.
+    // The backoff between attempts is 2000 ms plus a random 0 to 100 ms, and there are 3 attempts.
     private static final long MIN_BACKOFF_MS = 2000;
     private static final long MAX_BACKOFF_MS = 2100;
-    private static final int ATTEMPTS = 5;
+    private static final int ATTEMPTS = 3;
 
     private Admin admin;
     private MockTime time;
@@ -82,6 +86,14 @@ class ShareConsumeBenchWorkerTest {
         KafkaFutureImpl<Map<ConfigResource, Config>> failed = new KafkaFutureImpl<>();
         failed.completeExceptionally(new UnknownServerException("describe failed"));
         describeReturns(failed);
+    }
+
+    private static AlterConfigsResult alterFailsWith(Throwable error) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(error);
+        AlterConfigsResult result = mock(AlterConfigsResult.class);
+        when(result.all()).thenReturn(future);
+        return result;
     }
 
     private static AlterConfigsResult alterResult(boolean fails) {
@@ -201,6 +213,113 @@ class ShareConsumeBenchWorkerTest {
         // There is a backoff between the attempts, not after the last one.
         long elapsedMs = elapsedMs(startMs);
         assertTrue(elapsedMs >= (ATTEMPTS - 1) * MIN_BACKOFF_MS && elapsedMs <= (ATTEMPTS - 1) * MAX_BACKOFF_MS,
-            "Expected 4 backoffs of 2000 to 2100 ms each, got " + elapsedMs);
+            "Expected 2 backoffs of 2000 to 2100 ms each, got " + elapsedMs);
+    }
+
+    @Test
+    public void testInterruptIsRestoredAndNotRetried() {
+        describeReturns(new Config(List.of()));
+        KafkaFuture<Void> interrupted = new KafkaFutureImpl<Void>() {
+            @Override
+            public Void get(long timeout, TimeUnit unit) throws InterruptedException {
+                throw new InterruptedException();
+            }
+        };
+        AlterConfigsResult result = mock(AlterConfigsResult.class);
+        when(result.all()).thenReturn(interrupted);
+        when(admin.incrementalAlterConfigs(anyMap())).thenReturn(result);
+        long startMs = time.milliseconds();
+
+        try {
+            RuntimeException e = assertThrows(RuntimeException.class,
+                () -> ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time));
+            assertInstanceOf(InterruptedException.class, e.getCause());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(admin, times(1)).incrementalAlterConfigs(Map.of(GROUP, OPS));
+            assertEquals(0, elapsedMs(startMs));
+        } finally {
+            // Clear the flag so that it does not leak into other tests.
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    public void testNonRetriableErrorFailsWithoutRetrying() {
+        describeReturns(new Config(List.of()));
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new InvalidConfigurationException("bad config"));
+        AlterConfigsResult result = mock(AlterConfigsResult.class);
+        when(result.all()).thenReturn(future);
+        when(admin.incrementalAlterConfigs(anyMap())).thenReturn(result);
+        long startMs = time.milliseconds();
+
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time));
+
+        assertInstanceOf(ExecutionException.class, e.getCause());
+        assertInstanceOf(InvalidConfigurationException.class, e.getCause().getCause());
+        verify(admin, times(1)).incrementalAlterConfigs(Map.of(GROUP, OPS));
+        assertEquals(0, elapsedMs(startMs));
+    }
+
+    @Test
+    public void testAuthorizationErrorFailsWithoutRetrying() {
+        describeReturns(new Config(List.of()));
+        AlterConfigsResult fails = alterFailsWith(new GroupAuthorizationException("not authorized"));
+        when(admin.incrementalAlterConfigs(anyMap())).thenReturn(fails);
+        long startMs = time.milliseconds();
+
+        assertThrows(RuntimeException.class, () -> ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time));
+
+        verify(admin, times(1)).incrementalAlterConfigs(Map.of(GROUP, OPS));
+        assertEquals(0, elapsedMs(startMs));
+    }
+
+    @Test
+    public void testRetriableApiExceptionIsRetried() throws Exception {
+        describeReturns(new Config(List.of()));
+        AlterConfigsResult fails = alterFailsWith(new TimeoutException("timed out"));
+        AlterConfigsResult succeeds = alterResult(false);
+        when(admin.incrementalAlterConfigs(anyMap())).thenReturn(fails, succeeds);
+
+        ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time);
+
+        verify(admin, times(2)).incrementalAlterConfigs(Map.of(GROUP, OPS));
+    }
+
+    @Test
+    public void testNonApiExceptionIsRetried() throws Exception {
+        describeReturns(new Config(List.of()));
+        AlterConfigsResult fails = alterFailsWith(new IllegalStateException("client failure"));
+        AlterConfigsResult succeeds = alterResult(false);
+        when(admin.incrementalAlterConfigs(anyMap())).thenReturn(fails, succeeds);
+
+        ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time);
+
+        verify(admin, times(2)).incrementalAlterConfigs(Map.of(GROUP, OPS));
+    }
+
+    @Test
+    public void testInterruptDuringDescribeIsRestoredAndNotRetried() {
+        KafkaFuture<Map<ConfigResource, Config>> interrupted = new KafkaFutureImpl<Map<ConfigResource, Config>>() {
+            @Override
+            public Map<ConfigResource, Config> get(long timeout, TimeUnit unit) throws InterruptedException {
+                throw new InterruptedException();
+            }
+        };
+        describeReturns(interrupted);
+        long startMs = time.milliseconds();
+
+        try {
+            RuntimeException e = assertThrows(RuntimeException.class,
+                () -> ShareConsumeBenchWorker.alterConfigs(admin, GROUP, OPS, time));
+            assertInstanceOf(InterruptedException.class, e.getCause());
+            assertTrue(Thread.currentThread().isInterrupted());
+            verify(admin, never()).incrementalAlterConfigs(anyMap());
+            assertEquals(0, elapsedMs(startMs));
+        } finally {
+            // Clear the flag so that it does not leak into other tests.
+            Thread.interrupted();
+        }
     }
 }
