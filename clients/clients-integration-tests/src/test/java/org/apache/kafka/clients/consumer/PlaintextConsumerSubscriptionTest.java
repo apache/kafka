@@ -30,6 +30,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -48,6 +49,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.HEARTBEAT_INTERVAL_MS
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
@@ -343,6 +345,54 @@ public class PlaintextConsumerSubscriptionTest {
                 new TopicPartition(topic2, 1)
             );
             awaitAssignment(consumer, assignment);
+        }
+    }
+
+    @Timeout(120)
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    })
+    public void testAsyncConsumerRe2JPatternSwitchToNonMatchingRegexReassignsPartitions() throws InterruptedException {
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
+            GROUP_ID_CONFIG, "regex-switch-group"
+        );
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(config)) {
+            // Both members initially subscribe to the topic created by setup().
+            var matching = new SubscriptionPattern("topic.*");
+            consumer1.subscribe(matching);
+            consumer2.subscribe(matching);
+
+            Set<TopicPartition> all = Set.of(
+                new TopicPartition(topic, 0),
+                new TopicPartition(topic, 1)
+            );
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                Set<TopicPartition> union = new HashSet<>(consumer1.assignment());
+                union.addAll(consumer2.assignment());
+                return consumer1.assignment().size() == 1
+                    && consumer2.assignment().size() == 1
+                    && union.equals(all);
+            }, 30_000L, () -> "Expected one partition each, got " + consumer1.assignment() + " and " + consumer2.assignment());
+
+            // Member 2 changes its subscription without leaving the group.
+            consumer2.subscribe(new SubscriptionPattern("nothing-matches-this.*"));
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer2.assignment().isEmpty();
+            }, 30_000L, () -> "Member 2 never released its partition: " + consumer2.assignment());
+
+            // Allow for the regex resolver's minimum refresh interval of 10 seconds.
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer1.assignment().equals(all) && consumer2.assignment().isEmpty();
+            }, 45_000L, () -> "Partition released by member 2 was never reassigned to member 1. " +
+                "member1=" + consumer1.assignment() + " member2=" + consumer2.assignment());
         }
     }
 
