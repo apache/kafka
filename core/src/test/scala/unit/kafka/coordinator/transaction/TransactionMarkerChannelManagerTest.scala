@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
+import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
@@ -414,18 +414,6 @@ class TransactionMarkerChannelManagerTest {
     val topicId = Uuid.randomUuid()
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
-    // Send the getPartitionLeaderEndpoint request to the real metadata cache.
-    when(metadataCache.getPartitionLeaderEndpoint(
-      anyString(),
-      anyInt(),
-      any[ListenerName]())
-    ).thenAnswer(invocation => {
-      cache.getPartitionLeaderEndpoint(
-        invocation.getArgument(0),
-        invocation.getArgument(1),
-        invocation.getArgument(2))
-    })
-
     MetadataCacheTest.updateCache(cache, Seq(
       new TopicRecord().setName(partition1.topic).setTopicId(topicId),
       new PartitionRecord()
@@ -437,7 +425,7 @@ class TransactionMarkerChannelManagerTest {
     ))
 
     val manager = new TransactionMarkerChannelManager(
-      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)), metadataCache, networkClient, txnStateManager, time)
+      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)), cache, networkClient, txnStateManager, time)
     try {
       manager.addTxnMarkersToSend(coordinatorEpoch, result, txnMetadata2, expectedTransition)
 
