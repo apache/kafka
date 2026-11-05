@@ -4782,8 +4782,7 @@ public class GroupMetadataManager {
         };
 
         if (offloadAssignor) {
-            inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
-            executor.schedule(
+            if (executor.schedule(
                 targetAssignmentUpdateKey,
                 buildTargetAssignment::get,
                 (result, exception) -> handleOffloadedShareTargetAssignmentResult(
@@ -4792,10 +4791,16 @@ public class GroupMetadataManager {
                     result,
                     exception
                 )
-            );
+            )) {
+                inflightOffloadedAssignorEpochs.put(groupId, groupEpoch);
 
-            log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
-                groupId, groupEpoch, shareGroupAssignor);
+                log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
+                    groupId, groupEpoch, shareGroupAssignor);
+            } else {
+                // Unreachable because we return early above when an async assignor run is already in progress.
+                log.error("[GroupId {}] Failed to schedule computing a new target assignment for epoch {} with '{}' assignor because another run is already scheduled.",
+                    groupId, groupEpoch, shareGroupAssignor);
+            }
 
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         } else {
