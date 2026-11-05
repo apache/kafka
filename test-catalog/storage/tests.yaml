@@ -436,6 +436,7 @@ org.apache.kafka.storage.internals.log.LogCleanerTest:
 - testBasicTransactionAwareCleaning
 - testBuildOffsetMap
 - testBuildOffsetMapFakeLarge
+- testBuildOffsetMapSkipsAbortedTransactionSpanningCleaningStart
 - testBuildPartialOffsetMap
 - testCleanCorruptMessageSet
 - testCleanEmptyControlBatch
@@ -458,6 +459,7 @@ org.apache.kafka.storage.internals.log.LogCleanerTest:
 - testClientHandlingOfCorruptMessageSet
 - testCommitMarkerRemoval
 - testCommitMarkerRetentionWithEmptyBatch
+- testCommittedTombstoneAfterAbortedTransactionBeforeCleaningStart
 - testCommittedTransactionSpanningSegments
 - testCorruptMessageSizeLargerThanBytesAvailable
 - testDeletedBatchesWithNoMessagesRead
@@ -850,6 +852,7 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testBuildTimeIndexWhenNotAssigningOffsets
 - testCannotDeleteSegmentsAtOrAboveHighWatermark
 - testCannotIncrementLogStartOffsetPastHighWatermark
+- testCollectAbortedTransactionsFromStartOffset
 - testCompactedTopicConstraints
 - testCompactionDeletesProducerStateSnapshots
 - testCompressedMessages
