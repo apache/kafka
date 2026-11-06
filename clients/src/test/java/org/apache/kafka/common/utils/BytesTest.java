@@ -125,5 +125,8 @@ public class BytesTest {
         assertEquals("\\x00\\x05\\xFF", Bytes.wrap(new byte[]{0x00, 0x05, (byte) 0xFF}).toString());
         // mix of printable and escaped
         assertEquals("A\\x0AB", Bytes.wrap(new byte[]{'A', '\n', 'B'}).toString());
+        // printable range boundaries (space and tilde kept; just outside escaped)
+        assertEquals(" ~", Bytes.wrap(new byte[]{0x20, 0x7E}).toString());
+        assertEquals("\\x1F\\x7F\\x80", Bytes.wrap(new byte[]{0x1F, 0x7F, (byte) 0x80}).toString());
     }
 }
