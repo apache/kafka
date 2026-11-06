@@ -142,6 +142,7 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
