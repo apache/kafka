@@ -392,7 +392,9 @@ public class ConsoleProducer {
 
             props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
             props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
-            props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
+            if (options.has(compressionCodecOpt) || !props.containsKey(COMPRESSION_TYPE_CONFIG)) {
+                props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
+            }
 
             if (props.getProperty(CLIENT_ID_CONFIG) == null) {
                 props.put(CLIENT_ID_CONFIG, "console-producer");
