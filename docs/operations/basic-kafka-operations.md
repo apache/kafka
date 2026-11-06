@@ -764,21 +764,21 @@ Configure custom quota for (user=user1, client-id=clientA):
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
-Updated config for entity: user-principal 'user1', client-id 'clientA'.
+Completed updating config for user user1.
 ```
 
 Configure custom quota for user=user1: 
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1
-Updated config for entity: user-principal 'user1'.
+Completed updating config for user user1.
 ```
 
 Configure custom quota for client-id=clientA: 
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-name clientA
-Updated config for entity: client-id 'clientA'.
+Completed updating config for client clientA.
 ```
 
 It is possible to set default quotas for each (user, client-id), user or client-id group by specifying _\--entity-default_ option instead of _\--entity-name_. 
@@ -787,21 +787,21 @@ Configure default client-id quota for user=user1:
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
-Updated config for entity: user-principal 'user1', default client-id.
+Completed updating config for user user1.
 ```
 
 Configure default quota for user: 
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-default
-Updated config for entity: default user-principal.
+Completed updating default config for users in the cluster.
 ```
 
 Configure default quota for client-id: 
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-default
-Updated config for entity: default client-id.
+Completed updating default config for clients in the cluster.
 ```
 
 Here's how to describe the quota for a given (user, client-id): 
