@@ -2886,7 +2886,11 @@ public class KafkaConsumerTest {
         assertTrue(commitReceived.get());
 
         // mock rebalance responses
-        client.respondFrom(joinGroupFollowerResponse(assignor, 2, "memberId", "leaderId", Errors.NONE), coordinator);
+        // A heartbeat sent while the group was stable can still be in flight to the coordinator, and
+        // respondFrom answers the first request in flight to a node, of any type. So answer the JoinGroup
+        // request itself.
+        client.respondToRequest(findRequest(client, ApiKeys.JOIN_GROUP),
+            joinGroupFollowerResponse(assignor, 2, "memberId", "leaderId", Errors.NONE));
 
         // we need to poll 1) for getting the join response, and then send the sync request;
         //                 2) for getting the sync response
@@ -2908,8 +2912,9 @@ public class KafkaConsumerTest {
         fetches1.put(tp0, new FetchInfo(3, 1));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        // now complete the rebalance
-        client.respondFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
+        // now complete the rebalance; answer the SyncGroup request itself for the same reason
+        client.respondToRequest(findRequest(client, ApiKeys.SYNC_GROUP),
+            syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE));
 
         AtomicInteger count = new AtomicInteger(0);
         AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>(ConsumerRecords.empty());
