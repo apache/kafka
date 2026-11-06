@@ -138,6 +138,20 @@ public class ChunkedBytesStream extends FilterInputStream {
     }
 
     /**
+     * This stream does not support mark/reset. The underlying stream may support it, but resetting only the
+     * source stream would leave this stream's intermediate buffer out of sync with the source.
+     */
+    @Override
+    public boolean markSupported() {
+        return false;
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+        throw new IOException("mark/reset not supported");
+    }
+
+    /**
      * Fills the intermediate buffer with more data. The amount of new data read is equal to the remaining empty space
      * in the buffer. For optimal performance, read as much data as possible in this call.
      * This method also assumes that all data has already been read in, hence pos > count.
