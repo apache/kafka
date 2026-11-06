@@ -1658,6 +1658,7 @@ public interface KStream<K, V> {
      * <p>However, because the key cannot be modified, some restrictions apply to a {@link FixedKeyProcessor} compared
      * to a {@link Processor}: for example, forwarding result records from a {@link Punctuator} is not possible.
      */
+    @Deprecated
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final String... stateStoreNames
@@ -1668,7 +1669,20 @@ public interface KStream<K, V> {
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
+    @Deprecated
     <VOut> KStream<K, VOut> processValues(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    );
+
+    // newly added
+    <VOut> KStream<K, VOut> processFixedKey(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final String... stateStoreNames
+    );
+
+    <VOut> KStream<K, VOut> processFixedKey(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final Named named,
         final String... stateStoreNames
