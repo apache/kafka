@@ -51,6 +51,8 @@ import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
  */
 @InterfaceAudience.Public
 public class MirrorClientConfig extends AbstractConfig {
+    public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
     private static final String REPLICATION_POLICY_CLASS_DOC = "Class which defines the remote topic naming convention.";
     public static final Class<?> REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
@@ -118,14 +120,14 @@ public class MirrorClientConfig extends AbstractConfig {
 
     // Properties passed to internal Kafka clients
     static final ConfigDef CLIENT_CONFIG_DEF = new ConfigDef()
-        .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+        .define(BOOTSTRAP_SERVERS_CONFIG,
             Type.LIST,
             NO_DEFAULT_VALUE,
             ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         // security support
-        .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+        .define(SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
             CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
             in(Utils.enumOptions(SecurityProtocol.class)),
@@ -135,7 +137,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .withClientSaslSupport();
 
     static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+        .define(BOOTSTRAP_SERVERS_CONFIG,
             Type.LIST,
             NO_DEFAULT_VALUE,
             ConfigDef.ValidList.anyNonDuplicateValues(false, false),
@@ -165,7 +167,7 @@ public class MirrorClientConfig extends AbstractConfig {
             FORWARDING_ADMIN_CLASS_DEFAULT,
             ConfigDef.Importance.LOW,
             FORWARDING_ADMIN_CLASS_DOC)
-        .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+        .define(SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
             CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
             in(Utils.enumOptions(SecurityProtocol.class)),
