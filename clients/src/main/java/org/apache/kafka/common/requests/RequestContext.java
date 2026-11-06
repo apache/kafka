@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -32,9 +33,11 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
-
 public class RequestContext implements AuthorizableRequestContext {
+    /**
+     * The original header from the client request. For an unsupported {@link ApiVersionsRequest},
+     * use {@link #effectiveApiVersion()} to get the actual parsed API version.
+     */
     public final RequestHeader header;
     public final String connectionId;
     public final InetAddress clientAddress;
@@ -109,11 +112,33 @@ public class RequestContext implements AuthorizableRequestContext {
         this.principalSerde = principalSerde;
     }
 
+    /**
+     * Parses the request body from the given buffer, which must be positioned at the start of the request body.
+     * If the header indicates the request version is unsupported, the request body is not parsed. For all unsupported
+     * requests other than {@link ApiVersionsRequest}, an UnsupportedVersionException is thrown. An unsupported
+     * {@link ApiVersionsRequest} could come from new clients and is treated specially as a v0 request. The broker
+     * responds with a v0 {@link ApiVersionsResponse} including the supported versions of {@link ApiVersionsRequest}.
+     * If the client can't parse the response with the version in the original request it sent, it falls back to
+     * parsing the response as v0. This allows the new client to discover the version of {@link ApiVersionsRequest}
+     * supported by the broker.
+     *
+     * @param buffer the buffer containing the request body
+     * @return the parsed request and its size
+     * @throws UnsupportedVersionException if the request api version is not supported, except for {@link ApiVersionsRequest}
+     * @throws InvalidRequestException if the request body cannot be parsed
+     */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
-        if (isUnsupportedApiVersionsRequest()) {
-            // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
-            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
+        if (isApiVersionsFallback()) {
+            // Unsupported ApiVersion requests are treated as fallback version requests and are not parsed
+            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(),
+                ApiKeys.API_VERSIONS_FALLBACK_VERSION, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
+        } else if (!header.isApiVersionSupported()) {
+            // The request header is only partially parsed for unsupported versions (see RequestHeader#parse),
+            // so the buffer is not positioned at the start of the request body and must not be parsed.
+            throw new UnsupportedVersionException("Unsupported version " + header.apiVersion() + " for apiKey: " +
+                    header.apiKey() + ", connectionId: " + connectionId + ", listenerName: " + listenerName +
+                    ", principal: " + principal);
         } else {
             ApiKeys apiKey = header.apiKey();
             try {
@@ -134,7 +159,8 @@ public class RequestContext implements AuthorizableRequestContext {
      * over the network.
      */
     public Send buildResponseSend(AbstractResponse body) {
-        return body.toSend(header.toResponseHeader(), apiVersion());
+        short version = effectiveApiVersion();
+        return body.toSend(responseHeader(version), version);
     }
 
     /**
@@ -148,17 +174,28 @@ public class RequestContext implements AuthorizableRequestContext {
      * so we do not lose the benefit of "zero copy" transfers from disk.
      */
     public ByteBuffer buildResponseEnvelopePayload(AbstractResponse body) {
-        return body.serializeWithHeader(header.toResponseHeader(), apiVersion());
+        short version = effectiveApiVersion();
+        return body.serializeWithHeader(responseHeader(version), version);
     }
 
-    private boolean isUnsupportedApiVersionsRequest() {
-        return header.apiKey() == API_VERSIONS && !header.isApiVersionSupported();
+    private ResponseHeader responseHeader(short responseVersion) {
+        return new ResponseHeader(header.correlationId(), header.apiKey().responseHeaderVersion(responseVersion));
     }
 
-    public short apiVersion() {
-        // Use v0 when serializing an unhandled ApiVersion response
-        if (isUnsupportedApiVersionsRequest())
-            return 0;
+    private boolean isApiVersionsFallback() {
+        return header.apiKey().isFallbackVersion(header.apiVersion());
+    }
+
+    /**
+     * Returns the API version parsed by the server. This is usually the API version in the original client request.
+     * The only exception is an unsupported {@link ApiVersionsRequest}, whose API version is set to 0 after parsing.
+     * The response should be sent and serialized using this version.
+     * <p>
+     * To retrieve the API version in the original client request, use {@link #requestVersion()} instead.
+     */
+    public short effectiveApiVersion() {
+        if (isApiVersionsFallback())
+            return ApiKeys.API_VERSIONS_FALLBACK_VERSION;
         return header.apiVersion();
     }
 
@@ -191,6 +228,11 @@ public class RequestContext implements AuthorizableRequestContext {
         return header.apiKey().id;
     }
 
+    /**
+     * Returns the original API version sent by the client in the request header. This can differ from
+     * {@link #effectiveApiVersion()} for an unsupported {@link ApiVersionsRequest}. Use this when the original
+     * version is needed, such as checking whether the requested API version is enabled.
+     */
     @Override
     public int requestVersion() {
         return header.apiVersion();
