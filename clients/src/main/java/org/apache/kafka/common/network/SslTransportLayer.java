@@ -804,6 +804,7 @@ public class SslTransportLayer implements TransportLayer {
      * SSLSession's peerPrincipal for the remote host.
      * @return Principal
      */
+    @Override
     public Principal peerPrincipal() {
         try {
             return sslEngine.getSession().getPeerPrincipal();

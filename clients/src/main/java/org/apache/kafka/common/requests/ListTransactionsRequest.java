@@ -56,6 +56,7 @@ public class ListTransactionsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public ListTransactionsRequestData data() {
         return data;
     }

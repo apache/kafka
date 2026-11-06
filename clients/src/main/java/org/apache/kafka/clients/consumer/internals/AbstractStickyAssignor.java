@@ -115,6 +115,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return assignmentBuilder.build();
     }
 
+    @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         return assignPartitions(partitionInfosWithoutRacks(partitionsPerTopic), subscriptions);
@@ -413,6 +414,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             this.dstMemberId = dstMemberId;
         }
 
+        @Override
         public String toString() {
             return this.srcMemberId + "->" + this.dstMemberId;
         }

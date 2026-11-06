@@ -201,10 +201,12 @@ public abstract class Shell {
             this.run();
         }
 
+        @Override
         protected String[] execString() {
             return command;
         }
 
+        @Override
         protected void parseExecResult(BufferedReader reader) throws IOException {
             output = new StringBuffer();
             char[] buf = new char[512];
@@ -226,6 +228,7 @@ public abstract class Shell {
          *
          * @return a string representation of the object.
          */
+        @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
             String[] args = execString();

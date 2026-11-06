@@ -32,6 +32,7 @@ public class ListTransactionsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public ListTransactionsResponseData data() {
         return data;
     }

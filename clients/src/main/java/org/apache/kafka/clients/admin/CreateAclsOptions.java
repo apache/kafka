@@ -33,6 +33,7 @@ public class CreateAclsOptions extends AbstractOptions<CreateAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public CreateAclsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

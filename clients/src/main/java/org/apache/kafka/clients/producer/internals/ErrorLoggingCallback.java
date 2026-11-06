@@ -43,6 +43,7 @@ public class ErrorLoggingCallback implements Callback {
         this.logAsString = logAsString;
     }
 
+    @Override
     public void onCompletion(RecordMetadata metadata, Exception e) {
         if (e != null) {
             String keyString = (key == null) ? "null" :

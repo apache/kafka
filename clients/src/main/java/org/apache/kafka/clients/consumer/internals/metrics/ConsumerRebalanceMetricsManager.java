@@ -100,21 +100,25 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
     }
 
+    @Override
     public void recordRebalanceStarted(long nowMs) {
         lastRebalanceStartMs = nowMs;
     }
 
+    @Override
     public void recordRebalanceEnded(long nowMs) {
         lastRebalanceEndMs = nowMs;
         successfulRebalanceSensor.record(nowMs - lastRebalanceStartMs);
     }
 
+    @Override
     public void maybeRecordRebalanceFailed() {
         if (lastRebalanceStartMs <= lastRebalanceEndMs)
             return;
         failedRebalanceSensor.record();
     }
 
+    @Override
     public boolean rebalanceStarted() {
         return lastRebalanceStartMs > lastRebalanceEndMs;
     }
