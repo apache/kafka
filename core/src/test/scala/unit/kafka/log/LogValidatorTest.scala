@@ -16,14 +16,15 @@
  */
 package kafka.log
 
+import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import kafka.server.{BrokerTopicStats, RequestLocal}
-import kafka.utils.TestUtils.meterCount
+import kafka.utils.TestUtils.{meterCount, meterCountOpt}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{PrimitiveRef, Time}
+import org.apache.kafka.common.utils.{ByteBufferOutputStream, PrimitiveRef, Time}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
@@ -35,7 +36,7 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,6 +46,8 @@ class LogValidatorTest {
   val topicPartition = new TopicPartition("topic", 0)
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
   val metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats().allTopicsStats)
+  // Same value as LogValidator.MAX_RECORD_ERRORS_PER_BATCH, which is package-private
+  val maxRecordErrorsPerBatch = 3
 
   /**
    * The compressed validation path enforces the per-record decompressed-body-size limit
@@ -1493,6 +1496,181 @@ class LogValidatorTest {
     testBatchWithoutRecordsNotAllowed(CompressionType.NONE, Compression.gzip().build())
   }
 
+  // Matching source and target compression keeps the original offsets: NONE goes through
+  // assignOffsetsNonCompressed and GZIP through the in-place path of validateMessagesAndAssignOffsetsCompressed.
+  @ParameterizedTest
+  @MethodSource(Array("compressionTypeAndOffsetDeltas"))
+  def testRejectsRecordWithMismatchedOffsetDelta(compressionType: CompressionType, offsetDeltas: Array[Int]): Unit = {
+    val compression = Compression.of(compressionType).build()
+    val records = createRecordsWithOffsetDeltas(compression, offsetDeltas)
+    val validator = newLogValidator(records, compressionType, compression)
+    val invalidOffsetCountBefore = invalidOffsetRecordCount
+
+    val e = assertThrows(classOf[RecordValidationException],
+      () => validator.validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+
+    val mismatchedIndexes = offsetDeltas.indices.filter(i => offsetDeltas(i) != i).toList
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(mismatchedIndexes, e.recordErrors.asScala.map(_.batchIndex).toList)
+    e.recordErrors.asScala.foreach(error => assertTrue(error.message.contains("offset delta"), error.message))
+    assertEquals(mismatchedIndexes.size.toLong, invalidOffsetRecordCount - invalidOffsetCountBefore)
+    val message = e.invalidException.getMessage
+    assertTrue(message.contains(s"due to ${mismatchedIndexes.size} record errors in total"), message)
+  }
+
+  // Positive control: also shows createRecordsWithOffsetDeltas builds an otherwise valid batch.
+  @ParameterizedTest
+  @EnumSource(value = classOf[CompressionType], names = Array("NONE", "GZIP"))
+  def testAcceptsRecordsWithSequentialOffsetDeltas(compressionType: CompressionType): Unit = {
+    val compression = Compression.of(compressionType).build()
+    val records = createRecordsWithOffsetDeltas(compression, Array(0, 1, 2))
+    val invalidOffsetCountBefore = invalidOffsetRecordCount
+
+    val result = newLogValidator(records, compressionType, compression).validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier)
+
+    assertEquals(0L, invalidOffsetRecordCount - invalidOffsetCountBefore)
+    checkOffsets(result.validatedRecords, 0)
+    assertEquals(3, result.validatedRecords.records.asScala.size)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("gzip,lz4", "none,gzip", "gzip,none"))
+  def testCodecChangeRejectsMismatchedOffsetDelta(sourceCompressionType: String, targetCompressionType: String): Unit = {
+    val sourceCompression = Compression.of(sourceCompressionType).build()
+    val records = createRecordsWithOffsetDeltas(sourceCompression, Array(0, 1, 100, 101, 102))
+    val validator = newLogValidator(records, sourceCompression.`type`(), Compression.of(targetCompressionType).build())
+    val invalidOffsetCountBefore = invalidOffsetRecordCount
+
+    val e = assertThrows(classOf[RecordValidationException],
+      () => validator.validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(List(2, 3, 4), e.recordErrors.asScala.map(_.batchIndex).toList)
+    assertEquals(3L, invalidOffsetRecordCount - invalidOffsetCountBefore)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("none,none", "gzip,gzip", "gzip,lz4"))
+  def testOffsetDeltaRecordErrorsAreCapped(sourceCompressionType: String, targetCompressionType: String): Unit = {
+    val sourceCompression = Compression.of(sourceCompressionType).build()
+    val records = createRecordsWithOffsetDeltas(sourceCompression, new Array[Int](2 * maxRecordErrorsPerBatch))
+    val validator = newLogValidator(records, sourceCompression.`type`(), Compression.of(targetCompressionType).build())
+    val invalidOffsetCountBefore = invalidOffsetRecordCount
+
+    val e = assertThrows(classOf[RecordValidationException],
+      () => validator.validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(maxRecordErrorsPerBatch, e.recordErrors.size)
+    assertEquals(1, e.recordErrors.get(0).batchIndex)
+    assertEquals(maxRecordErrorsPerBatch.toLong, invalidOffsetRecordCount - invalidOffsetCountBefore)
+    val message = e.invalidException.getMessage
+    assertTrue(message.contains(s"due to at least $maxRecordErrorsPerBatch record errors in total"), message)
+    assertTrue(message.contains(s"only showing the first $maxRecordErrorsPerBatch errors at most"), message)
+  }
+
+  @Test
+  def testOffsetDeltaRecordErrorsAreCappedWhenConvertingMagic(): Unit = {
+    val records = createRecordsWithOffsetDeltas(Compression.NONE, new Array[Int](2 * maxRecordErrorsPerBatch))
+    val validator = new LogValidator(records, topicPartition, time, CompressionType.NONE, Compression.NONE, false,
+      RecordBatch.MAGIC_VALUE_V1, TimestampType.CREATE_TIME, 5000L, 5000L, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT, MetadataVersion.latestTesting)
+    val invalidOffsetCountBefore = invalidOffsetRecordCount
+
+    val e = assertThrows(classOf[RecordValidationException],
+      () => validator.validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+
+    assertEquals(maxRecordErrorsPerBatch, e.recordErrors.size)
+    assertEquals(maxRecordErrorsPerBatch.toLong, invalidOffsetRecordCount - invalidOffsetCountBefore)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[CompressionType], names = Array("NONE", "GZIP"))
+  def testTimestampRecordErrorsAreCapped(compressionType: CompressionType): Unit = {
+    val compression = Compression.of(compressionType).build()
+    val outOfRangeTimestamp = time.milliseconds - 60000L
+    val builder = MemoryRecords.builder(ByteBuffer.allocate(64 * 1024), RecordBatch.MAGIC_VALUE_V2,
+      compression, TimestampType.CREATE_TIME, 0L)
+    (0 until 2 * maxRecordErrorsPerBatch).foreach { i =>
+      builder.appendWithOffset(i, outOfRangeTimestamp, null, "v".getBytes)
+    }
+    val validator = newLogValidator(builder.build(), compressionType, compression)
+
+    val e = assertThrows(classOf[RecordValidationException],
+      () => validator.validateMessagesAndAssignOffsets(
+        PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertEquals(maxRecordErrorsPerBatch, e.recordErrors.size)
+  }
+
+  @Test
+  def testInPlaceAssignmentWithNonZeroBaseOffset(): Unit = {
+    val compression = Compression.gzip().build()
+    val records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 5L, compression,
+      new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes), new SimpleRecord("c".getBytes))
+
+    val result = newLogValidator(records, CompressionType.GZIP, compression).validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier)
+
+    assertFalse(result.messageSizeMaybeChanged)
+    checkOffsets(result.validatedRecords, 0)
+  }
+
+  private def invalidOffsetRecordCount: Long =
+    meterCountOpt(s"${BrokerTopicMetrics.INVALID_OFFSET_OR_SEQUENCE_RECORDS_PER_SEC}").getOrElse(0L)
+
+  private def newLogValidator(records: MemoryRecords,
+                              sourceCompression: CompressionType,
+                              targetCompression: Compression): LogValidator = {
+    new LogValidator(
+      records,
+      topicPartition,
+      time,
+      sourceCompression,
+      targetCompression,
+      false,
+      RecordBatch.MAGIC_VALUE_V2,
+      TimestampType.CREATE_TIME,
+      5000L,
+      5000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting
+    )
+  }
+
+  // Writes the records by hand because MemoryRecordsBuilder rejects non-increasing offsets. The header is
+  // self-consistent (lastOffsetDelta == count - 1, valid CRC), so only the per-record deltas are malformed.
+  private def createRecordsWithOffsetDeltas(compression: Compression, offsetDeltas: Array[Int]): MemoryRecords = {
+    val bufferStream = new ByteBufferOutputStream(512)
+    bufferStream.position(DefaultRecordBatch.RECORD_BATCH_OVERHEAD)
+    val out = new DataOutputStream(compression.wrapForOutput(bufferStream, RecordBatch.MAGIC_VALUE_V2))
+    try {
+      offsetDeltas.indices.foreach { i =>
+        DefaultRecord.writeTo(out, offsetDeltas(i), 0L, null, ByteBuffer.wrap(s"v$i".getBytes), Record.EMPTY_HEADERS)
+      }
+    } finally {
+      out.close()
+    }
+
+    val buffer = bufferStream.buffer
+    val sizeInBytes = buffer.position
+    buffer.position(0)
+    DefaultRecordBatch.writeHeader(buffer, 0L, offsetDeltas.length - 1, sizeInBytes, RecordBatch.MAGIC_VALUE_V2,
+      compression.`type`(), TimestampType.CREATE_TIME, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false, false,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetDeltas.length)
+    buffer.position(0)
+    buffer.limit(sizeInBytes)
+    MemoryRecords.readableRecords(buffer.slice)
+  }
+
   @Test
   def testInvalidTimestampExceptionHasBatchIndex(): Unit = {
     val now = System.currentTimeMillis()
@@ -1537,8 +1715,8 @@ class LogValidatorTest {
 
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertFalse(e.recordErrors.isEmpty)
-    // recordsWithInvalidInnerMagic creates 20 records
-    assertEquals(e.recordErrors.size, 20)
+    // recordsWithInvalidInnerMagic creates 20 records, more than MAX_RECORD_ERRORS_PER_BATCH
+    assertEquals(maxRecordErrorsPerBatch, e.recordErrors.size)
     e.recordErrors.asScala.foreach(assertNotNull(_))
   }
 
@@ -1571,7 +1749,7 @@ class LogValidatorTest {
     // InvalidTimestampException takes precedence
     assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
     assertFalse(e.recordErrors.isEmpty)
-    assertEquals(6, e.recordErrors.size)
+    assertEquals(maxRecordErrorsPerBatch, e.recordErrors.size)
   }
 
   @Test
@@ -1875,5 +2053,21 @@ class LogValidatorTest {
       assertTrue(tempBytes > 0, "Temp bytes not updated")
     else
       assertEquals(0, tempBytes)
+  }
+}
+
+object LogValidatorTest {
+  // The header can be self-consistent while inner records' offsetDeltas don't match their positions;
+  // only a per-record check catches this.
+  def compressionTypeAndOffsetDeltas(): java.util.stream.Stream[Arguments] = {
+    val deltas = Seq(
+      Array(0, -1, 2),  // negative
+      Array(0, 2, 1),   // non-increasing
+      Array(0, 1, 100)  // gap
+    )
+    Seq(CompressionType.NONE, CompressionType.GZIP)
+      .flatMap(compressionType => deltas.map(d => Arguments.of(compressionType, d)))
+      .asJava
+      .stream()
   }
 }
