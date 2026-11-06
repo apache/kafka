@@ -16,20 +16,21 @@
  */
 package kafka
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
-import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SslConfigs}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -448,6 +449,51 @@ class KafkaConfigTest {
     } else {
       assertEquals("requirement failed: control.plane.listener.name is not supported in KRaft mode.",
         assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(properties)).getMessage)
+    }
+  }
+
+  @Test
+  def testConfigProviderAllowlistSkippedForServerProperties(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.write(providerFile, "token=1234".getBytes(StandardCharsets.UTF_8))
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0, "zkconnect")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(1234, config.numIoThreads)
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
+
+  @Test
+  def testConfigProviderAllowlistEnforcedForReconfiguration(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.write(providerFile, "token=1234".getBytes(StandardCharsets.UTF_8))
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0, "zkconnect")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val e = assertThrows(classOf[ConfigException], () => KafkaConfig(props, doLog = false, enforceProviderAllowlist = true))
+      assertTrue(e.getMessage.contains("is not allowed"))
+      assertFalse(e.getMessage.contains("1234"))
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
     }
   }
 }
