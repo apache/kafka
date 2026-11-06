@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -365,5 +366,25 @@ public class ProducerBatchTest {
             this.exception = exception;
         }
     }
+
+	@Test
+	public void testSplitWrapsSequencesAtMaxValue() {
+		MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), MAGIC_VALUE_V2,
+				Compression.of(CompressionType.NONE).build(), TimestampType.CREATE_TIME, 0L);
+		ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+		batch.setProducerState(new ProducerIdAndEpoch(1234L, (short) 0), Integer.MAX_VALUE, false);
+
+		byte[] value = new byte[100];
+		assertNotNull(batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, null, now));
+		assertNotNull(batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, null, now));
+
+		Deque<ProducerBatch> batches = batch.split(1);
+		assertEquals(2, batches.size());
+		assertEquals(Integer.MAX_VALUE, batches.peekFirst().baseSequence());
+
+		ProducerBatch second = batches.peekLast();
+		assertEquals(0, second.baseSequence());
+		second.records();
+	}
 
 }
