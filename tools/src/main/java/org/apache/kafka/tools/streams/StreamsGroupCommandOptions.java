@@ -41,8 +41,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
     private static final String DELETE_DOC = "Delete topic partition offsets and ownership information for one or more streams groups.";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at a time, and multiple topics.";
-    private static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
-        "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
+    private static final String TIMEOUT_MS_DOC = "The timeout in milliseconds for the Admin API calls made by the command. If not specified, " +
+        "default.api.timeout.ms from --command-config is used when set.";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
     private static final String STATE_DOC = "When specified with --list, it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, NotReady, Stable, Assigning, Reconciling, and Dead.";

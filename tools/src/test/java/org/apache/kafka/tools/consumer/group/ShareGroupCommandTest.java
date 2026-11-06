@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsResult;
@@ -61,6 +62,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
 
@@ -80,6 +82,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1717,6 +1720,29 @@ public class ShareGroupCommandTest {
         listFuture.complete(groupListings);
         when(listResult.all()).thenReturn(listFuture);
         when(client.listGroups(any())).thenReturn(listResult);
+    }
+
+    @Test
+    public void testDefaultApiTimeoutFromCommandConfigIsUsed() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--list", "--command-config", config.getAbsolutePath()};
+        Admin adminClient = mock(KafkaAdminClient.class);
+        ListGroupsResult result = mock(ListGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(List.of()));
+        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
+
+        try (ShareGroupService service = new ShareGroupService(new ShareGroupCommandOptions(args), Map.of()) {
+            @Override
+            protected Admin createAdminClient(Properties adminClientProps) {
+                return adminClient;
+            }
+        }) {
+            service.listShareGroups();
+        }
+
+        ArgumentCaptor<ListGroupsOptions> options = ArgumentCaptor.forClass(ListGroupsOptions.class);
+        verify(adminClient).listGroups(options.capture());
+        assertEquals(5000, options.getValue().timeoutMs());
     }
 
     ShareGroupService getShareGroupService(String[] args, Admin adminClient) {
