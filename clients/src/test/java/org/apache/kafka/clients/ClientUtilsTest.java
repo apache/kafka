@@ -194,6 +194,38 @@ public class ClientUtilsTest {
         assertEquals(asList(addresses), ClientUtils.resolve("kafka.apache.org", hostResolver));
     }
 
+    @Test
+    public void testParseAndValidateAddressesPreservesConfiguredHostname() throws UnknownHostException {
+        // A resolver can return an "unnamed" InetAddress, e.g. one constructed from an IP literal,
+        // which has no memory of the hostname it was looked up for. The resulting InetSocketAddress
+        // must still carry the originally configured hostname, not the resolver's address literal,
+        // since later reconnection logic re-resolves whatever hostname ends up stored here.
+        InetAddress unnamedAddress = InetAddress.getByName("198.51.100.9");
+        HostResolver hostResolver = host -> new InetAddress[] {unnamedAddress};
+
+        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+            Collections.singletonList("myhost:1234"), ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver);
+
+        assertEquals(1, addresses.size());
+        assertEquals("myhost", addresses.get(0).getHostString());
+        assertEquals("198.51.100.9", addresses.get(0).getAddress().getHostAddress());
+    }
+
+    @Test
+    public void testParseAndValidateAddressesFailsOnInvalidPortEvenWhenHostIsUnresolvable() {
+        // A malformed port must fail validation regardless of whether its paired host resolves,
+        // instead of being silently skipped just because resolution happened to fail for that entry.
+        HostResolver hostResolver = host -> {
+            if (host.equals("bad.invalid")) {
+                throw new UnknownHostException("simulated unresolvable host");
+            }
+            return InetAddress.getAllByName(host);
+        };
+
+        assertThrows(ConfigException.class, () -> ClientUtils.parseAndValidateAddresses(
+            asList("bad.invalid:70000", "127.0.0.1:9092"), ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver));
+    }
+
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
         return ClientUtils.parseAndValidateAddresses(asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
     }
