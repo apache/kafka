@@ -18,15 +18,19 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalLong;
 import java.util.PrimitiveIterator;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetSyncStoreTest {
@@ -115,6 +119,53 @@ public class OffsetSyncStoreTest {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
             store.start(true);
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
+        }
+    }
+
+    @Test
+    public void testStopInitializationPreventsStart() {
+        AtomicBoolean backingStoreStarted = new AtomicBoolean();
+        try (OffsetSyncStore store = new OffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                backingStoreStarted.set(true);
+            }
+        }) {
+            store.stopInitialization();
+            store.start(true);
+
+            assertFalse(backingStoreStarted.get(),
+                    "the backing store must not be started once the store has been told to stop");
+            assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 100));
+        }
+    }
+
+    @Test
+    public void testStartSwallowsWakeupCausedByStopInitialization() {
+        try (OffsetSyncStore store = new OffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                // this is what happens when another thread calls stopInitialization() during the initial read
+                stopInitialization();
+                throw new WakeupException();
+            }
+        }) {
+            store.start(true);
+
+            // the store never read to the end of the topic, so it must not translate anything
+            assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 100));
+        }
+    }
+
+    @Test
+    public void testStartPropagatesWakeupNotCausedByStopInitialization() {
+        try (OffsetSyncStore store = new OffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                throw new WakeupException();
+            }
+        }) {
+            assertThrows(WakeupException.class, () -> store.start(true));
         }
     }
 
