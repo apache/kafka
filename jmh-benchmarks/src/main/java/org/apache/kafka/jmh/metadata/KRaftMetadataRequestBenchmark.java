@@ -25,6 +25,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.share.SharePartitionManager;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -84,9 +85,11 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
@@ -126,6 +129,13 @@ public class KRaftMetadataRequestBenchmark {
     private int topicCount;
     @Param({"10", "20", "50"})
     private int partitionCount;
+    @Param({"5"})
+    private int brokerCount;
+    @Param({"3"})
+    private int replicationFactor;
+    // 0 leaves replica directories unassigned (DirectoryId.MIGRATING), which skips the online log dir check.
+    @Param({"0", "1", "16"})
+    private int logDirsPerBroker;
     private KafkaApis kafkaApis;
     private Request allTopicMetadataRequest;
 
@@ -140,32 +150,59 @@ public class KRaftMetadataRequestBenchmark {
         MetadataDelta buildupMetadataDelta = new MetadataDelta.Builder()
             .setImage(MetadataImage.EMPTY)
             .build();
-        IntStream.range(0, 5).forEach(brokerId -> {
+        List<List<Uuid>> logDirs = new ArrayList<>();
+        Random random = new Random(0);
+        IntStream.range(0, brokerCount).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
             endpoints.addAll(endpoints(brokerId));
+            List<Uuid> brokerLogDirs = IntStream.range(0, logDirsPerBroker).mapToObj(i -> DirectoryId.random()).toList();
+            logDirs.add(brokerLogDirs);
             buildupMetadataDelta.replay(new RegisterBrokerRecord().
                 setBrokerId(brokerId).
                 setBrokerEpoch(100L).
                 setFenced(false).
                 setRack(null).
                 setEndPoints(endpoints).
-                setIncarnationId(Uuid.fromString(Uuid.randomUuid().toString())));
+                setIncarnationId(Uuid.fromString(Uuid.randomUuid().toString())).
+                setLogDirs(brokerLogDirs));
         });
         IntStream.range(0, topicCount).forEach(topicNum -> {
             Uuid topicId = Uuid.randomUuid();
             buildupMetadataDelta.replay(new TopicRecord().setName("topic-" + topicNum).setTopicId(topicId));
-            IntStream.range(0, partitionCount).forEach(partitionId ->
+            // Leaders rotate across the brokers, starting each topic at a random broker so that topics
+            // don't all share the same layout.
+            int firstLeader = random.nextInt(brokerCount);
+            IntStream.range(0, partitionCount).forEach(partitionId -> {
+                List<Integer> replicas = replicas((firstLeader + partitionId) % brokerCount);
                 buildupMetadataDelta.replay(new PartitionRecord().
                     setPartitionId(partitionId).
                     setTopicId(topicId).
-                    setReplicas(List.of(0, 1, 3)).
-                    setIsr(List.of(0, 1, 3)).
+                    setReplicas(replicas).
+                    setIsr(replicas).
                     setRemovingReplicas(List.of()).
                     setAddingReplicas(List.of()).
-                    setLeader(partitionCount % 5).
-                    setLeaderEpoch(0)));
+                    setLeader(replicas.get(0)).
+                    setLeaderEpoch(0).
+                    setDirectories(directories(logDirs, replicas, random)));
+            });
         });
         metadataCache.setImage(buildupMetadataDelta.apply(MetadataProvenance.EMPTY));
+    }
+
+    // Places the followers on the brokers after the leader.
+    private List<Integer> replicas(int leader) {
+        return IntStream.range(0, replicationFactor).mapToObj(i -> (leader + i) % brokerCount).toList();
+    }
+
+    // Assigns each replica to a random log dir of its broker. A predictable assignment would let the
+    // CPU's branch predictor hide most of the cost of the online log dir lookup.
+    private List<Uuid> directories(List<List<Uuid>> logDirs, List<Integer> replicas, Random random) {
+        if (logDirsPerBroker == 0) {
+            return List.of();
+        }
+        return replicas.stream().
+            map(replica -> logDirs.get(replica).get(random.nextInt(logDirsPerBroker))).
+            toList();
     }
 
     private List<RegisterBrokerRecord.BrokerEndpoint> endpoints(final int brokerId) {
