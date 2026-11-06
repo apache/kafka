@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.LegacyRecord;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
@@ -46,8 +48,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -1560,6 +1565,180 @@ public class LogValidatorTest {
         assertEquals(1, metricsRecorder.recordInvalidOffsetCount);
     }
 
+    // The header can be self-consistent while inner records' offsetDeltas don't match their positions;
+    // only a per-record check catches this.
+    private static Stream<Arguments> compressionTypeAndOffsetDeltas() {
+        List<int[]> deltas = List.of(
+            new int[]{0, -1, 2},  // negative
+            new int[]{0, 2, 1},   // non-increasing
+            new int[]{0, 1, 100}  // gap
+        );
+        return Stream.of(CompressionType.NONE, CompressionType.GZIP)
+            .flatMap(compressionType -> deltas.stream().map(d -> Arguments.of(compressionType, d)));
+    }
+
+    // Matching source and target compression keeps the original offsets: NONE goes through
+    // assignOffsetsNonCompressed and GZIP through the in-place path of validateMessagesAndAssignOffsetsCompressed.
+    @ParameterizedTest
+    @MethodSource("compressionTypeAndOffsetDeltas")
+    public void testRejectsRecordWithMismatchedOffsetDelta(CompressionType compressionType, int[] offsetDeltas) throws IOException {
+        Compression compression = Compression.of(compressionType).build();
+        MemoryRecords records = createRecordsWithOffsetDeltas(compression, offsetDeltas);
+        LogValidator validator = newLogValidator(records, compressionType, compression);
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+            () -> validator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+
+        List<Integer> mismatchedIndexes = IntStream.range(0, offsetDeltas.length)
+            .filter(i -> offsetDeltas[i] != i).boxed().toList();
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(mismatchedIndexes, e.recordErrors().stream().map(error -> error.batchIndex).toList());
+        e.recordErrors().forEach(error -> assertTrue(error.message.contains("offset delta"), error.message));
+        assertEquals(mismatchedIndexes.size(), metricsRecorder.recordInvalidOffsetCount);
+        String message = e.invalidException().getMessage();
+        assertTrue(message.contains("due to " + mismatchedIndexes.size() + " record errors in total"), message);
+    }
+
+    // Positive control: also shows createRecordsWithOffsetDeltas builds an otherwise valid batch.
+    @ParameterizedTest
+    @EnumSource(value = CompressionType.class, names = {"NONE", "GZIP"})
+    public void testAcceptsRecordsWithSequentialOffsetDeltas(CompressionType compressionType) throws IOException {
+        Compression compression = Compression.of(compressionType).build();
+        MemoryRecords records = createRecordsWithOffsetDeltas(compression, 0, 1, 2);
+
+        ValidationResult result = newLogValidator(records, compressionType, compression)
+            .validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier());
+
+        assertEquals(0, metricsRecorder.recordInvalidOffsetCount);
+        checkOffsets(result.validatedRecords(), 0);
+        assertEquals(3, TestUtils.toList(result.validatedRecords().records()).size());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"gzip,lz4", "none,gzip", "gzip,none"})
+    public void testCodecChangeRejectsMismatchedOffsetDelta(String sourceCompressionType, String targetCompressionType) throws IOException {
+        Compression sourceCompression = Compression.of(sourceCompressionType).build();
+        MemoryRecords records = createRecordsWithOffsetDeltas(sourceCompression, 0, 1, 100, 101, 102);
+        LogValidator validator = newLogValidator(records, sourceCompression.type(), Compression.of(targetCompressionType).build());
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+            () -> validator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(List.of(2, 3, 4), e.recordErrors().stream().map(error -> error.batchIndex).toList());
+        assertEquals(3, metricsRecorder.recordInvalidOffsetCount);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"none,none", "gzip,gzip", "gzip,lz4"})
+    public void testOffsetDeltaRecordErrorsAreCapped(String sourceCompressionType, String targetCompressionType) throws IOException {
+        Compression sourceCompression = Compression.of(sourceCompressionType).build();
+        MemoryRecords records = createRecordsWithOffsetDeltas(sourceCompression, new int[2 * LogValidator.MAX_RECORD_ERRORS_PER_BATCH]);
+        LogValidator validator = newLogValidator(records, sourceCompression.type(), Compression.of(targetCompressionType).build());
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+            () -> validator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+
+        assertInstanceOf(InvalidRecordException.class, e.invalidException());
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, e.recordErrors().size());
+        assertEquals(1, e.recordErrors().get(0).batchIndex);
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, metricsRecorder.recordInvalidOffsetCount);
+        String message = e.invalidException().getMessage();
+        assertTrue(message.contains("due to at least " + LogValidator.MAX_RECORD_ERRORS_PER_BATCH + " record errors in total"), message);
+        assertTrue(message.contains("only showing the first " + LogValidator.MAX_RECORD_ERRORS_PER_BATCH + " errors at most"), message);
+    }
+
+    @Test
+    public void testOffsetDeltaRecordErrorsAreCappedWhenConvertingMagic() throws IOException {
+        MemoryRecords records = createRecordsWithOffsetDeltas(Compression.NONE, new int[2 * LogValidator.MAX_RECORD_ERRORS_PER_BATCH]);
+        LogValidator validator = new LogValidator(records, topicPartition, time, CompressionType.NONE, Compression.NONE, false,
+            RecordBatch.MAGIC_VALUE_V1, TimestampType.CREATE_TIME, 5000L, 5000L, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+            AppendOrigin.CLIENT);
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+            () -> validator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, e.recordErrors().size());
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, metricsRecorder.recordInvalidOffsetCount);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CompressionType.class, names = {"NONE", "GZIP"})
+    public void testTimestampRecordErrorsAreCapped(CompressionType compressionType) {
+        Compression compression = Compression.of(compressionType).build();
+        long outOfRangeTimestamp = time.milliseconds() - 60_000L;
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64 * 1024), RecordBatch.MAGIC_VALUE_V2,
+            compression, TimestampType.CREATE_TIME, 0L);
+        for (int i = 0; i < 2 * LogValidator.MAX_RECORD_ERRORS_PER_BATCH; i++)
+            builder.appendWithOffset(i, outOfRangeTimestamp, null, "v".getBytes());
+        LogValidator validator = newLogValidator(builder.build(), compressionType, compression);
+
+        RecordValidationException e = assertThrows(RecordValidationException.class,
+            () -> validator.validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()));
+
+        assertInstanceOf(InvalidTimestampException.class, e.invalidException());
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, e.recordErrors().size());
+    }
+
+    @Test
+    public void testInPlaceAssignmentWithNonZeroBaseOffset() {
+        Compression compression = Compression.gzip().build();
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 5L, compression,
+            new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes()), new SimpleRecord("c".getBytes()));
+
+        ValidationResult result = newLogValidator(records, CompressionType.GZIP, compression)
+            .validateMessagesAndAssignOffsets(
+                PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier());
+
+        assertFalse(result.messageSizeMaybeChanged());
+        checkOffsets(result.validatedRecords(), 0);
+    }
+
+    private LogValidator newLogValidator(MemoryRecords records, CompressionType sourceCompression, Compression targetCompression) {
+        return new LogValidator(
+            records,
+            topicPartition,
+            time,
+            sourceCompression,
+            targetCompression,
+            false,
+            RecordBatch.MAGIC_VALUE_V2,
+            TimestampType.CREATE_TIME,
+            5000L,
+            5000L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH,
+            AppendOrigin.CLIENT
+        );
+    }
+
+    // Writes the records by hand because MemoryRecordsBuilder rejects non-increasing offsets. The header is
+    // self-consistent (lastOffsetDelta == count - 1, valid CRC), so only the per-record deltas are malformed.
+    private static MemoryRecords createRecordsWithOffsetDeltas(Compression compression, int... offsetDeltas) throws IOException {
+        ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(512);
+        bufferStream.position(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+        try (DataOutputStream out = new DataOutputStream(compression.wrapForOutput(bufferStream, RecordBatch.MAGIC_VALUE_V2))) {
+            for (int i = 0; i < offsetDeltas.length; i++)
+                DefaultRecord.writeTo(out, offsetDeltas[i], 0L, null, ByteBuffer.wrap(("v" + i).getBytes()), Record.EMPTY_HEADERS);
+        }
+
+        ByteBuffer buffer = bufferStream.buffer();
+        int sizeInBytes = buffer.position();
+        buffer.position(0);
+        DefaultRecordBatch.writeHeader(buffer, 0L, offsetDeltas.length - 1, sizeInBytes, RecordBatch.MAGIC_VALUE_V2,
+            compression.type(), TimestampType.CREATE_TIME, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false, false,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH, offsetDeltas.length);
+        buffer.position(0);
+        buffer.limit(sizeInBytes);
+        return MemoryRecords.readableRecords(buffer.slice());
+    }
+
     @Test
     public void testInvalidTimestampExceptionHasBatchIndex() {
         long now = System.currentTimeMillis();
@@ -1604,8 +1783,8 @@ public class LogValidatorTest {
 
         assertInstanceOf(InvalidRecordException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
-        // recordsWithInvalidInnerMagic creates 20 records
-        assertEquals(20, e.recordErrors().size());
+        // recordsWithInvalidInnerMagic creates 20 records, more than MAX_RECORD_ERRORS_PER_BATCH
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, e.recordErrors().size());
         for (Object error : e.recordErrors()) {
             assertNotNull(error);
         }
@@ -1641,7 +1820,7 @@ public class LogValidatorTest {
         // InvalidTimestampException takes precedence
         assertInstanceOf(InvalidTimestampException.class, e.invalidException());
         assertFalse(e.recordErrors().isEmpty());
-        assertEquals(6, e.recordErrors().size());
+        assertEquals(LogValidator.MAX_RECORD_ERRORS_PER_BATCH, e.recordErrors().size());
     }
 
     @Test
