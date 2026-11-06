@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The result of {@link org.apache.kafka.clients.admin.Admin#removeRaftVoter(int, org.apache.kafka.common.Uuid, org.apache.kafka.clients.admin.RemoveRaftVoterOptions)}.
+ * The result of {@link org.apache.kafka.clients.admin.Admin#removeRaftVoter(int, org.apache.kafka.clients.admin.RemoveRaftVoterOptions)}.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
