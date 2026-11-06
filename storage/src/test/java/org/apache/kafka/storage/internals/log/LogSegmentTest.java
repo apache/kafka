@@ -601,6 +601,38 @@ public class LogSegmentTest {
     }
 
     /**
+     * recover() keeps overflowing batches, trims a preallocated zero tail, and reports both
+     * so the caller can truncate remaining segments and then split.
+     */
+    @Test
+    public void testRecoveryReportsOffsetOverflowAndTruncatesZeroTail() throws Exception {
+        long overflowOffset = (long) Integer.MAX_VALUE + 1;
+        int padBytes = 1024;
+        File logFile = LogFileUtils.logFile(logDir, 0);
+        try (LogSegment segment = createSegment(0)) {
+            segment.log().append(MemoryRecords.withRecords(0L, Compression.NONE, 0, new SimpleRecord("a".getBytes())));
+            segment.log().append(MemoryRecords.withRecords(overflowOffset, Compression.NONE, 0, new SimpleRecord("b".getBytes())));
+            segment.flush();
+        }
+        try (RandomAccessFile raf = new RandomAccessFile(logFile, "rw")) {
+            raf.setLength(raf.length() + padBytes);
+        }
+        try (LogSegment segment = createSegment(0)) {
+            LogSegment.RecoveryResult result = segment.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
+            assertEquals(padBytes, result.truncatedBytes());
+            assertEquals(OptionalLong.of(overflowOffset), result.overflowOffset());
+            boolean foundOverflow = false;
+            for (RecordBatch batch : segment.log().batches()) {
+                if (batch.lastOffset() == overflowOffset) {
+                    foundOverflow = true;
+                }
+            }
+            assertTrue(foundOverflow, "Overflowing batch must remain so the caller can split the segment");
+            assertEquals(logFile.length(), segment.log().sizeInBytes());
+        }
+    }
+
+    /**
      * Randomly corrupt a log a number of times and attempt recovery.
      */
     @Test
