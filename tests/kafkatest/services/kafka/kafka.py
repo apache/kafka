@@ -1480,8 +1480,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return True
 
     def execute_reassign_partitions(self, reassignment, node=None,
-                                    throttle=None):
-        """Run the reassign partitions admin tool in "verify" mode
+                                    throttle=None, additional=False):
+        """Run the reassign partitions admin tool in "execute" mode.
+
+        Set additional=True to pass --additional, which lets the tool override a
+        reassignment that is still in progress instead of refusing to run.
         """
         if node is None:
             node = self.nodes[0]
@@ -1498,6 +1501,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += self._connect_setting_reassign_partitions(node)
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
+        if additional:
+            cmd += " --additional"
         if throttle is not None:
             cmd += " --throttle %d" % throttle
         cmd += " && sleep 1 && rm -f %s" % json_file
@@ -1511,6 +1516,39 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
+
+    def list_partition_reassignments(self, node=None):
+        """Run the reassign partitions admin tool in "list" mode and return the
+        reassignments that are in progress as a dictionary keyed by
+        (topic, partition):
+        {
+            ("test_topic", 0): {"replicas": [1, 2, 4, 3], "adding": [4], "removing": [3]}
+        }
+        """
+        if node is None:
+            node = self.nodes[0]
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
+        cmd += self._connect_setting_reassign_partitions(node)
+        cmd += "--list"
+
+        self.logger.info("Listing partition reassignments...")
+        output = self.run_cli_tool(node, cmd)
+
+        # Lines look like this: test_topic-0: replicas: 1,2,4,3. adding: 4. removing: 3.
+        reassignments = {}
+        for line in output.splitlines():
+            m = re.match(r"^(.*)-(\d+): replicas: ([\d,]+)\.(?: adding: ([\d,]+)\.)?(?: removing: ([\d,]+)\.)?$", line.strip())
+            if m is None:
+                continue
+            topic, partition, replicas, adding, removing = m.groups()
+            reassignments[(topic, int(partition))] = {
+                "replicas": [int(i) for i in replicas.split(",")],
+                "adding": [int(i) for i in adding.split(",")] if adding else [],
+                "removing": [int(i) for i in removing.split(",")] if removing else []
+            }
+        return reassignments
 
     def search_data_files(self, topic, messages):
         """Check if a set of messages made it into the Kafka data files. Note that

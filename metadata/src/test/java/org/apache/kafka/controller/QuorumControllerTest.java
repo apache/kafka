@@ -26,9 +26,12 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
@@ -45,7 +48,9 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
@@ -1403,6 +1408,136 @@ public class QuorumControllerTest {
 
             testToImages(clientEnv.allRecords());
         }
+    }
+
+    /**
+     * Override an in-flight reassignment while its adding replica is still catching up, and check
+     * that the controller keeps tracking that replica as adding until it joins the ISR. Without
+     * that, the override completes as soon as the newly added replica catches up, leaving the
+     * original adding replica in the replica set but out of the ISR with no reassignment in
+     * progress for it.
+     */
+    @Test
+    public void testOverridingReassignmentKeepsStillAddingReplica() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+                setBootstrapMetadata(SIMPLE_BOOTSTRAP).
+                build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(active, 5);
+            CreateTopicsResponseData createResponse = active.createTopics(ANONYMOUS_CONTEXT,
+                new CreateTopicsRequestData().setTopics(
+                    new CreatableTopicCollection(Set.of(
+                        new CreatableTopic().setName("foo").setNumPartitions(-1).
+                            setReplicationFactor((short) -1).
+                            setAssignments(new CreatableReplicaAssignmentCollection(
+                                List.of(new CreatableReplicaAssignment().
+                                    setPartitionIndex(0).
+                                    setBrokerIds(List.of(0, 1, 2)))))))),
+                Set.of("foo"), false).get();
+            Uuid fooId = createResponse.topics().find("foo").topicId();
+
+            // Reassign foo-0 from [0, 1, 2] to [0, 1, 3]. Replica 3 is now adding, 2 is removing.
+            alterReassignment(active, "foo", 0, List.of(0, 1, 3));
+            assertEquals(List.of(new OngoingPartitionReassignment().
+                    setPartitionIndex(0).
+                    setReplicas(List.of(0, 1, 3, 2)).
+                    setAddingReplicas(List.of(3)).
+                    setRemovingReplicas(List.of(2))),
+                listReassignment(active, "foo"));
+
+            // Before replica 3 catches up, override the reassignment with [0, 1, 3, 4].
+            // Replica 3 has not joined the ISR, so it must stay in the adding set with 4.
+            alterReassignment(active, "foo", 0, List.of(0, 1, 3, 4));
+            assertEquals(List.of(new OngoingPartitionReassignment().
+                    setPartitionIndex(0).
+                    setReplicas(List.of(0, 1, 3, 4, 2)).
+                    setAddingReplicas(List.of(3, 4)).
+                    setRemovingReplicas(List.of(2))),
+                listReassignment(active, "foo"));
+
+            // Replica 4 catches up first. The reassignment must stay in progress because 3 is
+            // still out of the ISR, and nothing may be removed yet.
+            alterIsr(active, brokerEpochs, fooId, 0, List.of(0, 1, 2, 4));
+            PartitionRegistration partition = active.replicationControl().getPartition(fooId, 0);
+            assertArrayEquals(new int[] {0, 1, 3, 4, 2}, partition.replicas);
+            assertArrayEquals(new int[] {0, 1, 2, 4}, partition.isr);
+            assertArrayEquals(new int[] {3, 4}, partition.addingReplicas);
+            assertArrayEquals(new int[] {2}, partition.removingReplicas);
+            assertEquals(List.of(new OngoingPartitionReassignment().
+                    setPartitionIndex(0).
+                    setReplicas(List.of(0, 1, 3, 4, 2)).
+                    setAddingReplicas(List.of(3, 4)).
+                    setRemovingReplicas(List.of(2))),
+                listReassignment(active, "foo"));
+
+            // Once replica 3 catches up as well, the reassignment completes and 2 is dropped.
+            alterIsr(active, brokerEpochs, fooId, 0, List.of(0, 1, 2, 3, 4));
+            partition = active.replicationControl().getPartition(fooId, 0);
+            assertArrayEquals(new int[] {0, 1, 3, 4}, partition.replicas);
+            assertArrayEquals(new int[] {0, 1, 3, 4}, partition.isr);
+            assertArrayEquals(new int[] {}, partition.addingReplicas);
+            assertArrayEquals(new int[] {}, partition.removingReplicas);
+            assertEquals(List.of(), listReassignment(active, "foo"));
+
+            testToImages(clientEnv.allRecords());
+        }
+    }
+
+    private static void alterReassignment(
+        QuorumController active,
+        String topic,
+        int partitionIndex,
+        List<Integer> replicas
+    ) throws Exception {
+        AlterPartitionReassignmentsResponseData response = active.alterPartitionReassignments(ANONYMOUS_CONTEXT,
+            new AlterPartitionReassignmentsRequestData().setTopics(List.of(
+                new ReassignableTopic().setName(topic).setPartitions(List.of(
+                    new ReassignablePartition().setPartitionIndex(partitionIndex).setReplicas(replicas)))))).get();
+        assertEquals(Errors.NONE.code(), response.errorCode(), response.toString());
+        ReassignablePartitionResponse partitionResponse = response.responses().get(0).partitions().get(0);
+        assertEquals(Errors.NONE.code(), partitionResponse.errorCode(), partitionResponse.toString());
+    }
+
+    private static List<OngoingPartitionReassignment> listReassignment(
+        QuorumController active,
+        String topic
+    ) throws Exception {
+        ListPartitionReassignmentsResponseData response = active.listPartitionReassignments(ANONYMOUS_CONTEXT,
+            new ListPartitionReassignmentsRequestData().setTopics(List.of(
+                new ListPartitionReassignmentsTopics().setName(topic).setPartitionIndexes(List.of(0))))).get();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        return response.topics().stream().
+            flatMap(topicReassignment -> topicReassignment.partitions().stream()).
+            toList();
+    }
+
+    private static void alterIsr(
+        QuorumController active,
+        Map<Integer, Long> brokerEpochs,
+        Uuid topicId,
+        int partitionIndex,
+        List<Integer> newIsr
+    ) throws Exception {
+        PartitionRegistration partition = active.replicationControl().getPartition(topicId, partitionIndex);
+        AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData().
+            setTopicId(topicId);
+        topicData.partitions().add(new AlterPartitionRequestData.PartitionData().
+            setPartitionIndex(partitionIndex).
+            setLeaderEpoch(partition.leaderEpoch).
+            setPartitionEpoch(partition.partitionEpoch).
+            setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(newIsr)));
+        AlterPartitionRequestData request = new AlterPartitionRequestData().
+            setBrokerId(partition.leader).
+            setBrokerEpoch(brokerEpochs.get(partition.leader));
+        request.topics().add(topicData);
+        AlterPartitionResponseData response = active.alterPartition(ANONYMOUS_CONTEXT,
+            new AlterPartitionRequest.Builder(request).build(ApiKeys.ALTER_PARTITION.oldestVersion()).data()).get();
+        AlterPartitionResponseData.PartitionData partitionResponse = response.topics().get(0).partitions().get(0);
+        assertEquals(Errors.NONE.code(), partitionResponse.errorCode(), partitionResponse.toString());
     }
 
     @Test

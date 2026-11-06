@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.PartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -35,6 +36,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -400,6 +402,125 @@ public class ReassignPartitionsCommandTest {
         assertEquals(Map.entry(Set.of(foo0), Set.of()), runCancelAssignment(assignment, true, true));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 4));
+    }
+
+    /**
+     * Test overriding an in-progress reassignment with --additional while one of the replicas it
+     * is adding has not joined the ISR yet. The new reassignment keeps that replica, so it must
+     * stay in addingReplicas and the override must not complete until it has caught up.
+     */
+    @ClusterTest
+    public void testAdditionalReassignmentKeepsStillAddingReplica() throws Exception {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 200);
+
+        // [0,1,2] -> [0,1,4]: replica 4 is added and replica 2 removed. Replica 4 is throttled,
+        // so it never joins the ISR and the reassignment stays in progress.
+        String firstAssignment = "{\"version\":1,\"partitions\":" +
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+            "]}";
+        // Override to [0,1,4,3] while 4 is still being added. Replica 3 is not throttled.
+        String secondAssignment = "{\"version\":1,\"partitions\":" +
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,4,3],\"log_dirs\":[\"any\",\"any\",\"any\",\"any\"]}" +
+            "]}";
+
+        setReplicationThrottleForPartitions(foo0);
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            runExecuteAssignment(false, firstAssignment, -1L, -1L);
+            assertReassignment(admin, foo0, Set.of(4), Set.of(2));
+
+            // Replica 4 has not caught up, so it must stay in addingReplicas next to 3.
+            runExecuteAssignment(true, secondAssignment, -1L, -1L);
+            assertReassignment(admin, foo0, Set.of(3, 4), Set.of(2));
+
+            // Replica 3 catches up. On a controller that dropped 4 from addingReplicas on the
+            // override, the reassignment completes in the same controller event that admits 3
+            // to the ISR, leaving replicas=[0,1,4,3] with 4 out of sync and nothing in progress.
+            assertNoUntrackedOutOfSyncReplica(admin, foo0);
+            TestUtils.waitForCondition(() -> isr(admin, foo0).contains(3),
+                "Timed out while waiting for replica 3 to join the ISR");
+            assertNoUntrackedOutOfSyncReplica(admin, foo0);
+
+            assertReassignment(admin, foo0, Set.of(3, 4), Set.of(2));
+            assertEquals(Set.of(0, 1, 2, 3), isr(admin, foo0));
+
+            // --verify must report the override as still in progress.
+            VerifyAssignmentResult verifyResult = runVerifyAssignment(admin, secondAssignment, true);
+            assertTrue(verifyResult.partsOngoing());
+            assertEquals(new PartitionReassignmentState(List.of(0, 1, 4, 3, 2), List.of(0, 1, 4, 3), false),
+                verifyResult.partStates().get(foo0));
+
+            // Re-submitting the in-progress target is a no-op.
+            runExecuteAssignment(true, secondAssignment, -1L, -1L);
+            assertReassignment(admin, foo0, Set.of(3, 4), Set.of(2));
+
+            // Let replica 4 catch up: the override completes with exactly the requested replicas,
+            // all of them in the ISR.
+            removeReplicationThrottleForPartitions(foo0);
+            waitForVerifyAssignment(admin, secondAssignment, false,
+                new VerifyAssignmentResult(Map.of(foo0,
+                    new PartitionReassignmentState(List.of(0, 1, 4, 3), List.of(0, 1, 4, 3), true))));
+            TestUtils.waitForCondition(() -> isr(admin, foo0).equals(Set.of(0, 1, 3, 4)),
+                "Timed out while waiting for replica 4 to join the ISR");
+            assertNoUntrackedOutOfSyncReplica(admin, foo0);
+        }
+        verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 2));
+    }
+
+    private Optional<PartitionReassignment> reassignment(Admin admin, TopicPartition partition) {
+        return Optional.ofNullable(assertDoesNotThrow(() ->
+            admin.listPartitionReassignments(Set.of(partition)).reassignments().get().get(partition)));
+    }
+
+    private void assertReassignment(Admin admin,
+                                    TopicPartition partition,
+                                    Set<Integer> adding,
+                                    Set<Integer> removing) {
+        Optional<PartitionReassignment> reassignment = reassignment(admin, partition);
+        assertTrue(reassignment.isPresent(), "Expected " + partition + " to be reassigning with adding=" + adding +
+            " removing=" + removing + ", but no reassignment is in progress: " + partitionInfo(admin, partition));
+        assertEquals(adding, Set.copyOf(reassignment.get().addingReplicas()),
+            "Unexpected adding replicas in " + reassignment.get());
+        assertEquals(removing, Set.copyOf(reassignment.get().removingReplicas()),
+            "Unexpected removing replicas in " + reassignment.get());
+    }
+
+    private TopicPartitionInfo partitionInfo(Admin admin, TopicPartition partition) {
+        TopicDescription description = assertDoesNotThrow(() ->
+            admin.describeTopics(Set.of(partition.topic())).topicNameValues().get(partition.topic()).get());
+        return description.partitions().stream()
+            .filter(p -> p.partition() == partition.partition())
+            .findFirst()
+            .orElseThrow();
+    }
+
+    private Set<Integer> isr(Admin admin, TopicPartition partition) {
+        return partitionInfo(admin, partition).isr().stream().map(Node::id).collect(Collectors.toSet());
+    }
+
+    /**
+     * Every replica that is not in the ISR must be accounted for by an in-progress reassignment,
+     * either as a replica it is adding or as one it is removing. A replica that is out of sync
+     * and tracked by neither is one the controller stopped waiting for.
+     */
+    private void assertNoUntrackedOutOfSyncReplica(Admin admin, TopicPartition partition) {
+        // Read the reassignment before the partition: a reassignment that completes between the
+        // two reads then shows up as a partition with every replica in the ISR, not the reverse.
+        Optional<PartitionReassignment> reassignment = reassignment(admin, partition);
+        TopicPartitionInfo info = partitionInfo(admin, partition);
+        Set<Integer> outOfSync = info.replicas().stream().map(Node::id).collect(Collectors.toCollection(HashSet::new));
+        info.isr().forEach(node -> outOfSync.remove(node.id()));
+        Set<Integer> tracked = new HashSet<>();
+        reassignment.ifPresent(r -> {
+            tracked.addAll(r.addingReplicas());
+            tracked.addAll(r.removingReplicas());
+        });
+        assertTrue(tracked.containsAll(outOfSync),
+            "Replicas " + outOfSync + " of " + partition + " are out of sync but not part of a reassignment: " +
+                "replicas=" + info.replicas().stream().map(Node::id).toList() +
+                " isr=" + info.isr().stream().map(Node::id).toList() +
+                " reassignment=" + reassignment);
     }
 
     /**
