@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -113,6 +114,86 @@ public class SetSchemaMetadataTest {
 
         // Make sure the struct's schema and fields all point to the new schema
         assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());
+    }
+
+    public static Stream<Arguments> primitiveSchemas() {
+        return Stream.of(
+                Arguments.of(SchemaBuilder.int32().name("orig").version(1).build(), 42),
+                Arguments.of(SchemaBuilder.int64().name("orig").version(1).build(), 42L),
+                Arguments.of(SchemaBuilder.string().name("orig").version(1).build(), "value"),
+                Arguments.of(SchemaBuilder.float64().name("orig").version(1).build(), 3.14),
+                Arguments.of(SchemaBuilder.bool().name("orig").version(1).build(), true)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("primitiveSchemas")
+    public void schemaNameAndVersionUpdateWithPrimitive(Schema schema, Object value) {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+        xform.configure(props);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, schema, value, 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals(42, updatedRecord.valueSchema().version());
+        assertEquals(schema.type(), updatedRecord.valueSchema().type());
+        assertSame(value, updatedRecord.value());
+    }
+
+    @Test
+    public void schemaNameAndVersionUpdateWithPrimitiveAndNullValue() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+        xform.configure(props);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, Schema.INT32_SCHEMA, null, 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals(42, updatedRecord.valueSchema().version());
+        assertEquals(Schema.Type.INT32, updatedRecord.valueSchema().type());
+        assertNull(updatedRecord.value());
+    }
+
+    @Test
+    public void schemaNameAndVersionUpdateWithArray() {
+        final Schema schema = SchemaBuilder.array(Schema.STRING_SCHEMA).name("my.orig.Array").version(1).build();
+
+        final Map<String, Object> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+        xform.configure(props);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, schema, Collections.singletonList("value"), 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals(42, updatedRecord.valueSchema().version());
+        assertEquals(Schema.Type.ARRAY, updatedRecord.valueSchema().type());
+        assertSame(Schema.STRING_SCHEMA, updatedRecord.valueSchema().valueSchema());
+    }
+
+    @Test
+    public void schemaNameAndVersionUpdateWithMap() {
+        final Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).name("my.orig.Map").version(1).build();
+
+        final Map<String, Object> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+        xform.configure(props);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, schema, Collections.singletonMap("key", 42), 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals(42, updatedRecord.valueSchema().version());
+        assertEquals(Schema.Type.MAP, updatedRecord.valueSchema().type());
+        assertSame(Schema.STRING_SCHEMA, updatedRecord.valueSchema().keySchema());
+        assertSame(Schema.INT32_SCHEMA, updatedRecord.valueSchema().valueSchema());
     }
 
     @ParameterizedTest
