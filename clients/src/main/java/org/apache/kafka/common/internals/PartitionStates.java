@@ -18,12 +18,17 @@ package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
@@ -43,8 +48,54 @@ import java.util.function.BiConsumer;
  */
 public class PartitionStates<S> {
 
-    private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
-    private final Set<TopicPartition> partitionSetView = Collections.unmodifiableSet(map.keySet());
+    // The order is kept by linking our own nodes rather than by a LinkedHashMap. Moving a partition to the end then
+    // reuses its node. With LinkedHashMap, remove + put leaves the removed entry pointing at the next entry of its
+    // bucket, so two partitions of one bucket updated in turn link every removed entry to the next one; once any of
+    // them is promoted to the old generation, young GC keeps copying all the entries that follow it.
+    private static final class Node<S> implements Map.Entry<TopicPartition, S> {
+        private final TopicPartition topicPartition;
+        private S state;
+        private Node<S> prev;
+        private Node<S> next;
+
+        private Node(TopicPartition topicPartition, S state) {
+            this.topicPartition = topicPartition;
+            this.state = state;
+        }
+
+        @Override
+        public TopicPartition getKey() {
+            return topicPartition;
+        }
+
+        @Override
+        public S getValue() {
+            return state;
+        }
+
+        @Override
+        public S setValue(S value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Map.Entry)) return false;
+            Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
+            return topicPartition.equals(e.getKey()) && Objects.equals(state, e.getValue());
+        }
+
+        @Override
+        public int hashCode() {
+            return topicPartition.hashCode() ^ Objects.hashCode(state);
+        }
+    }
+
+    private final Map<TopicPartition, Node<S>> nodes = new HashMap<>();
+    private final Set<TopicPartition> partitionSetView = Collections.unmodifiableSet(nodes.keySet());
+    private final Map<TopicPartition, S> partitionStateMapView = new StateMapView();
+    private Node<S> head;
+    private Node<S> tail;
 
     /* the number of partitions that are currently assigned available in a thread safe manner */
     private volatile int size = 0;
@@ -52,24 +103,35 @@ public class PartitionStates<S> {
     public PartitionStates() {}
 
     public void moveToEnd(TopicPartition topicPartition) {
-        S state = map.remove(topicPartition);
-        if (state != null)
-            map.put(topicPartition, state);
+        Node<S> node = nodes.get(topicPartition);
+        if (node != null)
+            moveNodeToEnd(node);
     }
 
     public void updateAndMoveToEnd(TopicPartition topicPartition, S state) {
-        map.remove(topicPartition);
-        map.put(topicPartition, state);
+        Node<S> node = nodes.get(topicPartition);
+        if (node == null) {
+            addLast(topicPartition, state);
+        } else {
+            node.state = state;
+            moveNodeToEnd(node);
+        }
         updateSize();
     }
 
     public void update(TopicPartition topicPartition, S state) {
-        map.put(topicPartition, state);
+        Node<S> node = nodes.get(topicPartition);
+        if (node == null)
+            addLast(topicPartition, state);
+        else
+            node.state = state;
         updateSize();
     }
 
     public void remove(TopicPartition topicPartition) {
-        map.remove(topicPartition);
+        Node<S> node = nodes.remove(topicPartition);
+        if (node != null)
+            unlink(node);
         updateSize();
     }
 
@@ -82,35 +144,58 @@ public class PartitionStates<S> {
     }
 
     public void clear() {
-        map.clear();
+        while (head != null)
+            unlink(head);
+        nodes.clear();
         updateSize();
     }
 
     public boolean contains(TopicPartition topicPartition) {
-        return map.containsKey(topicPartition);
+        return nodes.containsKey(topicPartition);
     }
 
     public Iterator<S> stateIterator() {
-        return map.values().iterator();
+        return new Iterator<>() {
+            private Node<S> next = head;
+
+            @Override
+            public boolean hasNext() {
+                return next != null;
+            }
+
+            @Override
+            public S next() {
+                if (next == null)
+                    throw new NoSuchElementException();
+                S state = next.state;
+                next = next.next;
+                return state;
+            }
+        };
     }
 
     public void forEach(BiConsumer<TopicPartition, S> biConsumer) {
-        map.forEach(biConsumer);
+        for (Node<S> node = head; node != null; node = node.next)
+            biConsumer.accept(node.topicPartition, node.state);
     }
 
     public Map<TopicPartition, S> partitionStateMap() {
-        return Collections.unmodifiableMap(map);
+        return partitionStateMapView;
     }
 
     /**
      * Returns the partition state values in order.
      */
     public List<S> partitionStateValues() {
-        return new ArrayList<>(map.values());
+        List<S> values = new ArrayList<>(nodes.size());
+        for (Node<S> node = head; node != null; node = node.next)
+            values.add(node.state);
+        return values;
     }
 
     public S stateValue(TopicPartition topicPartition) {
-        return map.get(topicPartition);
+        Node<S> node = nodes.get(topicPartition);
+        return node == null ? null : node.state;
     }
 
     /**
@@ -127,13 +212,13 @@ public class PartitionStates<S> {
      * map): a0, a1, b1, b0, c0, c1.
      */
     public void set(Map<TopicPartition, S> partitionToState) {
-        map.clear();
+        clear();
         update(partitionToState);
         updateSize();
     }
 
     private void updateSize() {
-        size = map.size();
+        size = nodes.size();
     }
 
     private void update(Map<TopicPartition, S> partitionToState) {
@@ -145,11 +230,102 @@ public class PartitionStates<S> {
         for (Map.Entry<String, List<TopicPartition>> entry : topicToPartitions.entrySet()) {
             for (TopicPartition tp : entry.getValue()) {
                 S state = partitionToState.get(tp);
-                map.put(tp, state);
+                update(tp, state);
             }
         }
     }
 
+    private void addLast(TopicPartition topicPartition, S state) {
+        Node<S> node = new Node<>(topicPartition, state);
+        nodes.put(topicPartition, node);
+        linkLast(node);
+    }
 
+    private void moveNodeToEnd(Node<S> node) {
+        if (node != tail) {
+            unlink(node);
+            linkLast(node);
+        }
+    }
 
+    private void linkLast(Node<S> node) {
+        node.prev = tail;
+        if (tail == null)
+            head = node;
+        else
+            tail.next = node;
+        tail = node;
+    }
+
+    private void unlink(Node<S> node) {
+        if (node.prev == null)
+            head = node.next;
+        else
+            node.prev.next = node.next;
+        if (node.next == null)
+            tail = node.prev;
+        else
+            node.next.prev = node.prev;
+        node.prev = null;
+        node.next = null;
+    }
+
+    // An unmodifiable view in partition order that reflects later changes, like Collections.unmodifiableMap over a
+    // LinkedHashMap.
+    private final class StateMapView extends AbstractMap<TopicPartition, S> {
+        private final Set<Map.Entry<TopicPartition, S>> entries = new AbstractSet<>() {
+            @Override
+            public Iterator<Map.Entry<TopicPartition, S>> iterator() {
+                return new Iterator<>() {
+                    private Node<S> next = head;
+
+                    @Override
+                    public boolean hasNext() {
+                        return next != null;
+                    }
+
+                    @Override
+                    public Map.Entry<TopicPartition, S> next() {
+                        if (next == null)
+                            throw new NoSuchElementException();
+                        Node<S> node = next;
+                        next = next.next;
+                        return node;
+                    }
+                };
+            }
+
+            @Override
+            public int size() {
+                return nodes.size();
+            }
+        };
+
+        @Override
+        public Set<Map.Entry<TopicPartition, S>> entrySet() {
+            return entries;
+        }
+
+        @Override
+        public int size() {
+            return nodes.size();
+        }
+
+        @Override
+        public boolean containsKey(Object key) {
+            return nodes.containsKey(key);
+        }
+
+        @Override
+        public S get(Object key) {
+            Node<S> node = nodes.get(key);
+            return node == null ? null : node.state;
+        }
+
+        @Override
+        public void forEach(BiConsumer<? super TopicPartition, ? super S> action) {
+            for (Node<S> node = head; node != null; node = node.next)
+                action.accept(node.topicPartition, node.state);
+        }
+    }
 }
