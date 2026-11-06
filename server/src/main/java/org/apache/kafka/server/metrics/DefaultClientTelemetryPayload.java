@@ -32,8 +32,9 @@ public class DefaultClientTelemetryPayload implements ClientTelemetryPayload {
     private final String metricsContentType;
     private final ByteBuffer metricsData;
 
-    DefaultClientTelemetryPayload(PushTelemetryRequest request, int maxDecompressedBytes) {
-        this.clientInstanceId = request.data().clientInstanceId();
+    DefaultClientTelemetryPayload(PushTelemetryRequest request, Uuid clientInstanceId, int maxDecompressedBytes) {
+        // Resolved by the broker: from the request body in v0, from the request header in v1 (KIP-1313).
+        this.clientInstanceId = clientInstanceId;
         this.isClientTerminating = request.data().terminating();
         this.metricsContentType = request.metricsContentType();
         this.metricsData = request.metricsData(maxDecompressedBytes);

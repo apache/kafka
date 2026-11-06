@@ -57,6 +57,10 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsKey;
+import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsValue;
+import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateKey;
+import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValue;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
@@ -81,6 +85,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
@@ -100,6 +105,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -124,6 +133,7 @@ import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
@@ -1298,6 +1308,195 @@ public class DumpLogSegmentsTest {
                 "non-nullable field stateBatches was serialized as null."),
             Optional.empty()
         );
+    }
+
+    private static Stream<Arguments> mirrorStateRecords() {
+        Uuid topicId = Uuid.fromString("1Y8fjhRoQsqFkIrwd1FIeg");
+        MirrorPartitionStateKey stateKey = new MirrorPartitionStateKey()
+            .setMirrorName("a-to-b")
+            .setTopicId(topicId)
+            .setPartition(0);
+        LastMirrorEpochsKey epochsKey = new LastMirrorEpochsKey()
+            .setMirrorName("a-to-b")
+            .setTopicId(topicId)
+            .setPartition(0);
+        String stateKeyJson = "{\"type\":\"0\",\"data\":{\"mirrorName\":\"a-to-b\",\"topicId\":\"1Y8fjhRoQsqFkIrwd1FIeg\",\"partition\":0}}";
+        String epochsKeyJson = "{\"type\":\"1\",\"data\":{\"mirrorName\":\"a-to-b\",\"topicId\":\"1Y8fjhRoQsqFkIrwd1FIeg\",\"partition\":0}}";
+        return Stream.of(
+            Arguments.of(
+                stateKey,
+                new MirrorPartitionStateValue()
+                    .setState(MirrorPartitionState.FAILED.value())
+                    .setLeaderEpoch(42)
+                    .setStateEpoch(7)
+                    .setErrorMessage("Source \"A\" failed: 東京")
+                    .setRetryAttempt((short) 3)
+                    .setPreviousState(MirrorPartitionState.MIRRORING.value()),
+                stateKeyJson,
+                "{\"version\":\"0\",\"data\":{\"state\":\"FAILED\",\"leaderEpoch\":42,\"stateEpoch\":7," +
+                    "\"errorMessage\":\"Source \\\"A\\\" failed: 東京\",\"retryAttempt\":3,\"previousState\":\"MIRRORING\"}}"
+            ),
+            Arguments.of(
+                stateKey,
+                new MirrorPartitionStateValue(),
+                stateKeyJson,
+                "{\"version\":\"0\",\"data\":{\"state\":\"LOG_ALIGNMENT\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"UNKNOWN\"}}"
+            ),
+            Arguments.of(
+                stateKey,
+                new MirrorPartitionStateValue().setState(Byte.MAX_VALUE).setPreviousState(MirrorPartitionState.MIRRORING.value()),
+                stateKeyJson,
+                "{\"version\":\"0\",\"data\":{\"state\":\"127\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"MIRRORING\"}}"
+            ),
+            Arguments.of(
+                stateKey,
+                new MirrorPartitionStateValue().setState(MirrorPartitionState.FAILED.value()).setPreviousState(Byte.MIN_VALUE),
+                stateKeyJson,
+                "{\"version\":\"0\",\"data\":{\"state\":\"FAILED\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"-128\"}}"
+            ),
+            Arguments.of(
+                stateKey,
+                new MirrorPartitionStateValue().setState(Byte.MAX_VALUE).setPreviousState(Byte.MIN_VALUE),
+                stateKeyJson,
+                "{\"version\":\"0\",\"data\":{\"state\":\"127\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"-128\"}}"
+            ),
+            Arguments.of(
+                epochsKey,
+                new LastMirrorEpochsValue()
+                    .setLastMirrorEpoch(42)
+                    .setLastMirrorOffset(4_294_967_313L), // Verify offsets larger than a 32-bit integer.
+                epochsKeyJson,
+                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":42,\"lastMirrorOffset\":4294967313}}"
+            ),
+            Arguments.of(
+                epochsKey,
+                new LastMirrorEpochsValue(),
+                epochsKeyJson,
+                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"
+            ),
+            Arguments.of(stateKey, null, stateKeyJson, "<DELETE>"),
+            Arguments.of(epochsKey, null, epochsKeyJson, "<DELETE>")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("mirrorStateRecords")
+    public void testMirrorStateMessageParser(ApiMessage key, ApiMessage value, String expectedKey, String expectedValue) {
+        DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
+        assertParseResult(
+            parser.parse(serializedRecord(key, value == null ? null : new ApiMessageAndVersion(value, (short) 0))),
+            Optional.of(expectedKey),
+            Optional.of(expectedValue)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("mirrorStateRecords")
+    public void testDumpMirrorState(ApiMessage key, ApiMessage value, String expectedKey, String expectedValue) throws IOException {
+        try (FileRecords records = FileRecords.open(new File(logFilePath), true)) {
+            records.append(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+                MessageUtil.toCoordinatorTypePrefixedBytes(key),
+                value == null ? null : MessageUtil.toVersionPrefixedBytes((short) 0, value)
+            )));
+        }
+
+        String output = runDumpLogSegments(new String[]{"--mirror-state-decoder", "--files", logFilePath});
+        assertTrue(output.contains(DumpLogSegments.RECORD_INDENT + " offset: 0"), output);
+        assertTrue(output.contains(" key: " + expectedKey + " payload: " + expectedValue), output);
+    }
+
+    @Test
+    public void testMirrorStateMessageParserMissingKey() {
+        DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
+        Record record = singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+            RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        assertEquals(
+            "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
+            assertThrows(RuntimeException.class, () -> parser.parse(record)).getMessage()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {2, Short.MAX_VALUE})
+    public void testMirrorStateMessageParserUnknownType(short type) {
+        DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
+        Record record = singletonRecords(null, ByteBuffer.allocate(Short.BYTES).putShort(type).array(),
+            Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        assertParseResult(
+            parser.parse(record),
+            Optional.of("Unknown record type " + type + " at offset 0, skipping."),
+            Optional.empty()
+        );
+    }
+
+    private static Stream<ApiMessage> mirrorStateKeys() {
+        return Stream.of(new MirrorPartitionStateKey(), new LastMirrorEpochsKey());
+    }
+
+    @ParameterizedTest
+    @MethodSource("mirrorStateKeys")
+    public void testMirrorStateMessageParserUnsupportedVersion(ApiMessage key) {
+        DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
+        for (short version : new short[] {-1, 1}) {
+            Record record = singletonRecords(ByteBuffer.allocate(Short.BYTES).putShort(version).array(),
+                MessageUtil.toCoordinatorTypePrefixedBytes(key), Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+            assertParseResult(
+                parser.parse(record),
+                Optional.of("Error at offset 0, skipping. Found an unknown record version " + version +
+                    " for " + key.apiKey() + " type"),
+                Optional.empty()
+            );
+        }
+    }
+
+    private static Stream<Arguments> malformedMirrorStateRecords() {
+        byte[] stateKey = MessageUtil.toCoordinatorTypePrefixedBytes(new MirrorPartitionStateKey());
+        byte[] epochsKey = MessageUtil.toCoordinatorTypePrefixedBytes(new LastMirrorEpochsKey());
+        return Stream.of(
+            Arguments.of(new byte[0], null),
+            Arguments.of(new byte[] {0}, null),
+            Arguments.of(Arrays.copyOf(stateKey, stateKey.length - 1), null),
+            Arguments.of(Arrays.copyOf(epochsKey, epochsKey.length - 1), null),
+            Arguments.of(stateKey, new byte[0]),
+            Arguments.of(epochsKey, new byte[] {0}),
+            Arguments.of(stateKey, ByteBuffer.allocate(Short.BYTES).putShort((short) 0).array()),
+            Arguments.of(epochsKey, ByteBuffer.allocate(Short.BYTES).putShort((short) 0).array())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("malformedMirrorStateRecords")
+    public void testMirrorStateMessageParserMalformedRecord(byte[] key, byte[] value) {
+        DumpLogSegments.MirrorStateMessageParser parser = new DumpLogSegments.MirrorStateMessageParser();
+        Record record = singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+            RecordBatch.CURRENT_MAGIC_VALUE).records().iterator().next();
+        DumpLogSegments.ParseResult<String, String> result = parser.parse(record);
+        assertTrue(result.key().orElseThrow().startsWith("Error at offset 0, skipping."));
+        assertEquals(Optional.empty(), result.value());
+    }
+
+    @Test
+    public void testDumpMirrorStateContinuesAfterInvalidRecords() throws IOException {
+        byte[] key = MessageUtil.toCoordinatorTypePrefixedBytes(new LastMirrorEpochsKey());
+        byte[] value = MessageUtil.toVersionPrefixedBytes((short) 0, new LastMirrorEpochsValue());
+        try (FileRecords records = FileRecords.open(new File(logFilePath), true)) {
+            records.append(MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord(ByteBuffer.allocate(Short.BYTES).putShort((short) 2).array(), null),
+                new SimpleRecord(key, new byte[0]),
+                new SimpleRecord(key, value)
+            ));
+        }
+
+        String output = runDumpLogSegments(new String[]{"--mirror-state-decoder", "--files", logFilePath});
+        assertTrue(output.contains("Unknown record type 2 at offset 0, skipping."), output);
+        assertTrue(output.contains("Error at offset 1, skipping."), output);
+        assertTrue(output.contains(DumpLogSegments.RECORD_INDENT + " offset: 2"), output);
+        assertTrue(output.contains("payload: {\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"), output);
     }
 
     private MetadataLogConfig createMetadataLogConfig(

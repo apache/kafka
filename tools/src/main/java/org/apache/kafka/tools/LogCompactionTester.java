@@ -148,9 +148,9 @@ public class LogCompactionTester {
                     .defaultsTo(0);
 
             sleepSecsOpt = parser
-                    .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+                    .accepts("sleep", "Time in seconds to sleep between production and consumption.")
                     .withRequiredArg()
-                    .describedAs("ms")
+                    .describedAs("seconds")
                     .ofType(Integer.class)
                     .defaultsTo(0);
 
@@ -273,7 +273,7 @@ public class LogCompactionTester {
                 compressionType, compressionLevel,
                 dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
-        TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
+        TimeUnit.SECONDS.sleep(sleepSecs);
         System.out.println("Consuming messages...");
         Path consumedDataFilePath = consumeMessages(brokerUrl, topics);
 

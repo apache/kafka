@@ -782,12 +782,18 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     |                | Retry | Current | Retry | Current |
     +----------------+-------+---------+-------+---------+
-    | Empty          | PF    | EB      | PF    | ITS     |
+    | Empty          | PF    | EB      | PF    | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | PF    | ITS     |
+    | CompleteAbort  | NONE  | EB      | PF    | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteCommit | ITS   | EB      | NONE  | ITS     |
+    | CompleteCommit | ITS   | EB      | NONE  | EB      |
     +----------------+-------+---------+-------+---------+
+
+    Empty, CompleteAbort and CompleteCommit + Commit + Current commits an empty transaction, the same way an abort
+    there aborts one: the epoch is bumped and the transition is written to the log. A coordinator that has lost
+    leadership but has not applied the metadata change yet can only see the transaction as empty, since the
+    partitions were added on the new coordinator. Returning ITS from its cache would be fatal to the client; going
+    through the log instead fails with a retriable error because the write cannot be replicated (KAFKA-21181).
 
     CompleteAbort + Commit + Retry returns PF rather than ITS because the coordinator may abort an open
     transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
@@ -949,6 +955,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 }
               }
 
+              def commitEmptyTransaction(): ApiResult[(Int, TxnTransitMetadata)] = {
+                info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state} with no partitions, committing an " +
+                  s"empty transaction for producer $producerId at epoch $producerEpoch.")
+                generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_COMMIT, noPartitionAdded = true)
+              }
+
               if (txnMetadata.clientProducerId != producerId && !retryOnOverflow)
                 Left(Errors.INVALID_PRODUCER_ID_MAPPING)
               else if (!isValidEpoch)
@@ -966,7 +978,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     if (isRetry)
                       Left(Errors.NONE)
                     else
-                      logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                      commitEmptyTransaction()
                   } else {
                     // Abort.
                     if (isRetry)
@@ -990,14 +1002,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                         s"timeout while the commit was in flight. Returning ${Errors.PRODUCER_FENCED}.")
                       Left(Errors.PRODUCER_FENCED)
                     } else {
-                      logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                      commitEmptyTransaction()
                     }
                   }
                 case TransactionState.EMPTY =>
                   if (txnMarkerResult == TransactionResult.ABORT) {
                     generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_ABORT, noPartitionAdded = true)
                   } else {
-                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                    commitEmptyTransaction()
                   }
                 case TransactionState.DEAD | TransactionState.PREPARE_EPOCH_FENCE | TransactionState.PREPARE_COMMIT | TransactionState.PREPARE_ABORT =>
                   val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +

@@ -121,8 +121,8 @@ public class BalancedTaskAssignorTest {
 
     @Test
     public void shouldAssignActiveStatefulTasksEvenlyOverUnevenlyDistributedMembers() {
-        // process1 has three members, process2 has one. Round-robin would give each process four tasks, so the
-        // balancing step has to move two tasks to process1 to even out the per-member load.
+        // process1 has three members, process2 has one, so process1 takes three of every four tasks and every
+        // member ends up with two.
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members(
                 "member1_1", "process1", "member1_2", "process1", "member1_3", "process1",
@@ -161,6 +161,23 @@ public class BalancedTaskAssignorTest {
         assertOnePartitionOfEachSubtopology(result, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
         assertOnePartitionOfEachSubtopology(result, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
         assertAllTasksAssignedOnce(result, statefulTopology(2, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
+    }
+
+    @Test
+    public void shouldSpreadTasksOfEachSubtopologyInProportionToMemberCounts() {
+        // process1 has two members, process2 has one, so every subtopology is split 2:1, not only the total.
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members("member1_1", "process1", "member1_2", "process1", "member2_1", "process2"), AssignmentConfigsImpl.DEFAULT),
+            statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2)
+        );
+
+        final Map<String, Set<Integer>> process1Tasks = mergeTasks(result, true, "member1_1", "member1_2");
+        final Map<String, Set<Integer>> process2Tasks = mergeTasks(result, true, "member2_1");
+        for (final String subtopology : List.of(SUBTOPOLOGY_1, SUBTOPOLOGY_2)) {
+            assertEquals(2, process1Tasks.getOrDefault(subtopology, Set.of()).size(), subtopology + " on process1");
+            assertEquals(1, process2Tasks.getOrDefault(subtopology, Set.of()).size(), subtopology + " on process2");
+        }
+        assertAllTasksAssignedOnce(result, statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
     }
 
     @Test

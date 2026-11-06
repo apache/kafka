@@ -205,6 +205,40 @@ public class TransactionMetadataTest {
         assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"})
+    public void testTransitFromNoOngoingTransactionToPrepareCommitAndCompleteCommitInV2(TransactionState state) {
+        short producerEpoch = 735;
+
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_ID,
+            producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            30000,
+            state,
+            Set.of(),
+            state == TransactionState.EMPTY ? -1 : time.milliseconds() - 1,
+            time.milliseconds(),
+            TV_2
+        );
+
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true);
+        txnMetadata.completeTransitionTo(transitMetadata);
+        assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state());
+        assertEquals(producerId, txnMetadata.producerId());
+        assertEquals(producerEpoch + 1, txnMetadata.producerEpoch());
+        assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp());
+
+        transitMetadata = txnMetadata.prepareComplete(time.milliseconds() + 2);
+        txnMetadata.completeTransitionTo(transitMetadata);
+        assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata.state());
+        assertEquals(producerEpoch + 1, txnMetadata.producerEpoch());
+        assertTrue(txnMetadata.topicPartitions().isEmpty());
+    }
+
     @Test
     public void testTolerateUpdateTimeShiftDuringEpochBump() {
         short producerEpoch = 1;

@@ -78,17 +78,6 @@ public class ProcessStateTest {
     }
 
     @Test
-    void shouldCompareBasedOnLoadAndCapacity() {
-        ProcessState processState1 = new ProcessState("process1");
-        ProcessState processState2 = new ProcessState("process2");
-        processState1.addMember("member1");
-        processState2.addMember("member2");
-        processState1.addTask("member1", new TaskId("id1", 0), true, true);
-
-        assertTrue(processState1.compareTo(processState2) > 0);
-    }
-
-    @Test
     void shouldReturnTrueIfTaskIsAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");

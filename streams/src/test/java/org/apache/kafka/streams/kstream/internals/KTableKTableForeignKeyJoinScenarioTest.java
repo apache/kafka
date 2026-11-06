@@ -36,8 +36,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TableJoined;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -47,6 +50,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -373,6 +377,43 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             expectedOutput.put("producer2:product1", "(product1-data,producer2-data)");
 
             assertEquals(expectedOutput, output.readKeyValuesToMap());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotFailOnInvalidPartitionInSubscription(final boolean withHeaders) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Integer, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KTable<Integer, String> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.Integer(), Serdes.String()));
+        left.join(
+            right,
+            value -> Integer.parseInt(value.split("\\|")[1]),
+            (value1, value2) -> "(" + value1 + "," + value2 + ")",
+            TableJoined.as("fk-join")
+        ).toStream().to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
+
+        try (final TopologyTestDriver driver = createTopologyTestDriver(builder, withHeaders)) {
+            final TestInputTopic<Integer, String> leftInput = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new StringSerializer());
+            final TestInputTopic<Integer, String> rightInput = driver.createInputTopic(RIGHT_TABLE, new IntegerSerializer(), new StringSerializer());
+            final TestOutputTopic<Integer, String> output = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
+            final TestInputTopic<Integer, SubscriptionWrapper<Integer>> subscriptionInput = driver.createInputTopic(
+                "test-app-fk-join-subscription-registration-topic",
+                new IntegerSerializer(),
+                new SubscriptionWrapperSerde<>(() -> "pk-pseudo-topic", Serdes.Integer()).serializer()
+            );
+
+            rightInput.pipeInput(1, "rhsValue1");
+            leftInput.pipeInput(2, "lhsValue1|1");
+            assertEquals(Map.of(2, "(lhsValue1|1,rhsValue1)"), output.readKeyValuesToMap());
+
+            subscriptionInput.pipeInput(1, new SubscriptionWrapper<>(
+                Murmur3.hash128("lhsValue1|1".getBytes(StandardCharsets.UTF_8)),
+                SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+                2,
+                -1
+            ));
+            assertEquals(Map.of(2, "(lhsValue1|1,rhsValue1)"), output.readKeyValuesToMap());
         }
     }
 

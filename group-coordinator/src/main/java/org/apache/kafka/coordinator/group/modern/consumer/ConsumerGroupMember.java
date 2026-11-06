@@ -51,7 +51,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * A builder that facilitates the creation of a new member or the update of
      * an existing one.
      *
-     * Please refer to the javadoc of {{@link ConsumerGroupMember}} for the
+     * Please refer to the javadoc of {@link ConsumerGroupMember} for the
      * definition of the fields.
      */
     public static class Builder {

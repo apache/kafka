@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -111,7 +111,7 @@ public class ConsumerMembershipManagerTest {
     private static final int MEMBER_EPOCH = 1;
     private static final LogContext LOG_CONTEXT = new LogContext();
 
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private CommitRequestManager commitRequestManager;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -124,7 +124,7 @@ public class ConsumerMembershipManagerTest {
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         mockConsumer = mock(Consumer.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -3275,7 +3275,7 @@ public class ConsumerMembershipManagerTest {
             Arguments.of(MemberState.STALE));
     }
 
-    private static class SleepyRebalanceListener implements ConsumerRebalanceListener {
+    private static class SleepyRebalanceListener implements RebalanceListener {
         private long sleepMs;
         private final long sleepDurationMs;
         private final Time time;
@@ -3285,13 +3285,13 @@ public class ConsumerMembershipManagerTest {
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }

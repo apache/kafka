@@ -61,7 +61,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("d"), val("base-d"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -79,7 +79,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("a"), val("base-a"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             assertTrue(iter.hasNext());
             final KeyValue<Bytes, byte[]> entry = iter.next();
             assertEquals("a", entry.key.toString());
@@ -94,7 +94,7 @@ public class StagedMergeIteratorTest {
         staging.put(key("a"), Optional.of(val("staged-a")));
 
         final KeyValueIterator<Bytes, byte[]> iter =
-            new StagedMergeIterator(staging, new ListIterator(List.of()));
+            new StagedMergeIterator<>(staging, new ListIterator(List.of()));
         iter.close();
 
         // A closed store iterator must signal via InvalidStateStoreException -- the type
@@ -115,7 +115,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("b"), val("base-b"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -135,7 +135,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("c"), val("base-c"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -153,7 +153,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("b"), val("base-b"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -168,7 +168,7 @@ public class StagedMergeIteratorTest {
         staging.put(key("a"), Optional.of(val("staged-a")));
         staging.put(key("b"), Optional.of(val("staged-b")));
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(List.of()))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(List.of()))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -181,7 +181,7 @@ public class StagedMergeIteratorTest {
     public void shouldHandleBothEmpty() {
         final NavigableMap<Bytes, Optional<byte[]>> staging = new TreeMap<>();
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(List.of()))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(List.of()))) {
             assertFalse(iter.hasNext());
         }
     }
@@ -197,7 +197,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("b"), val("base-b"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             assertFalse(iter.hasNext());
         }
     }
@@ -211,7 +211,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("a"), val("base-a"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             assertEquals(key("a"), iter.peekNextKey());
             iter.next(); // consume a
             assertEquals(key("b"), iter.peekNextKey());
@@ -224,7 +224,7 @@ public class StagedMergeIteratorTest {
     public void shouldThrowOnNextWhenExhausted() {
         final NavigableMap<Bytes, Optional<byte[]>> staging = new TreeMap<>();
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(List.of()))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(List.of()))) {
             assertThrows(NoSuchElementException.class, iter::next);
         }
     }
@@ -237,7 +237,7 @@ public class StagedMergeIteratorTest {
         staging.put(key("c"), Optional.empty());
         staging.put(key("d"), Optional.of(val("staged-d")));
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(List.of()))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(List.of()))) {
             assertTrue(iter.hasNext());
             assertEquals("d", iter.next().key.toString());
             assertFalse(iter.hasNext());
@@ -258,7 +258,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("g"), val("base-g"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries))) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries))) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -278,7 +278,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("b"), val("base-b"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries), false)) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries), false)) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -296,7 +296,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("a"), val("base-a"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries), false)) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries), false)) {
             assertTrue(iter.hasNext());
             final KeyValue<Bytes, byte[]> entry = iter.next();
             assertEquals("a", entry.key.toString());
@@ -315,7 +315,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("b"), val("base-b"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries), false)) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries), false)) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
@@ -335,7 +335,7 @@ public class StagedMergeIteratorTest {
             new KeyValue<>(key("a"), val("base-a"))
         );
 
-        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator(staging, new ListIterator(baseEntries), false)) {
+        try (KeyValueIterator<Bytes, byte[]> iter = new StagedMergeIterator<>(staging, new ListIterator(baseEntries), false)) {
             final List<String> keys = new ArrayList<>();
             while (iter.hasNext()) {
                 keys.add(iter.next().key.toString());
