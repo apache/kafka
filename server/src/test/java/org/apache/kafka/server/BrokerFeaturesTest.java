@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.apache.kafka.server.common.Feature.ELIGIBLE_LEADER_REPLICAS_VERSION;
 import static org.apache.kafka.server.common.Feature.GROUP_VERSION;
+import static org.apache.kafka.server.common.Feature.MIRROR_VERSION;
 import static org.apache.kafka.server.common.Feature.SHARE_VERSION;
 import static org.apache.kafka.server.common.Feature.STREAMS_VERSION;
 import static org.apache.kafka.server.common.Feature.TRANSACTION_VERSION;
@@ -94,7 +95,7 @@ public class BrokerFeaturesTest {
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
-        Map<String, Short> expectedFeatures = Map.of(
+        Map<String, Short> expectedFeatures = new HashMap<>(Map.of(
                 MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel(),
                 TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting(),
                 GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting(),
@@ -105,9 +106,21 @@ public class BrokerFeaturesTest {
                 "test_feature_1", (short) 4,
                 "test_feature_2", (short) 3,
                 "test_feature_3", (short) 7
-        );
+        ));
+        expectedFeatures.put(MIRROR_VERSION.featureName(), MIRROR_VERSION.latestTesting());
 
         assertEquals(expectedFeatures, brokerFeatures.defaultFinalizedFeatures());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMirrorVersionRequiresUnstableFeatures(boolean includeUnstable) {
+        Map<String, SupportedVersionRange> features = BrokerFeatures.defaultSupportedFeatures(includeUnstable).features();
+        if (includeUnstable) {
+            assertEquals(new SupportedVersionRange((short) 0, (short) 1), features.get(MIRROR_VERSION.featureName()));
+        } else {
+            assertFalse(features.containsKey(MIRROR_VERSION.featureName()));
+        }
     }
 
     @ParameterizedTest

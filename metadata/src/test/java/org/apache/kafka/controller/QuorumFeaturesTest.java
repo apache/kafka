@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.MirrorVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,6 +82,17 @@ public class QuorumFeaturesTest {
             }
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultSupportedFeatureMap(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMirrorVersionRequiresUnstableFeatures(boolean enableUnstable) {
+        Map<String, VersionRange> features = QuorumFeatures.defaultSupportedFeatureMap(enableUnstable);
+        if (enableUnstable) {
+            assertEquals(VersionRange.of(0, 1), features.get(MirrorVersion.FEATURE_NAME));
+        } else {
+            assertFalse(features.containsKey(MirrorVersion.FEATURE_NAME));
+        }
     }
 
     @ParameterizedTest
