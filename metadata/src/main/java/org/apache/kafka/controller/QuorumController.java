@@ -82,6 +82,7 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -175,18 +176,6 @@ import static org.apache.kafka.controller.QuorumController.ControllerOperationFl
  */
 public final class QuorumController implements Controller {
     /**
-     * The default maximum records that the controller will write in a single batch.
-     */
-    private static final int DEFAULT_MAX_RECORDS_PER_BATCH = 10000;
-
-    /**
-     * The maximum records any user-initiated operation is allowed to generate.
-     *
-     * For now, this is set to the maximum records in a single batch.
-     */
-    static final int MAX_RECORDS_PER_USER_OP = DEFAULT_MAX_RECORDS_PER_BATCH;
-
-    /**
      * A builder class which creates the QuorumController.
      */
     public static class Builder {
@@ -214,7 +203,7 @@ public final class QuorumController implements Controller {
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
-        private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
+        private int maxRecordsPerBatch;
         private long controllerPerformanceSamplePeriodMs = 60000L;
         private long controllerPerformanceAlwaysLogThresholdMs = 2000L;
         private DelegationTokenCache tokenCache;
@@ -318,7 +307,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+        public Builder setControllerMaxRecordsPerBatch(int maxRecordsPerBatch) {
             this.maxRecordsPerBatch = maxRecordsPerBatch;
             return this;
         }
@@ -400,6 +389,8 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify a non-fatal fault handler.");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
+            } else if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
             }
 
             if (threadNamePrefix == null) {
@@ -488,7 +479,7 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!isNodeIdRegistered(nodeId)) {
+                    if (!isNodeIdKnown(nodeId)) {
                         throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
@@ -504,13 +495,13 @@ public final class QuorumController implements Controller {
         }
 
         /**
-         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         * Checks if a node id is known to the controller, from registrations or the voter set.
          */
-        private boolean isNodeIdRegistered(int nodeId) {
+        private boolean isNodeIdKnown(int nodeId) {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
                 return true;
             }
-            if (featureControl.isControllerId(nodeId)) {
+            if (featureControl.isVoterId(nodeId)) {
                 return true;
             }
             return clusterControl.controllerRegistrations().containsKey(nodeId);
@@ -1325,6 +1316,9 @@ public final class QuorumController implements Controller {
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
                 break;
+            case UNREGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((UnregisterControllerRecord) message);
+                break;
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
                 break;
@@ -1551,6 +1545,7 @@ public final class QuorumController implements Controller {
         this.clientQuotaControlManager = new ClientQuotaControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.queueAccessor = new PeriodicTaskControlManagerQueueAccessor();
@@ -1565,6 +1560,7 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1588,6 +1584,7 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             setFeatureControl(featureControl).
             setSupportedConfigChecker(supportedConfigChecker).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1600,6 +1597,7 @@ public final class QuorumController implements Controller {
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).
@@ -1608,6 +1606,7 @@ public final class QuorumController implements Controller {
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.delegationTokenControlManager = new DelegationTokenControlManager.Builder().
             setLogContext(logContext).
@@ -1619,6 +1618,7 @@ public final class QuorumController implements Controller {
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setMaxRecordsPerBatch(maxRecordsPerBatch).
             build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
@@ -2150,6 +2150,22 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("registerController", context.deadlineNs(),
             () -> clusterControl.registerController(request),
+            EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    @Override
+    public CompletableFuture<Void> unregisterController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        return appendWriteEvent("unregisterController", context.deadlineNs(),
+            () -> {
+                if (featureControl.isVoterId(controllerId)) {
+                    throw new InvalidRequestException("Cannot unregister controller " + controllerId +
+                        " because it is part of the voter set.");
+                }
+                return clusterControl.unregisterController(controllerId);
+            },
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 

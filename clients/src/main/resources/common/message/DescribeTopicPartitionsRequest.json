@@ -20,6 +20,9 @@
   "name": "DescribeTopicPartitionsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]TopicRequest", "versions": "0+",
       "about": "The topics to fetch details for.",

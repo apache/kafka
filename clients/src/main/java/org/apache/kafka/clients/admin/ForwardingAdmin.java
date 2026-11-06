@@ -273,6 +273,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options) {
+        return delegate.unregisterController(controllerId, options);
+    }
+
+    @Override
     public DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options) {
         return delegate.describeProducers(partitions, options);
     }

@@ -47,12 +47,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -82,15 +81,9 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
 
             left.pipeInput("lhs1", "lhsValue1|rhs1");
 
-            assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(emptyMap())
-            );
+            assertTrue(outputTopic.readKeyValuesToMap().isEmpty());
             if (materialized && queryable) {
-                assertThat(
-                    asMap(store),
-                    is(emptyMap())
-                );
+                assertTrue(asMap(store).isEmpty());
             }
 
             // Deleting a non-joining record produces an unnecessary tombstone for inner joins, because
@@ -102,35 +95,20 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                     // suppress the unnecessary tombstone. This is because the cache is able to determine
                     // for sure that there has never been a previous result. (Because the "old" and "new" values
                     // are both null, and the underlying store is also missing the record in question).
-                    assertThat(
-                        outputTopic.readKeyValuesToMap(),
-                        is(emptyMap())
-                    );
+                    assertTrue(outputTopic.readKeyValuesToMap().isEmpty());
 
-                    assertThat(
-                        asMap(store),
-                        is(emptyMap())
-                    );
+                    assertTrue(asMap(store).isEmpty());
                 } else {
-                    assertThat(
-                        outputTopic.readKeyValuesToMap(),
-                        is(mkMap(mkEntry("lhs1", null)))
-                    );
+                    assertEquals(mkMap(mkEntry("lhs1", null)), outputTopic.readKeyValuesToMap());
                 }
             }
 
             // Deleting a non-existing record is idempotent
             left.pipeInput("lhs1", (String) null);
             {
-                assertThat(
-                    outputTopic.readKeyValuesToMap(),
-                    is(emptyMap())
-                );
+                assertTrue(outputTopic.readKeyValuesToMap().isEmpty());
                 if (materialized && queryable) {
-                    assertThat(
-                        asMap(store),
-                        is(emptyMap())
-                    );
+                    assertTrue(asMap(store).isEmpty());
                 }
             }
         }

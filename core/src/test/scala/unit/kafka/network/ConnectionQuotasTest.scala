@@ -22,7 +22,6 @@ import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.Properties
 import com.yammer.metrics.core.Meter
-import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
@@ -30,7 +29,7 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.network.{ConnectionThrottledException, SocketServer, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.network.{ConnectionThrottledException, Processor, SocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ServerTestUtils
@@ -94,7 +93,7 @@ class ConnectionQuotasTest {
 
     listeners.keys.foreach { name =>
         blockedPercentMeters.put(name, new KafkaMetricsGroup(metricsPackage, metricsClassName).newMeter(
-          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, util.Map.of(ListenerMetricTag, name)))
+          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, util.Map.of(Processor.LISTENER_METRIC_TAG, name)))
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
@@ -832,7 +831,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
       SocketServer.METRICS_GROUP,
-      util.Map.of(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.LISTENER_METRIC_TAG, listener))
     metrics.metric(metricName)
   }
 
@@ -840,7 +839,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "ip-connection-accept-throttle-time",
       SocketServer.METRICS_GROUP,
-      util.Map.of(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.LISTENER_METRIC_TAG, listener))
     metrics.metric(metricName)
   }
 
@@ -848,7 +847,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-rate",
       SocketServer.METRICS_GROUP,
-      util.Map.of(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.LISTENER_METRIC_TAG, listener))
     metrics.metric(metricName)
   }
 

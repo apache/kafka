@@ -16,8 +16,15 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
+import org.apache.kafka.clients.admin.RemoveRaftVoterResult;
+import org.apache.kafka.clients.admin.UnregisterControllerResult;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.VoterNotFoundException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -33,9 +40,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MetadataQuorumCommandUnitTest {
     @Test
@@ -47,8 +57,24 @@ public class MetadataQuorumCommandUnitTest {
                     "--controller-id", "2",
                     "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
                     "--dry-run"))).split("\n"));
-        assertTrue(outputs.contains("DRY RUN of removing  KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
             "Failed to find expected output in stdout: " + outputs);
+    }
+
+    @Test
+    public void testRemoveControllerDryRunWithUnregister() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-id", "2",
+                    "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                    "--dry-run",
+                    "--unregister"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+            "Failed to find expected output in stdout: " + outputs);
+        assertTrue(outputs.contains("DRY RUN of unregistering KRaft controller 2"),
+            "Failed to find expected unregister output in stdout: " + outputs);
     }
 
     @Test
@@ -259,5 +285,95 @@ public class MetadataQuorumCommandUnitTest {
                 "wZoXPqWoSu6F6c8MkmdyAg and endpoints: CONTROLLER://example.com:9093, CONTROLLER_SSL://example.com:9094"),
                     "Failed to find expected output in stdout: " + outputs);
         }
+    }
+
+    private static final int REMOVE_CONTROLLER_ID = 2;
+    private static final String REMOVE_DIRECTORY_ID_STRING = "_KWDkTahTVaiVVVTaugNew";
+    private static final Uuid REMOVE_DIRECTORY_ID = Uuid.fromString(REMOVE_DIRECTORY_ID_STRING);
+
+    private static <T> KafkaFutureImpl<T> completedFuture(T value) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.complete(value);
+        return future;
+    }
+
+    private static <T> KafkaFutureImpl<T> failedFuture(Throwable cause) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(cause);
+        return future;
+    }
+
+    private static Admin mockAdminForRemoveController(
+        KafkaFutureImpl<Void> removeRaftVoterFuture,
+        KafkaFutureImpl<Void> unregisterControllerFuture
+    ) {
+        Admin admin = mock(Admin.class);
+        RemoveRaftVoterResult removeResult = mock(RemoveRaftVoterResult.class);
+        when(removeResult.all()).thenReturn(removeRaftVoterFuture);
+        when(admin.removeRaftVoter(REMOVE_CONTROLLER_ID, REMOVE_DIRECTORY_ID)).thenReturn(removeResult);
+        if (unregisterControllerFuture != null) {
+            UnregisterControllerResult unregisterResult = mock(UnregisterControllerResult.class);
+            when(unregisterResult.all()).thenReturn(unregisterControllerFuture);
+            when(admin.unregisterController(REMOVE_CONTROLLER_ID)).thenReturn(unregisterResult);
+        }
+        return admin;
+    }
+
+    @Test
+    public void testRemoveControllerWithUnregisterSuccess() {
+        Admin admin = mockAdminForRemoveController(completedFuture(null), completedFuture(null));
+        String stdout = ToolsTestUtils.captureStandardOut(() ->
+            assertDoesNotThrow(() ->
+                MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
+                    REMOVE_DIRECTORY_ID_STRING, false, true)));
+        assertTrue(stdout.contains("Removed KRaft controller " + REMOVE_CONTROLLER_ID
+                + " with directory id " + REMOVE_DIRECTORY_ID_STRING),
+            "Expected 'Removed' line in stdout: " + stdout);
+        assertTrue(stdout.contains("Unregistered KRaft controller " + REMOVE_CONTROLLER_ID),
+            "Expected 'Unregistered' line in stdout: " + stdout);
+    }
+
+    @Test
+    public void testRemoveControllerFailsWithUnsupportedVersion() {
+        Admin admin = mockAdminForRemoveController(
+            failedFuture(new UnsupportedVersionException("kraft.version=0 doesn't support voter removal")),
+            null);
+        TerseException e = assertThrows(TerseException.class,
+            () -> MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
+                REMOVE_DIRECTORY_ID_STRING, false, true));
+        assertTrue(e.getMessage().contains("Failed to remove KRaft voter " + REMOVE_CONTROLLER_ID),
+            "Expected removal-failure prefix; got: " + e.getMessage());
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
+                + REMOVE_CONTROLLER_ID),
+            "Expected kafka-cluster.sh hint; got: " + e.getMessage());
+    }
+
+    @Test
+    public void testRemoveControllerFailsWithVoterNotFound() {
+        Admin admin = mockAdminForRemoveController(
+            failedFuture(new VoterNotFoundException("voter " + REMOVE_CONTROLLER_ID + " is not in the voter set")),
+            null);
+        TerseException e = assertThrows(TerseException.class,
+            () -> MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
+                REMOVE_DIRECTORY_ID_STRING, false, true));
+        assertTrue(e.getMessage().contains("Failed to remove KRaft voter " + REMOVE_CONTROLLER_ID),
+            "Expected removal-failure prefix; got: " + e.getMessage());
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
+                + REMOVE_CONTROLLER_ID),
+            "Expected kafka-cluster.sh hint; got: " + e.getMessage());
+    }
+
+    @Test
+    public void testRemoveControllerSucceedsButUnregisterFails() {
+        Admin admin = mockAdminForRemoveController(completedFuture(null),
+            failedFuture(new UnknownServerException("server failed to apply unregister")));
+        TerseException e = assertThrows(TerseException.class,
+            () -> MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
+                REMOVE_DIRECTORY_ID_STRING, false, true));
+        assertTrue(e.getMessage().contains("Failed to unregister controller " + REMOVE_CONTROLLER_ID),
+            "Expected post-removal failure prefix; got: " + e.getMessage());
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
+                + REMOVE_CONTROLLER_ID),
+            "Expected kafka-cluster.sh hint; got: " + e.getMessage());
     }
 }

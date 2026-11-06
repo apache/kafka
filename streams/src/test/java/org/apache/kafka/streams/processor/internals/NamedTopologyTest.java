@@ -40,8 +40,8 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation")
@@ -107,15 +107,15 @@ public class NamedTopologyTest {
         final NamedTopology topology2 = builder2.build();
         final NamedTopology topology3 = builder3.build();
         streams.start(asList(topology1, topology2, topology3));
-        assertThat(streams.getTopologyByName("topology-1").orElseThrow(), equalTo(topology1));
-        assertThat(streams.getTopologyByName("topology-2").orElseThrow(), equalTo(topology2));
-        assertThat(streams.getTopologyByName("topology-3").orElseThrow(), equalTo(topology3));
+        assertEquals(topology1, streams.getTopologyByName("topology-1").orElseThrow());
+        assertEquals(topology2, streams.getTopologyByName("topology-2").orElseThrow());
+        assertEquals(topology3, streams.getTopologyByName("topology-3").orElseThrow());
     }
 
     @Test
     public void shouldReturnEmptyWhenLookingUpNonExistentTopologyByName() {
         streams.start(builder1.build());
-        assertThat(streams.getTopologyByName("non-existent-topology").isPresent(), equalTo(false));
+        assertFalse(streams.getTopologyByName("non-existent-topology").isPresent());
     }
 
     @Test
@@ -164,7 +164,7 @@ public class NamedTopologyTest {
             () -> streams.addNamedTopology(builder2.build()).all().get()
         );
 
-        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
+        assertEquals(TopologyException.class, exception.getCause().getClass());
     }
 
     @Test
@@ -179,7 +179,7 @@ public class NamedTopologyTest {
             () -> streams.addNamedTopology(builder2.build()).all().get()
         );
 
-        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
+        assertEquals(TopologyException.class, exception.getCause().getClass());
     }
 
     @Test
@@ -319,23 +319,21 @@ public class NamedTopologyTest {
         builder1.stream("input").filter((k, v) -> !k.equals(v)).to("output");
         streams.start(builder1.build());
 
-        assertThat(
-            streams.getFullTopologyDescription(),
-            equalTo(
-                "Topology: topology-1:\n"
-                    + "   Sub-topology: 0\n"
-                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
-                    + "      --> none\n"
-                    + "\n"
-                    + "  Sub-topology: 1\n"
-                    + "    Source: KSTREAM-SOURCE-0000000001 (topics: [input])\n"
-                    + "      --> KSTREAM-FILTER-0000000002\n"
-                    + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
-                    + "      --> KSTREAM-SINK-0000000003\n"
-                    + "      <-- KSTREAM-SOURCE-0000000001\n"
-                    + "    Sink: KSTREAM-SINK-0000000003 (topic: output)\n"
-                    + "      <-- KSTREAM-FILTER-0000000002\n\n")
-        );
+        assertEquals(
+            "Topology: topology-1:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
+                + "      --> none\n"
+                + "\n"
+                + "  Sub-topology: 1\n"
+                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [input])\n"
+                + "      --> KSTREAM-FILTER-0000000002\n"
+                + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
+                + "      --> KSTREAM-SINK-0000000003\n"
+                + "      <-- KSTREAM-SOURCE-0000000001\n"
+                + "    Sink: KSTREAM-SINK-0000000003 (topic: output)\n"
+                + "      <-- KSTREAM-FILTER-0000000002\n\n",
+            streams.getFullTopologyDescription());
     }
 
     @Test
@@ -351,55 +349,53 @@ public class NamedTopologyTest {
                 builder3.build())
         );
 
-        assertThat(
-            streams.getFullTopologyDescription(),
-            equalTo(
-                     "Topology: topology-1:\n"
-                    + "   Sub-topology: 0\n"
-                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
-                    + "      --> none\n"
-                    + "\n"
-                    + "  Sub-topology: 1\n"
-                    + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-1])\n"
-                    + "      --> KSTREAM-FILTER-0000000002\n"
-                    + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
-                    + "      --> KSTREAM-SINK-0000000003\n"
-                    + "      <-- KSTREAM-SOURCE-0000000001\n"
-                    + "    Sink: KSTREAM-SINK-0000000003 (topic: output-1)\n"
-                    + "      <-- KSTREAM-FILTER-0000000002\n"
-                    + "\n"
-                    + "Topology: topology-2:\n"
-                    + "   Sub-topology: 0\n"
-                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-2])\n"
-                    + "      --> none\n"
-                    + "\n"
-                    + "  Sub-topology: 1\n"
-                    + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-2])\n"
-                    + "      --> KSTREAM-FILTER-0000000002\n"
-                    + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
-                    + "      --> KSTREAM-SINK-0000000003\n"
-                    + "      <-- KSTREAM-SOURCE-0000000001\n"
-                    + "    Sink: KSTREAM-SINK-0000000003 (topic: output-2)\n"
-                    + "      <-- KSTREAM-FILTER-0000000002\n"
-                    + "\n"
-                    + "Topology: topology-3:\n"
-                    + "   Sub-topology: 0\n"
-                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-3])\n"
-                    + "      --> none\n"
-                    + "\n"
-                    + "  Sub-topology: 1\n"
-                    + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-3])\n"
-                    + "      --> KSTREAM-FILTER-0000000002\n"
-                    + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
-                    + "      --> KSTREAM-SINK-0000000003\n"
-                    + "      <-- KSTREAM-SOURCE-0000000001\n"
-                    + "    Sink: KSTREAM-SINK-0000000003 (topic: output-3)\n"
-                    + "      <-- KSTREAM-FILTER-0000000002\n\n")
-        );
+        assertEquals(
+            "Topology: topology-1:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
+                + "      --> none\n"
+                + "\n"
+                + "  Sub-topology: 1\n"
+                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-1])\n"
+                + "      --> KSTREAM-FILTER-0000000002\n"
+                + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
+                + "      --> KSTREAM-SINK-0000000003\n"
+                + "      <-- KSTREAM-SOURCE-0000000001\n"
+                + "    Sink: KSTREAM-SINK-0000000003 (topic: output-1)\n"
+                + "      <-- KSTREAM-FILTER-0000000002\n"
+                + "\n"
+                + "Topology: topology-2:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-2])\n"
+                + "      --> none\n"
+                + "\n"
+                + "  Sub-topology: 1\n"
+                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-2])\n"
+                + "      --> KSTREAM-FILTER-0000000002\n"
+                + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
+                + "      --> KSTREAM-SINK-0000000003\n"
+                + "      <-- KSTREAM-SOURCE-0000000001\n"
+                + "    Sink: KSTREAM-SINK-0000000003 (topic: output-2)\n"
+                + "      <-- KSTREAM-FILTER-0000000002\n"
+                + "\n"
+                + "Topology: topology-3:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-3])\n"
+                + "      --> none\n"
+                + "\n"
+                + "  Sub-topology: 1\n"
+                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [stream-3])\n"
+                + "      --> KSTREAM-FILTER-0000000002\n"
+                + "    Processor: KSTREAM-FILTER-0000000002 (stores: [])\n"
+                + "      --> KSTREAM-SINK-0000000003\n"
+                + "      <-- KSTREAM-SOURCE-0000000001\n"
+                + "    Sink: KSTREAM-SINK-0000000003 (topic: output-3)\n"
+                + "      <-- KSTREAM-FILTER-0000000002\n\n",
+            streams.getFullTopologyDescription());
     }
 
     @Test
     public void shouldDescribeWithEmptyNamedTopology() {
-        assertThat(streams.getFullTopologyDescription(), equalTo(""));
+        assertEquals("", streams.getFullTopologyDescription());
     }
 }

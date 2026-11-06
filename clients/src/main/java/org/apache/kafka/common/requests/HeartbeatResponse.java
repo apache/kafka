@@ -70,8 +70,4 @@ public class HeartbeatResponse extends AbstractResponse {
         return new HeartbeatResponse(new HeartbeatResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

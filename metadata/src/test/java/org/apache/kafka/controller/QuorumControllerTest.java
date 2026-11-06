@@ -101,6 +101,7 @@ import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
@@ -1405,6 +1406,36 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public void testUnregisterControllerInVoterSet() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+                setControllerBuilderInitializer(builder ->
+                    builder.setQuorumFeatures(new QuorumFeatures(
+                        0,
+                        QuorumFeatures.defaultSupportedFeatureMap(true),
+                        () -> Set.of(0, 1)))).
+                build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+
+            // Controller 0 and 1 are part of the voter set
+            assertEquals("Cannot unregister controller 0 because it is part of the voter set.",
+                assertThrows(ExecutionException.class,
+                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 0).get()).getCause().getMessage());
+
+            assertEquals("Cannot unregister controller 1 because it is part of the voter set.",
+                    assertThrows(ExecutionException.class,
+                            () -> active.unregisterController(ANONYMOUS_CONTEXT, 1).get()).getCause().getMessage());
+
+            // Controller 2 is not part of the voter set, so the voter set check passes
+            assertEquals("Controller ID 2 is not currently registered.",
+                assertThrows(ExecutionException.class,
+                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 2).get()).getCause().getMessage());
+        }
+    }
+
+    @Test
     public void testIsNodeIdRegisteredWithDynamicQuorum() throws Throwable {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).build();
@@ -1610,6 +1641,7 @@ public class QuorumControllerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
                 .setSnapshotRegistry(snapshotRegistry)
+                .setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT)
                 .build();
         featureControlManager.replay(new FeatureLevelRecord()
             .setName(MetadataVersion.FEATURE_NAME)

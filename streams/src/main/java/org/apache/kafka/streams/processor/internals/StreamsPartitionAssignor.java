@@ -92,7 +92,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonList;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
 import static org.apache.kafka.common.utils.Utils.filterMap;
@@ -274,7 +273,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     @Override
     public List<RebalanceProtocol> supportedProtocols() {
-        return singletonList(RebalanceProtocol.COOPERATIVE);
+        return List.of(RebalanceProtocol.COOPERATIVE);
     }
 
     @Override
@@ -312,12 +311,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             for (final String consumerId : clientMetadata.consumers) {
                 assignment.put(consumerId, new Assignment(
-                    Collections.emptyList(),
+                    List.of(),
                     new AssignmentInfo(LATEST_SUPPORTED_VERSION,
-                        Collections.emptyList(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
+                        List.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
                         errorCode).encode()
                 ));
             }
@@ -376,7 +375,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap(), subscription.rackId()));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Map.of(), subscription.rackId()));
                 }
             } else {
                 processId = info.processId();
@@ -586,7 +585,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                    final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                    final GroupSubscription groupSubscription) {
         if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
-            assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
+            assignor.onAssignmentComputed(new GroupAssignment(Map.of()), groupSubscription, assignmentError);
             log.error("Rebalance failed due to task assignor returning assignment with error {}, " +
                       "assignor callback will receive empty GroupAssignment due to this error", assignmentError);
             throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
@@ -1495,9 +1494,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
-                partitionsByHost = Collections.emptyMap();
-                standbyPartitionsByHost = Collections.emptyMap();
-                topicToPartitionInfo = Collections.emptyMap();
+                partitionsByHost = Map.of();
+                standbyPartitionsByHost = Map.of();
+                topicToPartitionInfo = Map.of();
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 2:
@@ -1508,7 +1507,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
                 activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = info.partitionsByHost();
-                standbyPartitionsByHost = Collections.emptyMap();
+                standbyPartitionsByHost = Map.of();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;

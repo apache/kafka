@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.Readable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * Possible error codes.
@@ -83,7 +85,8 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         INCORRECTLY_PARTITIONED_TOPICS((byte) 2, "One or more topics expected to be copartitioned are not copartitioned."),
         MISSING_INTERNAL_TOPICS((byte) 3, "One or more internal topics are missing."),
         SHUTDOWN_APPLICATION((byte) 4, "A client requested the shutdown of the whole application."),
-        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator.");
+        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator."),
+        MISSING_CLIENT_TAGS((byte) 6, "One or more required client tags for rack-aware standby task assignment are missing.");
 
         private static final Map<Byte, Status> CODE_TO_STATUS;
 
@@ -117,6 +120,14 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
                 throw new IllegalArgumentException("Unknown code " + code);
             }
             return status;
+        }
+
+        public static boolean isKnownCode(byte code) {
+            return CODE_TO_STATUS.containsKey(code);
+        }
+
+        public static SortedSet<Byte> knownCodes() {
+            return Collections.unmodifiableSortedSet(new TreeSet<>(CODE_TO_STATUS.keySet()));
         }
     }
 }

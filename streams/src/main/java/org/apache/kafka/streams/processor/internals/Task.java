@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -183,6 +182,16 @@ public interface Task {
     default void recordProcessBatchTime(final long processBatchTime) {
     }
 
+    /**
+     * Record terminal-node e2e latency for everything buffered since the last flush against a single
+     * wall-clock time. Must be called on every path that can forward to a terminal node -- the end of
+     * a processing batch, punctuation, and flushing the caches -- with a clock read taken after that
+     * work completed, so the processing delay is part of the measured latency.
+     * No-op for tasks that do not forward to terminal nodes.
+     */
+    default void maybeFlushTerminalE2ELatency(final long endMs) {
+    }
+
     default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
     }
 
@@ -202,7 +211,7 @@ public interface Task {
     void postCommit(boolean enforceCheckpoint);
 
     default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     /**
@@ -213,7 +222,11 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
+    /**
+     * {@code numRecords} feeds restore-total/restore-rate; {@code numOffsets} feeds the offset-based
+     * remaining-records metric (or initialises it when {@code initRemaining} is true).
+     */
+    void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining);
 
     // task status inquiry
 

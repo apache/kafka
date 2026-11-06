@@ -67,7 +67,6 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -465,7 +464,7 @@ public class ConfigCommand {
 
         Collection<ClientQuotaAlteration.Op> alterOps = Stream.concat(addOps.stream(), deleteOps.stream()).toList();
 
-        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+        adminClient.alterClientQuotas(Set.of(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
                 .all().get(60, TimeUnit.SECONDS);
     }
 
@@ -672,7 +671,7 @@ public class ConfigCommand {
                 ? Optional.empty()
                 : Optional.of(context.dynamicConfigSource());
         DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
-        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(context.configResource()), describeOptions)
+        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Set.of(context.configResource()), describeOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
         return filterAndSortEntries(configs.get(context.configResource()), configSourceFilter);

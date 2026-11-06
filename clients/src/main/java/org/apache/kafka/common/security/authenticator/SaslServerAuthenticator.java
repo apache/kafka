@@ -139,6 +139,10 @@ public class SaslServerAuthenticator implements Authenticator {
     private AuthenticationException pendingException = null;
     private SaslServer saslServer;
     private String saslMechanism;
+    // The authenticated principal is connection-scoped. Cache it after the first build since principal() is invoked
+    // for every request. It is only accessed by the Processor thread, so no synchronization is needed.
+    // Re-authentication installs a new SaslServerAuthenticator, and therefore a fresh cache.
+    private KafkaPrincipal principal;
 
     // buffers used in `authenticate`
     private Integer saslAuthRequestMaxReceiveSize;
@@ -305,14 +309,18 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
+        if (principal != null)
+            return principal;
+
         Optional<SSLSession> sslSession = transportLayer instanceof SslTransportLayer ?
                 Optional.of(((SslTransportLayer) transportLayer).sslSession()) : Optional.empty();
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol,
                 clientAddress(), listenerName.value(), sslSession);
-        KafkaPrincipal principal = principalBuilder.build(context);
+        KafkaPrincipal builtPrincipal = principalBuilder.build(context);
         if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
-            principal.tokenAuthenticated(true);
+            builtPrincipal.tokenAuthenticated(true);
         }
+        principal = builtPrincipal;
         return principal;
     }
 

@@ -666,6 +666,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.UNREGISTER_BROKER =>
           new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
+        case ApiKeys.UNREGISTER_CONTROLLER =>
+          new UnregisterControllerRequest.Builder(new UnregisterControllerRequestData())
+
         case ApiKeys.DESCRIBE_TRANSACTIONS =>
           new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
             .setTransactionalIds(util.List.of("test-transactional-id")))
@@ -738,19 +741,19 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData())
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData())
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData())
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData())
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData())
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), 3.toShort)
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())

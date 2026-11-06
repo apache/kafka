@@ -72,6 +72,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -92,6 +93,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -113,10 +115,8 @@ import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
@@ -238,8 +238,8 @@ public class EosIntegrationTest {
             final long consumerPosition = consumer.position(topicPartition);
             final long endOffset = consumer.endOffsets(topicPartitions).get(topicPartition);
 
-            assertThat(committedOffset, equalTo(consumerPosition));
-            assertThat(committedOffset, equalTo(endOffset));
+            assertEquals(consumerPosition, committedOffset);
+            assertEquals(endOffset, committedOffset);
         }
     }
 
@@ -339,7 +339,7 @@ public class EosIntegrationTest {
         addAllKeys(allKeys, expectedResult);
 
         for (final Long key : allKeys) {
-            assertThat(reason, getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            assertEquals(getAllRecordPerKey(key, expectedResult), getAllRecordPerKey(key, result), reason);
         }
     }
 
@@ -396,7 +396,7 @@ public class EosIntegrationTest {
             );
 
             final List<KeyValue<Long, Long>> firstCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, firstBurstOfData.size(), CONSUMER_GROUP_ID);
-            assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
+            assertEquals(firstBurstOfData, firstCommittedRecords);
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 SINGLE_PARTITION_INPUT_TOPIC,
@@ -406,7 +406,7 @@ public class EosIntegrationTest {
             );
 
             final List<KeyValue<Long, Long>> secondCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, secondBurstOfData.size(), CONSUMER_GROUP_ID);
-            assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
+            assertEquals(secondBurstOfData, secondCommittedRecords);
         }
     }
 
@@ -508,7 +508,7 @@ public class EosIntegrationTest {
                 expectedCommittedRecordsAfterRecovery,
                 "The committed records after recovery do not match what expected");
 
-            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
+            assertFalse(hasUnexpectedError, "Should only get one uncaught exception from Streams.");
         }
     }
 
@@ -628,7 +628,78 @@ public class EosIntegrationTest {
                 getMaxPerKey(expectedResult),
                 "The state store content after recovery do not match what expected");
 
-            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
+            assertFalse(hasUnexpectedError, "Should only get one uncaught exception from Streams.");
+        }
+    }
+
+    @Test
+    public void shouldBufferStateStoreWritesUntilCommitUnderEos() throws Exception {
+        // this test writes 10 + 3 + 7 records per key (running with 2 partitions, one key per partition)
+        //
+        // the first burst crosses the processor's commit boundary (value % 10 == 9) and is committed
+        // the second burst does not cross a commit boundary, so it is left staged in the transaction
+        // buffer: it must be visible to a READ_UNCOMMITTED reader but NOT to a READ_COMMITTED reader
+        // the third burst crosses the next commit boundary, flushing the buffer to the store: the
+        // READ_COMMITTED view must then reflect both staged bursts
+        //
+        // buffer/commit behaviour is independent of group protocol and processing-threads (see
+        // groupProtocolProcessingThreadsAndTransactionalParameters), so a single representative
+        // combination is sufficient here.
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, "classic", false, true)) {
+            startApplicationAndWaitUntilRunning(streams);
+
+            final List<KeyValue<Long, Long>> firstCommittedBurst = prepareData(0L, 10L, 0L, 1L);
+            writeInputData(firstCommittedBurst);
+
+            waitForCondition(
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit for the first burst.");
+
+            final Set<KeyValue<Long, Long>> expectedAfterFirstCommit = getMaxPerKey(computeExpectedResult(firstCommittedBurst));
+
+            // context.commit() only requests a commit; the transaction buffer is flushed to the
+            // store asynchronously afterwards, so wait for the READ_COMMITTED view to catch up.
+            // This also guarantees the commit has fully completed before the staged burst below is
+            // written, so it cannot be swept into this same commit.
+            waitForStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_COMMITTED,
+                "The state store should reflect the first committed burst at READ_COMMITTED");
+            verifyStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_UNCOMMITTED,
+                "The state store should reflect the first committed burst at READ_UNCOMMITTED");
+
+            final List<KeyValue<Long, Long>> stagedBurst = prepareData(10L, 13L, 0L, 1L);
+            writeInputData(stagedBurst);
+
+            final List<KeyValue<Long, Long>> dataSoFar = new ArrayList<>(firstCommittedBurst);
+            dataSoFar.addAll(stagedBurst);
+
+            // the staged burst is visible in the output topic at READ_UNCOMMITTED ...
+            readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataSoFar.size(), null);
+
+            // ... and in the store at READ_UNCOMMITTED, but READ_COMMITTED must still only reflect
+            // the already-committed burst: this is the core buffering invariant under test
+            verifyStateStore(
+                streams, getMaxPerKey(computeExpectedResult(dataSoFar)), IsolationLevel.READ_UNCOMMITTED,
+                "The state store should reflect the staged burst at READ_UNCOMMITTED");
+            verifyStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_COMMITTED,
+                "The state store must not reflect the staged burst at READ_COMMITTED before commit");
+
+            // cross the next commit boundary, forcing the transaction buffer to flush to the store
+            final List<KeyValue<Long, Long>> secondCommittedBurst = prepareData(13L, 20L, 0L, 1L);
+            writeInputData(secondCommittedBurst);
+
+            waitForCondition(
+                () -> commitRequested.get() == 4, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit for the second burst.");
+
+            final List<KeyValue<Long, Long>> allData = new ArrayList<>(dataSoFar);
+            allData.addAll(secondCommittedBurst);
+
+            waitForStateStore(
+                streams, getMaxPerKey(computeExpectedResult(allData)), IsolationLevel.READ_COMMITTED,
+                "The state store should reflect the second committed burst at READ_COMMITTED");
         }
     }
 
@@ -1422,20 +1493,59 @@ public class EosIntegrationTest {
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent,
                                   final String reason) {
-        final StateQueryRequest<KeyValueIterator<Long, Long>> request =
+        verifyStateStore(streams, expectedStoreContent, Optional.empty(), reason);
+    }
+
+    private void verifyStateStore(final KafkaStreams streams,
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final IsolationLevel isolationLevel,
+                                  final String reason) {
+        verifyStateStore(streams, expectedStoreContent, Optional.of(isolationLevel), reason);
+    }
+
+    private void verifyStateStore(final KafkaStreams streams,
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final Optional<IsolationLevel> isolationLevel,
+                                  final String reason) {
+        for (final KeyValue<Long, Long> actual : queryStateStore(streams, isolationLevel)) {
+            assertTrue(expectedStoreContent.remove(actual), reason);
+        }
+
+        assertTrue(expectedStoreContent.isEmpty(), reason);
+    }
+
+    private Set<KeyValue<Long, Long>> queryStateStore(final KafkaStreams streams,
+                                                       final Optional<IsolationLevel> isolationLevel) {
+        StateQueryRequest<KeyValueIterator<Long, Long>> request =
                 inStore(storeName).withQuery(RangeQuery.withNoBounds());
+        if (isolationLevel.isPresent()) {
+            request = request.withIsolationLevel(isolationLevel.get());
+        }
 
         final StateQueryResult<KeyValueIterator<Long, Long>> result =
                 IntegrationTestUtils.iqv2WaitForResult(streams, request);
 
+        final Set<KeyValue<Long, Long>> actualStoreContent = new HashSet<>();
         for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
             try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
                 while (it.hasNext()) {
-                    assertTrue(expectedStoreContent.remove(it.next()), reason);
+                    actualStoreContent.add(it.next());
                 }
             }
         }
+        return actualStoreContent;
+    }
 
-        assertTrue(expectedStoreContent.isEmpty(), reason);
+    // Buffered writes are only flushed to the store when the Streams commit cycle completes, which
+    // happens asynchronously after context.commit() is requested. Poll until the READ_COMMITTED view
+    // catches up rather than asserting immediately.
+    private void waitForStateStore(final KafkaStreams streams,
+                                   final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                   final IsolationLevel isolationLevel,
+                                   final String reason) throws Exception {
+        waitForCondition(
+            () -> queryStateStore(streams, Optional.of(isolationLevel)).equals(expectedStoreContent),
+            MAX_WAIT_TIME_MS,
+            reason);
     }
 }

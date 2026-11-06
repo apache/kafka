@@ -81,11 +81,6 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     }
 
     @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 0;
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

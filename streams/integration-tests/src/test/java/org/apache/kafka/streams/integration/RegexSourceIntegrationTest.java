@@ -72,10 +72,8 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -223,7 +221,7 @@ public class RegexSourceIntegrationTest {
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();
-            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            assertTrue(topology.describe().subtopologies().size() > 1);
             streams = new KafkaStreams(topology, streamsConfiguration);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -276,7 +274,7 @@ public class RegexSourceIntegrationTest {
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();
-            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            assertTrue(topology.describe().subtopologies().size() > 1);
             streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
@@ -426,7 +424,7 @@ public class RegexSourceIntegrationTest {
 
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
+        assertEquals(expectedReceivedValues, actualValues);
     }
 
     @Test
@@ -529,7 +527,7 @@ public class RegexSourceIntegrationTest {
             // this is fine
         }
 
-        assertThat(expectError.get(), is(true));
+        assertTrue(expectError.get());
     }
 
     private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {

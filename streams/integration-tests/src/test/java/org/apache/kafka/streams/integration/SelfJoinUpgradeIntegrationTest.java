@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -55,8 +57,7 @@ import static java.time.Duration.ofMinutes;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 @Tag("integration")
@@ -114,6 +115,12 @@ public class SelfJoinUpgradeIntegrationTest {
         }
     }
 
+    private void closeAndLeaveGroupBeforeRestart() {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+    }
+
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -156,7 +163,7 @@ public class SelfJoinUpgradeIntegrationTest {
         );
 
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
@@ -223,7 +230,7 @@ public class SelfJoinUpgradeIntegrationTest {
             )
         );
 
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
@@ -282,7 +289,7 @@ public class SelfJoinUpgradeIntegrationTest {
             expected.size(),
             60 * 1000);
 
-        assertThat(actual, is(expected));
+        assertEquals(expected, actual);
 
         return actual.equals(expected);
     }

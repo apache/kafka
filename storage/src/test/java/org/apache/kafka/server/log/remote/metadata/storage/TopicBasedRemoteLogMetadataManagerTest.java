@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicIdPartition;
@@ -94,10 +93,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testDoesTopicExist() throws ExecutionException, InterruptedException {
+        String topic = "test-topic-exist";
+        clusterInstance.createTopic(topic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String topic = "test-topic-exist";
-            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(topic, 1);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertTrue(doesTopicExist);
         }
@@ -144,13 +142,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Create topics.
         String leaderTopic = "new-leader";
         String followerTopic = "new-follower";
-        try (Admin admin = clusterInstance.admin()) {
-            // Set broker id 0 as the first entry which is taken as the leader.
-            admin.createTopics(List.of(new NewTopic(leaderTopic, Map.of(0, List.of(0, 1, 2))))).all().get();
-            clusterInstance.waitTopicCreation(leaderTopic, 1);
-            admin.createTopics(List.of(new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0))))).all().get();
-            clusterInstance.waitTopicCreation(followerTopic, 1);
-        }
+        // Set broker id 0 as the first entry which is taken as the leader.
+        clusterInstance.createTopicWithAssignment(leaderTopic, Map.of(0, List.of(0, 1, 2)));
+        clusterInstance.createTopicWithAssignment(followerTopic, Map.of(0, List.of(1, 2, 0)));
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition newFollowerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
@@ -360,7 +354,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
                 TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
-                TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
+                TopicBasedRemoteLogMetadataManagerConfig.NODE_ID, 0
             );
             rlmm.configure(configs);
             rlmm.onBrokerReady();

@@ -46,8 +46,10 @@ import java.util.concurrent.CompletableFuture;
  * <code>remote.log.metadata.manager.listener.name</code> property is about listener name of the local broker to which
  * it should get connected if needed by RemoteLogMetadataManager implementation.
  * </p>
- * "cluster.id", "broker.id" and all other properties prefixed with the config: "remote.log.metadata.manager.impl.prefix"
+ * "cluster.id", "node.id" and all other properties prefixed with the config: "remote.log.metadata.manager.impl.prefix"
  * (default value is "rlmm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
+ * "broker.id" is also passed with the same value as "node.id", but it is deprecated since 4.4 and will not be passed
+ * from Apache Kafka 5.0 onwards. Implementations should read "node.id" instead.
  * <p>
  *
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.

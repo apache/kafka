@@ -18,6 +18,7 @@
 package org.apache.kafka.server.partition;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
@@ -48,7 +49,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class DefaultAlterPartitionManager implements AlterPartitionManager {
     private static final Logger log = LoggerFactory.getLogger(DefaultAlterPartitionManager.class);
@@ -198,26 +198,24 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 .setBrokerId(brokerId)
                 .setBrokerEpoch(brokerEpoch);
 
-        inflightAlterPartitionItems.stream()
-                .collect(Collectors.groupingBy(item -> item.topicIdPartition().topicId()))
-                .forEach((topicId, items) -> {
-                    AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData().setTopicId(topicId);
-                    message.topics().add(topicData);
-
-                    items.forEach(item -> {
-                        AlterPartitionRequestData.PartitionData partitionData =
-                                new AlterPartitionRequestData.PartitionData()
-                                        .setPartitionIndex(item.topicIdPartition().partitionId())
-                                        .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
-                                        .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
-                                        .setPartitionEpoch(item.leaderAndIsr().partitionEpoch());
-
-                        partitionData.setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value());
-
-                        topicData.partitions().add(partitionData);
+        Map<Uuid, AlterPartitionRequestData.TopicData> topicDataByTopicId = new HashMap<>();
+        for (AlterPartitionItem item : inflightAlterPartitionItems) {
+            AlterPartitionRequestData.TopicData topicData = topicDataByTopicId.computeIfAbsent(
+                    item.topicIdPartition().topicId(),
+                    topicId -> {
+                        AlterPartitionRequestData.TopicData newTopicData =
+                                new AlterPartitionRequestData.TopicData().setTopicId(topicId);
+                        message.topics().add(newTopicData);
+                        return newTopicData;
                     });
 
-                });
+            topicData.partitions().add(new AlterPartitionRequestData.PartitionData()
+                    .setPartitionIndex(item.topicIdPartition().partitionId())
+                    .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
+                    .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
+                    .setPartitionEpoch(item.leaderAndIsr().partitionEpoch())
+                    .setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value()));
+        }
 
         return new AlterPartitionRequest.Builder(message);
     }
@@ -229,8 +227,10 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
         Errors error = Errors.forCode(data.errorCode());
         switch (error) {
             case STALE_BROKER_EPOCH -> log.warn("Broker had a stale broker epoch ({}), retrying.", sentBrokerEpoch);
-            case CLUSTER_AUTHORIZATION_FAILED -> log.error("Broker is not authorized to send AlterPartition to controller",
-                    Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"));
+            case CLUSTER_AUTHORIZATION_FAILED -> {
+                String msg = "Broker is not authorized to send AlterPartition to controller";
+                log.error(msg, Errors.CLUSTER_AUTHORIZATION_FAILED.exception(msg));
+            }
             case NONE -> {
                 // Collect partition-level responses to pass to the callbacks
                 Map<TopicIdPartition, LeaderAndIsr> successResponses = new HashMap<>();

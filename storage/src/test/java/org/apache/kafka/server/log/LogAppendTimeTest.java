@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.log;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -73,12 +71,8 @@ public class LogAppendTimeTest {
         }
     )
     public void testProduceConsumeWithConfigOnTopic(ClusterInstance clusterInstance) throws InterruptedException {
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(
-                new NewTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS).
-                    configs(Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"))));
-            clusterInstance.waitTopicCreation(TOPIC, NUM_PARTITION);
-        }
+        clusterInstance.createTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS,
+                Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"));
 
         testProduceConsume(clusterInstance);
     }

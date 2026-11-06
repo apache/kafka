@@ -29,6 +29,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -55,12 +59,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -124,7 +126,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         assertEquals(3, driver.sizeOf(store));
 
-        assertThat(store.get(0), nullValue());
+        assertNull(store.get(0));
     }
 
 
@@ -165,10 +167,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(3));
-        assertThat(valuesWithPrefix.get(0), is("f"));
-        assertThat(valuesWithPrefix.get(1), is("d"));
-        assertThat(valuesWithPrefix.get(2), is("b"));
+        assertEquals(3, numberOfKeysReturned);
+        assertEquals("f", valuesWithPrefix.get(0));
+        assertEquals("d", valuesWithPrefix.get(1));
+        assertEquals("b", valuesWithPrefix.get(2));
     }
 
     @Test
@@ -197,7 +199,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(1));
+            assertEquals(1, numberOfKeysReturned);
         }
     }
 
@@ -230,8 +232,8 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(valuesWithPrefix.get(0), is("a"));
+        assertEquals(1, numberOfKeysReturned);
+        assertEquals("a", valuesWithPrefix.get(0));
     }
 
     @Test
@@ -258,7 +260,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(0));
+        assertEquals(0, numberOfKeysReturned);
     }
 
     @SuppressWarnings("resource")
@@ -467,7 +469,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             assertArrayEquals(bytesValue("v1-staged"), uncommitted.get(k1));
             assertArrayEquals(bytesValue("v2-staged"), uncommitted.get(k2));
             assertArrayEquals(bytesValue("v1"), committed.get(k1));
-            assertThat(committed.get(k2), nullValue());
+            assertNull(committed.get(k2));
 
             try (KeyValueIterator<Bytes, byte[]> it = committed.all()) {
                 final List<String> keys = new ArrayList<>();
@@ -498,7 +500,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
             txnStore.delete(k);
 
-            assertThat(txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k), nullValue());
+            assertNull(txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k));
             assertArrayEquals(bytesValue("v"), txnStore.readOnly(IsolationLevel.READ_COMMITTED).get(k));
         } finally {
             txnStore.close();
@@ -636,6 +638,62 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         } finally {
             store.close();
         }
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+        );
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("concurrency-store");
+        store.init(ctx, store);
+        ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    store.put(bytesKey("key" + (i % 100)), bytesValue("value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = store.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(writer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent put and IQ query");
     }
 
     private InMemoryKeyValueStore openTransactionalStore() {

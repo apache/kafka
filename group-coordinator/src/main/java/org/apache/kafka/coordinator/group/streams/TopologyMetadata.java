@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.Collections;
@@ -27,11 +27,11 @@ import java.util.Objects;
 import java.util.SortedMap;
 
 /**
- * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to get topic and
- * partition metadata for the topology that the streams group using.
+ * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor} to get topic and
+ * partition metadata for the topology that the streams group is using.
  *
- * @param metadataImage  The metadata image
- * @param subtopologyMap The configured subtopologies
+ * @param metadataImage  The metadata image.
+ * @param subtopologyMap The configured subtopologies.
  */
 public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
 

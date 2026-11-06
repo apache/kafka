@@ -30,12 +30,12 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -60,6 +60,7 @@ public class ScramControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -71,11 +72,20 @@ public class ScramControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         ScramControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             return new ScramControlManager(logContext,
-                snapshotRegistry);
+                snapshotRegistry,
+                maxRecordsPerBatch);
         }
     }
 
@@ -163,13 +173,16 @@ public class ScramControlManager {
 
     private final Logger log;
     private final TimelineHashMap<ScramCredentialKey, ScramCredentialValue> credentials;
+    private final int maxRecordsPerBatch;
 
     private ScramControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(ScramControlManager.class);
         this.credentials = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
     }
 
     /*
@@ -227,7 +240,7 @@ public class ScramControlManager {
             }
         }
         AlterUserScramCredentialsResponseData response = new AlterUserScramCredentialsResponseData();
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
         for (ScramCredentialDeletion deletion : userToDeletion.values()) {
             response.results().add(new AlterUserScramCredentialsResult().
                 setUser(deletion.name()).

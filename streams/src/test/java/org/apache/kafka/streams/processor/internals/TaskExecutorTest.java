@@ -17,13 +17,20 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,5 +65,47 @@ public class TaskExecutorTest {
         taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
 
         verify(producer).commitTransaction(Collections.emptyMap(), groupMetadata);
+    }
+
+    @Test
+    public void shouldFlushTerminalE2ELatencyAgainstTheBatchEndTime() {
+        final Tasks tasks = mock(Tasks.class);
+        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
+        final StreamTask task = mock(StreamTask.class);
+        final MockTime time = new MockTime(0L, 0L, 0L);
+
+        when(tasks.activeInitializedTasks()).thenReturn(Collections.singleton(task));
+        when(metadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        // every step of the batch takes 5ms, and the batch ends once process() returns false
+        final AtomicInteger processCalls = new AtomicInteger();
+        when(task.process(anyLong())).thenAnswer(invocation -> {
+            time.sleep(5L);
+            return processCalls.getAndIncrement() < 2;
+        });
+
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
+
+        assertEquals(2, taskExecutor.process(10, time));
+        // three calls to process() means the batch ends at 15, not at the time it began
+        verify(task).maybeFlushTerminalE2ELatency(15L);
+    }
+
+    @Test
+    public void shouldFlushTerminalE2ELatencyWhenProcessingThrows() {
+        final Tasks tasks = mock(Tasks.class);
+        final TaskManager taskManager = mock(TaskManager.class);
+        final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
+        final StreamTask task = mock(StreamTask.class);
+        final MockTime time = new MockTime(0L, 0L, 0L);
+
+        when(tasks.activeInitializedTasks()).thenReturn(Collections.singleton(task));
+        when(metadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        when(task.process(anyLong())).thenThrow(new RuntimeException("KABOOM!"));
+
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
+
+        assertThrows(StreamsException.class, () -> taskExecutor.process(10, time));
+        verify(task).maybeFlushTerminalE2ELatency(anyLong());
     }
 }

@@ -37,7 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +57,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_5;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TaskAssignmentUtilsTest {
 
@@ -71,7 +69,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeActiveTaskSimple(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-1"))
@@ -90,16 +88,16 @@ public class TaskAssignmentUtilsTest {
 
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             RackAwareOptimizationParams.of(applicationState), assignments);
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
+        assertEquals(2, assignments.size());
+        assertEquals(Set.of(TASK_0_1), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(2)).tasks().keySet());
 
         // Repeated to make sure nothing gets shifted around after the first round of optimization.
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             RackAwareOptimizationParams.of(applicationState), assignments);
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
+        assertEquals(2, assignments.size());
+        assertEquals(Set.of(TASK_0_1), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(2)).tasks().keySet());
     }
 
     @Timeout(value = 30)
@@ -110,7 +108,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeStandbyTasksBasic(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-3"))
@@ -130,17 +128,17 @@ public class TaskAssignmentUtilsTest {
         );
 
         TaskAssignmentUtils.optimizeRackAwareStandbyTasks(RackAwareOptimizationParams.of(applicationState), assignments);
-        assertThat(assignments.size(), equalTo(3));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of(TASK_0_1)));
+        assertEquals(3, assignments.size());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_1), assignments.get(processId(3)).tasks().keySet());
     }
 
     @Timeout(value = 30)
     @Test
     public void shouldAssignStandbyTasksWithClientTags() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 2, Collections.singletonList("az"));
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 2, List.of("az"));
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true)
         );
@@ -166,20 +164,20 @@ public class TaskAssignmentUtilsTest {
         );
 
         TaskAssignmentUtils.defaultStandbyTaskAssignment(applicationState, assignments);
-        assertThat(assignments.size(), equalTo(4));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(1)).tasks().get(TASK_0_0).type(), equalTo(AssignedTask.Type.ACTIVE));
+        assertEquals(4, assignments.size());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(AssignedTask.Type.ACTIVE, assignments.get(processId(1)).tasks().get(TASK_0_0).type());
 
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of()));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
+        assertEquals(Set.of(), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(3)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(4)).tasks().keySet());
     }
 
     @Timeout(value = 30)
     @Test
     public void shouldAssignStandbyTasksByClientLoad() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 3, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 3, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, false),
@@ -204,11 +202,11 @@ public class TaskAssignmentUtilsTest {
         );
 
         TaskAssignmentUtils.defaultStandbyTaskAssignment(applicationState, assignments);
-        assertThat(assignments.size(), equalTo(5));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_3, TASK_0_4, TASK_0_5)));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(5)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
+        assertEquals(5, assignments.size());
+        assertEquals(Set.of(TASK_0_3, TASK_0_4, TASK_0_5), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(3)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(4)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(5)).tasks().keySet());
     }
 
     @Timeout(value = 30)
@@ -219,7 +217,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldNotViolateClientTagsAssignmentDuringStandbyOptimization(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 2, Collections.singletonList("az"));
+            strategy, 100, 1, 2, List.of("az"));
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("r1")),
             mkTaskInfo(TASK_0_1, true, Set.of("r1"))
@@ -261,11 +259,11 @@ public class TaskAssignmentUtilsTest {
         );
 
         TaskAssignmentUtils.optimizeRackAwareStandbyTasks(RackAwareOptimizationParams.of(applicationState), assignments);
-        assertThat(assignments.size(), equalTo(4));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(Set.of()));
+        assertEquals(4, assignments.size());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), assignments.get(processId(3)).tasks().keySet());
+        assertEquals(Set.of(), assignments.get(processId(4)).tasks().keySet());
     }
 
     @Timeout(value = 30)
@@ -276,7 +274,7 @@ public class TaskAssignmentUtilsTest {
     })
     public void shouldOptimizeStandbyTasksWithMultipleRacks(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            strategy, 100, 1, 1, Collections.emptyList());
+            strategy, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, Set.of("rack-1", "rack-2")),
             mkTaskInfo(TASK_0_1, true, Set.of("rack-2", "rack-3")),
@@ -301,17 +299,17 @@ public class TaskAssignmentUtilsTest {
                 .forTasks(new TreeSet<>(Set.of(TASK_0_0, TASK_0_1, TASK_0_2))),
             assignments
         );
-        assertThat(assignments.size(), equalTo(3));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_0)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_1)));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of(TASK_0_2)));
+        assertEquals(3, assignments.size());
+        assertEquals(Set.of(TASK_0_0), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_1), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_2), assignments.get(processId(3)).tasks().keySet());
     }
 
     @Timeout(value = 30)
     @Test
     public void shouldCorrectlyReturnIdentityAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
@@ -329,19 +327,19 @@ public class TaskAssignmentUtilsTest {
 
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = TaskAssignmentUtils.identityAssignment(applicationState);
-        assertThat(assignments.size(), equalTo(5));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(Set.of()));
-        assertThat(assignments.get(processId(4)).tasks().keySet(), equalTo(Set.of()));
-        assertThat(assignments.get(processId(5)).tasks().keySet(), equalTo(Set.of()));
+        assertEquals(5, assignments.size());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), assignments.get(processId(1)).tasks().keySet());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), assignments.get(processId(2)).tasks().keySet());
+        assertEquals(Set.of(), assignments.get(processId(3)).tasks().keySet());
+        assertEquals(Set.of(), assignments.get(processId(4)).tasks().keySet());
+        assertEquals(Set.of(), assignments.get(processId(5)).tasks().keySet());
     }
 
     @Timeout(value = 30)
     @Test
     public void testValidateTaskAssignment() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, Collections.emptyList());
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, 100, 1, 1, List.of());
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_1_1, false)
         );
@@ -364,7 +362,7 @@ public class TaskAssignmentUtilsTest {
             )
         );
         org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError error = TaskAssignmentUtils.validateTaskAssignment(applicationState, noError);
-        assertThat(error, equalTo(TaskAssignor.AssignmentError.NONE));
+        assertEquals(TaskAssignor.AssignmentError.NONE, error);
 
         // ****
         final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment missingProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
@@ -377,7 +375,7 @@ public class TaskAssignmentUtilsTest {
             )
         );
         error = TaskAssignmentUtils.validateTaskAssignment(applicationState, missingProcessId);
-        assertThat(error, equalTo(TaskAssignor.AssignmentError.MISSING_PROCESS_ID));
+        assertEquals(TaskAssignor.AssignmentError.MISSING_PROCESS_ID, error);
 
         // ****
         final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
@@ -392,7 +390,7 @@ public class TaskAssignmentUtilsTest {
             )
         );
         error = TaskAssignmentUtils.validateTaskAssignment(applicationState, unknownProcessId);
-        assertThat(error, equalTo(TaskAssignor.AssignmentError.UNKNOWN_PROCESS_ID));
+        assertEquals(TaskAssignor.AssignmentError.UNKNOWN_PROCESS_ID, error);
 
         // ****
         final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownTaskId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
@@ -410,7 +408,7 @@ public class TaskAssignmentUtilsTest {
             )
         );
         error = TaskAssignmentUtils.validateTaskAssignment(applicationState, unknownTaskId);
-        assertThat(error, equalTo(TaskAssignor.AssignmentError.UNKNOWN_TASK_ID));
+        assertEquals(TaskAssignor.AssignmentError.UNKNOWN_TASK_ID, error);
 
         // ****
         final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment activeTaskDuplicated = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
@@ -428,7 +426,7 @@ public class TaskAssignmentUtilsTest {
             )
         );
         error = TaskAssignmentUtils.validateTaskAssignment(applicationState, activeTaskDuplicated);
-        assertThat(error, equalTo(TaskAssignor.AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES));
+        assertEquals(TaskAssignor.AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES, error);
     }
 
     public static class TestApplicationState implements ApplicationState {

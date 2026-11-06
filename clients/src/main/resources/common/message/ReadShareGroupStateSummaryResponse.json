@@ -20,8 +20,13 @@
   // Version 0 is the initial version (KIP-932).
   //
   // Version 1 introduces DeliveryCompleteCount (KIP-1226).
-  "validVersions": "0-1",
+  //
+  // Version 2 is the same as version 1 (KIP-1313).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   // - NOT_COORDINATOR (version 0+)
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)

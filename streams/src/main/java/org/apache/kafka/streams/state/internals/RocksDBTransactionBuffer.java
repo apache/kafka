@@ -114,6 +114,25 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     }
 
     /**
+     * Runs a sequence of {@link #stage} calls as one batch, holding the {@code snapshotLock} write
+     * lock for the whole batch so a non-owner (IQ) read observes either none or all of it. Without
+     * this, a multi-write operation would stage entry-by-entry and a reader could interleave with a
+     * half-staged batch, which the equivalent non-transactional {@code WriteBatch} write never
+     * exposes. The lock is reentrant, so the per-write acquisitions nested inside are uncontended.
+     *
+     * @param stagingOperations the batch to stage; must only call {@code stage}/{@code stageDeleteRange}
+     *                          on this buffer, and must not block
+     */
+    void stageAll(final Runnable stagingOperations) {
+        snapshotLock.writeLock().lock();
+        try {
+            stagingOperations.run();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    /**
      * Stages a range deletion for an explicit column family. Updates the shared
      * {@code pendingWrites} and {@code rangeTombstones} so iterators opened before
      * commit hide the deleted range, and appends the range delete to the shared
@@ -316,7 +335,10 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     public long approximateNumUncommittedBytes() {
-        return super.approximateNumUncommittedBytes() + writeBatch.getDataSize();
+        // an empty WriteBatch still reports its fixed header, which no commit can release; counting it would
+        // keep the uncommitted-bytes limit exceeded after every commit when the limit is below that baseline
+        final long batchBytes = writeBatch.count() > 0 ? writeBatch.getDataSize() : 0;
+        return super.approximateNumUncommittedBytes() + batchBytes;
     }
 
     @Override

@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -201,7 +202,7 @@ public class ConsumerRecordsTest {
             // deprecated constructor does not supply next offsets, so the map is empty
             assertTrue(consumerRecords.nextOffsets().isEmpty());
 
-            List<String> errors = appender.getMessages("ERROR");
+            List<String> errors = appender.getMessages(Level.ERROR);
             assertEquals(1, errors.size());
             assertTrue(errors.get(0).contains("deprecated ConsumerRecords(Map) constructor"),
                 "Unexpected error message: " + errors.get(0));
@@ -209,13 +210,13 @@ public class ConsumerRecordsTest {
             // Within the rate-limit window, neither repeated calls nor new tainted instances log again.
             assertTrue(consumerRecords.nextOffsets().isEmpty());
             assertTrue(new ConsumerRecords<>(records).nextOffsets().isEmpty());
-            assertEquals(1, appender.getMessages("ERROR").size());
+            assertEquals(1, appender.getMessages(Level.ERROR).size());
 
             // Once the window has elapsed, the error is logged again.
             ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(
                 System.nanoTime() - ConsumerRecords.TAINT_LOG_INTERVAL_NS - 1);
             assertTrue(consumerRecords.nextOffsets().isEmpty());
-            assertEquals(2, appender.getMessages("ERROR").size());
+            assertEquals(2, appender.getMessages(Level.ERROR).size());
         } finally {
             ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(previousLastLogNs);
         }
@@ -233,7 +234,7 @@ public class ConsumerRecordsTest {
 
             assertFalse(consumerRecords.nextOffsets().isEmpty());
             assertEquals(nextOffsets, consumerRecords.nextOffsets());
-            assertTrue(appender.getMessages("ERROR").isEmpty());
+            assertTrue(appender.getMessages(Level.ERROR).isEmpty());
         }
     }
 
@@ -241,7 +242,7 @@ public class ConsumerRecordsTest {
     public void testNextOffsetsDoesNotLogErrorForEmptyRecords() {
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
             assertTrue(ConsumerRecords.empty().nextOffsets().isEmpty());
-            assertTrue(appender.getMessages("ERROR").isEmpty());
+            assertTrue(appender.getMessages(Level.ERROR).isEmpty());
         }
     }
 

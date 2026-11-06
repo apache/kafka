@@ -355,7 +355,7 @@ public class LogManager {
                     if (!created) {
                         throw new IOException("Failed to create data directory " + dir.getAbsolutePath());
                     }
-                    Utils.flushDir(dir.toPath().toAbsolutePath().normalize().getParent());
+                    Utils.flushPath(dir.toPath().toAbsolutePath().normalize().getParent());
                 }
                 if (!dir.isDirectory() || !dir.canRead()) {
                     throw new IOException(dir.getAbsolutePath() + " is not a readable log directory.");
@@ -393,7 +393,7 @@ public class LogManager {
                 .collect(Collectors.toUnmodifiableSet());
         offlineTopicPartitions.forEach(topicPartition -> {
             Optional<UnifiedLog> removedLog = removeLogAndMetrics(logs, topicPartition);
-            removedLog.ifPresent(UnifiedLog::closeHandlers);
+            removedLog.ifPresent(UnifiedLog::closeQuietly);
         });
 
         return offlineTopicPartitions;
@@ -877,13 +877,11 @@ public class LogManager {
 
             Collection<UnifiedLog> logs = logsInDir(localLogsByDir, dir).values();
 
-            List<Runnable> jobsForDir = logs.stream().map(log -> {
+            List<Runnable> jobsForDir = logs.stream().map(log -> (Runnable) () -> {
+                log.prepareActiveSegmentForClose();
                 // flush the log to ensure latest possible recovery point
-                return (Runnable) () -> {
-                    // flush the log to ensure latest possible recovery point
-                    log.flush(true);
-                    log.close();
-                };
+                log.flush(true);
+                log.close();
             }).toList();
 
             jobs.put(dir, jobsForDir.stream().map(pool::submit).collect(Collectors.toList()));
@@ -1561,10 +1559,10 @@ public class LogManager {
             });
             destLog.newMetrics();
         } catch (KafkaStorageException kse) {
-            // If sourceLog's log directory is offline, we need close its handlers here.
-            // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
+            // If sourceLog's log directory is offline, we need to quietly close it here.
+            // handleLogDirFailure() will not close sourceLog because it has been removed from currentLogs map
             sourceLog.ifPresent(srcLog -> {
-                srcLog.closeHandlers();
+                srcLog.closeQuietly();
                 srcLog.removeLogMetrics();
             });
             throw kse;

@@ -17,41 +17,43 @@
 
 package kafka.server
 
-import java.{lang, util}
-import java.util.{Optional, Properties, Map => JMap}
-import java.util.concurrent.{CompletionStage, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketServer}
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{DynamicLogConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
-import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.telemetry._
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{anySet, anyString}
+import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
-import org.mockito.Mockito.{mock, never, times, verify, verifyNoMoreInteractions, when}
 
-import scala.jdk.CollectionConverters._
+import java.io.File
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{CompletionStage, TimeUnit}
+import java.util.{Optional, Properties, Map => JMap}
+import java.{lang, util}
 import scala.collection.Set
+import scala.jdk.CollectionConverters._
 
 class DynamicBrokerConfigTest {
 
@@ -98,6 +100,21 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
+  }
+
+  @Test
+  def testAssignmentIntervalClampAppliesToEffectiveConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicConfig = config.dynamicConfig
+    dynamicConfig.initialize(None)
+
+    val props1 = new Properties
+    props1.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "999999")
+    dynamicConfig.updateBrokerConfig(0, props1)
+
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT,
+      config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
   }
 
   @Test
@@ -699,6 +716,40 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testMetricReportersAreConfiguredWithBothIdConfigs(): Unit = {
+    val nodeId = 0
+    val reporterName = classOf[TestConfigCapturingReporter].getName
+    // createBrokerConfig only sets node.id, so broker.id is only visible through the synonym mechanism
+    val origProps = TestUtils.createBrokerConfig(nodeId)
+    origProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterName)
+
+    val config = KafkaConfig(origProps)
+    config.dynamicConfig.initialize(None)
+    val m = new DynamicMetricsReporters(nodeId, config, mock(classOf[Metrics]), "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+
+    def updateReporters(reporterNames: String): Unit = {
+      val props = new Properties()
+      props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterNames)
+      config.dynamicConfig.updateDefaultConfig(props)
+    }
+
+    def assertBothIdsArePassedAsStrings(): Unit = {
+      val configs = m.currentReporters(reporterName).asInstanceOf[TestConfigCapturingReporter].configs
+      assertEquals(nodeId.toString, configs.get(KRaftConfigs.NODE_ID_CONFIG))
+      assertEquals(nodeId.toString, configs.get(ServerConfigs.BROKER_ID_CONFIG))
+    }
+
+    assertBothIdsArePassedAsStrings()
+
+    // a dynamic update recreates the reporter with the parsed config values, where the ids are integers
+    updateReporters("")
+    assertTrue(m.currentReporters.isEmpty)
+    updateReporters(reporterName)
+    assertBothIdsArePassedAsStrings()
+  }
+
+  @Test
   def testDynamicLogLocalRetentionMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
@@ -1057,12 +1108,8 @@ class DynamicBrokerConfigTest {
   def testEnableFollowerFetchLastTieredOffset(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 9092)
     val config = KafkaConfig.fromProps(props)
-    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
-
-    Mockito.when(serverMock.config).thenReturn(config)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
 
     assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
       config.followerFetchLastTieredOffsetEnable)
@@ -1182,6 +1229,32 @@ class DynamicBrokerConfigTest {
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(4)).handleCordoned(anySet)
+  }
+
+  @Test
+  def testDynamicLogConfigRelativeCordonedLogDir(): Unit = {
+    // createBrokerConfig uses a mix of relative and absolute log dirs when logDirCount is greater than one.
+    val origProps = TestUtils.createBrokerConfig(0, logDirCount = 2)
+    val ctx = new DynamicLogConfigContext(origProps)
+    val relativeLogDir = ctx.config.logDirs().asScala.find(dir => !new File(dir).isAbsolute).get
+    val absoluteLogDir = new File(relativeLogDir).getAbsolutePath
+    val directoryId = Uuid.randomUuid()
+    // Only the absolute path resolves to an ID, matching how LogManager keys its directory ID map.
+    Mockito.when(ctx.logManagerMock.directoryId(ArgumentMatchers.anyString())).thenAnswer(invocation =>
+      if (absoluteLogDir == invocation.getArgument[String](0)) Optional.of(directoryId) else Optional.empty())
+
+    val props = new Properties()
+    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals(util.List.of(relativeLogDir), ctx.config.cordonedLogDirs)
+    verify(ctx.logManagerMock).updateCordonedLogDirs(util.Set.of(absoluteLogDir))
+    verify(ctx.directoryEventHandler).handleCordoned(util.Set.of(directoryId))
+
+    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, absoluteLogDir)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals(util.List.of(absoluteLogDir), ctx.config.cordonedLogDirs)
+    verify(ctx.logManagerMock, times(2)).updateCordonedLogDirs(util.Set.of(absoluteLogDir))
+    verify(ctx.directoryEventHandler, times(2)).handleCordoned(util.Set.of(directoryId))
   }
 
   @Test
@@ -1333,6 +1406,16 @@ class TestDynamicThreadPool extends BrokerReconfigurable {
     assertEquals(10, newConfig.numIoThreads)
     assertEquals(100, newConfig.backgroundThreads)
   }
+}
+
+class TestConfigCapturingReporter extends MetricsReporter {
+  var configs: util.Map[String, _] = _
+
+  override def configure(configs: util.Map[String, _]): Unit = this.configs = configs
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
+  override def close(): Unit = {}
 }
 
 class TestExporterOnly extends MetricsReporter with ClientTelemetryExporterProvider {

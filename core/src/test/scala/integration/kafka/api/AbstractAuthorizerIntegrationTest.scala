@@ -100,7 +100,6 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
     addNodeProperties(properties)
   }
 
