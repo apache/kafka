@@ -128,6 +128,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private final String brokerSecurityProtocol;
         private final String controllerSecurityProtocol;
         private boolean standalone;
+        private boolean skipJaasFileSetup;
         private Optional<Map<Integer, Uuid>> initialVoterSet = Optional.empty();
         private boolean deleteOnClose;
 
@@ -147,6 +148,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         public Builder setStandalone(boolean standalone) {
             this.standalone = standalone;
+            return this;
+        }
+
+        public Builder setSkipJaasFileSetup(boolean skipJaasFileSetup) {
+            this.skipJaasFileSetup = skipJaasFileSetup;
             return this;
         }
 
@@ -279,8 +285,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private Optional<File> maybeSetupJaasFile() throws Exception {
-            if ((brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
-                    brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) &&
+            // Skip the auto-generated PLAIN-only JAAS file when the test opts out via
+            // skipJaasFileSetup (for example, a MiniKdc-based GSSAPI test that supplies its own
+            // JAAS login config and also enables PLAIN), since overwriting the test's login
+            // config here would discard mechanisms other than PLAIN.
+            if (!skipJaasFileSetup &&
+                    (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
+                        brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) &&
                     isPlainSaslMechanism(configProps)) {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
