@@ -1444,6 +1444,8 @@ public class CommitRequestManagerTest {
             commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), memberId);
         }
 
+        // Records returned after the initial commit was created may still be awaiting application processing.
+        subscriptionState.seek(tp, 10);
         completeOffsetCommitRequestWithError(commitRequestManager, error);
 
         if ((error.exception() instanceof RetriableException || error == Errors.STALE_MEMBER_EPOCH) && error != Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -1456,9 +1458,11 @@ public class CommitRequestManagerTest {
             time.sleep(retryBackoffMs);
             res = commitRequestManager.poll(time.milliseconds());
             assertEquals(1, res.unsentRequests.size());
+            OffsetCommitRequestData reqData = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+            assertEquals(5, reqData.topics().get(0).partitions().get(0).committedOffset(),
+                "Retries must preserve the offsets captured for the initial request");
             if (error == Errors.STALE_MEMBER_EPOCH) {
                 // The retried request should include the latest member ID and epoch
-                OffsetCommitRequestData reqData = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
                 assertEquals(newEpoch, reqData.generationIdOrMemberEpoch());
                 assertEquals(memberId, reqData.memberId());
             }
