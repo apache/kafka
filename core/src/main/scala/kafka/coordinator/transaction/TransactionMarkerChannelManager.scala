@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 
-import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendRetryQueueSizeMetricName, MetricNames, UnknownDestinationQueueSizeMetricName}
+import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendRetryQueueSizeMetricName, MetricNames, UnknownDestinationQueueSizeMetricName, UnknownDestinationRetryBackoffMs}
 
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
@@ -46,6 +46,9 @@ import scala.jdk.javaapi.OptionConverters
 object TransactionMarkerChannelManager {
   private val UnknownDestinationQueueSizeMetricName = "UnknownDestinationQueueSize"
   private val LogAppendRetryQueueSizeMetricName = "LogAppendRetryQueueSize"
+
+  // Visible for testing
+  private[transaction] val UnknownDestinationRetryBackoffMs = 100L
 
   // Visible for testing
   private[transaction] val MetricNames = Set(
@@ -189,6 +192,16 @@ class TransactionMarkerChannelManager(
     }
   }
 
+  override def doWork(): Unit = {
+    // Markers in the unknown-broker queue are only retried by generateRequests(), which does not wake up the
+    // network client. While any are parked, bound the poll so they are retried after a backoff instead of
+    // either spinning or waiting until an unrelated event wakes up this thread.
+    if (markersQueueForUnknownBroker.totalNumMarkers > 0)
+      pollOnce(UnknownDestinationRetryBackoffMs)
+    else
+      pollOnce(Long.MaxValue)
+  }
+
   override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     retryLogAppends()
     val pendingCompleteTxnAndMarkerEntries = new util.ArrayList[PendingCompleteTxnAndMarkerEntry]()
@@ -203,7 +216,9 @@ class TransactionMarkerChannelManager(
       val pendingCompleteTxn = pendingCompleteTxnAndMarker.pendingCompleteTxn
       val topicPartitions = pendingCompleteTxnAndMarker.txnMarkerEntry.partitions.asScala.toSet
 
-      addTxnMarkersToBrokerQueue(producerId, producerEpoch, txnResult, pendingCompleteTxn, topicPartitions)
+      // No wakeup() here: this runs on the sender thread, and markers moved to a broker queue are drained below.
+      // Waking up the network client for a marker that is parked again would turn the retry into a busy loop.
+      enqueueTxnMarkers(producerId, producerEpoch, txnResult, pendingCompleteTxn, topicPartitions)
     }
 
     val currentTimeMs = time.milliseconds()
@@ -341,6 +356,15 @@ class TransactionMarkerChannelManager(
                                  result: TransactionResult,
                                  pendingCompleteTxn: PendingCompleteTxn,
                                  topicPartitions: immutable.Set[TopicPartition]): Unit = {
+    enqueueTxnMarkers(producerId, producerEpoch, result, pendingCompleteTxn, topicPartitions)
+    wakeup()
+  }
+
+  private def enqueueTxnMarkers(producerId: Long,
+                                producerEpoch: Short,
+                                result: TransactionResult,
+                                pendingCompleteTxn: PendingCompleteTxn,
+                                topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val txnTopicPartition = txnStateManager.partitionFor(pendingCompleteTxn.transactionalId)
     val partitionsByDestination: immutable.Map[Option[Node], immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       OptionConverters.toScala(metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName))
@@ -407,8 +431,6 @@ class TransactionMarkerChannelManager(
           }
       }
     }
-
-    wakeup()
   }
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {
