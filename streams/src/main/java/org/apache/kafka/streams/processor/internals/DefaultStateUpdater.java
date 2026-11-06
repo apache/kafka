@@ -970,15 +970,42 @@ public class DefaultStateUpdater implements StateUpdater {
                 tasksAndActionsLock.unlock();
             }
 
-            try {
-                stateUpdaterThread.join(timeout.toMillis());
-                if (stateUpdaterThread.isAlive()) {
-                    throw new StreamsException("State updater thread did not shutdown within the timeout");
+            awaitStateUpdaterThreadShutdown(timeout);
+            if (stateUpdaterThread.isAlive()) {
+                throw new StreamsException("State updater thread did not shutdown within the timeout");
+            }
+            stateUpdaterThread = null;
+        }
+    }
+
+    /**
+     * Waits for the state updater thread to stop, retrying within the given budget if the calling
+     * thread is interrupted. An interrupt must not cut this wait short: the caller closes the tasks
+     * left behind by the updater once this returns, and doing that while the thread is still running
+     * would race with it. The interrupt status is restored before returning.
+     */
+    private void awaitStateUpdaterThreadShutdown(final Duration timeout) {
+        final long startNs = System.nanoTime();
+        final long timeoutMs = timeout.toMillis();
+        boolean interrupted = false;
+        try {
+            while (true) {
+                final long remainingMs = timeoutMs - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+                if (remainingMs <= 0) {
+                    return;
                 }
-                stateUpdaterThread = null;
-            } catch (final InterruptedException ignored) {
+                try {
+                    stateUpdaterThread.join(remainingMs);
+                    return;
+                } catch (final InterruptedException retryWithRemainingBudget) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
+                log.warn("Interrupted while waiting for the state updater thread to shut down. "
+                    + "The wait was retried so that the remaining tasks can be closed safely.");
                 Thread.currentThread().interrupt();
-                log.warn("Interrupted while waiting for state updater thread to shut down");
             }
         }
     }
