@@ -459,17 +459,22 @@ public class GroupOffsetsResetter {
         // collect all topics
         Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
 
-        try {
-            return adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
-                .stream()
-                .flatMap(entry -> entry.getValue().partitions().stream()
+        List<TopicPartition> noneLeaderPartitions = new ArrayList<>();
+        adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
+            try {
+                future.get().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() == null)
-                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                    .map(partitionInfo -> new TopicPartition(topic, partitionInfo.partition()))
                     .filter(topicPartitions::contains)
-                .toList();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+                    .forEach(noneLeaderPartitions::add);
+            } catch (InterruptedException | ExecutionException e) {
+                if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
+                    throw new RuntimeException(e);
+                // A deleted topic has no leader for any of its partitions
+                topicPartitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(noneLeaderPartitions::add);
+            }
+        });
+        return noneLeaderPartitions;
     }
 
     public List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
