@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -37,6 +38,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.FileLock;
 import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
@@ -50,10 +52,13 @@ import com.yammer.metrics.core.MetricName;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
@@ -70,8 +75,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -679,6 +689,115 @@ public class LogManagerTest {
             UnifiedLog log = logs.get(i);
             assertEquals(checkpoints.get(tp), log.recoveryPoint(), "Recovery point should equal checkpoint");
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    @SuppressWarnings("unchecked")
+    public void testRecoveryCheckpointOverlappingTruncation(boolean truncateFully) throws Exception {
+        // Keep the segment-roll flush pending until after the simulated crash.
+        MockScheduler scheduler = new MockScheduler(time) {
+            @Override
+            public ScheduledFuture<?> schedule(String name, Runnable task, long delayMs, long periodMs) {
+                return super.schedule(name, task, name.equals("flush-log") ? 86_400_000 : delayMs, periodMs);
+            }
+        };
+        Field schedulerField = LogManager.class.getDeclaredField("scheduler");
+        schedulerField.setAccessible(true);
+        schedulerField.set(logManager, scheduler);
+        TopicPartition tp = new TopicPartition(NAME, 0);
+        UnifiedLog log = logManager.getOrCreateLog(tp, Optional.empty());
+        LogSegment originalSegment = log.activeSegment();
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(LogTestUtils.singletonRecords(new byte[] {1}), 0);
+        }
+        log.flush(false);
+        assertEquals(10, log.recoveryPoint());
+
+        CountDownLatch sampled = new CountDownLatch(1);
+        CountDownLatch resumeCheckpoint = new CountDownLatch(1);
+        AtomicBoolean firstSample = new AtomicBoolean(true);
+        UnifiedLog spyLog = spy(log);
+        doAnswer(invocation -> {
+            long recoveryPoint = (long) invocation.callRealMethod();
+            if (firstSample.compareAndSet(true, false)) {
+                sampled.countDown();
+                assertTrue(resumeCheckpoint.await(10, TimeUnit.SECONDS));
+            }
+            return recoveryPoint;
+        }).when(spyLog).recoveryPoint();
+        Field field = LogManager.class.getDeclaredField("currentLogs");
+        field.setAccessible(true);
+        ((ConcurrentMap<TopicPartition, UnifiedLog>) field.get(logManager)).put(tp, spyLog);
+
+        FutureTask<Void> checkpoint = new FutureTask<>(logManager::checkpointLogRecoveryOffsets, null);
+        FutureTask<Void> truncation = new FutureTask<>(() -> {
+            if (truncateFully) {
+                logManager.truncateFullyAndStartAt(tp, 0, false, Optional.empty());
+            } else {
+                logManager.truncateTo(Map.of(tp, 0L), false);
+            }
+        }, null);
+        Thread checkpointThread = new Thread(checkpoint, "recovery-checkpoint");
+        Thread truncationThread = new Thread(truncation, "log-truncation");
+        try {
+            checkpointThread.start();
+            assertTrue(sampled.await(10, TimeUnit.SECONDS));
+            truncationThread.start();
+            // The truncation either finishes its checkpoint or waits for the older checkpoint.
+            TestUtils.waitForCondition(() -> truncation.isDone() ||
+                            (truncationThread.getState() == Thread.State.BLOCKED &&
+                                    Arrays.stream(truncationThread.getStackTrace()).anyMatch(frame ->
+                                            frame.getMethodName().equals("checkpointRecoveryOffsetsInDir"))),
+                    "Truncation did not reach its recovery checkpoint");
+            assertEquals(0, log.recoveryPoint());
+        } finally {
+            resumeCheckpoint.countDown();
+            checkpointThread.join(10_000);
+            truncationThread.join(10_000);
+        }
+        checkpoint.get(10, TimeUnit.SECONDS);
+        truncation.get(10, TimeUnit.SECONDS);
+        Map<TopicPartition, Long> offsets = new OffsetCheckpointFile(
+                new File(logDir, LogManager.RECOVERY_POINT_CHECKPOINT_FILE), null).read();
+        assertEquals(0L, offsets.get(tp), "An older checkpoint must not overwrite the truncation checkpoint");
+
+        log.appendAsLeader(LogTestUtils.singletonRecords(new byte[] {2}), 1);
+        File damagedFile = log.activeSegment().log().file();
+        log.roll();
+        log.appendAsLeader(LogTestUtils.singletonRecords(new byte[] {3}), 1);
+        assertEquals(0, log.recoveryPoint());
+        assertEquals(2, log.logSegments().size());
+
+        // Close channels without shutdown flushing/checkpointing; retain indexes to exercise checkpoint-based recovery.
+        for (LogSegment segment : log.logSegments()) {
+            segment.log().channel().close();
+            segment.offsetIndex().close();
+            segment.timeIndex().close();
+            segment.txnIndex().close();
+        }
+        if (truncateFully) {
+            originalSegment.close();
+        }
+        log.removeLogMetrics();
+        scheduler.clear();
+        time.scheduler.clear();
+        for (FileLock lock : logManager.dirLocks()) {
+            lock.destroy();
+        }
+        logManager = null;
+        assertFalse(new File(logDir, ".kafka_cleanshutdown").exists());
+        // Model an unflushed batch damaged by a hard failure.
+        try (RandomAccessFile file = new RandomAccessFile(damagedFile, "rw")) {
+            file.seek(DefaultRecordBatch.CRC_OFFSET);
+            int crcByte = file.readUnsignedByte();
+            file.seek(DefaultRecordBatch.CRC_OFFSET);
+            file.writeByte(crcByte ^ 1);
+        }
+        logManager = createLogManager();
+        logManager.startup(Set.of());
+        assertEquals(0, logManager.getLog(tp).orElseThrow().logEndOffset(),
+                "Recovery must scan and truncate the damaged segment even after a segment roll");
     }
 
     private LogManager createLogManager() throws IOException {
