@@ -221,7 +221,7 @@ public class Values {
             return null;
         }
         StringBuilder sb = new StringBuilder();
-        append(sb, value, false);
+        append(sb, schema, value, false);
         return sb.toString();
     }
 
@@ -695,6 +695,10 @@ public class Values {
     }
 
     protected static void append(StringBuilder sb, Object value, boolean embedded) {
+        append(sb, null, value, embedded);
+    }
+
+    protected static void append(StringBuilder sb, Schema schema, Object value, boolean embedded) {
         if (value == null) {
             sb.append(NULL_VALUE);
         } else if (value instanceof Number) {
@@ -720,17 +724,16 @@ public class Values {
             append(sb, bytes, embedded);
         } else if (value instanceof List<?> list) {
             sb.append('[');
-            appendIterable(sb, list.iterator());
+            appendIterable(sb, valueSchemaOf(schema), list.iterator());
             sb.append(']');
         } else if (value instanceof Map<?, ?> map) {
             sb.append('{');
-            appendIterable(sb, map.entrySet().iterator());
+            appendIterable(sb, schema, map.entrySet().iterator());
             sb.append('}');
         } else if (value instanceof Struct struct) {
-            Schema schema = struct.schema();
             boolean first = true;
             sb.append('{');
-            for (Field field : schema.fields()) {
+            for (Field field : struct.schema().fields()) {
                 if (first) {
                     first = false;
                 } else {
@@ -738,15 +741,15 @@ public class Values {
                 }
                 append(sb, field.name(), true);
                 sb.append(':');
-                append(sb, struct.get(field), true);
+                append(sb, field.schema(), struct.get(field), true);
             }
             sb.append('}');
         } else if (value instanceof Map.Entry<?, ?> entry) {
-            append(sb, entry.getKey(), true);
+            append(sb, keySchemaOf(schema), entry.getKey(), true);
             sb.append(':');
-            append(sb, entry.getValue(), true);
+            append(sb, valueSchemaOf(schema), entry.getValue(), true);
         } else if (value instanceof java.util.Date dateValue) {
-            String formatted = dateFormatFor(dateValue).format(dateValue);
+            String formatted = dateFormatFor(schema, dateValue).format(dateValue);
             sb.append(formatted);
         } else {
             throw new DataException("Failed to serialize unexpected value type " + value.getClass().getName() + ": " + value);
@@ -754,18 +757,44 @@ public class Values {
     }
 
     protected static void appendIterable(StringBuilder sb, Iterator<?> iter) {
+        appendIterable(sb, null, iter);
+    }
+
+    protected static void appendIterable(StringBuilder sb, Schema elementSchema, Iterator<?> iter) {
         if (iter.hasNext()) {
-            append(sb, iter.next(), true);
+            append(sb, elementSchema, iter.next(), true);
             while (iter.hasNext()) {
                 sb.append(',');
-                append(sb, iter.next(), true);
+                append(sb, elementSchema, iter.next(), true);
             }
         }
+    }
+
+    private static Schema keySchemaOf(Schema schema) {
+        return schema != null && schema.type() == Type.MAP ? schema.keySchema() : null;
+    }
+
+    private static Schema valueSchemaOf(Schema schema) {
+        return schema != null && (schema.type() == Type.ARRAY || schema.type() == Type.MAP) ? schema.valueSchema() : null;
     }
 
     protected static String escape(String value) {
         String replace1 = TWO_BACKSLASHES.matcher(value).replaceAll("\\\\\\\\");
         return DOUBLE_QUOTE.matcher(replace1).replaceAll("\\\\\"");
+    }
+
+    public static DateFormat dateFormatFor(Schema schema, java.util.Date value) {
+        String logicalName = schema == null ? null : schema.name();
+        if (Time.LOGICAL_NAME.equals(logicalName)) {
+            return new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
+        }
+        if (Date.LOGICAL_NAME.equals(logicalName)) {
+            return new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN);
+        }
+        if (Timestamp.LOGICAL_NAME.equals(logicalName)) {
+            return new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
+        }
+        return dateFormatFor(value);
     }
 
     public static DateFormat dateFormatFor(java.util.Date value) {
