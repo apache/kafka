@@ -103,6 +103,7 @@ public class LogCleanerTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogCleanerTest.class);
 
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private final File tmpdir = TestUtils.tempDirectory();
     private final File dir = TestUtils.randomPartitionLogDir(tmpdir);
     private final LogConfig logConfig;
@@ -122,8 +123,12 @@ public class LogCleanerTest {
 
     @AfterEach
     public void teardown() throws IOException {
-        Utils.swallow(LOG, time.scheduler::shutdown);
-        Utils.delete(tmpdir);
+        try {
+            Utils.swallow(LOG, time.scheduler::shutdown);
+            Utils.delete(tmpdir);
+        } finally {
+            brokerTopicStats.close();
+        }
     }
 
     @Test
@@ -271,7 +276,7 @@ public class LogCleanerTest {
             offsets.nextOffsetMetadata(), time.scheduler, time, topicPartition, logDirFailureChannel);
         var log = new UnifiedLog(offsets.logStartOffset(),
             localLog,
-            new BrokerTopicStats(),
+            brokerTopicStats,
             producerIdExpirationCheckIntervalMs,
             leaderEpochCache,
             producerStateManager,
@@ -2029,7 +2034,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, brokerTopicStats, time, time.scheduler);
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
@@ -2049,7 +2054,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, brokerTopicStats, time, time.scheduler);
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
@@ -2068,7 +2073,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, brokerTopicStats, time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -2087,7 +2092,7 @@ public class LogCleanerTest {
         // 4) Simulate recovery after swap file is created and old segments files are renamed
         //    to .deleted. Clean operation is resumed during recovery.
         log.logSegments().get(0).changeFileSuffixes("", UnifiedLog.SWAP_FILE_SUFFIX);
-        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, brokerTopicStats, time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -2107,7 +2112,7 @@ public class LogCleanerTest {
         //    to .deleted. Clean operation is resumed during recovery.
         File timeIndexFile = log.logSegments().get(0).timeIndex().file();
         timeIndexFile.renameTo(new File(Utils.replaceSuffix(timeIndexFile.getPath(), "", UnifiedLog.SWAP_FILE_SUFFIX)));
-        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, brokerTopicStats, time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -2126,7 +2131,7 @@ public class LogCleanerTest {
 
         // 6) Simulate recovery after swap is complete, but async deletion
         //    is not yet complete. Clean operation is resumed during recovery.
-        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, brokerTopicStats, time, time.scheduler);
         log.close();
     }
 
@@ -2632,7 +2637,7 @@ public class LogCleanerTest {
             0L,
             recoveryPoint,
             time.scheduler,
-            new BrokerTopicStats(),
+            brokerTopicStats,
             time,
             5 * 60 * 1000,
             producerStateManagerConfig,

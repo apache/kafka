@@ -64,21 +64,22 @@ public class BrokerCompressionTest {
         Compression messageCompression = Compression.of(messageCompressionType).build();
 
         /* Configure broker-side compression */
-        try (UnifiedLog log = UnifiedLog.create(
-            logDir,
-            new LogConfig(Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)),
-            0L,
-            0L,
-            time.scheduler,
-            new BrokerTopicStats(),
-            time,
-            5 * 60 * 1000,
-            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-            TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-            new LogDirFailureChannel(10),
-            true,
-            Optional.empty()
-        )) {
+        try (BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+             UnifiedLog log = UnifiedLog.create(
+                logDir,
+                new LogConfig(Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)),
+                0L,
+                0L,
+                time.scheduler,
+                brokerTopicStats,
+                time,
+                5 * 60 * 1000,
+                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                new LogDirFailureChannel(10),
+                true,
+                Optional.empty()
+            )) {
             /* Append two messages */
             log.appendAsLeader(
                     MemoryRecords.withRecords(messageCompression, 0,
