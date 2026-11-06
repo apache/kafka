@@ -55,6 +55,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -161,6 +162,8 @@ public class GlobalStateTaskTest {
         globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
         assertEquals(1, sourceOne.numReceived);
         assertEquals(0, sourceTwo.numReceived);
+        assertNull(context.recordContext());
+        assertEquals(new RecordHeaders(), context.headers());
     }
 
     @Test
@@ -435,6 +438,8 @@ public class GlobalStateTaskTest {
             @Override
             public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
                 handlerInvoked.set(true);
+                assertEquals(topic1, context.topic());
+                assertEquals(1L, context.offset());
                 assertEquals("Test processing exception", exception.getMessage());
                 return Response.resume();
 
@@ -458,6 +463,7 @@ public class GlobalStateTaskTest {
         globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
         assertTrue(handlerInvoked.get());
         assertEquals(1, sourceForward.numReceived);
+        assertNull(testContext.recordContext());
 
     }
 
@@ -481,5 +487,6 @@ public class GlobalStateTaskTest {
                 () -> globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes())));
         assertEquals("Test processing exception", exception.getMessage());
         assertEquals(1, sourceForward.numReceived);
+        assertNull(testContext.recordContext());
     }
 }
