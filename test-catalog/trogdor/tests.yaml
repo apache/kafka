@@ -112,6 +112,20 @@ org.apache.kafka.trogdor.workload.ShareConsumeBenchSpecTest:
 - testShareGroupDLQConfigDefaults
 - testShareGroupDLQConfigParsedFromJson
 - testUnsupportedAcknowledgeTypeRaisesException
+org.apache.kafka.trogdor.workload.ShareConsumeBenchWorkerTest:
+- testAuthorizationErrorFailsWithoutRetrying
+- testConfigsAlreadySetAreLeftAlone
+- testConfigsAreAlteredWhenTheyCannotBeDescribed
+- testConfigsWithADifferentValueAreAltered
+- testFailedAlterIsRetriedAfterTheBackoff
+- testGivesUpAfterAllAttempts
+- testInterruptDuringDescribeIsRestoredAndNotRetried
+- testInterruptIsRestoredAndNotRetried
+- testMissingConfigsAreAltered
+- testNonApiExceptionIsRetried
+- testNonRetriableErrorFailsWithoutRetrying
+- testRetriableApiExceptionIsRetried
+- testRetryStopsWhenAnotherConsumerSetsTheConfigs
 org.apache.kafka.trogdor.workload.ThrottleTest:
 - testThrottle
 org.apache.kafka.trogdor.workload.TimeIntervalTransactionsGeneratorTest:
