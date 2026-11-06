@@ -674,7 +674,7 @@ public final class Utils {
                 props.load(propStream);
             }
         } else {
-            System.out.println("Did not load any properties since the property file is not specified");
+            log.warn("Did not load any properties since the property file is not specified");
         }
 
         if (onlyIncludeKeys == null || onlyIncludeKeys.isEmpty())
