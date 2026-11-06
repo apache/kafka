@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.scram.internals;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
@@ -52,7 +51,7 @@ public class ScramSaslServerTest {
     public void setUp() throws Exception {
         ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
         formatter  = new ScramFormatter(mechanism);
-        CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
+        CredentialCache.Cache credentialCache = new CredentialCache().createCache(mechanism.mechanismName());
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
         ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));

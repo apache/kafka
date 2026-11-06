@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.MockTime;
@@ -121,8 +120,7 @@ public final class NioEchoServer extends Thread {
             this.tokenCache = tokenCache;
             if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
                 for (String mechanism : ScramMechanism.mechanismNames()) {
-                    if (credentialCache.cache(mechanism, ScramCredential.class) == null)
-                        credentialCache.createCache(mechanism, ScramCredential.class);
+                    credentialCache.createCache(mechanism);
                 }
             }
             LogContext logContext = new LogContext();
