@@ -19,6 +19,7 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
@@ -584,6 +585,43 @@ public class KafkaMetricsCollectorTest {
         assertEquals(1, metric.dataPointsCount());
         assertEquals(1, metric.attributesCount());
         assertEquals(Collections.singletonMap("tag1", "value1"), metric.attributes());
+    }
+
+    @Test
+    public void testCollectMetricWithSensor() {
+        Sensor sensor = metrics.sensor("test", Sensor.RecordingLevel.DEBUG);
+        sensor.add(metricName, new WindowedCount());
+
+        sensor.record();
+        sensor.record();
+
+        time.sleep(2 * 1000L);
+
+        // Collect delta metrics.
+        testEmitter.onlyDeltaMetrics(true);
+        collector.collect(testEmitter);
+        List<SinglePointMetric> result1 = testEmitter.emittedMetrics();
+
+        assertFalse(result1.stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")));
+
+        // Dynamically modifying the config metric to DEBUG so it matched that of the metric level
+        testEmitter.reset();
+        MetricConfig config = metrics.config();
+        config.recordLevel(Sensor.RecordingLevel.DEBUG);
+
+        sensor.record();
+        sensor.record();
+
+        time.sleep(2 * 1000L);
+
+        collector.collect(testEmitter);
+        List<SinglePointMetric> result2 = testEmitter.emittedMetrics();
+
+        // the kafka metric should get added as the config record level is not less than that of the metric
+        assertTrue(result2.stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")));
+
     }
 
     private static SinglePointMetric metricByName(List<SinglePointMetric> metrics, String name) {

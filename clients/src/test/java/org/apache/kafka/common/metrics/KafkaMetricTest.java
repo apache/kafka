@@ -122,6 +122,52 @@ public class KafkaMetricTest {
                 metric.toString());
     }
 
+    /**
+     * testing kafkaMetric that do not have recordingLevel
+     * should always return true for isActive
+     */
+    @Test
+    public void testKafkaMetricWithoutRecordingLevel() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, new MetricConfig(), new MockTime());
+        assertTrue(metric.isActive());
+    }
+
+    /**
+     * Testing kafkaMetric with recording level set to TRACE
+     * config level changing from info -> trace
+     */
+
+    @Test
+    public void testKafkaMetricWithRecordingLevelTrace() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        Sensor.RecordingLevel recordingLevel = Sensor.RecordingLevel.TRACE;
+        MetricConfig metricConfig = new MetricConfig();
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, metricConfig, new MockTime(), recordingLevel);
+        assertFalse(metric.isActive());
+        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
+        assertFalse(metric.isActive());
+        metricConfig.recordLevel(Sensor.RecordingLevel.TRACE);
+        assertTrue(metric.isActive());
+    }
+
+    /**
+     * Testing kafkaMetric with recording level set to INFO
+     * config level changing from info -> trace
+     */
+    @Test
+    public void testKafkaMetricWithRecordingLevelInfo() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        Sensor.RecordingLevel recordingLevel = Sensor.RecordingLevel.INFO;
+        MetricConfig metricConfig = new MetricConfig();
+        KafkaMetric kafkaMetric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, metricConfig, new MockTime(), recordingLevel);
+        assertTrue(kafkaMetric.isActive());
+        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
+        assertTrue(kafkaMetric.isActive());
+        metricConfig.recordLevel(Sensor.RecordingLevel.TRACE);
+        assertTrue(kafkaMetric.isActive());
+    }
+
     private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
         KafkaMetric metric = new KafkaMetric(
                 new Object(), METRIC_NAME_2, metricValueProvider, new MetricConfig(), new MockTime());
