@@ -62,7 +62,7 @@ public class GroupSpecImplTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             subscriptionType
@@ -128,18 +128,7 @@ public class GroupSpecImplTest {
 
     @Test
     void testIsPartitionAssignable() {
-        // Empty allowed map.
+        // All partitions are assignable in consumer groups.
         assertTrue(groupSpec.isPartitionAssignable(topicId, 1));
-
-        // Allowed map with data.
-        groupSpec = new GroupSpecImpl(
-            metadataImage,
-            members,
-            subscriptionType,
-            Optional.of(Map.of(topicId, Set.of(0)))
-        );
-
-        assertTrue(groupSpec.isPartitionAssignable(topicId, 0));
-        assertFalse(groupSpec.isPartitionAssignable(topicId, 1));
     }
 }
