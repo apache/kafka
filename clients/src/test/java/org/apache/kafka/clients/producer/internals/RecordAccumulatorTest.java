@@ -1013,6 +1013,82 @@ public class RecordAccumulatorTest {
 
     @ParameterizedTest
     @MethodSource("allocationStrategies")
+    public void testPartitionAwaitingFirstAckDoesNotStarveOtherPartitions(String allocationStrategy) throws Exception {
+        int batchSize = 1025;
+        int deliveryTimeoutMs = 3200;
+        int lingerMs = 10;
+        long totalSize = 10 * batchSize;
+
+        TransactionManager transactionManager = Mockito.mock(TransactionManager.class);
+        RecordAccumulator accumulator = createTestRecordAccumulator(allocationStrategy, transactionManager,
+            deliveryTimeoutMs, batchSize, totalSize, Compression.NONE, lingerMs);
+
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
+        Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
+        Mockito.when(transactionManager.isSendToPartitionAllowed(Mockito.any())).thenReturn(true);
+        Mockito.when(transactionManager.firstInFlightSequence(Mockito.any())).thenReturn(RecordBatch.NO_SEQUENCE);
+        // tp1's first batch of the epoch is in flight and not acknowledged; tp2 has nothing in flight. Both are led
+        // by node1.
+        Mockito.when(transactionManager.isAwaitingFirstAck(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.isAwaitingFirstAck(tp2)).thenReturn(false);
+
+        accumulator.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            time.milliseconds(), cluster);
+        accumulator.append(topic, partition2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            time.milliseconds(), cluster);
+        time.sleep(lingerMs + 1);
+
+        // Only tp2 is drained, and tp1 waiting must not stop the drain for the rest of the node.
+        Map<Integer, List<ProducerBatch>> drained = accumulator.drain(metadataCache, Set.of(node1),
+            Integer.MAX_VALUE, time.milliseconds());
+        List<ProducerBatch> batches = drained.get(node1.id());
+        assertEquals(1, batches.size());
+        assertEquals(tp2, batches.get(0).topicPartition);
+        assertTrue(accumulator.hasUndrained());
+
+        // Once tp1's first batch is acknowledged, its new batch is drained.
+        Mockito.when(transactionManager.isAwaitingFirstAck(tp1)).thenReturn(false);
+        drained = accumulator.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+        batches = drained.get(node1.id());
+        assertEquals(1, batches.size());
+        assertEquals(tp1, batches.get(0).topicPartition);
+        assertFalse(accumulator.hasUndrained());
+    }
+
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testPartitionAwaitingFirstAckIsNotReady(String allocationStrategy) throws Exception {
+        int batchSize = 1025;
+        int deliveryTimeoutMs = 3200;
+        int lingerMs = 10;
+        long totalSize = 10 * batchSize;
+
+        TransactionManager transactionManager = Mockito.mock(TransactionManager.class);
+        RecordAccumulator accumulator = createTestRecordAccumulator(allocationStrategy, transactionManager,
+            deliveryTimeoutMs, batchSize, totalSize, Compression.NONE, lingerMs);
+
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
+        Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
+        Mockito.when(transactionManager.isSendToPartitionAllowed(Mockito.any())).thenReturn(true);
+        Mockito.when(transactionManager.firstInFlightSequence(Mockito.any())).thenReturn(RecordBatch.NO_SEQUENCE);
+        Mockito.when(transactionManager.isAwaitingFirstAck(tp1)).thenReturn(true);
+
+        accumulator.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            time.milliseconds(), cluster);
+        time.sleep(lingerMs + 1);
+
+        // The only batch must wait for tp1's first ack, so node1 is not ready: the sender would drain nothing and
+        // poll without a timeout.
+        RecordAccumulator.ReadyCheckResult result = accumulator.ready(metadataCache, time.milliseconds());
+        assertTrue(result.readyNodes.isEmpty());
+
+        Mockito.when(transactionManager.isAwaitingFirstAck(tp1)).thenReturn(false);
+        result = accumulator.ready(metadataCache, time.milliseconds());
+        assertEquals(Set.of(node1), result.readyNodes);
+    }
+
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
     public void testRecordsDrainedWhenTransactionCompleting(String allocationStrategy) throws Exception {
         int batchSize = 1025;
         int deliveryTimeoutMs = 3200;
