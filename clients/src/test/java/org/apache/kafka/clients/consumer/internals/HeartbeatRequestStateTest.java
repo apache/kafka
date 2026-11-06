@@ -134,4 +134,28 @@ public class HeartbeatRequestStateTest {
         assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertTrue(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()) > 0);
     }
+
+    @Test
+    public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin() {
+        final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
+            LOG_CONTEXT,
+            time,
+            HEARTBEAT_INTERVAL_MS,
+            RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
+            JITTER
+        );
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.resetTimer();
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+
+        // The next heartbeat is still in flight when the interval expires.
+        time.sleep(HEARTBEAT_INTERVAL_MS);
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.resetTimer();
+        time.sleep(HEARTBEAT_INTERVAL_MS);
+
+        assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
+        assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
+    }
 }
