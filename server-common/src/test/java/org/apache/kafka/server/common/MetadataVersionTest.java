@@ -176,7 +176,9 @@ class MetadataVersionTest {
     @EnumSource(value = MetadataVersion.class)
     public void testPartitionChangeRecordVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
-        if (metadataVersion.isElrSupported()) {
+        if (metadataVersion.isClusterMirrorSupported()) {
+            expectedVersion = (short) 3;
+        } else if (metadataVersion.isElrSupported()) {
             expectedVersion = (short) 2;
         } else if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectedVersion = (short) 1;
