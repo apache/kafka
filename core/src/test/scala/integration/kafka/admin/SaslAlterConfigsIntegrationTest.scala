@@ -70,7 +70,7 @@ class SaslAlterConfigsIntegrationTest extends BaseAlterConfigsIntegrationTest wi
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterConfigsWithConfigProvidersWithoutAcls(quorum: String): Unit = {
     val adminConfig: Map[String, AnyRef] = Map(
-      SaslConfigs.SASL_JAAS_CONFIG -> s"${classOf[PlainLoginModule].getName} required username=\"${JaasTestUtils.KafkaPlainUser2}\" password=\"${JaasTestUtils.KafkaPlainPassword2}\";"
+      SaslConfigs.SASL_JAAS_CONFIG -> s"""${classOf[PlainLoginModule].getName} required username="${JaasTestUtils.KafkaPlainUser2}" password="${JaasTestUtils.KafkaPlainPassword2}";"""
     )
     checkAlterConfigs(adminConfig, classOf[ClusterAuthorizationException], "token", placeholder = true)
   }
