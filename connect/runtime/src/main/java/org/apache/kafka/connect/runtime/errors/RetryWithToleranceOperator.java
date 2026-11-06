@@ -66,6 +66,10 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
 
     public static final long RETRIES_DELAY_MIN_MS = 300;
 
+    // Shifting RETRIES_DELAY_MIN_MS left by this many bits or more overflows a long. Attempt counts
+    // this high are reachable whenever errors.retry.timeout is -1, i.e. retries are infinite.
+    private static final int BACKOFF_SHIFT_OVERFLOW_THRESHOLD = Long.numberOfLeadingZeros(RETRIES_DELAY_MIN_MS);
+
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
     static {
         TOLERABLE_EXCEPTIONS.put(Stage.TRANSFORMATION, Exception.class);
@@ -298,7 +302,12 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
      */
     void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
-        long delay = RETRIES_DELAY_MIN_MS << numRetry;
+        // Once the shift would overflow, the exponential term is already far beyond the maximum
+        // delay, so treat it as unbounded and let the jitter below cap it. Computing the shift
+        // directly would wrap to a negative or zero delay, skipping that cap entirely.
+        long delay = numRetry < BACKOFF_SHIFT_OVERFLOW_THRESHOLD
+                ? RETRIES_DELAY_MIN_MS << numRetry
+                : Long.MAX_VALUE;
         if (delay > errorMaxDelayInMillis) {
             delay = ThreadLocalRandom.current().nextLong(errorMaxDelayInMillis);
         }
