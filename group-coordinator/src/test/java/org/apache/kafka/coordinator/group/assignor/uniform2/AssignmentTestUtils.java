@@ -55,34 +55,21 @@ public final class AssignmentTestUtils {
      * </ul>
      */
     public static void assertValidAssignment(GroupSpec spec, SubscribedTopicDescriber describer, GroupAssignment result) {
-        assertValidAssignment(spec, describer, result, "");
-    }
-
-    /**
-     * As {@link #assertValidAssignment(GroupSpec, SubscribedTopicDescriber, GroupAssignment)},
-     * with a context that prefixes the failure messages.
-     */
-    public static void assertValidAssignment(
-        GroupSpec spec,
-        SubscribedTopicDescriber describer,
-        GroupAssignment result,
-        String context
-    ) {
-        assertEquals(spec.memberIds(), result.members().keySet(), context);
-        var sizes = assertAssignedOnce(spec, describer, result, context);
+        assertEquals(spec.memberIds(), result.members().keySet());
+        var sizes = assertAssignedOnce(spec, describer, result);
 
         var topics = new HashSet<Uuid>();
         spec.memberIds().forEach(id -> topics.addAll(subscribedTopicIds(spec, id)));
         // The topics which do not exist have no partitions to assign.
         topics.removeIf(topicId -> describer.numPartitions(topicId) < 0);
         for (Uuid topicId : topics) {
-            assertSpread(spec, describer, result, sizes, topicId, context);
+            assertSpread(spec, describer, result, sizes, topicId);
         }
 
         if (spec.subscriptionType() == SubscriptionType.HOMOGENEOUS && !sizes.isEmpty()) {
             int min = Collections.min(sizes.values());
             int max = Collections.max(sizes.values());
-            assertTrue(max - min <= 1, context + ": sizes are not within one of each other: " + sizes);
+            assertTrue(max - min <= 1, "sizes are not within one of each other: " + sizes);
         }
     }
 
@@ -95,8 +82,7 @@ public final class AssignmentTestUtils {
     private static Map<String, Integer> assertAssignedOnce(
         GroupSpec spec,
         SubscribedTopicDescriber describer,
-        GroupAssignment result,
-        String context
+        GroupAssignment result
     ) {
         var owners = new HashMap<Uuid, Map<Integer, String>>();
         var sizes = new HashMap<String, Integer>();
@@ -106,14 +92,14 @@ public final class AssignmentTestUtils {
             for (Map.Entry<Uuid, Set<Integer>> topicEntry : entry.getValue().partitions().entrySet()) {
                 var topicId = topicEntry.getKey();
                 assertTrue(subscribedTopicIds(spec, id).contains(topicId),
-                    context + ": " + id + " is not subscribed to " + topicId);
-                assertFalse(topicEntry.getValue().isEmpty(), context + ": empty partition set for " + id + " and " + topicId);
+                    id + " is not subscribed to " + topicId);
+                assertFalse(topicEntry.getValue().isEmpty(), "empty partition set for " + id + " and " + topicId);
                 int numPartitions = describer.numPartitions(topicId);
                 for (int partition : topicEntry.getValue()) {
                     assertTrue(partition >= 0 && partition < numPartitions,
-                        context + ": " + topicId + "-" + partition + " does not exist");
+                        topicId + "-" + partition + " does not exist");
                     assertNull(owners.computeIfAbsent(topicId, k -> new HashMap<>()).put(partition, id),
-                        context + ": " + topicId + "-" + partition + " is assigned twice");
+                        topicId + "-" + partition + " is assigned twice");
                     size++;
                 }
             }
@@ -124,7 +110,7 @@ public final class AssignmentTestUtils {
                 int numPartitions = describer.numPartitions(topicId);
                 if (numPartitions >= 0) {
                     assertEquals(numPartitions, owners.getOrDefault(topicId, Map.of()).size(),
-                        context + ": topic " + topicId + " is not fully assigned");
+                        "topic " + topicId + " is not fully assigned");
                 }
             }
         }
@@ -140,8 +126,7 @@ public final class AssignmentTestUtils {
         SubscribedTopicDescriber describer,
         GroupAssignment result,
         Map<String, Integer> sizes,
-        Uuid topicId,
-        String context
+        Uuid topicId
     ) {
         var subscribers = new ArrayList<String>();
         for (String id : spec.memberIds()) {
@@ -155,13 +140,13 @@ public final class AssignmentTestUtils {
         for (String id : subscribers) {
             int count = result.members().get(id).partitions().getOrDefault(topicId, Set.of()).size();
             assertTrue(count == minQuota || count == minQuota + 1,
-                context + ": " + id + " has " + count + " partitions of " + topicId + " with a minimum quota of " + minQuota);
+                id + " has " + count + " partitions of " + topicId + " with a minimum quota of " + minQuota);
             (count == minQuota + 1 ? withExtra : withoutExtra).add(id);
         }
         for (String giver : withExtra) {
             for (String receiver : withoutExtra) {
                 assertTrue(sizes.get(giver) < sizes.get(receiver) + 2,
-                    context + ": an extra partition of " + topicId + " could move from " + giver + " of size "
+                    "an extra partition of " + topicId + " could move from " + giver + " of size "
                         + sizes.get(giver) + " to " + receiver + " of size " + sizes.get(receiver));
             }
         }
