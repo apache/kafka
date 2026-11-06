@@ -49,6 +49,7 @@ public class ByteUtilsTest {
     private final byte x01 = 0x01;
     private final byte x02 = 0x02;
     private final byte x0F = 0x0f;
+    private final byte x10 = 0x10;
     private final byte x07 = 0x07;
     private final byte x08 = 0x08;
     private final byte x3F = 0x3f;
@@ -316,6 +317,12 @@ public class ByteUtilsTest {
         // varint encoding has one overflow byte
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, x01});
         assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarint(buf));
+
+        // varint encoding has unused bits set in the last byte
+        ByteBuffer unusedBitsBuf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, x10});
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readUnsignedVarint(unusedBitsBuf.duplicate()));
+        InputStream unusedBitsIn = new ByteBufferInputStream(unusedBitsBuf);
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readUnsignedVarint(unusedBitsIn));
     }
 
     @Test
