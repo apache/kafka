@@ -86,6 +86,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
             streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
         }
+        streamThread.removePartitionsFromBufferOverflowTracking(partitionsToRevoke);
     }
 
     @Override
@@ -124,6 +125,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         } finally {
             tasksLostSensor.record(time.milliseconds() - start);
         }
+        streamThread.clearBufferOverflowTracking();
     }
 
     private StreamsRebalanceData.Assignment deduplicateTasks(final StreamsRebalanceData.Assignment assignment) {

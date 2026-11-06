@@ -299,6 +299,7 @@ public class StreamTaskTest {
         return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, processingExceptionHandler, timestampExtractor, false);
     }
 
+    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
@@ -1377,6 +1378,44 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotResumePartitionsExcludedByTheBytesGuard() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // five records exceed the legacy cap of three, so both partitions are paused
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 30),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 40),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 50)
+        ));
+        task.addRecords(partition2, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 15),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 25),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 35),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 45),
+            getConsumerRecordWithOffsetAsTimestamp(partition2, 55)
+        ));
+        assertEquals(Set.of(partition1, partition2), consumer.paused());
+
+        // two records from each partition bring both queues back to the cap, so both qualify for resume
+        for (int i = 0; i < 4; i++) {
+            assertTrue(task.process(0L));
+        }
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        // partition1 is also paused by the StreamThread bytes guard, which owns its resume
+        task.resumePollingForPartitionsWithAvailableSpace(Set.of(partition1));
+
+        assertEquals(Set.of(partition1), consumer.paused());
+    }
+
+    @Test
     public void shouldResumePartitionWhenSkippingOverRecordsWithInvalidTs() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
@@ -1437,6 +1476,43 @@ public class StreamTaskTest {
 
         assertTrue(task.process(0L)); // drain head record (ie, last corrupted record)
         assertFalse(task.process(0L));
+        assertFalse(task.hasRecordsQueued());
+    }
+
+    @Test
+    public void shouldNotPauseOrResumeAtStreamTaskLevelWhenBytesPathIsActive() {
+        // with the legacy config absent, maxBufferedSize == -1 and both per-task arms must stay off.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        final StreamsConfig configWithoutLegacy = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, BASE_DIR.getAbsolutePath()),
+            mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
+            mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "-1"),
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName())
+        )));
+        task = createStatelessTask(configWithoutLegacy);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // adding plenty of records — per-task pause must not fire under the bytes path.
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 30),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 40),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 50)
+        ));
+        assertEquals(0, consumer.paused().size());
+
+        // Draining empties the queue. In bytes-mode the per-task resume must NOT fire — otherwise it
+        // would undo a StreamThread bytes-guard pause and cause pause/resume churn (KIP-770).
+        while (task.process(0L)) { /* drain */ }
+        // pre-pause a partition to prove resumePollingForPartitionsWithAvailableSpace leaves it alone
+        consumer.pause(Set.of(partition1));
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertTrue(consumer.paused().contains(partition1));
         assertFalse(task.hasRecordsQueued());
     }
 

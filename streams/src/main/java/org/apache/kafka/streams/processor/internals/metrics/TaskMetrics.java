@@ -99,6 +99,9 @@ public class TaskMetrics {
     private static final String CACHE_SIZE_BYTES_TOTAL = "cache-size-bytes-total";
     private static final String CACHE_SIZE_BYTES_TOTAL_DESCRIPTION = "The total size in bytes of this task's cache.";
 
+    private static final String INPUT_BUFFER_BYTES_TOTAL = "input-buffer-bytes-total";
+    private static final String INPUT_BUFFER_BYTES_TOTAL_DESCRIPTION = "The total size in bytes of this task's input buffer.";
+
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
@@ -125,6 +128,22 @@ public class TaskMetrics {
                 streamsMetrics.taskLevelTagMap(threadId, taskId),
                 name,
                 CACHE_SIZE_BYTES_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor totalInputBufferBytesSensor(final String threadId,
+                                                     final String taskId,
+                                                     final StreamsMetricsImpl streamsMetrics) {
+        final String name = INPUT_BUFFER_BYTES_TOTAL;
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, RecordingLevel.DEBUG);
+
+        addValueMetricToSensor(
+                sensor,
+                TASK_LEVEL_GROUP,
+                streamsMetrics.taskLevelTagMap(threadId, taskId),
+                name,
+                INPUT_BUFFER_BYTES_TOTAL_DESCRIPTION
         );
         return sensor;
     }
