@@ -72,7 +72,7 @@ This feature upgrade is done by upgrading the KRaft feature version and updating
 
 ### Describe KRaft Version
 
-Dynamic controller cluster was added in `kraft.version=1` or `release-version 4.1`. To determine which kraft feature version the cluster is using you can execute the following CLI command:
+Dynamic controller cluster was added in `kraft.version=1`. To determine which kraft feature version the cluster is using you can execute the following CLI command:
 
 ```bash
 $ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
@@ -85,17 +85,13 @@ If the `FinalizedVersionLevel` for `Feature: kraft.version` is `0`, the version 
 
 ### Upgrade KRaft Version
 
-The KRaft feature version can be upgraded to support dynamic controller clusters by using the `kafka-feature` CLI command. To upgrade all of the feature versions to the latest version:
-
-```bash
-$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1
-```
-
-To upgrade just the KRaft feature version:
+The KRaft feature version can be upgraded to support dynamic controller clusters by using the `kafka-features` CLI command:
 
 ```bash
 $ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1
 ```
+
+Upgrading all of the feature versions with `--release-version` does not upgrade `kraft.version` from `0`, so a static controller cluster only becomes dynamic when you upgrade `kraft.version` explicitly.
 
 ### Update KRaft Config
 
