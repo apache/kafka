@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,6 +83,29 @@ public class CheckpointStoreTest {
         }) {
 
             assertFalse(store.start(), "expected start to return failure");
+            assertTrue(store.isInitialized());
+            assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
+        }
+    }
+
+    @Test
+    public void testStopInitializationPreventsReadingCheckpointsTopic() {
+        Set<String> consumerGroups = Set.of("group1");
+
+        MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
+        when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
+
+        AtomicBoolean topicRead = new AtomicBoolean();
+        try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
+            @Override
+            void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+                topicRead.set(true);
+            }
+        }) {
+            store.stopInitialization();
+
+            assertFalse(store.start(), "expected start to report that no checkpoints were loaded");
+            assertFalse(topicRead.get(), "the checkpoints topic must not be read once the store has been told to stop");
             assertTrue(store.isInitialized());
             assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
         }

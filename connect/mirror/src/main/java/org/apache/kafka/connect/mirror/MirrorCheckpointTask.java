@@ -66,7 +66,8 @@ public class MirrorCheckpointTask extends SourceTask {
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
-    private boolean stopping;
+    // written by the task thread in stop(), read by the scheduler thread which loads the stores
+    private volatile boolean stopping;
     private MirrorCheckpointLegacyMetrics legacyMetrics;
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
@@ -80,6 +81,16 @@ public class MirrorCheckpointTask extends SourceTask {
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
             CheckpointStore checkpointStore) {
+        this(sourceClusterAlias, targetClusterAlias, replicationPolicy, offsetSyncStore, consumerGroups,
+                idleConsumerGroupsOffset, checkpointStore, null);
+    }
+
+    // for testing
+    MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
+            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
+            CheckpointStore checkpointStore, Scheduler scheduler) {
+        this.scheduler = scheduler;
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
@@ -116,8 +127,11 @@ public class MirrorCheckpointTask extends SourceTask {
         scheduler.executeAsync(() -> {
             // loading the stores are potentially long running operations, so they run asynchronously
             // to avoid blocking task::start (until a task has completed starting it cannot be stopped)
-            boolean checkpointsReadOk = checkpointStore.start();
-            offsetSyncStore.start(!checkpointsReadOk);
+            initializeStores();
+            if (stopping) {
+                // the stores were not loaded because the task is shutting down, so there is nothing to schedule
+                return;
+            }
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                     "refreshing idle consumers group offsets at target cluster");
             scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
@@ -125,6 +139,12 @@ public class MirrorCheckpointTask extends SourceTask {
         }, "starting checkpoint and offset sync stores");
         log.info("{} checkpointing {} consumer groups {}->{}: {}.", Thread.currentThread().getName(),
                 consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
+    }
+
+    // Visible for testing
+    void initializeStores() {
+        boolean checkpointsReadOk = checkpointStore.start();
+        offsetSyncStore.start(!checkpointsReadOk);
     }
 
     @Override
@@ -136,13 +156,25 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
+        // The stores are loaded asynchronously by the scheduler (see start()), so the scheduler thread may still
+        // be using them. Tell any load which is in progress to give up, wait for the scheduler to finish, and only
+        // then close the stores: each of them is backed by a KafkaConsumer, which is not safe for multi-threaded
+        // access, so closing one while the scheduler thread is still reading from it corrupts the shutdown. Waiting
+        // for the scheduler first also keeps the admin clients alive until the scheduled tasks which use them have
+        // finished.
+        if (checkpointStore != null) {
+            checkpointStore.stopInitialization();
+        }
+        if (offsetSyncStore != null) {
+            offsetSyncStore.stopInitialization();
+        }
+        Utils.closeQuietly(scheduler, "scheduler");
         Utils.closeQuietly(topicFilter, "topic filter");
         Utils.closeQuietly(checkpointStore, "checkpoints store");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
         Utils.closeQuietly(legacyMetrics, "metrics");
-        Utils.closeQuietly(scheduler, "scheduler");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
 
