@@ -18,6 +18,7 @@ from io import BytesIO
 import json
 import logging
 import os
+import re
 import subprocess
 import shlex
 import sys
@@ -78,29 +79,82 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
-def split_paragraphs(text: str):
-    """
-    Split the given text into a generator of paragraph lines and a boolean "markdown" flag.
+_FENCE_START = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_BLOCK_START = re.compile(
+    r"^ {0,3}(?:#{1,6}(?:\s|$)|>|[-+*]|\d+[.)]\s+|<|\[[^\]]+\]:)"
+)
+_THEMATIC_BREAK = re.compile(
+    r"^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,}|(?:=\s*){3,})$"
+)
+_TRAILER = re.compile(r"^[A-Za-z0-9-]+:")
 
-    If any line of a paragraph starts with a markdown character, we will assume the whole paragraph
-    contains markdown.
-    """
-    lines = text.splitlines(keepends=True)
+
+def _wrap_paragraph(lines) -> str:
+    text = [line.rstrip("\n") for line in lines]
+    reviewers = text[0].startswith("Reviewers:")
+    if not reviewers:
+        if any(line.startswith((" ", "\t")) for line in text):
+            return "".join(lines)
+        if any(_BLOCK_START.match(line) or _THEMATIC_BREAK.match(line) for line in text):
+            return "".join(lines)
+        if _TRAILER.match(text[0]):
+            return "".join(lines)
+        if any(re.search(r"[\\|<>]| {2,}$", line) for line in text):
+            return "".join(lines)
+
+    wrapped = textwrap.fill(
+        " ".join(re.sub(r"[ \t]+", " ", line.strip()) for line in text),
+        subsequent_indent=" " if reviewers else "",
+        width=72,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    if not reviewers and any(
+        _BLOCK_START.match(line) or _THEMATIC_BREAK.match(line)
+        or _FENCE_START.match(line) or _TRAILER.match(line)
+        for line in wrapped.splitlines()
+    ):
+        return "".join(lines)
+    return wrapped + ("\n" if lines[-1].endswith("\n") else "")
+
+
+def format_body(body: str) -> str:
+    """Normalize line endings and wrap prose while preserving Markdown blocks."""
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
+    output = []
     paragraph = []
-    markdown = False
-    for line in lines:
-        if line.strip() == "":
-            if len(paragraph) > 0:
-                yield paragraph, markdown
-                paragraph.clear()
-                markdown = False
+    fence = None
+
+    def flush_paragraph():
+        if paragraph:
+            output.append(_wrap_paragraph(paragraph))
+            paragraph.clear()
+
+    for line in body.splitlines(keepends=True):
+        text = line.rstrip("\r\n")
+        if fence:
+            output.append(line)
+            if re.match(rf"^ {{0,3}}{re.escape(fence[0])}{{{len(fence)},}}\s*$", text):
+                fence = None
         else:
-            if line[0] in ("#", "*", "-", "=") or line[0].isdigit():
-                markdown = True
-            if "```" in line:
-                markdown = True
-            paragraph.append(line)
-    yield paragraph, markdown
+            match = _FENCE_START.match(text)
+            if match:
+                flush_paragraph()
+                fence = match.group(1)
+                output.append(line)
+            elif text.strip() == "":
+                flush_paragraph()
+                output.append(line)
+            else:
+                if _TRAILER.match(text) or (
+                    paragraph and _TRAILER.match(paragraph[0])
+                    and not text.startswith((" ", "\t"))
+                ):
+                    flush_paragraph()
+                paragraph.append(line)
+
+    flush_paragraph()
+    return "".join(output)
 
 
 if __name__ == "__main__":
@@ -154,24 +208,12 @@ if __name__ == "__main__":
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
     check("Committer Checklist" not in body, "PR template text not present", "Old PR template text should be removed")
 
-    paragraph_iter = split_paragraphs(body)
-    new_paragraphs = []
-    for p, markdown in paragraph_iter:
-        if markdown:
-            # If a paragraph looks like it has markdown in it, wrap each line separately.
-            new_lines = []
-            for line in p:
-                new_lines.append(textwrap.fill(line, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=False))
-            rewrapped_p = "\n".join(new_lines)
-        else:
-            indent = ""
-            if len(p) > 0 and p[0].startswith("Reviewers:"):
-                indent = " "
-            rewrapped_p = textwrap.fill("".join(p), subsequent_indent=indent, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
-        new_paragraphs.append(rewrapped_p + "\n")
-    body = "\n".join(new_paragraphs)
+    original_body = body
+    body = format_body(body)
 
-    if get_env("GITHUB_ACTIONS"):
+    if body == original_body:
+        logger.info(f"PR {pr_number} body is already formatted.")
+    elif get_env("GITHUB_ACTIONS"):
         with tempfile.NamedTemporaryFile() as fp:
             fp.write(body.encode())
             fp.flush()
