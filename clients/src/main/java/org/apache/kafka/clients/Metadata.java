@@ -499,6 +499,12 @@ public class Metadata implements Closeable {
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             String topicName = metadata.topic();
             Uuid topicId = metadata.topicId();
+            if (topicName == null) {
+                log.warn("Metadata response returned topic ID {} with error {} and no topic name", topicId, metadata.error());
+                if (metadata.error().exception() instanceof InvalidMetadataException)
+                    requestUpdate(false);
+                continue;
+            }
             topics.add(topicName);
             // We can only reason about topic ID changes when both IDs are valid, so keep oldId null unless the new metadata contains a topic ID
             Uuid oldTopicId = null;
