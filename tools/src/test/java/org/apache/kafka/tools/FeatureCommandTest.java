@@ -376,6 +376,40 @@ public class FeatureCommandTest {
                         "upgrade", "--release-version", "3.9-IV0"))
         );
 
+        assertEquals("metadata.version was upgraded to 21.", commandOutput);
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
+        );
+        List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", MetadataVersion.latestTesting().version(), "3.9-IV0",
+                outputWithoutEpoch(features.get(3))
+        );
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "upgrade", "--feature", "kraft.version=1"))
+        );
+        assertEquals("kraft.version was upgraded to 1.", commandOutput);
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
+    public void testUpgradeWithReleaseVersionWhenKraftVersionAlreadyFinalized(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "upgrade", "--feature", "kraft.version=1"))
+        );
+        assertEquals("kraft.version was upgraded to 1.", commandOutput);
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "upgrade", "--release-version", "3.9-IV0"))
+        );
         assertEquals("kraft.version was upgraded to 1.\n" +
                 "metadata.version was upgraded to 21.", commandOutput);
     }
