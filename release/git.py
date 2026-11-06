@@ -82,6 +82,11 @@ def contributors(from_rev, to_rev, **kwargs):
     line += " | cut -f2 | sort --ignore-case | uniq"
     return [str(x) for x in filter(None, execute(line, **kwargs).split('\n'))]
 
+def commit_count(from_rev, to_rev, **kwargs):
+    __defaults(kwargs)
+    return int(execute(f"git rev-list --count {from_rev}..{to_rev}", **kwargs).strip())
+
+
 def branches(**kwargs):
     output = execute('git branch')
     return [line.replace('*', ' ').strip() for line in output.splitlines()]
