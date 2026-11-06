@@ -316,7 +316,7 @@ public class AdminMetadataManager {
     private long delayBeforeNextAttemptMs(long now) {
         long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
         long backoffMs = equivalentResponseCount > 0 ?
-            refreshBackoff.backoff(equivalentResponseCount) :
+            refreshBackoff.backoff(equivalentResponseCount - 1) :
             refreshBackoff.initialInterval();
         return Math.max(0, backoffMs - timeSinceAttempt);
     }

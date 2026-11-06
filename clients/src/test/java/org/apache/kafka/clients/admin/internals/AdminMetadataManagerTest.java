@@ -111,15 +111,16 @@ public class AdminMetadataManagerTest {
         // Each response with the same nodes increases the backoff, up to the maximum
         long expectedBackoffMs = refreshBackoffMs;
         for (int i = 0; i < 5; i++) {
-            expectedBackoffMs = Math.min(expectedBackoffMs * 2, refreshBackoffMaxMs);
             fetchAndRequestUpdate(mockCluster());
             assertEquals(expectedBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
                 expectedBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            expectedBackoffMs = Math.min(expectedBackoffMs * 2, refreshBackoffMaxMs);
         }
     }
 
     @Test
     public void testMetadataRefreshBackoffResetsWhenNodesChange() {
+        fetchAndRequestUpdate(mockCluster());
         fetchAndRequestUpdate(mockCluster());
         fetchAndRequestUpdate(mockCluster());
         assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
@@ -135,6 +136,7 @@ public class AdminMetadataManagerTest {
     public void testMetadataRefreshBackoffResetsAfterUpdateFailure() {
         fetchAndRequestUpdate(mockCluster());
         fetchAndRequestUpdate(mockCluster());
+        fetchAndRequestUpdate(mockCluster());
         assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
             2 * refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
 
@@ -146,6 +148,7 @@ public class AdminMetadataManagerTest {
 
     @Test
     public void testMetadataRefreshBackoffResetsAfterMetadataExpiry() {
+        fetchAndRequestUpdate(mockCluster());
         fetchAndRequestUpdate(mockCluster());
         fetchAndRequestUpdate(mockCluster());
         assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
