@@ -16,11 +16,12 @@
  */
 package kafka.api
 
-import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
-import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
@@ -28,15 +29,19 @@ import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.util
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.collection.mutable.ArrayBuffer
 
 /**
  * Integration tests for the consumer that cover basic usage as well as coordinator failure
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
+
+  protected val tp = new TopicPartition(topic, 0)
 
   private var currentTestName: String = _
 
@@ -131,6 +136,109 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     // the failover should not cause a rebalance
     ensureNoRebalance(consumer, listener)
+  }
+
+  private class TestConsumerReassignmentListener extends RebalanceListener {
+    var callsToAssigned = 0
+    var callsToRevoked = 0
+
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
+      info("onPartitionsAssigned called.")
+      callsToAssigned += 1
+    }
+
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
+      info("onPartitionsRevoked called.")
+      callsToRevoked += 1
+    }
+  }
+
+  protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
+                            tp: TopicPartition,
+                            startingTimestamp: Long): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
+    val records = (0 until numRecords).map { i =>
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
+      producer.send(record)
+      record
+    }
+    producer.flush()
+
+    records
+  }
+
+  protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+                                        numRecords: Int,
+                                        startingOffset: Int,
+                                        startingTimestamp: Long): Unit = {
+    val records = consumeRecords(consumer, numRecords)
+    for (i <- 0 until numRecords) {
+      val record = records(i)
+      val offset = startingOffset + i
+      assertEquals(tp.topic, record.topic)
+      assertEquals(tp.partition, record.partition)
+      assertEquals(TimestampType.CREATE_TIME, record.timestampType)
+      assertEquals(startingTimestamp + i, record.timestamp)
+      assertEquals(offset.toLong, record.offset)
+      assertEquals(s"key $i", new String(record.key))
+      assertEquals(s"value $i", new String(record.value))
+      // this is true only because K and V are byte arrays
+      assertEquals(s"key $i".length, record.serializedKeySize)
+      assertEquals(s"value $i".length, record.serializedValueSize)
+    }
+  }
+
+  private def consumeRecords[K, V](consumer: Consumer[K, V],
+                                   numRecords: Int): ArrayBuffer[ConsumerRecord[K, V]] = {
+    val records = new ArrayBuffer[ConsumerRecord[K, V]]
+    def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
+      records ++= polledRecords.asScala
+      records.size >= numRecords
+    }
+    TestUtils.pollRecordsUntilTrue(consumer, pollAction, waitTimeMs = 60000,
+      msg = s"Timed out before consuming expected $numRecords records. " +
+        s"The number consumed was ${records.size}.")
+    records
+  }
+
+  protected def sendAndAwaitAsyncCommit[K, V](consumer: Consumer[K, V]): Unit = {
+
+    class RetryCommitCallback extends OffsetCommitCallback {
+      var isComplete = false
+      var error: Option[Exception] = None
+
+      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+        exception match {
+          case e: RetriableCommitFailedException =>
+            consumer.commitAsync(this)
+          case e =>
+            isComplete = true
+            error = Option(e)
+        }
+      }
+    }
+
+    val commitCallback = new RetryCommitCallback
+
+    consumer.commitAsync(commitCallback)
+    TestUtils.pollUntilTrue(consumer, () => commitCallback.isComplete,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+
+    assertEquals(None, commitCallback.error)
+  }
+
+  private def awaitRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    val numReassignments = rebalanceListener.callsToAssigned
+    TestUtils.pollUntilTrue(consumer, () => rebalanceListener.callsToAssigned > numReassignments,
+      "Timed out before expected rebalance completed")
+  }
+
+  private def ensureNoRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    // The best way to verify that the current membership is still active is to commit offsets.
+    // This would fail if the group had rebalanced.
+    val initialRevokeCalls = rebalanceListener.callsToRevoked
+    sendAndAwaitAsyncCommit(consumer)
+    assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked)
   }
 }
 
