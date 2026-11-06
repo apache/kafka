@@ -29,12 +29,15 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSManager;
@@ -47,6 +50,7 @@ import org.mockito.Mockito;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -161,6 +165,45 @@ public class SaslChannelBuilderTest {
 
         SaslChannelBuilder saslSslBuilder = createChannelBuilder(SecurityProtocol.SASL_SSL, "PLAIN");
         saslSslBuilder.configure(configs);
+    }
+
+    @Test
+    public void testUnsecuredOAuthBearerValidatorLogsWarning() {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(SaslChannelBuilder.class)) {
+            appender.setClassLogger(SaslChannelBuilder.class, Level.WARN);
+            createOAuthBearerServerChannelBuilder(new HashMap<>()).close();
+            assertEquals(List.of("Using the unsecured OAUTHBEARER validator, which accepts unsigned tokens and must not be used in production, " +
+                    "because listener.name.sasl_plaintext.oauthbearer.sasl.server.callback.handler.class is not set. " +
+                    "Set it to a secure validator such as org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler."),
+                appender.getMessages("WARN"));
+        }
+    }
+
+    @Test
+    public void testConfiguredOAuthBearerValidatorDoesNotLogWarning() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put("oauthbearer." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+            OAuthBearerUnsecuredValidatorCallbackHandler.class);
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(SaslChannelBuilder.class)) {
+            appender.setClassLogger(SaslChannelBuilder.class, Level.WARN);
+            createOAuthBearerServerChannelBuilder(configs).close();
+            assertEquals(List.of(), appender.getMessages("WARN"));
+        }
+    }
+
+    private SaslChannelBuilder createOAuthBearerServerChannelBuilder(Map<String, Object> configs) {
+        TestJaasConfig jaasConfig = new TestJaasConfig();
+        jaasConfig.addEntry("jaasContext", OAuthBearerLoginModule.class.getName(),
+            Collections.singletonMap("unsecuredLoginStringClaim_sub", "admin"));
+        JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
+        SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER,
+            Collections.singletonMap(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasContext), SecurityProtocol.SASL_PLAINTEXT,
+            new ListenerName("SASL_PLAINTEXT"), false, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+        Map<String, Object> allConfigs = new HashMap<>(new TestSecurityConfig(new HashMap<>()).values());
+        allConfigs.putAll(configs);
+        channelBuilder.configure(allConfigs);
+        return channelBuilder;
     }
 
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
