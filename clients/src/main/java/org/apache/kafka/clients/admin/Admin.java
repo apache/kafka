@@ -1219,7 +1219,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the current reassignments for the given partitions
+     * List the current reassignments for the given partitions.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code ListPartitionReassignmentsResult}:</p>
@@ -1243,7 +1243,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List all of the current partition reassignments
+     * List all the current partition reassignments.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code ListPartitionReassignmentsResult}:</p>
@@ -1264,7 +1264,10 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * @param partitions the partitions we want to get reassignment for, or an empty optional if we want to get the reassignments for all partitions in the cluster
+     * List all the current partition reassignments.
+     *
+     * @param partitions The partitions to get reassignments for.
+     *                   If empty, reassignments for all partitions in the cluster are returned.
      * @param options         The options to use.
      * @return                The result.
      */

@@ -30,6 +30,20 @@ import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single classic group in the cluster.
+ * <p>
+ * This is the result type of {@link Admin#describeClassicGroups(java.util.Collection)}.
+ * Classic groups are the legacy group coordination protocol used before KIP-848 introduced the new
+ * consumer group protocol. They are used by classic consumers and Kafka Connect.
+ * <p>
+ * The {@link #protocol() protocol type} indicates the kind of group: {@code "consumer"} for
+ * classic consumer groups, {@code "connect"} for Connect groups, or an empty string for simple
+ * consumer groups that use manual partition assignment without coordinator-based rebalancing.
+ * <p>
+ * The {@link #protocolData() protocol data} depends on the protocol type: for a classic consumer
+ * group it is the partition assignor name; for a Connect group it indicates which Connect
+ * protocols are enabled.
+ *
+ * @see Admin#describeClassicGroups(java.util.Collection)
  */
 @InterfaceAudience.Public
 public class ClassicGroupDescription {
@@ -41,6 +55,14 @@ public class ClassicGroupDescription {
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
+    /**
+     * @param groupId         The group id.
+     * @param protocol        The group protocol type.
+     * @param protocolData    The group protocol data.
+     * @param members         The group members.
+     * @param state           The classic group state.
+     * @param coordinator     The group coordinator.
+     */
     public ClassicGroupDescription(String groupId,
                                    String protocol,
                                    String protocolData,
@@ -50,6 +72,15 @@ public class ClassicGroupDescription {
         this(groupId, protocol, protocolData, members, state, coordinator, Set.of());
     }
 
+    /**
+     * @param groupId               The group id.
+     * @param protocol              The group protocol type.
+     * @param protocolData          The group protocol data.
+     * @param members               The group members.
+     * @param state                 The classic group state.
+     * @param coordinator           The group coordinator.
+     * @param authorizedOperations  The authorized operations.
+     */
     public ClassicGroupDescription(String groupId,
                                    String protocol,
                                    String protocolData,
@@ -93,7 +124,7 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * The group protocol type.
+     * The group protocol type, or the empty string.
      */
     public String protocol() {
         return protocol;
@@ -109,7 +140,7 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * If the group is a simple consumer group or not.
+     * Whether this is a simple consumer group (i.e., a group with an empty protocol type).
      */
     public boolean isSimpleConsumerGroup() {
         return protocol.isEmpty();
