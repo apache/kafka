@@ -27104,8 +27104,10 @@ public class GroupMetadataManagerTest {
         );
     }
 
-    @Test
-    public void testConsumerGroupMemberJoinsWithNewRegex() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConsumerGroupMemberJoinsWithNewRegex(boolean matchesTopic) {
+        String regex = matchesTopic ? "foo*" : "nothing-matches-this.*";
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -27150,7 +27152,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicRegex("foo*")
+                .setSubscribedTopicRegex(regex)
                 .setServerAssignor("range")
                 .setTopicPartitions(List.of()));
 
@@ -27170,7 +27172,7 @@ public class GroupMetadataManagerTest {
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicRegex("foo*")
+            .setSubscribedTopicRegex(regex)
             .setServerAssignorName("range")
             .build();
 
@@ -27191,9 +27193,9 @@ public class GroupMetadataManagerTest {
                         // The resolution of the new regex is persisted.
                         GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
                             groupId,
-                            "foo*",
+                            regex,
                             new ResolvedRegularExpression(
-                                Set.of("foo"),
+                                matchesTopic ? Set.of("foo") : Set.of(),
                                 12345L,
                                 context.time.milliseconds()
                             )
@@ -27205,6 +27207,55 @@ public class GroupMetadataManagerTest {
             ),
             tasks
         );
+    }
+
+    @Test
+    public void testConsumerGroupRefreshOfNonMatchingRegexDoesNotBumpEpoch() {
+        String groupId = "regex-refresh-group";
+        String memberId = Uuid.randomUuid().toString();
+        String regex = "nothing-matches-this.*";
+        long groupMetadataHash = computeGroupHash(Map.of());
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 10000)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 2)
+                .buildCoordinatorMetadataImage(12345L))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicRegex(regex)
+                    .build())
+                .withResolvedRegularExpression(regex, new ResolvedRegularExpression(Set.of(), 12345L, 0L))
+                .withAssignment(memberId, Map.of())
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
+            .build();
+
+        // Refresh an already resolved empty result after the batching interval.
+        context.sleep(11000L);
+        context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(10));
+
+        assertTrue(context.executor.isScheduled(groupId + "-regex"));
+        List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
+        assertEquals(1, tasks.size());
+        assertRecordsEquals(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                groupId,
+                regex,
+                new ResolvedRegularExpression(Set.of(), 12345L, context.time.milliseconds())
+            )),
+            tasks.get(0).result().records()
+        );
+        assertEquals(10, context.groupMetadataManager.consumerGroup(groupId).groupEpoch());
     }
 
     @Test

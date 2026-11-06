@@ -3915,11 +3915,12 @@ public class GroupMetadataManager {
                 if (group.numSubscribedMembers(regex) == 0) continue;
 
                 ResolvedRegularExpression newResolvedRegularExpression = entry.getValue();
-                ResolvedRegularExpression oldResolvedRegularExpression = group
-                    .resolvedRegularExpression(regex)
-                    .orElse(ResolvedRegularExpression.EMPTY);
+                Optional<ResolvedRegularExpression> previousResolution = group.resolvedRegularExpression(regex);
+                ResolvedRegularExpression oldResolvedRegularExpression = previousResolution.orElse(ResolvedRegularExpression.EMPTY);
 
-                if (!oldResolvedRegularExpression.topics().equals(newResolvedRegularExpression.topics())) {
+                // The first resolution must trigger assignment computation even when no topics match.
+                if (previousResolution.isEmpty() ||
+                    !oldResolvedRegularExpression.topics().equals(newResolvedRegularExpression.topics())) {
                     bumpGroupEpoch = true;
 
                     oldResolvedRegularExpression.topics().forEach(topicName ->
