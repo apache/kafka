@@ -257,7 +257,11 @@ public class EndToEndLatency {
         NewTopic newTopic = new NewTopic(topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
         try {
             adminClient.createTopics(Set.of(newTopic)).all().get();
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (ExecutionException e) {
+            System.out.printf("Creation of topic %s failed%n", topic);
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             System.out.printf("Creation of topic %s failed%n", topic);
             throw new RuntimeException(e);
         } finally {

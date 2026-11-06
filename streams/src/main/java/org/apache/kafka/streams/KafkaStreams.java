@@ -2168,6 +2168,7 @@ public class KafkaStreams implements AutoCloseable {
                 throw (TimeoutException) cause;
             }
         } catch (final InterruptedException error) {
+            Thread.currentThread().interrupt();
             cause = error;
         }
 
