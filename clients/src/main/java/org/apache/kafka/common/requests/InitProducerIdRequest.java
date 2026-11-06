@@ -28,7 +28,11 @@ public class InitProducerIdRequest extends AbstractRequest {
         public final InitProducerIdRequestData data;
 
         public Builder(InitProducerIdRequestData data) {
-            super(ApiKeys.INIT_PRODUCER_ID);
+            this(data, false);
+        }
+
+        public Builder(InitProducerIdRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.INIT_PRODUCER_ID, enableUnstableLastVersion);
             this.data = data;
         }
 
