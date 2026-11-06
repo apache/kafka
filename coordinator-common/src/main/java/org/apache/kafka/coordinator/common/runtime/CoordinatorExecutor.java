@@ -52,7 +52,8 @@ public interface CoordinatorExecutor<T> {
 
     /**
      * Schedule an asynchronous task. Note that only one task for a given key can
-     * be executed at the time.
+     * be executed at the time. If the operation which scheduled the task is
+     * reverted, the task is cancelled.
      *
      * @param key       The key to identify the task.
      * @param task      The task itself.
@@ -76,7 +77,8 @@ public interface CoordinatorExecutor<T> {
     boolean isScheduled(String key);
 
     /**
-     * Cancel the given task
+     * Cancel the given task. If the operation which cancelled the task is
+     * reverted, the cancellation is not reverted.
      *
      * @param key The key to identify the task.
      */
