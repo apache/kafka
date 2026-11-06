@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -59,6 +60,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.time.Duration;
@@ -79,6 +82,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
+import static java.util.stream.Collectors.toList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -813,6 +817,72 @@ public abstract class TopologyTestDriverTest {
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         assertEquals(testRecord1.value(), globalStore.get(testRecord1.key()));
+    }
+
+    @Test
+    public void shouldAssignIndependentOffsetsToRegularAndGlobalSourcesOnSameTopic() {
+        final Topology topology = setupGlobalStoreTopology(SOURCE_TOPIC_1);
+        topology.addSource("local-source", SOURCE_TOPIC_1);
+        topology.addProcessor("local-processor", new MockProcessorSupplier(), "local-source");
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+
+        assertEquals(Arrays.asList(0L, 1L, 2L),
+            mockProcessors.get(0).processedRecords.stream().map(record -> record.offset)
+                .collect(toList()));
+        assertEquals(2L, testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore")
+            .getPosition().getPartitionPositions(SOURCE_TOPIC_1).get(0));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "false,false,false", "false,false,true", "false,true,false", "false,true,true",
+        "true,false,false", "true,false,true", "true,true,false", "true,true,true"
+    })
+    public void shouldProcessSharedTopicWithGlobalTable(final boolean globalFirst,
+                                                       final boolean localTable,
+                                                       final boolean optimize) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        if (globalFirst) {
+            builder.globalTable(SOURCE_TOPIC_1, consumed, Materialized.as("global-store"));
+        }
+        if (localTable) {
+            builder.table(SOURCE_TOPIC_1, consumed,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("local-store")
+                    .withCachingDisabled()).toStream().to(SINK_TOPIC_1);
+        } else {
+            builder.stream(SOURCE_TOPIC_1, consumed).to(SINK_TOPIC_1);
+        }
+        if (!globalFirst) {
+            builder.globalTable(SOURCE_TOPIC_1, consumed, Materialized.as("global-store"));
+        }
+        config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
+            optimize ? StreamsConfig.OPTIMIZE : StreamsConfig.NO_OPTIMIZATION);
+        testDriver = new TopologyTestDriverBuilder(builder.build(config)).withConfig(config).build();
+        final TestInputTopic<String, String> input =
+            testDriver.createInputTopic(SOURCE_TOPIC_1, new StringSerializer(), new StringSerializer());
+        final TestOutputTopic<String, String> output =
+            testDriver.createOutputTopic(SINK_TOPIC_1, new StringDeserializer(), new StringDeserializer());
+        final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("global-store");
+        final KeyValueStore<String, String> localStore = localTable ? testDriver.getKeyValueStore("local-store") : null;
+
+        for (final String value : Arrays.asList("initial", "updated", null)) {
+            input.pipeInput("key", value);
+            assertEquals(KeyValue.pair("key", value), output.readKeyValue());
+            assertEquals(value, globalStore.get("key"));
+            if (localStore != null) {
+                assertEquals(value, localStore.get("key"));
+            }
+        }
+        assertTrue(output.isEmpty());
+        assertEquals(2L, globalStore.getPosition().getPartitionPositions(SOURCE_TOPIC_1).get(0));
+        if (localStore != null) {
+            assertEquals(2L, localStore.getPosition().getPartitionPositions(SOURCE_TOPIC_1).get(0));
+        }
     }
 
     @Test

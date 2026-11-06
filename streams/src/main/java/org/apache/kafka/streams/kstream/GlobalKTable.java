@@ -48,6 +48,10 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * Furthermore, {@link GlobalKTable} are "bootstrapped" on startup, and are maintained by a separate thread.
  * Thus, updates to a {@link GlobalKTable} are not "stream-time synchronized" what may lead to non-deterministic results.
  *
+ * <p>The same topic can be consumed as both a {@code GlobalKTable} and a {@link KStream} or {@link KTable}.
+ * These sources use independent consumers. Processing a record in the regular source does not guarantee that
+ * the corresponding update has already been applied to the global table.
+ *
  * <p>Furthermore, all {@link GlobalKTable} have an internal {@link StateStore state store} which can be accessed from
  * "outside" using the Interactive Queries (IQ) API (see {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}
  * and {@link KafkaStreams#query(StateQueryRequest) KafkaStreams#query(...) [new API; evolving]} for details).
