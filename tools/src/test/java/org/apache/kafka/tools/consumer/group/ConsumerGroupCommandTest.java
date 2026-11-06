@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -41,7 +39,7 @@ public class ConsumerGroupCommandTest {
     @Test
     public void testValidateRegexCommandWithValidRegex() {
         String output = ToolsTestUtils.grabConsoleOutput(
-            () -> ConsumerGroupCommand.main(List.of(
+            () -> ConsumerGroupCommand.mainNoExit(List.of(
                 "--validate-regex",
                 "foo.*"
             ).toArray(new String[0]))
@@ -56,7 +54,7 @@ public class ConsumerGroupCommandTest {
     @Test
     public void testValidateRegexCommandWithInvalidRegex() {
         String output = ToolsTestUtils.grabConsoleOutput(
-            () -> ConsumerGroupCommand.main(List.of(
+            () -> ConsumerGroupCommand.mainNoExit(List.of(
                 "--validate-regex",
                 "[foo.*"
             ).toArray(new String[0]))
@@ -71,7 +69,7 @@ public class ConsumerGroupCommandTest {
     @Test
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", DUMMY_BOOTSTRAP_SERVERS, "--list"};
-        assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
     private static Stream<Arguments> validConsumerGroupStates() {

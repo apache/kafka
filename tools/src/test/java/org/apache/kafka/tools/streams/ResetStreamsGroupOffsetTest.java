@@ -27,7 +27,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -57,7 +56,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -75,7 +73,6 @@ import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.TRAN
 import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,49 +120,22 @@ public class ResetStreamsGroupOffsetTest {
     @Test
     public void testResetOffsetsWithoutGroupOption() {
         final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--dry-run", "--to-offset", "5"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-groups], [group]"));
-            exited.set(true);
-        }));
-        try (StreamsGroupCommand.StreamsGroupService ignored = getStreamsGroupService(args)) {
-            assertTrue(exited.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [reset-offsets] takes one of these options: [all-groups], [group]"));
     }
 
     @Test
     public void testResetOffsetsWithoutDryRunOrExecuteOption() {
         final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [reset-offsets] takes the option: [execute] or [dry-run]"));
-            exited.set(true);
-        }));
-        try (StreamsGroupCommand.StreamsGroupService ignored = getStreamsGroupService(args)) {
-            assertTrue(exited.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [reset-offsets] takes the option: [execute] or [dry-run]"));
     }
 
     @Test
     public void testResetOffsetsWithDeleteInternalTopicsOption() {
         final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--dry-run", "--all-groups", "--all-input-topics", "--to-offset", "5", "--delete-all-internal-topics"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-all-internal-topics] takes [execute] when [reset-offsets] is used"));
-            exited.set(true);
-        }));
-        try (StreamsGroupCommand.StreamsGroupService ignored = getStreamsGroupService(args)) {
-            assertTrue(exited.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [delete-all-internal-topics] takes [execute] when [reset-offsets] is used"));
     }
 
     @ClusterTest
