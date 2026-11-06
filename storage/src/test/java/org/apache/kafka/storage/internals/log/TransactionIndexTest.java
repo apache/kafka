@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +96,22 @@ public class TransactionIndexTest {
     }
 
     @Test
+    public void testLowerBound() {
+        List<AbortedTxn> records = List.of(
+                new AbortedTxn().setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setLastOffset(20).setLastStableOffset(21),
+                new AbortedTxn().setLastOffset(20).setLastStableOffset(21),
+                new AbortedTxn().setLastOffset(30).setLastStableOffset(31));
+
+        assertEquals(0, TransactionIndex.lowerBound(4, 0, records::get, AbortedTxn::lastOffset));
+        assertEquals(0, TransactionIndex.lowerBound(4, 10, records::get, AbortedTxn::lastStableOffset));
+        assertEquals(1, TransactionIndex.lowerBound(4, 21, records::get, AbortedTxn::lastStableOffset));
+        assertEquals(1, TransactionIndex.lowerBound(4, 20, records::get, AbortedTxn::lastOffset));
+        assertEquals(4, TransactionIndex.lowerBound(4, 32, records::get, AbortedTxn::lastStableOffset));
+        assertEquals(0, TransactionIndex.lowerBound(0, 0, records::get, AbortedTxn::lastOffset));
+    }
+
+    @Test
     public void testCollectAbortedTransactions() {
         List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
@@ -127,6 +144,55 @@ public class TransactionIndexTest {
         result = index.collectAbortedTxns(20, 41);
         assertEquals(abortedTransactions.subList(2, 4), result.abortedTransactions());
         assertFalse(result.isComplete());
+    }
+
+    @Test
+    public void testCollectAbortedTransactionsTerminatesBeforeFetchStart() throws IOException {
+        AbortedTxn first = new AbortedTxn()
+                .setProducerId(1).setFirstOffset(0).setLastOffset(10).setLastStableOffset(50);
+        AbortedTxn second = new AbortedTxn()
+                .setProducerId(2).setFirstOffset(20).setLastOffset(30).setLastStableOffset(60);
+        index.append(first);
+        index.append(second);
+
+        assertEquals(new TxnIndexSearchResult(List.of(), true), index.collectAbortedTxns(11, 40));
+    }
+
+    @Test
+    public void testCollectAbortedTransactionsMatchesSequentialScan() throws IOException {
+        Random random = new Random(12345);
+        List<AbortedTxn> records = new ArrayList<>();
+        long lastOffset = 0;
+        long lastStableOffset = 0;
+        for (int i = 0; i < 64; i++) {
+            lastOffset += 1 + random.nextInt(5);
+            lastStableOffset += random.nextInt(5);
+            AbortedTxn txn = new AbortedTxn()
+                    .setProducerId(i)
+                    .setFirstOffset(random.nextInt((int) lastOffset + 1))
+                    .setLastOffset(lastOffset)
+                    .setLastStableOffset(lastStableOffset);
+            records.add(txn);
+            index.append(txn);
+        }
+
+        for (int i = 0; i < 1000; i++) {
+            long fetchOffset = random.nextInt((int) lastOffset + 6);
+            long upperBoundOffset = fetchOffset + random.nextInt(20);
+            TxnIndexSearchResult expected = sequentialCollect(records, fetchOffset, upperBoundOffset);
+            assertEquals(expected, index.collectAbortedTxns(fetchOffset, upperBoundOffset));
+        }
+    }
+
+    private TxnIndexSearchResult sequentialCollect(List<AbortedTxn> records, long fetchOffset, long upperBoundOffset) {
+        List<AbortedTxn> abortedTransactions = new ArrayList<>();
+        for (AbortedTxn abortedTxn : records) {
+            if (abortedTxn.lastOffset() >= fetchOffset && abortedTxn.firstOffset() < upperBoundOffset)
+                abortedTransactions.add(abortedTxn);
+            if (abortedTxn.lastStableOffset() >= upperBoundOffset)
+                return new TxnIndexSearchResult(abortedTransactions, true);
+        }
+        return new TxnIndexSearchResult(abortedTransactions, false);
     }
 
     @Test
