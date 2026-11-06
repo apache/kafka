@@ -76,8 +76,13 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      * A record class to hold the value representing ShareGroupStatePartitionMetadata for the TimelineHashmap
      * keyed on share group id.
      *
-     * @param initializedTopics Map of set of partition ids keyed on the topic id.
-     * @param deletingTopics    Set of topic ids.
+     * @param initializingTopics Map of InitMapValue (topic name, partition ids and timestamp)
+     *                           keyed on the topic id, for the topics whose share group state is
+     *                           being initialized.
+     * @param initializedTopics  Map of InitMapValue (topic name, partition ids and timestamp)
+     *                           keyed on the topic id, for the topics whose share group state is
+     *                           initialized.
+     * @param deletingTopics     Set of topic ids.
      */
     public record ShareGroupStatePartitionMetadataInfo(
         Map<Uuid, InitMapValue> initializingTopics,
@@ -192,8 +197,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      * Gets or creates a member.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
      * @return A ShareGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.

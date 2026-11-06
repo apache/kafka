@@ -140,7 +140,7 @@ public class ProcessState {
     }
 
     /**
-     * Assigns a task to the least loaded member of this process
+     * Assigns a task to the least loaded member of this process.
      *
      * @param taskId     The task to assign.
      * @param isActive   Whether the task is an active task (true) or a standby task (false).
@@ -198,14 +198,6 @@ public class ProcessState {
 
     public boolean hasCapacity() {
         return this.load < 1.0;
-    }
-
-    public int compareTo(final ProcessState other) {
-        int loadCompare = Double.compare(this.load, other.load());
-        if (loadCompare == 0) {
-            return Integer.compare(other.capacity, this.capacity);
-        }
-        return loadCompare;
     }
 
     public boolean hasTask(final TaskId taskId) {
