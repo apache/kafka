@@ -114,6 +114,18 @@ public class DelegationTokenCacheTest {
     }
 
     @Test
+    public void testAddTokenDropsReplacedHmacMapping() {
+        DelegationTokenCache cache = new DelegationTokenCache(ScramMechanism.mechanismNames());
+        DelegationToken token = delegationToken("token1", 1000L);
+        DelegationToken reissued = new DelegationToken(token.tokenInfo(), "another-hmac".getBytes(StandardCharsets.UTF_8));
+        cache.addToken(token);
+        cache.addToken(reissued);
+
+        assertNull(cache.tokenForHmac(token.hmacAsBase64String()));
+        assertEquals(token.tokenInfo(), cache.tokenForHmac(reissued.hmacAsBase64String()));
+    }
+
+    @Test
     public void testRemoveTokenDropsHmacMapping() {
         DelegationTokenCache cache = new DelegationTokenCache(ScramMechanism.mechanismNames());
         DelegationToken token = delegationToken("token1", 1000L);

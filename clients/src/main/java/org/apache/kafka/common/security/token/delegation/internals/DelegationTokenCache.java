@@ -74,8 +74,16 @@ public class DelegationTokenCache {
 
     public void addToken(DelegationToken token) {
         String tokenId = token.tokenInfo().tokenId();
-        tokenCache.put(tokenId, token);
-        hmacTokenIdCache.put(token.hmacAsBase64String(), tokenId);
+        String hmac = token.hmacAsBase64String();
+        DelegationToken previous = tokenCache.put(tokenId, token);
+        hmacTokenIdCache.put(hmac, tokenId);
+        if (previous != null) {
+            String previousHmac = previous.hmacAsBase64String();
+            //Drop the hmac of the replaced token, unless the new token has the same hmac
+            if (!previousHmac.equals(hmac)) {
+                hmacTokenIdCache.remove(previousHmac);
+            }
+        }
     }
 
     public void removeToken(String tokenId) {
