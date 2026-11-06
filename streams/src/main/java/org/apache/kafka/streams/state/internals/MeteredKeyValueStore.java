@@ -52,7 +52,6 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -105,7 +104,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor restoreSensor;
 
     protected LongAdder numOpenIterators = new LongAdder();
-    protected NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(MeteredIterator.OPENED_FIRST);
 
 
     private final Map<Class<?>, QueryHandler<?>> queryHandlers =
@@ -569,6 +568,7 @@ public class MeteredKeyValueStore<K, V>
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestamp;
+        private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
 
         private MeteredKeyValueStoreIterator(final KeyValueIterator<Bytes, byte[]> iter,
                                              final Sensor sensor) {
@@ -583,6 +583,11 @@ public class MeteredKeyValueStore<K, V>
         @Override
         public long startTimestamp() {
             return startTimestamp;
+        }
+
+        @Override
+        public long sequenceNumber() {
+            return sequenceNumber;
         }
 
         @Override

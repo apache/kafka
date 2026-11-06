@@ -51,6 +51,7 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
     private final Set<MeteredIterator> openIterators;
     private final long startNs;
     private final long startTimestampMs;
+    private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
 
     AbstractMeteredIterator(final KeyValueIterator<RawKey, byte[]> iter,
                             final Sensor operationSensor,
@@ -76,6 +77,13 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
     @Override
     public final long startTimestamp() {
         return startTimestampMs;
+    }
+
+    // Final: openIterators.add(this) in the constructor sorts through this via the set's
+    // comparator, which also uses sequenceNumber for tie-breaking within the same millisecond.
+    @Override
+    public final long sequenceNumber() {
+        return sequenceNumber;
     }
 
     /**
