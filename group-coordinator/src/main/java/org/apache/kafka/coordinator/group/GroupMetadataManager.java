@@ -5902,8 +5902,7 @@ public class GroupMetadataManager {
         try {
             group = shareGroup(groupId);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("[GroupId {}] Could not initialize the share group state because the group does not exist.",
-                groupId);
+            log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
             return new CoordinatorResult<>(List.of(), null);
         }
 
