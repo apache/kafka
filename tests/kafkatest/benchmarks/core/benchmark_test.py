@@ -22,7 +22,6 @@ from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, ShareConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
-from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, KafkaVersion
 
 import os
@@ -287,18 +286,20 @@ class Benchmark(Test):
         PERSISTENT_ROOT = "/mnt/share_consumer_performance"
         COMMAND_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "command.properties")
 
-        if security_protocol is not SecurityConfig.PLAINTEXT:
-            prop_file = str(self.kafka.security_config.client_config())
-            self.logger.debug(prop_file)
-            kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
-            kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
+        prop_file = str(self.kafka.security_config.client_config())
+        self.logger.debug(prop_file)
+        kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
+        kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
 
         wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
                    timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
+        self.wait_for_share_group_ready(share_group, COMMAND_CONFIG_FILE, seed_record=True)
+
         self.share_consumer = ShareConsumerPerformanceService(
             self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records, group=share_group, timeout=20000)
         Service.run_parallel(self.producer, self.share_consumer)
+        self.check_share_consumer_records(num_records)
 
         data = {
             "producer": compute_aggregate_throughput(self.producer),
@@ -394,21 +395,49 @@ class Benchmark(Test):
         PERSISTENT_ROOT = "/mnt/share_consumer_performance"
         COMMAND_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "command.properties")
 
-        if security_protocol is not SecurityConfig.PLAINTEXT:
-            prop_file = str(self.kafka.security_config.client_config())
-            self.logger.debug(prop_file)
-            kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
-            kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
+        prop_file = str(self.kafka.security_config.client_config())
+        self.logger.debug(prop_file)
+        kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
+        kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
 
         wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
                    timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
+
+        self.wait_for_share_group_ready(share_group, COMMAND_CONFIG_FILE)
 
         # consume
         self.share_consumer = ShareConsumerPerformanceService(
             self.test_context, num_consumers, self.kafka,
             topic=TOPIC_REP_THREE, messages=num_records, group=share_group, timeout=20000)
         self.share_consumer.run()
+        self.check_share_consumer_records(num_records)
         return compute_aggregate_throughput(self.share_consumer)
+
+    def wait_for_share_group_ready(self, group, command_config, seed_record=False):
+        """
+        Wait until the share group can read one record from the topic.
+
+        The first share group in a cluster creates the __share_group_state topic. This can take
+        longer than the timeout of the perf tool, so it must be done before the measured run.
+        The record is released, so the measured run can still read it.
+        """
+        node = self.kafka.nodes[0]
+        common_args = "--bootstrap-server %s --topic %s --command-config %s" % \
+                      (self.kafka.bootstrap_servers(self.kafka.security_protocol), TOPIC_REP_THREE, command_config)
+
+        if seed_record:
+            node.account.ssh("echo warmup | %s %s" % (self.kafka.path.script("kafka-console-producer.sh", node), common_args),
+                             allow_fail=False)
+
+        cmd = "%s %s --group %s --max-messages 1 --release --timeout-ms 30000 2>&1" % \
+              (self.kafka.path.script("kafka-console-share-consumer.sh", node), common_args, group)
+        wait_until(lambda: "Processed a total of 1 messages" in self.kafka.run_cli_tool(node, cmd),
+                   timeout_sec=120, backoff_sec=1, retry_on_exc=True,
+                   err_msg="Share group %s could not read a record" % group)
+
+    def check_share_consumer_records(self, num_records):
+        records = sum(r['records'] for r in self.share_consumer.results)
+        assert records >= num_records, "Share consumers read %d records, expected at least %d" % (records, num_records)
 
     def validate_versions(self, client_version, broker_version):
         assert client_version <= broker_version, "Client version %s should be <= broker version %s" % (client_version, broker_version)
