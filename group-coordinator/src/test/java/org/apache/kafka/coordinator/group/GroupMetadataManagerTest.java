@@ -30496,6 +30496,26 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testInitializeShareGroupStateWithMissingOrNonShareGroup() {
+        String groupId = "unknown-group-id";
+        Map<Uuid, Set<Integer>> topicPartitionMap = Map.of(Uuid.randomUuid(), Set.of(0, 1));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        assertEquals(
+            new CoordinatorResult<>(List.of(), null),
+            context.groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap)
+        );
+
+        // The group id belongs to a consumer group.
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(groupId, true);
+        assertEquals(
+            new CoordinatorResult<>(List.of(), null),
+            context.groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap)
+        );
+    }
+
+    @Test
     public void testShareGroupInitializeEmptyMap() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
