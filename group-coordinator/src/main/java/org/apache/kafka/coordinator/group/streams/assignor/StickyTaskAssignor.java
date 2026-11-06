@@ -57,11 +57,16 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     /**
      * Least loaded process first; among equally loaded processes, the one with the fewest stateless active tasks, so
-     * that a stateless task fills up a process heavy on stateful ones. Written as one lambda to keep heap operations cheap.
+     * that a stateless task fills up a process heavy on stateful ones; then by process id, so the order is deterministic.
+     * Written as one lambda to keep heap operations cheap.
      */
     private static final Comparator<ProcessState> PROCESS_BY_LOAD = (process1, process2) -> {
         final int byLoad = Double.compare(process1.load(), process2.load());
-        return byLoad != 0 ? byLoad : Double.compare(process1.statelessActiveLoad(), process2.statelessActiveLoad());
+        if (byLoad != 0) {
+            return byLoad;
+        }
+        final int byStatelessActiveLoad = Double.compare(process1.statelessActiveLoad(), process2.statelessActiveLoad());
+        return byStatelessActiveLoad != 0 ? byStatelessActiveLoad : process1.processId().compareTo(process2.processId());
     };
 
     @Override
