@@ -24,7 +24,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.MissingNode;
 
-import java.io.IOException;
 import java.util.Optional;
 
 /**
@@ -53,28 +52,6 @@ public final class Json {
     }
 
     /**
-     * Parse a JSON byte array into a JsonValue if possible. `Empty` is returned if `input` is not valid JSON.
-     */
-    public static Optional<JsonValue> parseBytes(byte[] input) throws IOException {
-        try {
-            return Optional.ofNullable(MAPPER.readTree(input)).map(JsonValue::apply);
-        } catch (JsonProcessingException e) {
-            return Optional.empty();
-        }
-    }
-
-    public static JsonValue tryParseBytes(byte[] input) throws IOException {
-        return JsonValue.apply(MAPPER.readTree(input));
-    }
-
-    /**
-     * Parse a JSON byte array into a generic type T, or throws a JsonProcessingException in the case of exception.
-     */
-    public static <T> T parseBytesAs(byte[] input, Class<T> clazz) throws IOException {
-        return MAPPER.readValue(input, clazz);
-    }
-
-    /**
      * Parse a JSON string into a JsonValue if possible.
      * @param input a JSON string to parse
      * @return the actual json value.
@@ -95,14 +72,5 @@ public final class Json {
      */
     public static String encodeAsString(Object obj) throws JsonProcessingException {
         return MAPPER.writeValueAsString(obj);
-    }
-
-    /**
-     * Encode an object into a JSON value in bytes. This method accepts any type supported by Jackson's ObjectMapper in
-     * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
-     * a jackson-scala dependency).
-     */
-    public static byte[] encodeAsBytes(Object obj) throws JsonProcessingException {
-        return MAPPER.writeValueAsBytes(obj);
     }
 }
