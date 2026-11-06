@@ -54,6 +54,7 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -109,6 +110,9 @@ public class Sender implements Runnable {
 
     /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
     private volatile boolean forceClose;
+
+    /* bounds the abort of an open transaction during shutdown */
+    private Timer shutdownAbortTimer;
 
     /* metrics */
     private final SenderMetrics sensors;
@@ -265,6 +269,10 @@ public class Sender implements Runnable {
 
         // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
+            // The coordinator aborts the transaction on its own after transaction.timeout.ms, so there is no point
+            // in retrying the abort for longer than that.
+            if (shutdownAbortTimer == null)
+                shutdownAbortTimer = time.timer(transactionManager.transactionTimeoutMs());
             if (!transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
                 try {
@@ -276,6 +284,13 @@ public class Sender implements Runnable {
                     // Force close in case the transactionManager is in error states.
                     forceClose = true;
                 }
+            }
+            shutdownAbortTimer.update();
+            if (shutdownAbortTimer.isExpired()) {
+                log.info("Giving up on aborting the incomplete transaction on shutdown after waiting transaction.timeout.ms={} ms.",
+                        transactionManager.transactionTimeoutMs());
+                forceClose = true;
+                break;
             }
             try {
                 runOnce();
@@ -482,7 +497,7 @@ public class Sender implements Runnable {
                     transactionManager.coordinator(coordinatorType) :
                     client.leastLoadedNode(time.milliseconds()).node();
             if (targetNode != null) {
-                if (!awaitNodeReady(targetNode, coordinatorType)) {
+                if (!awaitNodeReady(targetNode, coordinatorType, maxNodeReadyWaitMs())) {
                     log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
                     maybeFindCoordinatorAndRetry(nextRequestHandler);
                     return true;
@@ -561,8 +576,16 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        if (NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+    // Don't wait on a node past the point where shutdown gives up on aborting the transaction.
+    private long maxNodeReadyWaitMs() {
+        if (shutdownAbortTimer == null)
+            return requestTimeoutMs;
+        shutdownAbortTimer.update();
+        return Math.min(requestTimeoutMs, shutdownAbortTimer.remainingMs());
+    }
+
+    private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType, long timeoutMs) throws IOException {
+        if (NetworkClientUtils.awaitReady(client, node, time, timeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
