@@ -878,25 +878,37 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ListGroups request.
      *
-     * @param statesFilter      The states of the groups we want to list.
-     *                          If empty, all groups are returned with their state.
-     *                          If invalid, no groups are returned.
-     * @param typesFilter       The types of the groups we want to list.
-     *                          If empty, all groups are returned with their type.
-     *                          If invalid, no groups are returned.
-     * @param committedOffset   A specified committed offset corresponding to this shard.
+     * @param statesFilter              The states of the groups we want to list.
+     *                                  If empty, all groups are returned with their state.
+     *                                  If invalid, no groups are returned.
+     * @param typesFilter               The types of the groups we want to list.
+     *                                  If empty, all groups are returned with their type.
+     *                                  If invalid, no groups are returned.
+     * @param requireCommittedOffsets   If true, only groups with at least one committed
+     *                                  offset are returned.
+     * @param committedOffset           A specified committed offset corresponding to this shard.
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         List<String> statesFilter,
         List<String> typesFilter,
+        boolean requireCommittedOffsets,
         long committedOffset
     ) throws ApiException {
 
         Set<String> statesFilterSet = new HashSet<>(statesFilter);
         Set<String> typesFilterSet = new HashSet<>(typesFilter);
 
-        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
+        List<ListGroupsResponseData.ListedGroup> groups =
+            groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
+
+        if (!requireCommittedOffsets) {
+            return groups;
+        }
+
+        return groups.stream()
+            .filter(group -> offsetMetadataManager.hasCommittedOffsets(group.groupId(), committedOffset))
+            .toList();
     }
 
     /**

@@ -1300,6 +1300,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 (coordinator, lastCommittedOffset) -> coordinator.listGroups(
                     request.statesFilter(),
                     request.typesFilter(),
+                    request.requireCommittedOffsets(),
                     lastCommittedOffset
                 )
             ),

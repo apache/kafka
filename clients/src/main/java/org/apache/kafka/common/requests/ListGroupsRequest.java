@@ -47,6 +47,9 @@ public class ListGroupsRequest extends AbstractRequest {
 
         @Override
         public ListGroupsRequest build(short version) {
+            if (data.requireCommittedOffsets() && version < 6) {
+                throw new UnsupportedProtocolFieldException("RequireCommittedOffsets", apiKey().name(), version, 6);
+            }
             if (!data.statesFilter().isEmpty() && version < 4) {
                 throw new UnsupportedProtocolFieldException("StatesFilter", apiKey().name(), version, 4);
             }
