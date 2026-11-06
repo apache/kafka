@@ -578,8 +578,8 @@ public class RemoteLogManager implements Closeable {
         return remoteLogMetadataManager.remoteLogSegmentMetadata(new TopicIdPartition(topicId, topicPartition), epochForOffset, offset);
     }
 
-    private Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
-            throws RemoteStorageException, IOException {
+    private Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset,
+                                                                     int maxRecordBodySize) throws RemoteStorageException, IOException {
         int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
         InputStream remoteSegInputStream = null;
@@ -592,7 +592,7 @@ public class RemoteLogManager implements Closeable {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
                         while (recordStreamingIterator.hasNext()) {
                             Record record = recordStreamingIterator.next();
                             if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
@@ -645,6 +645,7 @@ public class RemoteLogManager implements Closeable {
         }
 
         UnifiedLog unifiedLog = unifiedLogOptional.get();
+        int maxRecordBodySize = unifiedLog.config().maxDecompressedMessageBytes();
 
         // Get the respective epoch in which the starting-offset exists.
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
@@ -662,7 +663,7 @@ public class RemoteLogManager implements Closeable {
                     && rlsMetadata.endOffset() >= startingOffset
                     && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
                     && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
-                    return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                    return lookupTimestamp(rlsMetadata, timestamp, startingOffset, maxRecordBodySize);
                 }
             }
 

@@ -822,7 +822,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -876,7 +876,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -932,7 +932,7 @@ class UnifiedLogTest {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -1951,6 +1951,77 @@ class UnifiedLogTest {
     log.appendAsLeader(messageSetWithKeyedMessage, leaderEpoch = 0)
     log.appendAsLeader(messageSetWithKeyedMessages, leaderEpoch = 0)
     log.appendAsLeader(messageSetWithCompressedKeyedMessage, leaderEpoch = 0)
+  }
+
+  /**
+   * End-to-end produce-path enforcement of the per-record decompressed-body-size limit
+   * (max.decompressed.message.bytes): a record that is tiny gzip-compressed on the wire (well
+   * under max.message.bytes) but whose declared decompressed body exceeds the configured limit is
+   * rejected as an invalid record before the body is allocated. A small compressed record and an
+   * equally-large uncompressed record are unaffected.
+   */
+  @Test
+  def testAppendCompressedRecordExceedingMaxDecompressedMessageBytesIsRejected(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(maxDecompressedMessageBytes = 100)
+    val log = createLog(logDir, logConfig)
+
+    val oversizedCompressed = MemoryRecords.withRecords(Compression.gzip().build(),
+      new SimpleRecord("key".getBytes, new Array[Byte](1000)))
+    val e = assertThrows(classOf[InvalidRecordException], () => log.appendAsLeader(oversizedCompressed, 0))
+    assertTrue(e.getMessage.contains("exceeds the configured maximum record size"),
+      "expected the configured-maximum guard, got: " + e.getMessage)
+    assertEquals(0, log.logEndOffset, "a rejected record must not be appended")
+
+    // The limit bounds only the decompressed per-record body; uncompressed records are bounded
+    // on the wire by max.message.bytes.
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
+      new SimpleRecord("key".getBytes, new Array[Byte](64))), 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+      new SimpleRecord("key".getBytes, new Array[Byte](1000))), 0)
+    assertEquals(2, log.logEndOffset)
+  }
+
+  @Test
+  def testFetchOffsetByTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(maxDecompressedMessageBytes = 100)
+    val log = createLog(logDir, logConfig)
+    val firstTimestamp = mockTime.milliseconds
+    val secondTimestamp = firstTimestamp + 1
+    val gzip = Compression.gzip().build()
+    // appendAsFollower bypasses produce validation, so the oversized record becomes durable
+    log.appendAsFollower(MemoryRecords.withRecords(0L, gzip, 0,
+      new SimpleRecord(firstTimestamp, "key".getBytes, new Array[Byte](10))), 0)
+    log.appendAsFollower(MemoryRecords.withRecords(1L, gzip, 0,
+      new SimpleRecord(secondTimestamp, "key".getBytes, new Array[Byte](1000))), 0)
+
+    // A lookup that only decompresses the small record succeeds
+    assertEquals(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of[Integer](0))),
+      log.fetchOffsetByTimestamp(firstTimestamp))
+    // A lookup that has to decompress the oversized record is rejected before its body is allocated
+    val e = assertThrows(classOf[InvalidRecordException], () => log.fetchOffsetByTimestamp(secondTimestamp))
+    assertTrue(e.getMessage.contains("exceeds the configured maximum record size of 100"), e.getMessage)
+  }
+
+  @Test
+  def testFetchOffsetByMaxTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(maxDecompressedMessageBytes = 100)
+    val log = createLog(logDir, logConfig)
+    val firstTimestamp = mockTime.milliseconds
+    val gzip = Compression.gzip().build()
+    // appendAsFollower bypasses produce validation, so the oversized records become durable
+    log.appendAsFollower(MemoryRecords.withRecords(0L, gzip, 0,
+      new SimpleRecord(firstTimestamp, "key".getBytes, new Array[Byte](1000))), 0)
+    log.appendAsFollower(MemoryRecords.withRecords(1L, gzip, 0,
+      new SimpleRecord(firstTimestamp + 1, "key".getBytes, new Array[Byte](10))), 0)
+    // Resolving MAX_TIMESTAMP only decompresses the batch holding the max timestamp, here the small one
+    assertEquals(Some(new TimestampAndOffset(firstTimestamp + 1, 1L, Optional.of[Integer](0))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    // Once the oversized batch holds the max timestamp, the lookup is rejected before its body is allocated
+    log.appendAsFollower(MemoryRecords.withRecords(2L, gzip, 0,
+      new SimpleRecord(firstTimestamp + 2, "key".getBytes, new Array[Byte](1000))), 0)
+    val e = assertThrows(classOf[InvalidRecordException],
+      () => log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    assertTrue(e.getMessage.contains("exceeds the configured maximum record size of 100"), e.getMessage)
   }
 
   /**

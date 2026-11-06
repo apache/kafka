@@ -20,23 +20,27 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.message.ProduceRequestData
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.message.{ProduceRequestData, ProduceResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 /**
   * Subclasses of `BaseProduceSendRequestTest` exercise the producer and produce request/response. This class
@@ -45,6 +49,19 @@ import scala.jdk.CollectionConverters._
 class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
+
+  private var staticBrokerMaxDecompressedMessageBytes: Option[String] = None
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    if (testInfo.getTestMethod.toScala.exists(_.getName == "testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride"))
+      staticBrokerMaxDecompressedMessageBytes = Some(ProduceRequestTest.SmallMaxDecompressedMessageBytes)
+    super.setUp(testInfo)
+  }
+
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
+    staticBrokerMaxDecompressedMessageBytes.foreach(properties.put(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, _))
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
@@ -255,6 +272,132 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, Errors.forCode(partitionProduceResponse2.errorCode))
   }
 
+  /**
+   * A topic-level limit rejects a compressed record whose declared decompressed body exceeds it
+   * (INVALID_RECORD, before allocating the body). A small compressed record and an equally-large
+   * uncompressed record (bounded instead by max.message.bytes) are accepted.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProduceRejectsCompressedRecordExceedingMaxDecompressedMessageBytes(quorum: String): Unit = {
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, ProduceRequestTest.SmallMaxDecompressedMessageBytes)
+    val leader = createTopic("topic", topicConfig = topicConfig)(0)
+
+    val rejected = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+    assertEquals(Errors.INVALID_RECORD.code, rejected.errorCode,
+      "a compressed record exceeding the configured per-record limit must be rejected as invalid")
+    assertEquals(-1L, rejected.baseOffset, "a rejected record must not be appended")
+
+    val acceptedSmall = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.UndersizedValueBytes))))
+    assertEquals(Errors.NONE.code, acceptedSmall.errorCode,
+      "a compressed record under the configured per-record limit must be accepted")
+
+    val acceptedUncompressed = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.NONE, ProduceRequestTest.OversizedValueBytes))))
+    assertEquals(Errors.NONE.code, acceptedUncompressed.errorCode,
+      "an uncompressed record must not be subject to the decompressed per-record limit")
+  }
+
+  /**
+   * The topic-level limit is dynamically reconfigurable: a large compressed record is accepted at
+   * the default, then rejected after lowering it via incrementalAlterConfigs -- no restart.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMaxDecompressedMessageBytesIsDynamicallyReconfigurable(quorum: String): Unit = {
+    val leader = createTopic("topic")(0)
+
+    val before = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+    assertEquals(Errors.NONE.code, before.errorCode,
+      "with the default per-record limit the record must be accepted")
+
+    alterMaxDecompressedMessageBytes(new ConfigResource(ConfigResource.Type.TOPIC, "topic"))
+
+    // The topic-config change reaches the produce path asynchronously; poll until it takes effect.
+    TestUtils.waitUntilTrue(
+      () => onlyPartitionResponse(sendProduceRequest(leader,
+        produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+        .errorCode == Errors.INVALID_RECORD.code,
+      s"the lowered topic-level ${TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG} was not applied to the produce path")
+  }
+
+  /**
+   * A broker-level default is inherited by a topic without an override: an oversized compressed
+   * record is rejected. The static broker config is set in setUp for this test only.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride(quorum: String): Unit = {
+    val leader = createTopic("topic")(0)
+
+    val rejected = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+    assertEquals(Errors.INVALID_RECORD.code, rejected.errorCode,
+      "the broker-level default per-record limit must apply to a topic without an override")
+  }
+
+  /**
+   * The broker-level default is dynamically reconfigurable and flows to a topic without an
+   * override: accepted at the default, rejected after lowering the cluster-wide default via a
+   * BROKER-resource alter (asserted dynamic in KafkaConfigTest#testDynamicLogConfigs) -- no restart.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerDefaultMaxDecompressedMessageBytesIsDynamicallyReconfigurable(quorum: String): Unit = {
+    val leader = createTopic("topic")(0)
+
+    val before = onlyPartitionResponse(sendProduceRequest(leader,
+      produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+    assertEquals(Errors.NONE.code, before.errorCode,
+      "with the default broker per-record limit and no topic override the record must be accepted")
+
+    // Empty resource name = cluster-wide broker default.
+    alterMaxDecompressedMessageBytes(new ConfigResource(ConfigResource.Type.BROKER, ""))
+
+    // The broker-default change reaches the produce path asynchronously; poll until it takes effect.
+    TestUtils.waitUntilTrue(
+      () => onlyPartitionResponse(sendProduceRequest(leader,
+        produceRequest("topic", singleRecord(Compression.gzip().build(), ProduceRequestTest.OversizedValueBytes))))
+        .errorCode == Errors.INVALID_RECORD.code,
+      s"the lowered cluster-wide broker-default ${TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG} was not applied to the produce path")
+  }
+
+  private def alterMaxDecompressedMessageBytes(resource: ConfigResource): Unit = {
+    val admin = createAdminClient()
+    admin.incrementalAlterConfigs(Map(resource -> Seq(new AlterConfigOp(
+      new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, ProduceRequestTest.SmallMaxDecompressedMessageBytes),
+      AlterConfigOp.OpType.SET)).asJavaCollection).asJava).all().get()
+  }
+
+  private def produceRequest(topic: String, records: MemoryRecords): ProduceRequest = {
+    ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+        new ProduceRequestData.TopicProduceData()
+          .setName(topic)
+          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+            .setIndex(0)
+            .setRecords(records)))).iterator))
+      .setAcks((-1).toShort)
+      .setTimeoutMs(3000)
+      .setTransactionalId(null)).build()
+  }
+
+  private def singleRecord(compression: Compression, valueSize: Int): MemoryRecords = {
+    MemoryRecords.withRecords(compression,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, new Array[Byte](valueSize)))
+  }
+
+  private def onlyPartitionResponse(response: ProduceResponse): ProduceResponseData.PartitionProduceResponse = {
+    assertEquals(1, response.data.responses.size)
+    val topicResponse = response.data.responses.asScala.head
+    assertEquals(1, topicResponse.partitionResponses.size)
+    topicResponse.partitionResponses.asScala.head
+  }
+
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
     connectAndReceive[ProduceResponse](request, destination = brokerSocketServer(leaderId))
   }
@@ -262,6 +405,12 @@ class ProduceRequestTest extends BaseRequestTest {
 }
 
 object ProduceRequestTest {
+
+  private val SmallMaxDecompressedMessageBytes = "512"
+  // Above the limit but tiny gzip-compressed and below max.message.bytes, so the decompressed
+  // per-record limit -- not the wire bound -- is what rejects it.
+  private val OversizedValueBytes = 4096
+  private val UndersizedValueBytes = 64
 
   @nowarn("cat=deprecation") // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   def timestampConfigProvider: java.util.stream.Stream[Arguments] = {
