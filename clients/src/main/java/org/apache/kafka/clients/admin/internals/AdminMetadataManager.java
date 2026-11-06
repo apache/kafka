@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -28,12 +29,14 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,10 +50,10 @@ public class AdminMetadataManager {
     private final Logger log;
 
     /**
-     * The minimum amount of time that we should wait between subsequent
-     * retries, when fetching metadata.
+     * The backoff between metadata fetches. It grows while successive
+     * metadata responses do not change the cluster nodes.
      */
-    private final long refreshBackoffMs;
+    private final ExponentialBackoff refreshBackoff;
 
     /**
      * The minimum amount of time that we should wait before triggering an
@@ -83,6 +86,11 @@ public class AdminMetadataManager {
      * metadata.
      */
     private long lastMetadataFetchAttemptMs = 0;
+
+    /**
+     * The number of successive metadata responses that did not change the cluster nodes.
+     */
+    private long equivalentResponseCount = 0;
 
     /**
      * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
@@ -200,11 +208,16 @@ public class AdminMetadataManager {
     public AdminMetadataManager(
         LogContext logContext,
         long refreshBackoffMs,
+        long refreshBackoffMaxMs,
         long metadataExpireMs,
         boolean usingBootstrapControllers
     ) {
         this.log = logContext.logger(AdminMetadataManager.class);
-        this.refreshBackoffMs = refreshBackoffMs;
+        this.refreshBackoff = new ExponentialBackoff(
+            refreshBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            refreshBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.metadataExpireMs = metadataExpireMs;
         this.usingBootstrapControllers = usingBootstrapControllers;
         this.updater = new AdminMetadataUpdater();
@@ -302,7 +315,10 @@ public class AdminMetadataManager {
 
     private long delayBeforeNextAttemptMs(long now) {
         long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
-        return Math.max(0, refreshBackoffMs - timeSinceAttempt);
+        long backoffMs = equivalentResponseCount > 0 ?
+            refreshBackoff.backoff(equivalentResponseCount - 1) :
+            refreshBackoff.initialInterval();
+        return Math.max(0, backoffMs - timeSinceAttempt);
     }
 
     public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
@@ -322,6 +338,7 @@ public class AdminMetadataManager {
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
+        this.equivalentResponseCount = 0;
 
         if (RequestUtils.isFatalException(exception)) {
             // avoid unchecked/unconfirmed cast to ApiException
@@ -354,6 +371,14 @@ public class AdminMetadataManager {
             bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
+            // A response is equivalent if it has the same nodes as the previous one and that one has not expired.
+            // The controller is not compared because brokers return a random alive broker as the controller.
+            if (now - lastMetadataUpdateMs < metadataExpireMs &&
+                new HashSet<>(cluster.nodes()).equals(new HashSet<>(this.cluster.nodes()))) {
+                this.equivalentResponseCount++;
+            } else {
+                this.equivalentResponseCount = 0;
+            }
             this.lastMetadataUpdateMs = now;
         }
 
