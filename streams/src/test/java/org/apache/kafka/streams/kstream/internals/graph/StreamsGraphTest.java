@@ -331,17 +331,16 @@ public class StreamsGraphTest {
                 "      <-- KTABLE-TOSTREAM-0000000024\n\n",
             noOptimization.describe().toString()
         );
-        assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(1, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
         assertEquals(3, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
     @Test
-    public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixEnabled() {
+    public void shouldOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixEnabled() {
         final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE, true);
         final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION, true);
 
-        assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
-        assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(1, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
         assertEquals(3, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
@@ -578,13 +577,13 @@ public class StreamsGraphTest {
             "      --> KSTREAM-MERGE-0000000022\n" +
             "      <-- KSTREAM-PEEK-0000000020\n" +
             "    Processor: KSTREAM-MERGE-0000000022 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000024\n" +
+            "      --> KSTREAM-MERGE-0000000022-repartition-filter\n" +
             "      <-- KSTREAM-MAPVALUES-0000000021, KSTREAM-FLATMAP-0000000010\n" +
-            "    Processor: KSTREAM-FILTER-0000000024 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000023\n" +
+            "    Processor: KSTREAM-MERGE-0000000022-repartition-filter (stores: [])\n" +
+            "      --> KSTREAM-MERGE-0000000022-repartition-sink\n" +
             "      <-- KSTREAM-MERGE-0000000022\n" +
-            "    Sink: KSTREAM-SINK-0000000023 (topic: KSTREAM-MERGE-0000000022-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000024\n" +
+            "    Sink: KSTREAM-MERGE-0000000022-repartition-sink (topic: KSTREAM-MERGE-0000000022-repartition)\n" +
+            "      <-- KSTREAM-MERGE-0000000022-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 2\n" +
             "    Source: KSTREAM-SOURCE-0000000011 (topics: [id-table-topic])\n" +
@@ -599,11 +598,11 @@ public class StreamsGraphTest {
             "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 3\n" +
-            "    Source: KSTREAM-SOURCE-0000000025 (topics: [KSTREAM-MERGE-0000000022-repartition])\n" +
+            "    Source: KSTREAM-MERGE-0000000022-repartition-source (topics: [KSTREAM-MERGE-0000000022-repartition])\n" +
             "      --> KSTREAM-LEFTJOIN-0000000026\n" +
             "    Processor: KSTREAM-LEFTJOIN-0000000026 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000014])\n" +
             "      --> KSTREAM-BRANCH-0000000027\n" +
-            "      <-- KSTREAM-SOURCE-0000000025\n" +
+            "      <-- KSTREAM-MERGE-0000000022-repartition-source\n" +
             "    Processor: KSTREAM-BRANCH-0000000027 (stores: [])\n" +
             "      --> KSTREAM-BRANCH-00000000270, KSTREAM-BRANCH-00000000271\n" +
             "      <-- KSTREAM-LEFTJOIN-0000000026\n" +
