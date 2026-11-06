@@ -337,6 +337,10 @@
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.security" />
 
+    <file name="NativeImageConfigTest">
+      <allow pkg="io.github.classgraph" />
+    </file>
+
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.coordinator.common.runtime" />
       <subpackage name="group">
