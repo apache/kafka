@@ -42,6 +42,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Queue;
@@ -628,7 +629,31 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        Objects.requireNonNull(timestampsToSearch, "Timestamps to search cannot be null");
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            if (entry.getValue() < 0)
+                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                    entry.getValue() + ". The target time cannot be negative.");
+        }
+
+        if (offsetsException != null) {
+            RuntimeException exception = this.offsetsException;
+            this.offsetsException = null;
+            throw exception;
+        }
+
+        Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>(timestampsToSearch.size());
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            OffsetAndTimestamp offsetAndTimestamp = null;
+            for (ConsumerRecord<K, V> record : records.getOrDefault(entry.getKey(), Collections.emptyList())) {
+                if (record.timestamp() >= entry.getValue()) {
+                    offsetAndTimestamp = new OffsetAndTimestamp(record.offset(), record.timestamp(), record.leaderEpoch());
+                    break;
+                }
+            }
+            result.put(entry.getKey(), offsetAndTimestamp);
+        }
+        return result;
     }
 
     @Override
