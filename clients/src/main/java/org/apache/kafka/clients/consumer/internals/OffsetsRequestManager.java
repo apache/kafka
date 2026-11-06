@@ -59,6 +59,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.isErrorProvablyUnrelated;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.maybeWrapAsKafkaException;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
@@ -319,11 +320,19 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
         Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
-        if (cachedException != null) {
-            result.completeExceptionally(cachedException);
-            return true;
+        if (cachedException == null) {
+            return false;
         }
-        return false;
+
+        Set<String> topics = metadata.subscribedAssignedAndTransientTopics();
+        if (isErrorProvablyUnrelated(cachedException, topics)) {
+            log.debug("Dropping cached update-positions exception deemed unrelated to current topics {}",
+                    topics, cachedException);
+            return false;
+        }
+
+        result.completeExceptionally(cachedException);
+        return true;
     }
 
     /**
