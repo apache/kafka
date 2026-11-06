@@ -78,9 +78,6 @@
   "name":"[Lkafka.network.DataPlaneAcceptor;"
 },
 {
-  "name":"[Lkafka.server.DelayedOperationPurgatory$WatcherList;"
-},
-{
   "name":"[Lorg.apache.kafka.common.resource.PatternType;"
 },
 {
@@ -900,25 +897,8 @@
   "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getLevel","parameterTypes":[] }, {"name":"getOtherProperties","parameterTypes":[] }, {"name":"setLevel","parameterTypes":["java.lang.String"] }, {"name":"setOtherProperties","parameterTypes":["java.lang.String","java.lang.Object"] }]
 },
 {
-  "name":"kafka.tools.DefaultMessageFormatter",
+  "name":"kafka.metrics.KafkaCSVMetricsReporter",
   "methods":[{"name":"<init>","parameterTypes":[] }]
-},
-{
-  "name":"kafka.utils.Log4jController",
-  "queryAllPublicConstructors":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
-},
-{
-  "name":"kafka.utils.Log4jControllerMBean",
-  "queryAllPublicMethods":true
-},
-{
-  "name":"kafka.utils.LoggingController",
-  "queryAllPublicConstructors":true
-},
-{
-  "name":"kafka.utils.LoggingControllerMBean",
-  "queryAllPublicMethods":true
 },
 {
   "name":"net.jpountz.lz4.LZ4HCJNICompressor",
@@ -1007,6 +987,18 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.common.config.provider.DirectoryConfigProvider",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.config.provider.EnvVarConfigProvider",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.config.provider.FileConfigProvider",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.common.metrics.JmxReporter",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
@@ -1024,6 +1016,10 @@
 },
 {
   "name":"org.apache.kafka.common.security.authenticator.SaslClientCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -1095,11 +1091,19 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.common.security.plain.PlainLoginModule",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
   "name":"org.apache.kafka.common.security.plain.internals.PlainSaslServer$PlainSaslServerFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -1112,6 +1116,14 @@
 },
 {
   "name":"org.apache.kafka.common.security.scram.internals.ScramSaslServer$ScramSaslServerFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.ssl.CommonNameLoggingSslEngineFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.ssl.DefaultSslEngineFactory",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -1131,7 +1143,15 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.coordinator.group.assignor.SimpleAssignor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.coordinator.group.assignor.UniformAssignor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.coordinator.group.streams.AssignmentRefinerImpl",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -1139,7 +1159,19 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.metadata.authorizer.StandardAuthorizer",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -1151,6 +1183,10 @@
   "queryAllPublicMethods":true
 },
 {
+  "name":"org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler$Content",
   "allDeclaredFields":true,
   "queryAllDeclaredMethods":true,
@@ -1159,6 +1195,10 @@
 },
 {
   "name":"org.apache.kafka.tools.LineMessageReader",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.tools.PushHttpMetricsReporter",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {

@@ -2812,6 +2812,7 @@ project(':tools') {
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation testFixtures(project(':streams'))
+    testImplementation libs.classgraph
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
