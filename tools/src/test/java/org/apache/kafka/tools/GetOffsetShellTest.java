@@ -446,6 +446,21 @@ public class GetOffsetShellTest {
     }
 
     @ClusterTest
+    public void testOutputIsSortedByTopicAndPartition() throws InterruptedException {
+        cluster.createTopic("foo", 11, (short) 1);
+        cluster.createTopic("foo-1", 1, (short) 1);
+
+        List<Row> offsets = executeAndParse("--topic", "foo.*");
+
+        List<Row> expected = Stream.concat(
+                IntStream.range(0, 11).mapToObj(p -> new Row("foo", p, 0L)),
+                Stream.of(new Row("foo-1", 0, 0L))
+        ).toList();
+
+        assertEquals(expected, offsets);
+    }
+
+    @ClusterTest
     public void testTopicPartitionsNotFoundForNonExistentTopic() {
         assertExitCodeIsOne("--topic", "some_nonexistent_topic");
     }
