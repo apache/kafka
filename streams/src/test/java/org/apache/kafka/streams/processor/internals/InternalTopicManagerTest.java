@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -57,11 +58,13 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -126,6 +129,99 @@ public class InternalTopicManagerTest {
     @AfterEach
     public void shutdown() {
         mockAdminClient.close();
+    }
+
+    @Test
+    public void shouldNotBackOffPerTopicWhenCreatingATopicBatch() {
+        final Map<String, InternalTopicConfig> topicConfigs = new HashMap<>();
+        for (int i = 0; i < 25; i++) {
+            final String topicName = "batch-topic-" + i;
+            topicConfigs.put(topicName, setupRepartitionTopicConfig(topicName, 1));
+        }
+
+        final long before = time.milliseconds();
+        internalTopicManager.makeReady(topicConfigs);
+
+        // Every create succeeds immediately, so makeReady must not back off at all.
+        assertEquals(0L, time.milliseconds() - before);
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
+        mockAdminClient.addTopic(
+            false,
+            topic1,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic1);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        final long before = time.milliseconds();
+        // The clock has no auto-tick, so only the round backoff can advance it toward the
+        // deadline: reaching the timeout at all proves the round backs off instead of spinning.
+        assertThrows(
+            TimeoutException.class,
+            () -> internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+
+        // The timeout is 50 ms and retry.backoff.ms is 10 ms. The backoff doubles each round
+        // (10, 20, 40 ms), each with +/- jitter. The deadline is only checked before a sleep,
+        // so exactly three sleeps happen: after two sleeps the clock is at most 36 ms (< 50),
+        // and after three it is at least 56 ms (>= 50).
+        final long elapsed = time.milliseconds() - before;
+        long minElapsed = 0;
+        long maxElapsed = 0;
+        for (int round = 0; round < 3; round++) {
+            minElapsed += backoffBoundMs(10, round, 1 - CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            maxElapsed += backoffBoundMs(10, round, 1 + CommonClientConfigs.RETRY_BACKOFF_JITTER);
+        }
+        assertTrue(elapsed >= minElapsed && elapsed <= maxElapsed,
+            "Elapsed time " + elapsed + " is outside [" + minElapsed + ", " + maxElapsed + "]");
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldIncreaseBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
+        mockAdminClient.addTopic(
+            false,
+            topic1,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic1);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        final List<Long> sleeps = new ArrayList<>();
+        final MockTime recordingTime = new MockTime(0) {
+            @Override
+            public void sleep(final long ms) {
+                sleeps.add(ms);
+                super.sleep(ms);
+            }
+        };
+        final InternalTopicManager manager =
+            new InternalTopicManager(recordingTime, mockAdminClient, new StreamsConfig(config));
+
+        assertThrows(
+            TimeoutException.class,
+            () -> manager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+
+        assertEquals(3, sleeps.size());
+        for (int round = 0; round < sleeps.size(); round++) {
+            final long lower = backoffBoundMs(10, round, 1 - CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            final long upper = backoffBoundMs(10, round, 1 + CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            final long sleep = sleeps.get(round);
+            assertTrue(sleep >= lower && sleep <= upper,
+                "Backoff " + sleep + " of round " + round + " is outside [" + lower + ", " + upper + "]");
+        }
+    }
+
+    /**
+     * The backoff of the given (0-based) retry round when the jitter scales it by {@code jitterFactor}.
+     */
+    private static long backoffBoundMs(final long initialBackoffMs, final int round, final double jitterFactor) {
+        return (long) (initialBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, round) * jitterFactor);
     }
 
     @Test

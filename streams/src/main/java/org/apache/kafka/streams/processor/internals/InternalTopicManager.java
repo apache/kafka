@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -40,6 +41,7 @@ import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -77,7 +79,7 @@ public class InternalTopicManager {
 
     private final short replicationFactor;
     private final long windowChangeLogAdditionalRetention;
-    private final long retryBackOffMs;
+    private final ExponentialBackoff retryBackoff;
     private final long retryTimeoutMs;
 
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
@@ -93,7 +95,15 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        retryBackOffMs = streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        final long retryBackoffMs = streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        // Streams has no retry.backoff.max.ms config, so use the client default as the cap,
+        // but never cap below the configured initial backoff.
+        retryBackoff = new ExponentialBackoff(
+            retryBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            Math.max(retryBackoffMs, CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS),
+            CommonClientConfigs.RETRY_BACKOFF_JITTER
+        );
         final Map<String, Object> consumerConfig = streamsConfig.getMainConsumerConfigs("dummy", "dummy", -1);
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
@@ -158,6 +168,7 @@ public class InternalTopicManager {
         final ValidationResult validationResult = new ValidationResult();
         final Set<String> topicDescriptionsStillToValidate = new HashSet<>(topicConfigs.keySet());
         final Set<String> topicConfigsStillToValidate = new HashSet<>(topicConfigs.keySet());
+        long attempts = 0L;
         while (!topicDescriptionsStillToValidate.isEmpty() || !topicConfigsStillToValidate.isEmpty()) {
             Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Map.of();
             if (!topicDescriptionsStillToValidate.isEmpty()) {
@@ -216,7 +227,8 @@ public class InternalTopicManager {
             maybeSleep(
                 Arrays.asList(topicDescriptionsStillToValidate, topicConfigsStillToValidate),
                 deadline,
-                "validated"
+                "validated",
+                retryBackoff.backoff(attempts++)
             );
         }
 
@@ -426,6 +438,7 @@ public class InternalTopicManager {
         final Set<String> topicsToDescribe = new HashSet<>(topics);
         final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = new HashMap<>();
 
+        long attempts = 0L;
         while (!topicsToDescribe.isEmpty()) {
             final Set<String> tempUnknownTopics = new HashSet<>();
             final Map<String, List<TopicPartitionInfo>> existed = getTopicPartitionInfo(topicsToDescribe, tempUnknownTopics);
@@ -442,13 +455,14 @@ public class InternalTopicManager {
                     log.error(timeoutError);
                     throw new TimeoutException(timeoutError);
                 }
+                final long backoffMs = retryBackoff.backoff(attempts++);
                 log.info(
                     "Topics {} could not be describe fully. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
                     topics,
-                    retryBackOffMs,
+                    backoffMs,
                     deadlineMs - currentWallClockMs
                 );
-                Utils.sleep(retryBackOffMs);
+                Utils.sleep(backoffMs);
             }
         }
         log.debug("Completed describing topics");
@@ -474,7 +488,10 @@ public class InternalTopicManager {
         final Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
 
+        long attempts = 0L;
         while (!topicsNotReady.isEmpty()) {
+            // Computed once per round so the value logged in createTopics is the value slept in maybeSleep
+            final long backoffMs = retryBackoff.backoff(attempts++);
             final Set<String> tempUnknownTopics = new HashSet<>();
 
             // Only consider the not-ready subset on each iteration
@@ -492,7 +509,7 @@ public class InternalTopicManager {
                 break;
             }
             if (!topicsToCreate.isEmpty()) {
-                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady, deadlineMs);
+                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady, backoffMs);
                 topicsNotReady.removeAll(createdTopics);
                 newlyCreatedTopics.addAll(createdTopics);
             }
@@ -504,7 +521,7 @@ public class InternalTopicManager {
                     String.format("Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
                     null
                 ));
-
+                maybeSleep(List.of(topicsNotReady), deadlineMs, "made ready", backoffMs);
             }
         }
         log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
@@ -544,7 +561,7 @@ public class InternalTopicManager {
 
     private Set<String> createTopics(final Set<NewTopic> topicsToCreate,
                                      final Set<String> topicsNotReady,
-                                     final long deadlineMs) {
+                                     final long backoffMs) {
         final CreateTopicsResult createTopicsResult = adminClient.createTopics(topicsToCreate);
         final Set<String> createdTopics = new HashSet<>();
 
@@ -554,7 +571,6 @@ public class InternalTopicManager {
                 createTopicResult.getValue().get();
                 topicsNotReady.remove(topicName);
                 createdTopics.add(topicName);
-                
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -569,7 +585,7 @@ public class InternalTopicManager {
                                     +
                                     "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n"
                                     +
-                                    "Error message was: {}", topicName, retryBackOffMs,
+                                    "Error message was: {}", topicName, backoffMs,
                             cause.toString());
                 } else {
                     log.error("Unexpected error during topic creation for {}.\n" +
@@ -594,27 +610,10 @@ public class InternalTopicManager {
                 }
             }
 
-            if (!topicsNotReady.isEmpty()) {
-                maybeThrowTimeout(new TimeoutContext(
-                        topicsNotReady,
-                        deadlineMs,
-                        "createTopics timeout",
-                        String.format(
-                                "Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.",
-                                retryTimeoutMs),
-                        null));
-                log.info(
-                    "Topics {} could not be made ready. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
-                    topicsNotReady,
-                    retryBackOffMs,
-                    deadlineMs - time.milliseconds()
-                );
-                Utils.sleep(retryBackOffMs);
-            }
-        } 
+        }
+
         return createdTopics;
-    } 
-        
+    }
 
     /**
      * Try to get the partition information for the given topics; return the partition info for topics that already exists.
@@ -737,6 +736,7 @@ public class InternalTopicManager {
             ));
         final Set<String> createdTopics = new HashSet<>();
         final Set<String> topicStillToCreate = new HashSet<>(topicConfigs.keySet());
+        long attempts = 0L;
         while (!topicStillToCreate.isEmpty()) {
             final Set<NewTopic> newTopics = topicStillToCreate.stream()
                 .map(topicName -> new NewTopic(
@@ -751,7 +751,7 @@ public class InternalTopicManager {
 
             processCreateTopicResults(createTopicsResult, topicStillToCreate, createdTopics, deadline);
 
-            maybeSleep(List.of(topicStillToCreate), deadline, "created");
+            maybeSleep(List.of(topicStillToCreate), deadline, "created", retryBackoff.backoff(attempts++));
         }
 
         log.info("Completed setup of internal topics {}.", topicConfigs.keySet());
@@ -828,6 +828,7 @@ public class InternalTopicManager {
         final long deadline = now + retryTimeoutMs;
 
         final Set<String> topicsStillToCleanup = new HashSet<>(topicsToCleanUp);
+        long attempts = 0L;
         while (!topicsStillToCleanup.isEmpty()) {
             log.info("Going to cleanup internal topics: " + topicsStillToCleanup);
             final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsStillToCleanup);
@@ -887,7 +888,8 @@ public class InternalTopicManager {
             maybeSleep(
                 List.of(topicsStillToCleanup),
                 deadline,
-                "validated"
+                "validated",
+                retryBackoff.backoff(attempts++)
             );
         }
 
@@ -929,17 +931,18 @@ public class InternalTopicManager {
 
     private void maybeSleep(final List<Set<String>> resultSetsStillToValidate,
                             final long deadline,
-                            final String action) {
+                            final String action,
+                            final long backoffMs) {
         if (resultSetsStillToValidate.stream().anyMatch(resultSet -> !resultSet.isEmpty())) {
             final long now = time.milliseconds();
             log.info(
                 "Internal topics {} could not be {}. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
                 resultSetsStillToValidate.stream().flatMap(Collection::stream).collect(Collectors.toSet()),
                 action,
-                retryBackOffMs,
+                backoffMs,
                 deadline - now
             );
-            Utils.sleep(retryBackOffMs);
+            time.sleep(backoffMs);
         }
     }
 }
