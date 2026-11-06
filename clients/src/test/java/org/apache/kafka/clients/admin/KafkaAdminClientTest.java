@@ -268,6 +268,18 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
     }
 
     @Test
+    public void testMetricsReporterClosedOnce() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        MockMetricsReporter.CLOSE_COUNT.set(0);
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        admin.close();
+        assertEquals(1, MockMetricsReporter.CLOSE_COUNT.get(),
+            "MetricsReporter.close() should be invoked exactly once");
+    }
+
+    @Test
     public void testDisableJmxReporter() {
         Properties props = new Properties();
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
