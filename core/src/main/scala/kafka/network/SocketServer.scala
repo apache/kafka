@@ -828,8 +828,8 @@ private[kafka] class Processor(
   private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", JSocketServer.METRICS_GROUP, metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
-  private[network] val selector = createSelector(
-    ChannelBuilders.serverChannelBuilder(
+  private[network] val (selector, reconfigurableChannelBuilder) = {
+    val channelBuilder = ChannelBuilders.serverChannelBuilder(
       listenerName,
       listenerName == config.interBrokerListenerName,
       securityProtocol,
@@ -840,14 +840,17 @@ private[kafka] class Processor(
       logContext,
       version => apiVersionManager.apiVersionResponse(0, version < 4)
     )
-  )
+    val reconfigurableChannelBuilder = channelBuilder match {
+      case reconfigurable: Reconfigurable =>
+        config.addReconfigurable(reconfigurable)
+        Some(reconfigurable)
+      case _ => None
+    }
+    (createSelector(channelBuilder), reconfigurableChannelBuilder)
+  }
 
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
-    channelBuilder match {
-      case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
-      case _ =>
-    }
     new KSelector(
       maxRequestSize,
       connectionsMaxIdleMs,
@@ -1163,6 +1166,7 @@ private[kafka] class Processor(
    * Close the selector and all open connections
    */
   private def closeAll(): Unit = {
+    reconfigurableChannelBuilder.foreach(config.removeReconfigurable)
     while (!newConnections.isEmpty) {
       newConnections.poll().close()
     }
