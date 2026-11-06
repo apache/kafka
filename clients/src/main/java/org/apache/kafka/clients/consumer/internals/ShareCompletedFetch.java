@@ -69,6 +69,7 @@ public class ShareCompletedFetch {
     private int recordsRead;
     private int bytesRead;
     private RecordBatch currentBatch;
+    private Optional<Integer> currentBatchLeaderEpoch = Optional.empty();
     private Record lastRecord;
     private CloseableIterator<Record> records;
     private KafkaException cachedBatchException = null;
@@ -234,9 +235,8 @@ public class ShareCompletedFetch {
                 while (nextAcquired != null) {
                     if (lastRecord.offset() == nextAcquired.offset) {
                         // It's acquired, so we parse it and add it to the batch
-                        Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                         TimestampType timestampType = currentBatch.timestampType();
-                        ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch,
+                        ConsumerRecord<K, V> record = parseRecord(deserializers, partition, currentBatchLeaderEpoch,
                                 timestampType, lastRecord, nextAcquired.deliveryCount);
                         inFlightBatch.addRecord(record);
                         recordsRead++;
@@ -390,6 +390,7 @@ public class ShareCompletedFetch {
                 }
 
                 currentBatch = batches.next();
+                currentBatchLeaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 maybeEnsureValid(currentBatch, checkCrcs);
 
                 records = currentBatch.streamingIterator(decompressionBufferSupplier);
