@@ -277,15 +277,60 @@ class LocalLeaderEndPointTest extends Logging {
     appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
 
-    // Highest remote is 1 => earliest pending should be max(1+1, logStart)
+    // Highest remote is 1 => earliest pending should be max(1+1, logStart) = 2,
+    // and all records were appended under leader epoch 0
     val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
     log.updateHighestOffsetInRemoteStorage(1)
 
-    val expectedOffset = Math.max(2L, log.logStartOffset())
-    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(2L, 0), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetResolvesEpochOfPendingOffset(): Unit = {
+    // Append records under leader epoch 0 (offsets 0-2) and leader epoch 1 (offsets 3-5)
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+    bumpLeaderEpoch()
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    log.updateHighestOffsetInRemoteStorage(3)
+
+    // Earliest pending upload offset is max(3 + 1, max(0, 0)) = 4, which was appended under epoch 1
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 1)
+    assertEquals(new OffsetAndEpoch(4L, 1), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenEpochCannotBeResolved(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    log.updateHighestOffsetInRemoteStorage(1)
+    // Wipe the epoch cache so the epoch of the pending upload offset cannot be resolved. The
+    // ListOffsets-based path (UnifiedLog#fetchEarliestPendingUploadOffset) leaves the epoch unset
+    // in this case, which serializes as -1, so the local path must report -1 as well instead of
+    // fabricating epoch 0.
+    log.leaderEpochCache().clearAndFlush()
 
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
-    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+    assertEquals(new OffsetAndEpoch(2L, -1), result)
+  }
+
+  @Test
+  def testFetchOffsetsReturnUndefinedEpochWhenEpochCannotBeResolved(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    log.leaderEpochCache().clearAndFlush()
+
+    assertEquals(new OffsetAndEpoch(0L, -1), endPoint.fetchEarliestOffset(topicPartition, 0))
+    assertEquals(new OffsetAndEpoch(3L, -1), endPoint.fetchLatestOffset(topicPartition, 0))
+    assertEquals(new OffsetAndEpoch(0L, -1), endPoint.fetchEarliestLocalOffset(topicPartition, 0))
   }
 
   @Test
@@ -303,12 +348,9 @@ class LocalLeaderEndPointTest extends Logging {
     log.updateLocalLogStartOffset(8)
 
     // Expected: max(highestRemoteOffset + 1, max(logStartOffset, localLogStartOffset))
-    //         = max(5 + 1, max(0, 8)) = max(6, 8) = 8
-    val expectedOffset = 8L
-    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
-
+    //         = max(5 + 1, max(0, 8)) = max(6, 8) = 8, appended under leader epoch 0
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
-    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+    assertEquals(new OffsetAndEpoch(8L, 0), result)
   }
 
   @Test
@@ -330,12 +372,9 @@ class LocalLeaderEndPointTest extends Logging {
     // Set highestRemoteOffset to 5 (less than logStartOffset)
     log.updateHighestOffsetInRemoteStorage(5)
 
-    // Expected: max(5+1, max(10, 3)) = max(6, 10) = 10
-    val expectedOffset = 10L
-    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
-
+    // Expected: max(5+1, max(10, 3)) = max(6, 10) = 10, appended under leader epoch 0
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
-    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+    assertEquals(new OffsetAndEpoch(10L, 0), result)
   }
 
   @Test
@@ -357,12 +396,9 @@ class LocalLeaderEndPointTest extends Logging {
     // Set highestRemoteOffset to 15 (greater than logStartOffset)
     log.updateHighestOffsetInRemoteStorage(15)
 
-    // Expected: max(15+1, max(10, 3)) = max(16, 10) = 16
-    val expectedOffset = 16L
-    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
-
+    // Expected: max(15+1, max(10, 3)) = max(16, 10) = 16, appended under leader epoch 0
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
-    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+    assertEquals(new OffsetAndEpoch(16L, 0), result)
   }
 
   @Test
@@ -385,12 +421,9 @@ class LocalLeaderEndPointTest extends Logging {
     // Set highestRemoteOffset to 5 (less than start offsets)
     log.updateHighestOffsetInRemoteStorage(5)
 
-    // Expected: max(5+1, max(10, 10)) = max(6, 10) = 10
-    val expectedOffset = 10L
-    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
-
+    // Expected: max(5+1, max(10, 10)) = max(6, 10) = 10, appended under leader epoch 0
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
-    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+    assertEquals(new OffsetAndEpoch(10L, 0), result)
   }
 
   private class CallbackResult[T] {
