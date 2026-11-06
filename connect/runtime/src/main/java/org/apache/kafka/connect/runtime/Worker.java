@@ -680,8 +680,10 @@ public final class Worker {
         try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             log.info("Creating task {}", id);
 
-            if (tasks.containsKey(id))
-                throw new ConnectException("Task already exists in this worker: " + id);
+            if (tasks.containsKey(id)) {
+                log.warn("Ignoring start request for task {} that already exists in this worker", id);
+                return false;
+            }
 
             connectorStatusMetricsGroup.recordTaskAdded(id);
 
@@ -732,8 +734,13 @@ public final class Worker {
             }
 
             WorkerTask<?, ?> existing = tasks.putIfAbsent(id, workerTask);
-            if (existing != null)
-                throw new ConnectException("Task already exists in this worker: " + id);
+            if (existing != null) {
+                Utils.closeQuietly(keyConverterPlugin, "key converter");
+                Utils.closeQuietly(valueConverterPlugin, "value converter");
+                Utils.closeQuietly(headerConverterPlugin, "header converter");
+                log.warn("Ignoring start request for task {} that already exists in this worker", id);
+                return false;
+            }
 
             executor.submit(plugins.withClassLoader(connectorLoader, workerTask));
             if (workerTask instanceof WorkerSourceTask) {
