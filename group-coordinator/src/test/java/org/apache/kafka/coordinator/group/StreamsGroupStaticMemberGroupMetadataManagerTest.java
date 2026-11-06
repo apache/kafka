@@ -46,6 +46,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -69,7 +70,6 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessi
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.resetAssignedTasksEpochsToZero;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
@@ -111,7 +111,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -218,7 +218,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -261,7 +261,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -307,7 +307,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -438,6 +438,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
                 .setAcceptableRecoveryLag(10000)
+                .setActiveTasks(topic.responseTasks(0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of())
                 .setStatus(List.of()),
             revokeAckResult.response().data()
         );
@@ -529,7 +532,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -557,15 +560,16 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 bumpedGroupEpoch,
                 topic.metadataHash(),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             )
         ));
     }
 
-    @Test
-    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch() throws UnknownHostException {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch(String rackId) throws UnknownHostException {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
@@ -593,6 +597,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                     .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                     .setPreviousMemberEpoch(groupEpoch)
                     .setProcessId(processId)
+                    .setRackId(rackId)
                     .setAssignedTasks(assignedTasks)
                     .build())
                 .withTargetAssignment(oldMemberId, targetAssignment)
@@ -600,16 +605,19 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId),
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId)
+                .setRackId(rackId),
             newClientId,
             newClientAddress
         );
         
+        assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).rackId());
         assertEquals(rejoinMemberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
 
@@ -668,7 +676,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -689,7 +697,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, bumpedGroupEpoch, 0L)
             ),
             result.records()
@@ -725,7 +733,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -789,7 +797,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -862,7 +870,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -1001,7 +1009,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1065,7 +1073,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1123,7 +1131,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1206,7 +1214,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1272,7 +1280,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1332,8 +1340,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
 
-    @Test
-    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur() {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur(String newRackId) {
         int leaveEpoch = LEAVE_GROUP_STATIC_MEMBER_EPOCH;
         int memberEpoch = DEFAULT_MEMBER_EPOCH;
         int groupEpoch = DEFAULT_GROUP_EPOCH;
@@ -1364,13 +1373,12 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> normalHeartbeatResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, memberEpoch)
-                .setRackId(rackId)
         );
 
         assertResponseEquals(
@@ -1385,6 +1393,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setStandbyTasks(null), 
             normalHeartbeatResult.response().data());
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.of(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId).rackId());
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> leaveResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, leaveEpoch)
@@ -1404,7 +1413,6 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
 
         String newMemberId = Uuid.randomUuid().toString();
-        String newRackId = Uuid.randomUuid().toString();
         assignor.prepareGroupAssignment(Map.of(newMemberId, givenTargetAssignment));
 
         int bumpedGroupEpoch = groupEpoch + 1;
@@ -1432,6 +1440,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             rejoinResult.response().data()
         );
         assertEquals(bumpedGroupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(newRackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(newMemberId).rackId());
 
         StreamsGroupMember transationStaticInitMember = streamsGroupMemberBuilderWithDefaults(newMemberId, instanceId)
             .setMemberEpoch(JOIN_GROUP_MEMBER_EPOCH)
@@ -1467,7 +1476,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 // From hasStreamsMemberMetadataChanged
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, newJoinStaticMember),
 
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, bumpedGroupEpoch, context.time.milliseconds()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, reconciledMember)
             ),
@@ -1475,6 +1484,13 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         );
     }
 
+
+    private static Stream<Arguments> rackIdCases() {
+        return Stream.of(
+            Arguments.of("rack-b"), // Give other rack id.
+            Arguments.of((String) null) // Give no rack id.
+        );
+    }
 
     @Test
     public void testStaticMemberRejoinWritesReplacementRecordsInStreamsGroup() {
@@ -1506,7 +1522,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1571,7 +1587,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1632,7 +1648,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1691,7 +1707,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1741,7 +1757,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1791,7 +1807,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1842,7 +1858,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1898,7 +1914,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1955,7 +1971,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -2005,7 +2021,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -2053,7 +2069,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -2184,7 +2200,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -2252,7 +2268,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, 0L)
         );
         assertEquals(
@@ -2340,7 +2356,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
                 .withTargetAssignment(oldMemberId, targetAssignment)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
             .build();
         

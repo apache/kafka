@@ -49,7 +49,7 @@ import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, QuotaConfig}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
@@ -74,7 +74,7 @@ import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -150,8 +150,6 @@ class BrokerServer(
 
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
-
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
   val clusterId: String = sharedServer.metaPropsEnsemble.clusterId().get()
@@ -209,6 +207,11 @@ class BrokerServer(
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
       config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
+      QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
+        if (config.dynamicConfig.staticBrokerConfigs.contains(configName)) {
+          warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
+        }
+      }
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
@@ -293,8 +296,6 @@ class BrokerServer(
         apiVersionManager,
         sharedServer.socketFactory,
         connectionDisconnectListeners)
-
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
           config.effectiveAdvertisedBrokerListeners.asJava).
@@ -545,7 +546,8 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager,
+          quotaManagers.userClientQuotaUpdaters(),
+          (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala),
         ),
         new DynamicTopicClusterQuotaPublisher(
           clusterId,
@@ -784,6 +786,7 @@ class BrokerServer(
           Time.SYSTEM,
           shareGroupTimer,
           shareGroupMetrics,
+          () => config.shareGroupConfig.shareGroupDLQManagerFetcherNumThreads(),
           shareGroupLogReader
         )
       } else if (className.equals(classOf[NoOpShareGroupDLQManager].getName)) {
@@ -891,6 +894,23 @@ class BrokerServer(
       if (partitionMetadataClient != null)
         Utils.swallow(this.logger.underlying, () => partitionMetadataClient.close())
 
+      Utils.closeQuietly(sharePartitionManager, "share partition manager")
+
+      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
+      // groupCoordinator, sharePartitionManager must be closed before the persister so that
+      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
+      // persister.
+      if (persister != null)
+        Utils.swallow(this.logger.underlying, () => persister.stop())
+
+      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
+      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
+      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
+      // They are also closed before the shareCoordinator and the replicaManager, which the persister
+      // and the DLQ manager's reads of source records depend on.
+      if (shareGroupDLQManager != null)
+        Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
+
       if (shareCoordinator != null)
         Utils.swallow(this.logger.underlying, () => shareCoordinator.shutdown())
 
@@ -928,21 +948,6 @@ class BrokerServer(
         Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
 
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
-      Utils.closeQuietly(sharePartitionManager, "share partition manager")
-
-      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
-      // groupCoordinator, sharePartitionManager must be closed before the persister so that
-      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
-      // persister.
-      if (persister != null)
-        Utils.swallow(this.logger.underlying, () => persister.stop())
-
-      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
-      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
-      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
-      if (shareGroupDLQManager != null)
-        Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
-
       if (shareGroupMetrics != null)
         Utils.swallow(this.logger.underlying, () => shareGroupMetrics.close())
 

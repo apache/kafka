@@ -84,7 +84,7 @@ public class GroupSpecBuilderTest {
 
     @Test
     public void testEmpty() {
-        GroupSpecBuilder builder = new GroupSpecBuilder(Map.of())
+        GroupSpecBuilder builder = new GroupSpecBuilder(AssignmentConfigsImpl.DEFAULT)
             .withMembers(Map.of());
 
         assertEquals(
@@ -121,7 +121,7 @@ public class GroupSpecBuilderTest {
             Map.of(fooSubtopologyId, Map.of(0, 40L))
         );
 
-        GroupSpecBuilder builder = new GroupSpecBuilder(Map.of(AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"))
+        GroupSpecBuilder builder = new GroupSpecBuilder(AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1))
             .withMembers(Map.of(
                 "member-1", new StreamsGroupMember.Builder("member-1")
                     .setProcessId("processId")
@@ -201,10 +201,6 @@ public class GroupSpecBuilderTest {
     public void testAssignorOffload() {
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
-        Map<String, String> assignmentConfigs = new HashMap<>(Map.of(
-            AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"
-        ));
-
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-1")
             .setProcessId("processId")
             .setClientTags(Map.of())
@@ -225,14 +221,13 @@ public class GroupSpecBuilderTest {
             "member-1", memberTaskOffsets
         ));
 
-        GroupSpec groupSpec = new GroupSpecBuilder(assignmentConfigs)
+        GroupSpec groupSpec = new GroupSpecBuilder(AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1))
             .withMembers(members)
             .withTaskOffsets(taskOffsets)
             .withAssignorOffload(true)
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
-        assignmentConfigs.clear();
         members.clear();
         taskOffsets.clear();
 
@@ -240,10 +235,7 @@ public class GroupSpecBuilderTest {
             new GroupSpecImpl(
                 // members and taskOffsets
                 Map.of("member-1", createMemberMetadataAndState(member, memberTaskOffsets)),
-                // assignmentConfigs
-                AssignmentConfigsImpl.fromMap(Map.of(
-                    AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"
-                ))
+                AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)
             ),
             groupSpec
         );

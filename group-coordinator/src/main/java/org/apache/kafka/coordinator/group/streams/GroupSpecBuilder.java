@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -56,11 +55,13 @@ public class GroupSpecBuilder {
 
     /**
      * Constructs the object.
+     *
+     * @param assignmentConfigs The assignment configs to pass to the assignor.
      */
     public GroupSpecBuilder(
-        Map<String, String> assignmentConfigs
+        AssignmentConfigs assignmentConfigs
     ) {
-        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
+        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
     static MemberMetadataAndStateImpl createMemberMetadataAndState(
@@ -129,7 +130,7 @@ public class GroupSpecBuilder {
      * @return The {@link GroupSpec} describing the members and their existing assignments.
      */
     public GroupSpec build() {
-        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = Utils.newHashMap(members.size());
 
         // Prepare the member metadata for all members.
         members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(

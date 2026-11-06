@@ -138,7 +138,9 @@ The protocol is built out of the following primitive types.
 
 {{< include-html file="/static/{version}/generated/protocol_types.html" >}} 
 
-Message versions marked as flexible use the compact encoding for variable-length fields. In particular, arrays use `COMPACT_ARRAY` rather than `ARRAY`; strings and byte arrays similarly use their corresponding `COMPACT_*` types. Compact encodings store their length as an unsigned variable-length integer instead of a fixed-width integer. Flexible versions also include a tagged-fields section at the end of every request and response component.
+By default, message versions marked as flexible use the compact encoding for variable-length fields. In particular, arrays use `COMPACT_ARRAY` rather than `ARRAY`; strings and byte arrays similarly use their corresponding `COMPACT_*` types. Compact encodings store their length as an unsigned variable-length integer instead of a fixed-width integer. Flexible versions also include a tagged-fields section at the end of every request and response component.
+
+Individual fields can override this encoding in the message schema. For example, `ClientId` in flexible request headers uses `NULLABLE_STRING` with a two-byte length prefix, rather than `COMPACT_NULLABLE_STRING`, so that older brokers can read the header of an `ApiVersions` request.
 
 ### Notes on reading the request format grammars
 

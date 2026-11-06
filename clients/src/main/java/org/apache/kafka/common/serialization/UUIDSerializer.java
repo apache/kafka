@@ -26,7 +26,7 @@ import java.util.UUID;
 
 /**
  *  We are converting UUID to String before serializing. String encoding defaults to UTF8 and can be customized by setting
- *  the property key.deserializer.encoding, value.deserializer.encoding or deserializer.encoding. The first two take precedence over the last.
+ *  the property key.serializer.encoding, value.serializer.encoding or serializer.encoding. The first two take precedence over the last.
  */
 @InterfaceAudience.Public
 public class UUIDSerializer implements Serializer<UUID> {

@@ -136,6 +136,31 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testUpdateAndRetrieveHeartbeatVersions() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateHeartbeatVersion("old", 0);
+        streamsGroup.updateHeartbeatVersion("new", 1);
+
+        assertEquals(Map.of("old", 0, "new", 1), streamsGroup.heartbeatVersions());
+        // The refiner must not be able to change what the coordinator knows.
+        assertThrows(UnsupportedOperationException.class, () -> streamsGroup.heartbeatVersions().put("old", 1));
+
+        streamsGroup.updateHeartbeatVersion("old", 1);
+        assertEquals(1, streamsGroup.heartbeatVersions().get("old"));
+    }
+
+    @Test
+    public void testRemoveMemberForgetsItsHeartbeatVersion() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+
+        streamsGroup.removeMember("member-id");
+
+        assertEquals(Map.of(), streamsGroup.heartbeatVersions());
+    }
+
+    @Test
     public void testCacheAndRetrieveRefinedAssignment() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 

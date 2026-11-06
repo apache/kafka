@@ -3512,6 +3512,29 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void testFetchOffsetByTimestampSearchesNextSegmentWhenMatchIsBelowLogStartOffset() throws IOException {
+        long targetTimestamp = mockTime.milliseconds();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        // DeleteRecords moves the start offset past the matching record, leaving a lower-timestamp record in the segment.
+        log.appendAsLeader(singletonRecords("deleted-max".getBytes(), targetTimestamp), 0);
+        log.appendAsLeader(singletonRecords("retained-low-timestamp".getBytes(), targetTimestamp - 1), 0);
+        log.roll();
+        log.appendAsLeader(singletonRecords("valid-later-record".getBytes(), targetTimestamp), 0);
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(1L, log.logStartOffset());
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(targetTimestamp, 2L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(targetTimestamp, Optional.empty()));
+    }
+
+    @Test
     public void testFetchOffsetByTimestampWithMaxTimestampIncludesTimestamp() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(200)
@@ -4416,6 +4439,35 @@ public class UnifiedLogTest {
 
         log.updateHighWatermark(log.logEndOffset());
         assertEquals(Optional.empty(), log.firstUnstableOffset());
+    }
+
+    @Test
+    public void testCollectAbortedTransactionsFromStartOffset() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024 * 5)
+                .build();
+        UnifiedLog log = createLog(logDir, logConfig);
+        short epoch = 0;
+        long pid1 = 1L;
+        long pid2 = 2L;
+        Consumer<Integer> appendPid1 = LogTestUtils.appendTransactionalAsLeader(log, pid1, epoch, mockTime);
+        Consumer<Integer> appendPid2 = LogTestUtils.appendTransactionalAsLeader(log, pid2, epoch, mockTime);
+
+        appendPid1.accept(2); // 0-1
+        appendPid2.accept(2); // 2-3
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 4
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3); // 5-7
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT,
+            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 8
+        LogTestUtils.appendNonTransactionalAsLeader(log, 3); // 9-11
+
+        AbortedTxn abortedPid1 = new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(4L).setLastStableOffset(2L);
+        AbortedTxn abortedPid2 = new AbortedTxn().setProducerId(pid2).setFirstOffset(2L).setLastOffset(8L).setLastStableOffset(9L);
+        assertEquals(List.of(abortedPid1, abortedPid2), log.collectAbortedTransactions(0L, 12L));
+        // The transaction of pid1 ended at offset 4, the one of pid2 spans offset 6
+        assertEquals(List.of(abortedPid2), log.collectAbortedTransactions(6L, 12L));
+        assertEquals(List.of(), log.collectAbortedTransactions(9L, 12L));
     }
 
     private void createEmptyLogs(File dir, int... offsets) throws IOException {

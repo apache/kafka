@@ -332,7 +332,8 @@ class ReplicaManagerTest {
       partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
         new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
-      // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
+      // this method should use the initial fetch offset of the future log to create the log dir
+      // fetcher. Otherwise, it causes offset mismatch error
       rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(topicPartition).foreach(s => assertEquals(0L, s.fetchOffset)))
       // make sure alter log dir thread has processed the data
@@ -340,6 +341,67 @@ class ReplicaManagerTest {
       assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
       // the future log becomes the current log, so the partition state should get removed
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => assertEquals(None, t.fetchState(topicPartition)))
+    } finally {
+      rm.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testMaybeAddLogDirFetchersWhenFutureLogIsAheadOfHighWatermark(): Unit = {
+    val dir1 = TestUtils.tempDir()
+    val dir2 = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0)
+    props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), new LogConfig(new Properties()))
+    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
+    when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.MINIMUM_VERSION)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+
+    try {
+      val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId = topicIds(topic))
+      val image = imageFromTopics(delta.apply())
+      rm.applyDelta(delta, image)
+      val partition = rm.getPartitionOrException(topicPartition)
+      val leaderEpoch = partition.getLeaderEpoch
+
+      // Append one record per batch, so that the future log can be at a batch boundary below the log
+      // end offset of the current replica. Fetches are batch aligned, so a future log in the middle
+      // of a batch is not a state the fetcher can be in.
+      appendRecords(rm, topicPartition, MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes())))
+      appendRecords(rm, topicPartition, MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("second message".getBytes())))
+      logManager.maybeUpdatePreferredLogDir(topicPartition, dir2.getAbsolutePath)
+
+      partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
+
+      // Simulate a future log which has already replicated a record that is not committed on the
+      // current replica yet, so that its log end offset is ahead of its high watermark.
+      partition.appendRecordsToFollowerOrFutureReplica(
+        MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch, new SimpleRecord("first message".getBytes())),
+        isFuture = true, leaderEpoch)
+      val futureLog = partition.futureLocalLogOrException
+      assertTrue(futureLog.logEndOffset > futureLog.highWatermark)
+      assertTrue(futureLog.latestEpoch.isPresent)
+
+      // The fetcher has to start from the log end offset of the future log. Starting from its high
+      // watermark makes the first fetch fail with an offset mismatch in
+      // ReplicaAlterLogDirsThread.processPartitionData, which marks the partition as failed.
+      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
+      // The fetcher must start from the future log's end offset, not its high watermark.
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t =>
+        t.fetchState(topicPartition).foreach(s => assertEquals(futureLog.logEndOffset, s.fetchOffset)))
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
+      assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
     } finally {
       rm.shutdown(checkpointHW = false)
     }

@@ -181,12 +181,8 @@ Some suggested steps:
  * Validate GPG signatures on at least one file:
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz &&
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.asc &&
-      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.md5 &&
-      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha1 &&
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha512 &&
       gpg --verify kafka-{release_version}-src.tgz.asc kafka-{release_version}-src.tgz &&
-      gpg --print-md md5 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.md5 &&
-      gpg --print-md sha1 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha1 &&
       gpg --print-md sha512 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha512 &&
       rm kafka-{release_version}-src.tgz* &&
       echo "OK" || echo "Failed"

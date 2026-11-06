@@ -336,15 +336,11 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without username");
-        } catch (IOException e) {
-            // Expected exception
-            assertTrue(selector.channels().isEmpty(), "Channels not closed");
-            for (SelectionKey key : selector.keys())
-                assertFalse(key.isValid(), "Key not cancelled");
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE),
+                "SASL/PLAIN channel created without username");
+        assertTrue(selector.channels().isEmpty(), "Channels not closed");
+        for (SelectionKey key : selector.keys())
+            assertFalse(key.isValid(), "Key not cancelled");
     }
 
     /**
@@ -1245,32 +1241,17 @@ public class SaslAuthenticatorTest {
         Class<?> loginCallback = TestLoginCallbackHandler.class;
         assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with default login handler");
 
-        try {
-            saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener+mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener+mechanism prefix");
+        saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener prefix");
+        saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without mechanism prefix");
+        saslServerConfigs.remove(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
         // Connection should succeed using login callback override for mechanism
         saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
@@ -1613,7 +1594,7 @@ public class SaslAuthenticatorTest {
          * original token with a new one.
          */
         delay(1000L);
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyReauthenticationMetrics(0, 1);
     }
 
@@ -1733,7 +1714,7 @@ public class SaslAuthenticatorTest {
          * to sleep long enough so that the next write will trigger a re-authentication.
          */
         delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyAuthenticationMetrics(1, 0);
         server.verifyReauthenticationMetrics(0, 1);
     }
@@ -2336,6 +2317,12 @@ public class SaslAuthenticatorTest {
     
     private void checkClientConnection(String node) throws Exception {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    private void assertClientConnectionDisconnects(String node) {
+        AssertionFailedError e = assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"),
+            "Expected disconnection failure, but got: " + e.getMessage());
     }
 
     private void closeClientConnectionIfNecessary() {

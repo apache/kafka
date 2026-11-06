@@ -736,6 +736,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
         NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
+        long searchedThrough = startingOffset - 1;
         while (maybeEpoch.isPresent()) {
             int epoch = maybeEpoch.getAsInt();
             // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
@@ -743,6 +744,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition, epoch);
             while (iterator.hasNext()) {
                 RemoteLogSegmentMetadata rlsMetadata = iterator.next();
+                // Skip segments already searched: a segment spanning multiple leader epochs is listed once for each epoch.
+                if (rlsMetadata.endOffset() <= searchedThrough) {
+                    continue;
+                }
                 if (rlsMetadata.maxTimestampMs() >= timestamp
                     && rlsMetadata.endOffset() >= startingOffset
                     && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
@@ -751,14 +756,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     List<LogSegment> segmentsCopy = unifiedLog.logSegments();
                     if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
                         // search in remote-log
-                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
-                    } else {
-                        // search in local-log
-                        for (LogSegment segment : segmentsCopy) {
-                            if (segment.largestTimestamp() >= timestamp) {
-                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
-                            }
+                        Optional<FileRecords.TimestampAndOffset> timestampAndOffset =
+                                lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                        if (timestampAndOffset.isPresent()) {
+                            return timestampAndOffset;
                         }
+                        searchedThrough = rlsMetadata.endOffset();
+                    } else {
+                        // The local log covers this segment and all later offsets, so its result is final.
+                        return unifiedLog.searchOffsetInLocalLog(segmentsCopy, timestamp, startingOffset);
                     }
                 }
             }

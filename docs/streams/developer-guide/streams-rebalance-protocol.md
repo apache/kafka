@@ -125,6 +125,7 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
 * [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
 * [`group.streams.assignors`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.assignors): The task assignors available to streams groups, as a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor for groups that do not select one with `streams.assignor.name`.
+* [`group.streams.rack.aware.assignment.tags`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.rack.aware.assignment.tags): The default list of client tag keys used to distribute standby replicas across Kafka Streams instances, when the broker-side assignor supports it.
 
 ## Group Configuration
 
@@ -139,6 +140,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
 * [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
+* [`streams.rack.aware.assignment.tags`](/{version}/configuration/group-configs#groupconfigs_streams.rack.aware.assignment.tags): The list of client tag keys used to distribute standby replicas across Kafka Streams instances, when the broker-side assignor supports it.
 
 ### Example: Setting Group-Level Configuration
 ```

@@ -19,8 +19,10 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -268,6 +270,38 @@ class StreamsGroupHeartbeatRequestManagerTest {
             null
         ));
         assertEquals("Streams rebalance data cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 1000;
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+
+        ConsumerConfig testConfig =
+            new ConsumerConfig(config.originals(Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager(testConfig);
+
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+
+        // Keep the first heartbeat in flight; neither polling path should busy-spin or generate another request.
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
+
+        long elapsedMs = requestTimeoutMs / 2;
+        time.sleep(elapsedMs);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs - elapsedMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
     }
 
     @Test
@@ -2729,6 +2763,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {
+        return createStreamsGroupHeartbeatRequestManager(config);
+    }
+
+    private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager(ConsumerConfig config) {
         return new StreamsGroupHeartbeatRequestManager(
             LOG_CONTEXT,
             time,
@@ -2818,6 +2856,62 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     .setErrorMessage(errorMessage)
             )
         );
+    }
+
+    @Test
+    public void testUnknownStatusCodeFailsMemberFatally() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            final byte unknownStatusCode = (byte) (StreamsGroupHeartbeatResponse.Status.knownCodes().last() + 1);
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            result.unsentRequests.get(0).handler().onComplete(new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(unknownStatusCode)
+                            .setStatusDetail("a condition this client has never heard of")))
+                )
+            ));
+
+            // Fatal, not swallowed: the member must be told, and the error must reach the application.
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            final ArgumentCaptor<BackgroundEvent> eventCaptor = ArgumentCaptor.forClass(BackgroundEvent.class);
+            verify(backgroundEventHandler).add(eventCaptor.capture());
+            final ErrorEvent errorEvent = assertInstanceOf(ErrorEvent.class, eventCaptor.getValue());
+            assertInstanceOf(KafkaException.class, errorEvent.error());
+            final String message = errorEvent.error().getMessage();
+            assertTrue(message.contains("(" + unknownStatusCode + ") a condition this client has never heard of"),
+                "The unknown status should be named with its detail: " + message);
+            assertTrue(message.contains(StreamsGroupHeartbeatResponse.Status.knownCodes().toString()),
+                "The known status codes should be listed: " + message);
+
+            // Nothing from the rejected response is applied: the member epoch is not advanced, the assignment is not
+            // processed, and neither the statuses nor the group configuration carried by the response are stored.
+            verify(membershipManager, never()).onHeartbeatSuccess(any());
+            assertEquals(List.of(), streamsRebalanceData.statuses());
+            assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+
+            // The request is recorded as a failed attempt, as on the other fatal paths.
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(time.milliseconds());
+            verify(heartbeatRequestState, never()).onSuccessfulAttempt(anyLong());
+        }
     }
 
     @Test

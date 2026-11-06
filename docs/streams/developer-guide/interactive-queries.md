@@ -177,7 +177,7 @@ Note: These examples use `QueryableStoreTypes.keyValueStore()` and `ReadOnlyKeyV
     KafkaStreams streams = new KafkaStreams(builder, props);
     streams.start();
 
-After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java) API:
+After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java) API:
     
     
     // Get the key-value store CountsKeyValueStore
@@ -238,7 +238,7 @@ Note: These examples use `QueryableStoreTypes.windowStore()` and `ReadOnlyWindow
     groupedByWord.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(60)))
       .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>as("CountsWindowStore"));
 
-After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java) API:
+After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java) API:
     
     
     // Get the window store named "CountsWindowStore"
@@ -526,7 +526,7 @@ The class/interface hierarchy for your custom store might look something like:
 
 To make this store queryable you must:
 
-  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
+  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
   * Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
 
 
@@ -549,7 +549,7 @@ Here is how to implement `QueryableStoreType`:
 
 A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
 
-When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
+When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
 
 Here is an example implementation of the wrapper:
     
