@@ -77,7 +77,7 @@ public class LineMessageReader implements RecordReader {
             headersDelimiter = props.get("headers.delimiter").toString();
         if (props.containsKey("headers.separator"))
             headersSeparator = props.get("headers.separator").toString();
-        headersSeparatorPattern = Pattern.compile(headersSeparator);
+        headersSeparatorPattern = Pattern.compile(headersSeparator, Pattern.LITERAL);
         if (props.containsKey("headers.key.separator"))
             headersKeySeparator = props.get("headers.key.separator").toString();
         if (props.containsKey("ignore.error"))
