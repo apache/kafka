@@ -333,7 +333,7 @@ public class LogValidator {
             // then we can optimize the iterator to skip key / value / headers since they would not be used at all
             CloseableIterator<Record> recordsIterator;
             if (inPlaceAssignment && firstBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                recordsIterator = batch.skipKeyValueIterator(bufferSupplier, maxRecordBodySize);
+                recordsIterator = batch.skipKeyValueIterator(bufferSupplier);
             else
                 recordsIterator = batch.streamingIterator(bufferSupplier, maxRecordBodySize);
 

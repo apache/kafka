@@ -376,25 +376,18 @@ public class DefaultRecord implements Record {
     }
 
     /**
-     * Skip-decode a record from the (decompressed) stream, rejecting any record whose declared body
-     * size exceeds {@code maxRecordBodySize}. See
-     * {@link #readFrom(InputStream, long, long, int, Long, int)}.
+     * Skip-decode a record from the (decompressed) stream. Unlike
+     * {@link #readFrom(InputStream, long, long, int, Long, int)}, no buffer is allocated for the record
+     * body, so the declared body size is not limited.
      */
     public static PartialDefaultRecord readPartiallyFrom(InputStream input,
                                                          long baseOffset,
                                                          long baseTimestamp,
                                                          int baseSequence,
-                                                         Long logAppendTime,
-                                                         int maxRecordBodySize) throws IOException {
+                                                         Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         if (sizeOfBodyInBytes < 0)
             throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes + " is negative.");
-        // Reject records whose declared (decompressed) body exceeds the configured per-record
-        // maximum; as in readFrom, this doubles as the array-length allocation guard because
-        // maxRecordBodySize never exceeds SOFT_MAX_ARRAY_LENGTH.
-        if (sizeOfBodyInBytes > maxRecordBodySize)
-            throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes +
-                " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
         return readPartiallyFrom(input, totalSizeInBytes, baseOffset, baseTimestamp,
