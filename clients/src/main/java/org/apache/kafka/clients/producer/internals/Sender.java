@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -122,6 +123,9 @@ public class Sender implements Runnable {
     /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
+    /* the client telemetry sender, if telemetry is enabled, whose terminating push is awaited at close */
+    private final ClientTelemetrySender clientTelemetrySender;
+
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
@@ -137,7 +141,8 @@ public class Sender implements Runnable {
                   Time time,
                   int requestTimeoutMs,
                   long retryBackoffMs,
-                  TransactionManager transactionManager) {
+                  TransactionManager transactionManager,
+                  ClientTelemetrySender clientTelemetrySender) {
         this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
@@ -152,6 +157,7 @@ public class Sender implements Runnable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.transactionManager = transactionManager;
+        this.clientTelemetrySender = clientTelemetrySender;
         this.inFlightBatches = new HashMap<>();
     }
 
@@ -284,6 +290,18 @@ public class Sender implements Runnable {
             }
         }
 
+        // Give the client telemetry sender the chance to make its final, terminating metrics push now that
+        // all other work is done. The wait is bounded by the request timeout so that an unreachable cluster
+        // cannot delay closing indefinitely.
+        long terminatingPushDeadlineMs = time.milliseconds() + requestTimeoutMs;
+        while (!forceClose && isTerminatingTelemetryPushPending(terminatingPushDeadlineMs)) {
+            try {
+                runOnce();
+            } catch (Exception e) {
+                log.error("Uncaught error in kafka producer I/O thread: ", e);
+            }
+        }
+
         if (forceClose) {
             // We need to fail all the incomplete transactional requests and batches and wake up the threads waiting on
             // the futures.
@@ -301,6 +319,16 @@ public class Sender implements Runnable {
         }
 
         log.debug("Shutdown of Kafka producer I/O thread has completed.");
+    }
+
+    /**
+     * Whether the I/O thread should keep running at close so that the telemetry reporter's terminating
+     * metrics push can be sent and its reponse received, until the given deadline.
+     */
+    private boolean isTerminatingTelemetryPushPending(long deadlineMs) {
+        return clientTelemetrySender != null
+            && time.milliseconds() < deadlineMs
+            && clientTelemetrySender.isTerminatingPushPending();
     }
 
     /**
