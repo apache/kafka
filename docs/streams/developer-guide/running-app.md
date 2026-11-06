@@ -141,8 +141,8 @@ Example:
 
         @Override
         public void onBatchLoaded(TopicPartition topicPartition, String storeName,
-                                  TaskId taskId, long batchEndOffset,
-                                  long batchSize, long currentEndOffset) {
+                                  long batchEndOffset, long batchSize,
+                                  long currentEndOffset) {
             // track standby replication progress
         }
 
@@ -224,5 +224,4 @@ If your Kafka Streams application does crash or fail, it will first enter the `P
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
   * [Developer Guide](/documentation/streams/developer-guide/)
-
 

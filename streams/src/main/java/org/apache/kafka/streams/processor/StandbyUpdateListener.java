@@ -108,6 +108,29 @@ public interface StandbyUpdateListener {
      *        the changelog {@link TopicPartition} for this task
      * @param storeName
      *        the name of the store being loaded
+     * @param batchEndOffset
+     *        the changelog end offset (inclusive) of the batch that was just loaded
+     * @param batchSize
+     *        the total number of records in the batch that was just loaded
+     * @param currentEndOffset
+     *        the current end offset of the changelog topic partition
+     */
+    default void onBatchLoaded(
+        final TopicPartition topicPartition,
+        final String storeName,
+        final long batchEndOffset,
+        final long batchSize,
+        final long currentEndOffset
+    ) {
+    }
+
+    /**
+     * Method called after loading a batch of records.
+     *
+     * @param topicPartition
+     *        the changelog {@link TopicPartition} for this task
+     * @param storeName
+     *        the name of the store being loaded
      * @param taskId
      *        the {@link TaskId} of the task that owns the store being loaded
      * @param batchEndOffset
@@ -116,15 +139,19 @@ public interface StandbyUpdateListener {
      *        the total number of records in the batch that was just loaded
      * @param currentEndOffset
      *        the current end offset of the changelog topic partition
+     * @deprecated Since 4.5. Use {@link #onBatchLoaded(TopicPartition, String, long, long, long)} instead.
      */
-    void onBatchLoaded(
+    @Deprecated(since = "4.5")
+    default void onBatchLoaded(
         final TopicPartition topicPartition,
         final String storeName,
         final TaskId taskId,
         final long batchEndOffset,
         final long batchSize,
         final long currentEndOffset
-    );
+    ) {
+        onBatchLoaded(topicPartition, storeName, batchEndOffset, batchSize, currentEndOffset);
+    }
 
     /**
      * Method called when the corresponding standby or warm-up task stops being updated, for the provided reason.
