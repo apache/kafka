@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -440,13 +441,14 @@ public class GlobalStreamThread extends Thread {
 
             try {
                 stateConsumer.initialize();
-            } catch (final InvalidOffsetException recoverableException) {
+            } catch (final InvalidOffsetException | TaskCorruptedException recoverableException) {
                 log.error(
-                    "Bootstrapping global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
+                    "Bootstrapping global state failed due to inconsistent or corrupted local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                     recoverableException
                 );
 
                 closeStateConsumer(stateConsumer, true);
+                stateConsumer = null;
 
                 throw new StreamsException(
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
