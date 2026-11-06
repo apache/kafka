@@ -114,7 +114,7 @@ Apache Kafka does not encrypt log segments, indexes, snapshots, or controller me
 
 ## Audit Logging
 
-Apache Kafka emits authorizer decisions to the `kafka.authorizer.logger` log4j logger. Setting this logger to `INFO` records every denied request; `DEBUG` records every allowed request as well. In regulated environments this log should be shipped to durable, append-only storage off-broker. There is no built-in tamper-evident audit trail.
+Apache Kafka emits authorizer decisions to the `kafka.authorizer.logger` log4j logger. Setting this logger to `INFO` records every allowed request; `WARN` records every denied request as well. In regulated environments this log should be shipped to durable, append-only storage off-broker. There is no built-in tamper-evident audit trail.
 
 The request log (`kafka.request.logger`) provides finer detail on individual API calls and is useful for forensic investigation, but it is verbose and not enabled by default.
 
