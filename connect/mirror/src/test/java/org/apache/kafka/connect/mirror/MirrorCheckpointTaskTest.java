@@ -22,6 +22,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -370,5 +371,64 @@ public class MirrorCheckpointTaskTest {
         when(checkpointStore.isInitialized()).thenReturn(true);
         List<SourceRecord> polled = task.poll();
         assertEquals(1, polled.size());
+    }
+
+    /**
+     * A {@link GroupMirroringPolicy} that prefixes the source cluster alias, mirroring
+     * the same convention that {@link DefaultReplicationPolicy} uses for topics.
+     */
+    static class PrefixGroupMirroringPolicy implements GroupMirroringPolicy {
+        @Override
+        public String targetGroupId(String sourceClusterAlias, String group) {
+            return sourceClusterAlias + "." + group;
+        }
+
+        @Override
+        public String sourceGroupId(String sourceClusterAlias, String targetGroup) {
+            String prefix = sourceClusterAlias + ".";
+            return targetGroup.startsWith(prefix) ? targetGroup.substring(prefix.length()) : null;
+        }
+    }
+
+    @Test
+    public void testCheckpointUsesTargetGroupId() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start(true);
+
+        MirrorCheckpointTask task = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), new PrefixGroupMirroringPolicy(),
+                offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
+                new CheckpointStore(Collections.emptyMap()));
+
+        offsetSyncStore.sync(new TopicPartition("topic1", 0), 10L, 20L);
+
+        Optional<Checkpoint> result = task.checkpoint("my-app", new TopicPartition("topic1", 0),
+                new OffsetAndMetadata(15, null));
+
+        assertTrue(result.isPresent());
+        // The checkpoint consumer group ID must be the *target* name, not the source name.
+        assertEquals("source1.my-app", result.get().consumerGroupId(),
+                "checkpoint consumerGroupId should be the renamed target group");
+    }
+
+    @Test
+    public void testCheckpointPreservesGroupIdWithDefaultPolicy() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start(true);
+
+        MirrorCheckpointTask task = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), new DefaultGroupMirroringPolicy(),
+                offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
+                new CheckpointStore(Collections.emptyMap()));
+
+        offsetSyncStore.sync(new TopicPartition("topic1", 0), 10L, 20L);
+
+        Optional<Checkpoint> result = task.checkpoint("my-app", new TopicPartition("topic1", 0),
+                new OffsetAndMetadata(15, null));
+
+        assertTrue(result.isPresent());
+        // DefaultGroupMirroringPolicy is an identity — group name must be unchanged.
+        assertEquals("my-app", result.get().consumerGroupId(),
+                "DefaultGroupMirroringPolicy should leave the group ID unchanged");
     }
 }
