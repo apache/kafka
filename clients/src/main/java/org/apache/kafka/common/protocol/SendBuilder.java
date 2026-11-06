@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.clients.producer.internals.CompositeMemoryRecords;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.internal.BaseRecords;
@@ -141,6 +142,11 @@ public class SendBuilder implements Writable {
         } else if (records instanceof UnalignedMemoryRecords) {
             flushPendingBuffer();
             addBuffer(((UnalignedMemoryRecords) records).buffer());
+        } else if (records instanceof CompositeMemoryRecords) {
+            flushPendingBuffer();
+            for (ByteBuffer buffer : ((CompositeMemoryRecords) records).buffers()) {
+                addBuffer(buffer);
+            }
         } else {
             flushPendingSend();
             addSend(records.toSend());

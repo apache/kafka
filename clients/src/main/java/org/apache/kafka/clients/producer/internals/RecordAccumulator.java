@@ -36,7 +36,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
@@ -350,8 +349,10 @@ public class RecordAccumulator {
                         continue;
 
                     final ByteBuffer batchBuffer = buffer;
+                    final long createdMs = nowMs;
                     RecordAppendResult appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
-                            () -> MemoryRecords.builder(batchBuffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L),
+                            () -> new ProducerBatch(tp, MemoryRecords.builder(batchBuffer, RecordBatch.CURRENT_MAGIC_VALUE,
+                                    compression, TimestampType.CREATE_TIME, 0L), createdMs),
                             nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
@@ -456,10 +457,9 @@ public class RecordAccumulator {
      * @param value The value for the record
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
-     * @param recordsBuilderSupplier Supplies the {@link MemoryRecordsBuilder} for the new
-     *        batch. Invoked lazily, only when a new batch is actually created. The chunked
-     *        subclass passes a supplier that produces a builder backed by a
-     *        {@link ChunkedByteBufferOutputStream}.
+     * @param batchSupplier Supplies the new {@link ProducerBatch}. Invoked lazily, only when a new
+     *        batch is actually created. The chunked subclass passes a supplier that produces a
+     *        {@link ChunkedProducerBatch}.
      * @param nowMs The current time, in milliseconds
      * @return the append result, which is never {@code needsNewBatch}. It is either {@code appended}
      *         — the record was appended, whether to a batch another thread created concurrently or to
@@ -474,7 +474,7 @@ public class RecordAccumulator {
                                                 byte[] value,
                                                 Header[] headers,
                                                 AppendCallbacks callbacks,
-                                                Supplier<MemoryRecordsBuilder> recordsBuilderSupplier,
+                                                Supplier<ProducerBatch> batchSupplier,
                                                 long nowMs) {
         assert tp.partition() != RecordMetadata.UNKNOWN_PARTITION;
 
@@ -487,8 +487,7 @@ public class RecordAccumulator {
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilderSupplier.get();
-        ProducerBatch batch = createProducerBatch(tp, recordsBuilder, nowMs);
+        ProducerBatch batch = batchSupplier.get();
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
@@ -496,14 +495,6 @@ public class RecordAccumulator {
         incomplete.add(batch);
 
         return RecordAppendResult.appended(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
-    }
-
-    /**
-     * Create the {@link ProducerBatch} for a new batch. The incremental strategy overrides this to
-     * create a {@link ChunkedProducerBatch}.
-     */
-    protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
-        return new ProducerBatch(tp, recordsBuilder, nowMs);
     }
 
     /**

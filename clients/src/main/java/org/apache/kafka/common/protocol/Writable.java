@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.clients.producer.internals.CompositeMemoryRecords;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -43,6 +44,10 @@ public interface Writable {
         } else if (records instanceof UnalignedMemoryRecords) {
             UnalignedMemoryRecords memRecords = (UnalignedMemoryRecords) records;
             writeByteBuffer(memRecords.buffer());
+        } else if (records instanceof CompositeMemoryRecords) {
+            for (ByteBuffer buffer : ((CompositeMemoryRecords) records).buffers()) {
+                writeByteBuffer(buffer);
+            }
         } else {
             throw new UnsupportedOperationException("Unsupported record type " + records.getClass());
         }
