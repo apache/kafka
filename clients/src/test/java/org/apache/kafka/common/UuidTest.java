@@ -83,6 +83,15 @@ public class UuidTest {
 
         assertNotEquals(Uuid.ZERO_UUID, randomID);
         assertNotEquals(Uuid.METADATA_TOPIC_ID, randomID);
+        assertFalse(randomID.toString().startsWith("-"));
+    }
+
+    @RepeatedTest(value = 100, name = RepeatedTest.LONG_DISPLAY_NAME)
+    public void testRandomUuidNoDash() {
+        Uuid randomID = Uuid.randomUuidNoDashes();
+
+        assertNotEquals(Uuid.ZERO_UUID, randomID);
+        assertNotEquals(Uuid.METADATA_TOPIC_ID, randomID);
         assertFalse(randomID.toString().contains("-"));
     }
 
