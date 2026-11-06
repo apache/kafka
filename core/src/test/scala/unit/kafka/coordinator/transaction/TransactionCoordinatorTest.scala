@@ -756,7 +756,7 @@ class TransactionCoordinatorTest {
   def shouldCommitEmptyTransactionOnEndTxnRequestWhenStatusIsCompleteAbortAndResultIsCommitInV2(): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, (producerEpoch - 1).toShort, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
+      producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
@@ -968,7 +968,7 @@ class TransactionCoordinatorTest {
   @EnumSource(value = classOf[TransactionState], names = Array("EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"))
   def shouldPrepareEmptyCommitInV2(state: TransactionState): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, (producerEpoch - 1).toShort, 1, state, util.Set.of, 0, time.milliseconds(), TV_2)
+      producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, state, util.Set.of, 0, time.milliseconds(), TV_2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
     when(transactionManager.appendTransactionToLog(
@@ -1003,7 +1003,7 @@ class TransactionCoordinatorTest {
     mockPidGenerator()
     nextPid = producerId2
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, state, util.Set.of, 0, time.milliseconds(), TV_2)
+      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, state, util.Set.of, 0, time.milliseconds(), TV_2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
     when(transactionManager.appendTransactionToLog(
@@ -1036,7 +1036,7 @@ class TransactionCoordinatorTest {
     // A stale coordinator sees the transaction as empty since its partitions were added on the new coordinator,
     // but it cannot replicate the write, so the client gets a retriable error rather than INVALID_TXN_STATE.
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, (producerEpoch - 1).toShort, 1, TransactionState.COMPLETE_COMMIT, util.Set.of, 0, time.milliseconds(), TV_2)
+      producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_COMMIT, util.Set.of, 0, time.milliseconds(), TV_2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
     when(transactionManager.appendTransactionToLog(

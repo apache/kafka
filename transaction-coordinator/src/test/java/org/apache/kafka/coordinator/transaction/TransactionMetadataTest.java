@@ -217,6 +217,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             state,
             Set.of(),
@@ -225,7 +226,7 @@ public class TransactionMetadataTest {
             TV_2
         );
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state());
         assertEquals(producerId, txnMetadata.producerId());

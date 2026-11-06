@@ -878,7 +878,7 @@ class TransactionStateManagerTest {
       if (state == TransactionState.PREPARE_COMMIT) (TransactionResult.COMMIT, TransactionState.COMPLETE_COMMIT)
       else (TransactionResult.ABORT, TransactionState.COMPLETE_ABORT)
     val txnMetadata = new TransactionMetadata(transactionalId1, producerIds(transactionalId1), RecordBatch.NO_PRODUCER_ID,
-      RecordBatch.NO_PRODUCER_ID, 1.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, state,
+      RecordBatch.NO_PRODUCER_ID, 1.toShort, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, state,
       util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))

@@ -596,7 +596,7 @@ class TransactionMarkerChannelManagerTest {
       if (result == TransactionResult.COMMIT) (TransactionState.PREPARE_COMMIT, TransactionState.COMPLETE_COMMIT)
       else (TransactionState.PREPARE_ABORT, TransactionState.COMPLETE_ABORT)
     val txnMetadata = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, lastProducerEpoch, txnTimeoutMs, prepareState, util.Set.of, 0L, 0L, TransactionVersion.TV_2)
+      producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, prepareState, util.Set.of, 0L, 0L, TransactionVersion.TV_2)
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
