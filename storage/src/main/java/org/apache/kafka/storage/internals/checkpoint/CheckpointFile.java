@@ -56,7 +56,7 @@ import java.util.Optional;
  * @param <T> entry type.
  */
 public class CheckpointFile<T> {
-    private static final Logger log = LoggerFactory.getLogger(CheckpointFile.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CheckpointFile.class);
 
     public final File file;
     private final int version;
@@ -98,7 +98,7 @@ public class CheckpointFile<T> {
         try {
             writeInternal(entries);
         } catch (FileNotFoundException | NoSuchFileException e) {
-            log.warn("Failed to write to checkpoint file {}. This is ok if the topic/partition is being deleted", file.getAbsolutePath(), e);
+            LOG.warn("Failed to write to checkpoint file {}. This is ok if the topic/partition is being deleted", file.getAbsolutePath(), e);
         } catch (IOException e) {
             throw handleFailure("writing to", e);
         }
