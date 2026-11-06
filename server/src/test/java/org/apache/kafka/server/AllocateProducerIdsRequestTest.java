@@ -164,7 +164,7 @@ public class AllocateProducerIdsRequestTest {
     private AllocateProducerIdsResponse allocateProducerIds(int controllerId, int brokerId, long brokerEpoch) throws IOException {
         var request = new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData()
             .setBrokerId(brokerId)
-            .setBrokerEpoch(brokerEpoch)).build();
+            .setBrokerEpoch(brokerEpoch), (short) 3).build();
         int port = cluster.controllers().get(controllerId).socketServer().boundPort(cluster.controllerListenerName());
         return IntegrationTestUtils.connectAndReceive(request, port);
     }
