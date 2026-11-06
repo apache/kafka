@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.connect.integration;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.sourceOffset;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.sourcePartition;
+import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectStandalone;
 
@@ -27,7 +33,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.integration.TestableSourceConnector.MAX_MESSAGES_PER_SECOND_CONFIG;
@@ -63,7 +68,10 @@ public class MonitorableSourceIntegrationTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         // setup Connect cluster with defaults
-        connect = new EmbeddedConnectStandalone.Builder().build();
+        final int offsetCommitIntervalMs = 100;
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+        connect = new EmbeddedConnectStandalone.Builder().workerProps(workerProps).build();
 
         // start Connect cluster
         connect.start();
@@ -85,6 +93,7 @@ public class MonitorableSourceIntegrationTest {
             CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName(),
             TASKS_MAX_CONFIG, "1",
             TOPIC_CONFIG, "test-topic",
+            MAX_MESSAGES_PRODUCED_CONFIG, Integer.toString(MINIMUM_MESSAGES),
             KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
             VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
             MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL,
@@ -102,6 +111,11 @@ public class MonitorableSourceIntegrationTest {
         // wait for the connector tasks to produce enough records
         connectorHandle.taskHandle(TASK_ID).awaitRecords(SOURCE_TASK_PRODUCE_TIMEOUT_MS);
         connectorHandle.taskHandle(TASK_ID).awaitCommits(TimeUnit.MINUTES.toMillis(1));
+
+        // verify offsets
+        Map<Map<String, Object>, Map<String, Object>> offsets = connectorHandle.taskHandle(TASK_ID).committedOffsets();
+        assertEquals(1, offsets.size()); // all offsets produced has the same source-partitions.
+        assertEquals(sourceOffset(MINIMUM_MESSAGES), offsets.get(sourcePartition(TASK_ID)));
 
         // check connector metric
         Map<MetricName, KafkaMetric> metrics = connect.connectMetrics().metrics().metrics();
