@@ -1812,6 +1812,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testAsDescribedGroup
 - testAsDescribedGroupFallbackToStreamsTopologyWhenConfiguredTopologyEmpty
 - testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology
+- testAsDescribedGroupUsesConfiguredTopologyWithoutStreamsTopology
 - testAsDescribedGroupWithStreamsTopologyHavingSubtopologies
 - testAsListedGroup
 - testCacheAndRetrieveRefinedAssignment
