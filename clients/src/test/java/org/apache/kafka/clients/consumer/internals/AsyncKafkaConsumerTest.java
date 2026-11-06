@@ -146,6 +146,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -349,6 +350,7 @@ public class AsyncKafkaConsumerTest {
         forceCommitCallbackInvocation();
 
         assertEquals(1, callback.invoked);
+        assertEquals(offsets, callback.offsets);
         assertNull(callback.exception);
     }
 
@@ -365,7 +367,63 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
         forceCommitCallbackInvocation();
 
-        assertSame(exception.getClass(), callback.exception.getClass());
+        assertEquals(1, callback.invoked);
+        assertEquals(offsets, callback.offsets);
+        assertSame(exception, callback.exception);
+    }
+
+    @Test
+    public void testCommitAsyncAllConsumedUserSuppliedCallbackWithInvalidOffsets() {
+        Properties props = requiredConsumerConfig();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 100);
+        props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 100);
+        consumer = newConsumer(props);
+
+        TopicPartition tp = new TopicPartition("my-topic", 1);
+        SubscriptionState subscriptions = consumer.subscriptions();
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, -1L);
+        markOffsetsReadyForCommitEventWithException();
+
+        MockCommitCallback callback = new MockCommitCallback();
+        assertThrows(TimeoutException.class, () -> consumer.commitAsync(callback));
+
+        ArgumentCaptor<AsyncCommitEvent> eventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        AsyncCommitEvent event = eventCaptor.getValue();
+        assertEquals(Optional.empty(), event.offsets());
+        assertFalse(event.offsetsReady().isDone());
+        assertFutureThrows(IllegalArgumentException.class, event.future());
+
+        assertEquals(0, callback.invoked);
+    }
+
+    @ParameterizedTest
+    @MethodSource("commitExceptionSupplier")
+    public void testCommitAsyncAllConsumedUserSuppliedCallbackWithException(Exception exception) {
+        consumer = newConsumer();
+        TopicPartition tp = new TopicPartition("my-topic", 1);
+        SubscriptionState subscriptions = consumer.subscriptions();
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 200L);
+        markOffsetsReadyForCommitEvent();
+
+        MockCommitCallback callback = new MockCommitCallback();
+        assertDoesNotThrow(() -> consumer.commitAsync(callback));
+
+        ArgumentCaptor<AsyncCommitEvent> eventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        AsyncCommitEvent event = eventCaptor.getValue();
+        assertEquals(Optional.of(Map.of(tp, new OffsetAndMetadata(200L))), event.offsets());
+
+        subscriptions.seek(tp, 300L);
+        event.future().completeExceptionally(exception);
+        forceCommitCallbackInvocation();
+
+        assertEquals(1, callback.invoked);
+        assertEquals(Map.of(tp, new OffsetAndMetadata(200L)), callback.offsets);
+        assertSame(exception, callback.exception);
     }
 
     @Test
@@ -1117,7 +1175,7 @@ public class AsyncKafkaConsumerTest {
         ArgumentCaptor<SyncCommitEvent> eventCaptor = ArgumentCaptor.forClass(SyncCommitEvent.class);
         verify(applicationEventHandler).add(eventCaptor.capture());
         SyncCommitEvent capturedEvent = eventCaptor.getValue();
-        assertFalse(capturedEvent.offsets().isPresent(), "Expected empty optional offsets");
+        assertTrue(capturedEvent.offsets().isPresent(), "Expected offsets from allConsumed.");
     }
 
     /**
@@ -1187,12 +1245,14 @@ public class AsyncKafkaConsumerTest {
 
     private static class MockCommitCallback implements OffsetCommitCallback {
         public int invoked = 0;
+        public Map<TopicPartition, OffsetAndMetadata> offsets;
         public Exception exception = null;
         public String completionThread;
 
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             invoked++;
+            this.offsets = offsets;
             this.completionThread = Thread.currentThread().getName();
             this.exception = exception;
         }
@@ -2588,6 +2648,7 @@ public class AsyncKafkaConsumerTest {
     private void completeCommitAsyncApplicationEventExceptionally(Exception ex) {
         doAnswer(invocation -> {
             AsyncCommitEvent event = invocation.getArgument(0);
+            event.setOffsetsIfOffsetsIsEmpty(event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed()));
             event.markOffsetsReady();
             event.future().completeExceptionally(ex);
             return null;
@@ -2610,8 +2671,11 @@ public class AsyncKafkaConsumerTest {
     private void completeCommitAsyncApplicationEventSuccessfully() {
         doAnswer(invocation -> {
             AsyncCommitEvent event = invocation.getArgument(0);
+            Map<TopicPartition, OffsetAndMetadata> offsets =
+                event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed());
+            event.setOffsetsIfOffsetsIsEmpty(offsets);
             event.markOffsetsReady();
-            event.future().complete(null);
+            event.future().complete(offsets);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
     }
@@ -2714,7 +2778,22 @@ public class AsyncKafkaConsumerTest {
     private void markOffsetsReadyForCommitEvent() {
         doAnswer(invocation -> {
             CommitEvent event = invocation.getArgument(0);
+            event.setOffsetsIfOffsetsIsEmpty(event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed()));
             event.markOffsetsReady();
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitEvent.class));
+    }
+
+    private void markOffsetsReadyForCommitEventWithException() {
+        doAnswer(invocation -> {
+            CommitEvent event = invocation.getArgument(0);
+            try {
+                Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed());
+                event.setOffsetsIfOffsetsIsEmpty(offsets);
+                event.markOffsetsReady();
+            } catch (Exception e) {
+                event.future().completeExceptionally(e);
+            }
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitEvent.class));
     }
