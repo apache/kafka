@@ -30,6 +30,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
@@ -71,7 +72,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        credentialCache = new CredentialCache();
+        credentialCache = new CredentialCache(ScramMechanism.mechanismNames());
         SaslAuthenticatorTest.TestLogin.loginCount.set(0);
         startTimeMs = time.milliseconds();
     }

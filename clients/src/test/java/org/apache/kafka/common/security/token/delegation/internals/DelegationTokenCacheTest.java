@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public class DelegationTokenCacheTest {
 
         assertEquals(token.tokenInfo(), cache.token("token1"));
         assertEquals(OWNER.getName(), cache.owner("token1"));
-        assertEquals(List.of(token.tokenInfo()), List.copyOf(cache.tokens()));
+        assertEquals(List.of(token), List.copyOf(cache.tokens()));
         assertEquals(token.tokenInfo(), cache.tokenForHmac(token.hmacAsBase64String()));
         for (String mechanism : ScramMechanism.mechanismNames()) {
             assertEquals(credentials.get(mechanism), cache.credential(mechanism, "token1"));
@@ -106,7 +107,7 @@ public class DelegationTokenCacheTest {
             assertNull(cache.credential(mechanism, "token1"));
         }
 
-        assertEquals(List.of(token2.tokenInfo()), List.copyOf(cache.tokens()));
+        assertEquals(List.of(token2), List.copyOf(cache.tokens()));
         assertEquals(token2.tokenInfo(), cache.tokenForHmac(token2.hmacAsBase64String()));
         for (String mechanism : ScramMechanism.mechanismNames()) {
             assertNotNull(cache.credential(mechanism, "token2"));
@@ -138,6 +139,18 @@ public class DelegationTokenCacheTest {
 
         assertNull(cache.tokenForHmac(token.hmacAsBase64String()));
         assertEquals(token.tokenInfo(), cache.tokenForHmac(reissued.hmacAsBase64String()));
+    }
+
+    @Test
+    public void testTokensReturnsCopies() {
+        DelegationTokenCache cache = new DelegationTokenCache(ScramMechanism.mechanismNames());
+        DelegationToken token = delegationToken("token1", 1000L);
+        String hmac = token.hmacAsBase64String();
+        cache.addToken(token);
+
+        Arrays.fill(cache.tokens().iterator().next().hmac(), (byte) 0);
+
+        assertEquals(hmac, cache.tokens().iterator().next().hmacAsBase64String());
     }
 
     @Test

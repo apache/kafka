@@ -27,7 +27,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class CredentialCacheTest {
 
@@ -47,16 +46,5 @@ public class CredentialCacheTest {
 
         assertEquals(credentialA, sha512Cache.remove("userA"));
         assertNull(sha512Cache.get("userA"));
-    }
-
-    @Test
-    public void testCreateCacheReturnsExistingCache() {
-        CredentialCache cache = new CredentialCache();
-        String mechanism = ScramMechanism.SCRAM_SHA_256.mechanismName();
-        assertNull(cache.cache(mechanism));
-
-        CredentialCache.Cache sha256Cache = cache.createCache(mechanism);
-        assertSame(sha256Cache, cache.cache(mechanism));
-        assertSame(sha256Cache, cache.createCache(mechanism));
     }
 }

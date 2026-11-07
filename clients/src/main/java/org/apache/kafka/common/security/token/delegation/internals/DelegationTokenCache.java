@@ -93,8 +93,11 @@ public class DelegationTokenCache {
         }
     }
 
-    public Collection<TokenInformation> tokens() {
-        return tokenCache.values().stream().map(DelegationToken::tokenInfo).collect(Collectors.toList());
+    public Collection<DelegationToken> tokens() {
+        //Return copies, so callers can't change the hmac that removeToken() uses to find the hmac-id entry
+        return tokenCache.values().stream()
+            .map(token -> new DelegationToken(token.tokenInfo(), token.hmac().clone()))
+            .collect(Collectors.toList());
     }
 
     public TokenInformation token(String tokenId) {

@@ -99,8 +99,7 @@ public class DelegationTokenManager {
 
     public List<DelegationToken> getTokens(Predicate<TokenInformation> filterToken) {
         return tokenCache.tokens().stream()
-            .filter(filterToken)
-            .map(this::getDelegationToken)
+            .filter(token -> filterToken.test(token.tokenInfo()))
             .toList();
     }
 

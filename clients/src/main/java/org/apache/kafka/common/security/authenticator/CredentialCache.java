@@ -26,9 +26,6 @@ public class CredentialCache {
 
     private final ConcurrentHashMap<String, Cache> cacheMap = new ConcurrentHashMap<>();
 
-    public CredentialCache() {
-    }
-
     /**
      * Creates a cache for each SCRAM mechanism in {@code mechanisms}. Other mechanisms are ignored.
      */
@@ -37,10 +34,6 @@ public class CredentialCache {
             if (mechanisms.contains(mechanism))
                 cacheMap.put(mechanism, new Cache());
         }
-    }
-
-    public Cache createCache(String mechanism) {
-        return cacheMap.computeIfAbsent(mechanism, ignored -> new Cache());
     }
 
     public Cache cache(String mechanism) {

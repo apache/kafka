@@ -118,11 +118,6 @@ public final class NioEchoServer extends Thread {
             this.newChannels = Collections.synchronizedList(new ArrayList<>());
             this.credentialCache = credentialCache;
             this.tokenCache = tokenCache;
-            if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
-                for (String mechanism : ScramMechanism.mechanismNames()) {
-                    credentialCache.createCache(mechanism);
-                }
-            }
             LogContext logContext = new LogContext();
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,

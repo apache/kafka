@@ -176,7 +176,7 @@ public class SaslAuthenticatorTest {
         CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        credentialCache = new CredentialCache();
+        credentialCache = new CredentialCache(ScramMechanism.mechanismNames());
         TestLogin.loginCount.set(0);
         CountingKafkaPrincipalBuilder.buildCount = 0;
     }
@@ -2035,10 +2035,6 @@ public class SaslAuthenticatorTest {
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            credentialCache.createCache(saslMechanism);
-
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
@@ -2063,10 +2059,6 @@ public class SaslAuthenticatorTest {
         final Map<String, ?> configs = Collections.emptyMap();
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            credentialCache.createCache(saslMechanism);
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
