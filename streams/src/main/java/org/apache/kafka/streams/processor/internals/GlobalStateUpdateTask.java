@@ -174,6 +174,11 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     @Override
+    public long maxStoreUncommittedBytes() {
+        return stateMgr.maxStoreUncommittedBytes();
+    }
+
+    @Override
     public void maybeCheckpoint() {
         final long now = time.milliseconds();
         if (now - flushInterval >= lastFlush && StateManagerUtil.checkpointNeeded(false, stateMgr.changelogOffsets(), offsets)) {

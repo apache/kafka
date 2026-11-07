@@ -1941,7 +1941,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private boolean shouldCommitDueToUncommittedBytes() {
         final long limit = maxUncommittedBytesPerThread;
         if (limit <= 0) return false;
-        return taskManager.totalUncommittedBytes() > limit;
+        // stores commit one at a time, and a commit can need extra memory up to the size of the store's uncommitted data
+        return taskManager.totalUncommittedBytes() + taskManager.maxStoreUncommittedBytes() > limit;
     }
 
     public void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
