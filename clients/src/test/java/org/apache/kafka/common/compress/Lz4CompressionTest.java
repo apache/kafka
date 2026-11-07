@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
+import net.jpountz.lz4.LZ4FrameOutputStream;
 import net.jpountz.xxhash.XXHashFactory;
 
 import org.junit.jupiter.api.Test;
@@ -432,6 +433,65 @@ public class Lz4CompressionTest {
         }
         if (!args.ignoreFlagDescriptorChecksum && args.useBrokenFlagDescriptorChecksum) assertNotNull(error);
         if (!args.close) assertNotNull(error);
+    }
+
+    @Test
+    public void testContentChecksumVerificationSuccess() throws IOException {
+        byte[] payload = String.join("", Collections.nCopies(64, "content-checksum-verify"))
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] framed = withContentChecksum(payload, false);
+
+        try (Lz4BlockInputStream in = new Lz4BlockInputStream(
+                ByteBuffer.wrap(framed), BufferSupplier.create(), false)) {
+            assertArrayEquals(payload, in.readAllBytes());
+        }
+    }
+
+    @Test
+    public void testContentChecksumVerificationFailure() throws IOException {
+        byte[] payload = String.join("", Collections.nCopies(64, "content-checksum-verify"))
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] framed = withContentChecksum(payload, true);
+
+        try (Lz4BlockInputStream in = new Lz4BlockInputStream(
+                ByteBuffer.wrap(framed), BufferSupplier.create(), false)) {
+            IOException e = assertThrows(IOException.class, in::readAllBytes);
+            assertEquals(Lz4BlockInputStream.CONTENT_HASH_MISMATCH, e.getMessage());
+        }
+    }
+
+    @Test
+    public void testContentChecksumVerificationSuccessDirectBuffer() throws IOException {
+        byte[] payload = new byte[8 * 1024];
+        RANDOM.nextBytes(payload);
+        byte[] framed = withContentChecksum(payload, false);
+
+        ByteBuffer direct = ByteBuffer.allocateDirect(framed.length);
+        direct.put(framed).flip();
+
+        try (Lz4BlockInputStream in = new Lz4BlockInputStream(direct, BufferSupplier.create(), false)) {
+            assertArrayEquals(payload, in.readAllBytes());
+        }
+    }
+
+    /**
+     * Build a spec-compliant LZ4 frame with the contentChecksum FLG bit set, using lz4-java's
+     * own framed writer. BLOCK_INDEPENDENCE is required by Kafka's reader and is not a default.
+     */
+    private byte[] withContentChecksum(byte[] payload, boolean corruptTrailer) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (LZ4FrameOutputStream lz4 = new LZ4FrameOutputStream(
+                out,
+                LZ4FrameOutputStream.BLOCKSIZE.SIZE_64KB,
+                LZ4FrameOutputStream.FLG.Bits.BLOCK_INDEPENDENCE,
+                LZ4FrameOutputStream.FLG.Bits.CONTENT_CHECKSUM)) {
+            lz4.write(payload);
+        }
+        byte[] framed = out.toByteArray();
+        if (corruptTrailer) {
+            framed[framed.length - 1] ^= 0x01;
+        }
+        return framed;
     }
 
     private byte[] compressedBytes(Args args) throws IOException {
