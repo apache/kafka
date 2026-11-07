@@ -49,6 +49,7 @@ public class ShareSubscriptionStateTest {
     public void testInitialStateIsEmpty() {
         assertTrue(state.subscription().isEmpty());
         assertTrue(state.assignedPartitions().isEmpty());
+        assertEquals(0, state.numAssignedPartitions());
         assertTrue(state.assignedTopicIds().isEmpty());
         assertTrue(state.fetchablePartitions().isEmpty());
         assertFalse(state.hasAutoAssignedPartitions());
@@ -94,6 +95,7 @@ public class ShareSubscriptionStateTest {
 
         assertEquals(List.of(tp0, tp1, t1p0), state.fetchablePartitions());
         assertEquals(Set.of(tp0, tp1, t1p0), state.assignedPartitions());
+        assertEquals(3, state.numAssignedPartitions());
     }
 
     @Test
@@ -104,6 +106,7 @@ public class ShareSubscriptionStateTest {
 
         assertEquals(List.of(t1p0), state.fetchablePartitions());
         assertEquals(Set.of(t1p0), state.assignedPartitions());
+        assertEquals(1, state.numAssignedPartitions());
     }
 
     @Test
@@ -136,6 +139,7 @@ public class ShareSubscriptionStateTest {
 
         assertTrue(state.subscription().isEmpty());
         assertTrue(state.assignedPartitions().isEmpty());
+        assertEquals(0, state.numAssignedPartitions());
         assertTrue(state.assignedTopicIds().isEmpty());
         assertTrue(state.fetchablePartitions().isEmpty());
         assertFalse(state.hasAutoAssignedPartitions());
