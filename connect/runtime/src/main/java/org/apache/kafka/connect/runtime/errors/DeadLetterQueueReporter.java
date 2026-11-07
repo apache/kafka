@@ -42,6 +42,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
@@ -79,15 +81,22 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
                                                          SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
                                                          ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
+        long timeoutMs = TimeUnit.SECONDS.toMillis(30);
 
         try (Admin admin = Admin.create(adminProps)) {
-            if (!admin.listTopics().names().get().contains(topic)) {
-                log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
-                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
-                admin.createTopics(Set.of(schemaTopicRequest)).all().get();
+            if (!admin.listTopics().names().get(timeoutMs, TimeUnit.MILLISECONDS).contains(topic)) {
+                log.info("Topic {} does not exist; creating it with {} partitions and replication factor {}",
+                        topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
+                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS,
+                        sinkConfig.dlqTopicReplicationFactor());
+                admin.createTopics(Set.of(schemaTopicRequest)).all().get(timeoutMs, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
+        } catch (TimeoutException e) {
+            throw new ConnectException(
+                    "Timed out waiting for DLQ topic '" + topic + "' to be verified or created", e);
         } catch (ExecutionException e) {
             if (!(e.getCause() instanceof TopicExistsException)) {
                 throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
