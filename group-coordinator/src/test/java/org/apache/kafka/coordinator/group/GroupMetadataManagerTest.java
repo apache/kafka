@@ -21449,7 +21449,7 @@ public class GroupMetadataManagerTest {
             new CopartitionGroup().setSourceTopics(List.of((short) 0, (short) 2)),
             new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 3))
         ));
-        InvalidRequestException exception = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+        StreamsInvalidTopologyEpochException exception = assertThrows(StreamsInvalidTopologyEpochException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -21461,7 +21461,10 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())));
 
-        assertEquals("Topology updates are not supported yet.", exception.getMessage());
+        assertEquals(
+            "The topology sent by the member differs from the group's topology with the same epoch 1. Make sure all members of the group run the same topology.", 
+            exception.getMessage()
+        );
     }
 
     @Test
