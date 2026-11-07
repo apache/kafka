@@ -61,6 +61,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -100,6 +101,7 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1186,6 +1188,248 @@ public class TaskManagerTest {
         );
         verify(activeTaskToClose).closeClean();
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldTransferPendingOffsetResetsBeforeInitializingReplacementTask() {
+        final Set<TopicPartition> previousPartitions = Set.of(t1p0, t2p0);
+        final TopicPartition newlyAssignedPartition = new TopicPartition("topic3", 0);
+        final Set<TopicPartition> newPartitions = Set.of(t1p0, newlyAssignedPartition);
+        final StreamTask taskWithPendingReset = statelessTask(taskId00)
+            .withInputPartitions(previousPartitions)
+            .inState(State.CREATED)
+            .build();
+        when(taskWithPendingReset.partitionsForOffsetReset()).thenReturn(previousPartitions);
+
+        final StreamTask taskWithoutPendingReset = statelessTask(taskId01)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED)
+            .build();
+
+        final Tasks tasks = new Tasks(new LogContext());
+        tasks.addPendingTasksToInit(Set.of(taskWithPendingReset, taskWithoutPendingReset));
+        taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamTask replacementTaskWithPendingReset = statelessTask(taskId00)
+            .withInputPartitions(newPartitions)
+            .inState(State.CREATED)
+            .build();
+        final StreamTask replacementTaskWithoutPendingReset = statelessTask(taskId01)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED)
+            .build();
+
+        final Map<TaskId, Set<TopicPartition>> assignment = Map.of(
+            taskId00, newPartitions,
+            taskId01, taskId01Partitions
+        );
+        when(activeTaskCreator.createTasks(consumer, assignment))
+            .thenReturn(
+                List.of(replacementTaskWithPendingReset, replacementTaskWithoutPendingReset)
+            );
+
+        taskManager.handleAssignment(assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        verify(taskWithPendingReset).closeClean();
+        final InOrder order = inOrder(replacementTaskWithPendingReset, stateUpdater);
+        // Neither a removed input nor a newly assigned input inherits the reset obligation.
+        order.verify(replacementTaskWithPendingReset).addPartitionsForOffsetReset(taskId00Partitions);
+        order.verify(replacementTaskWithPendingReset).initializeIfNeeded();
+        order.verify(stateUpdater).add(replacementTaskWithPendingReset);
+        verify(replacementTaskWithoutPendingReset, never()).addPartitionsForOffsetReset(any());
+        verify(stateUpdater).add(replacementTaskWithoutPendingReset);
+    }
+
+    @Test
+    public void shouldPreservePendingOffsetResetsAcrossAssignmentsBeforeInitialization() {
+        setUpTaskManagerWithPendingOffsetReset(ProcessingMode.EXACTLY_ONCE_V2);
+        final StreamTask replacementTaskBeforeInitialization = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final StreamTask replacementTaskWithPendingReset = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment))
+            .thenReturn(
+                List.of(replacementTaskBeforeInitialization), List.of(replacementTaskWithPendingReset)
+            );
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+
+        verify(replacementTaskBeforeInitialization).closeClean();
+        verify(replacementTaskBeforeInitialization, never()).addPartitionsForOffsetReset(any());
+        verify(replacementTaskBeforeInitialization, never()).initializeIfNeeded();
+        final InOrder order = inOrder(replacementTaskWithPendingReset, stateUpdater);
+        order.verify(replacementTaskWithPendingReset).addPartitionsForOffsetReset(taskId00Partitions);
+        order.verify(replacementTaskWithPendingReset).initializeIfNeeded();
+        order.verify(stateUpdater).add(replacementTaskWithPendingReset);
+    }
+
+    @ParameterizedTest(name = "lockException={0}")
+    @ValueSource(booleans = {true, false})
+    public void shouldTransferPendingOffsetResetsOnlyOnceWhenInitializationIsRetried(final boolean lockException) {
+        setUpTaskManagerWithPendingOffsetReset(ProcessingMode.EXACTLY_ONCE_V2);
+        final StreamTask replacementTaskWithPendingReset = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment))
+            .thenReturn(
+                List.of(replacementTaskWithPendingReset)
+            );
+        final RuntimeException exception = lockException ? new LockException("locked") : new TimeoutException("timeout");
+        doThrow(exception).doNothing().when(replacementTaskWithPendingReset).initializeIfNeeded();
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+        assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        verify(stateUpdater, never()).add(replacementTaskWithPendingReset);
+        time.sleep(5000);
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+
+        final InOrder order = inOrder(replacementTaskWithPendingReset, stateUpdater);
+        order.verify(replacementTaskWithPendingReset).addPartitionsForOffsetReset(taskId00Partitions);
+        order.verify(replacementTaskWithPendingReset, times(2)).initializeIfNeeded();
+        order.verify(stateUpdater).add(replacementTaskWithPendingReset);
+        // The task owns the obligation after the first attempt; the manager must not deliver it again.
+        verify(replacementTaskWithPendingReset).addPartitionsForOffsetReset(any());
+    }
+
+    @Test
+    public void shouldDiscardPendingOffsetResetsWhenTaskIsRemovedFromAssignment() {
+        setUpTaskManagerWithPendingOffsetReset(ProcessingMode.EXACTLY_ONCE_V2);
+        final StreamTask replacementTaskBeforeInitialization = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final StreamTask reassignedTaskWithoutPendingReset = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment))
+            .thenReturn(
+                List.of(replacementTaskBeforeInitialization), 
+                List.of(reassignedTaskWithoutPendingReset)
+            );
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+        taskManager.handleAssignment(emptyMap(), emptyMap());
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        
+        // Reacquiring the same task must not resurrect an obligation from the previous ownership.
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+
+        verify(replacementTaskBeforeInitialization).closeClean();
+        verify(reassignedTaskWithoutPendingReset, never()).addPartitionsForOffsetReset(any());
+        verify(stateUpdater).add(reassignedTaskWithoutPendingReset);
+    }
+
+    @Test
+    public void shouldDiscardPendingOffsetResetsWhenTaskBecomesStandby() {
+        setUpTaskManagerWithPendingOffsetReset(ProcessingMode.EXACTLY_ONCE_V2);
+        final StreamTask replacementTaskBeforeInitialization = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final StandbyTask standbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment))
+            .thenReturn(
+                List.of(replacementTaskBeforeInitialization)
+            );
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(List.of(standbyTask));
+        taskManager.handleAssignment(emptyMap(), taskId00Assignment);
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+
+        verify(replacementTaskBeforeInitialization).closeClean();
+        verify(standbyTask, never()).addPartitionsForOffsetReset(any());
+        verify(stateUpdater).add(standbyTask);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProcessingMode.class)
+    public void shouldDiscardPendingOffsetResetsWhenAllTasksAreLost(final ProcessingMode processingMode) {
+        setUpTaskManagerWithPendingOffsetReset(processingMode);
+        final StreamTask replacementTaskBeforeInitialization = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final StreamTask reassignedTaskWithoutPendingReset = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment))
+            .thenReturn(
+                List.of(replacementTaskBeforeInitialization),
+                List.of(reassignedTaskWithoutPendingReset)
+            );
+
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertEquals(
+            Set.of(t1p0),
+            taskManager.pendingOffsetsResets().get(taskId00)
+        );
+        taskManager.handleLostAll();
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        assertNull(taskManager.pendingOffsetsResets().get(taskId00));
+
+        verify(replacementTaskBeforeInitialization).closeClean();
+        verify(reassignedTaskWithoutPendingReset, never()).addPartitionsForOffsetReset(any());
+        verify(stateUpdater).add(reassignedTaskWithoutPendingReset);
+    }
+
+    private void setUpTaskManagerWithPendingOffsetReset(final ProcessingMode processingMode) {
+        final StreamTask taskWithPendingReset = statelessTask(taskId00)
+            .withInputPartitions(taskId00Partitions).inState(State.CREATED).build();
+        when(taskWithPendingReset.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
+        final Tasks tasks = new Tasks(new LogContext());
+        tasks.addPendingTasksToInit(Set.of(taskWithPendingReset));
+        taskManager = setUpTaskManager(processingMode, tasks);
     }
 
     @Test
