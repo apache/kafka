@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -62,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Response;
 import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Result;
@@ -243,6 +245,48 @@ public class ProcessorNodeTest {
         assertEquals("dlq", collector.collected().get(0).topic());
         assertEquals("sourceKey", new String((byte[]) collector.collected().get(0).key()));
         assertEquals("sourceValue", new String((byte[]) collector.collected().get(0).value()));
+    }
+
+    @Test
+    public void shouldExposeSourceRawHeadersToProcessingExceptionHandlerWhenDeserializerMutatedHeaders() {
+        final RecordHeaders mutatedLiveHeaders = new RecordHeaders();
+        final Headers sourceRawHeaders = new RecordHeaders().add("source-only", "kept".getBytes());
+        final ProcessorRecordContext recordContextWithSnapshot = new ProcessorRecordContext(
+            TIMESTAMP,
+            OFFSET,
+            PARTITION,
+            TOPIC,
+            mutatedLiveHeaders,
+            RAW_KEY,
+            RAW_VALUE,
+            sourceRawHeaders
+        );
+        @SuppressWarnings("unchecked")
+        final InternalProcessorContext<Object, Object> internalProcessorContext =
+            mock(InternalProcessorContext.class, withSettings().strictness(Strictness.LENIENT));
+        when(internalProcessorContext.taskId()).thenReturn(TASK_ID);
+        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()));
+        when(internalProcessorContext.recordContext()).thenReturn(recordContextWithSnapshot);
+        when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
+
+        final AtomicReference<Headers> capturedHeaders = new AtomicReference<>();
+        final ProcessingExceptionHandler handler = new ProcessingExceptionHandler() {
+            @Override
+            public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+                capturedHeaders.set(context.headers());
+                return Response.resume();
+            }
+
+            @Override
+            public void configure(final Map<String, ?> configs) { }
+        };
+
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+        node.init(internalProcessorContext, handler);
+        node.process(new Record<>(KEY, VALUE, TIMESTAMP));
+
+        assertEquals(sourceRawHeaders, capturedHeaders.get());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
