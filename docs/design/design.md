@@ -442,7 +442,7 @@ The log cleaner is enabled by default, which starts the pool of cleaner threads.
 log.cleanup.policy=compact
 ```
 
-To enable compaction for an individual topic, set the topic configuration `cleanup.policy=compact` when creating or altering the topic. Topic-level configuration overrides the broker default, as documented [here](/documentation.html#topicconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
+To enable compaction for an individual topic, set the topic configuration `cleanup.policy=compact` when creating or altering the topic. Topic-level configuration overrides the broker default, as documented in the [topic configuration](/{version}/configuration/topic-configs) documentation. The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
 
 ```properties
 log.cleaner.min.compaction.lag.ms
@@ -460,7 +460,7 @@ Because the active segment is never compacted (as noted above), records become e
 
 Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 
-Further cleaner configurations are described [here](/documentation.html#brokerconfigs). 
+Further cleaner configurations are described in the [broker configuration](/{version}/configuration/broker-configs) documentation. 
 
 ## Quotas
 
