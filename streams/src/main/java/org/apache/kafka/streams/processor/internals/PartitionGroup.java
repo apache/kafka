@@ -161,7 +161,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                                 "Waiting for new data to be produced for configured idle time %d (deadline is %d).",
                             partition, wallClockTime, maxTaskIdleMs, deadline));
 
-                        return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
+                        return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()), true);
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
                         logger.trace("Partition {} is ready for processing due to the task idling deadline passing", partition);
@@ -178,7 +178,7 @@ class PartitionGroup extends AbstractPartitionGroup {
             return new ReadyToProcessResult(true, Optional.empty());
         } else if (queued.isEmpty()) {
             appendLog(logMessageBuilder, "No partitions were buffered locally, so this task is not ready for processing.");
-            return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
+            return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()), true);
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
