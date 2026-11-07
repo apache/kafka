@@ -47,8 +47,8 @@ public class MirrorStateMessageFormatter extends CoordinatorRecordMessageFormatt
     protected JsonNode valueAsJson(ApiMessage message, short version) {
         JsonNode json = CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
         if (message instanceof MirrorPartitionStateValue state) {
-            ((ObjectNode) json).put("state", MirrorPartitionState.nameOf(state.state()));
-            ((ObjectNode) json).put("previousState", MirrorPartitionState.nameOf(state.previousState()));
+            ((ObjectNode) json).put("stateName", MirrorPartitionState.nameOf(state.state()));
+            ((ObjectNode) json).put("previousStateName", MirrorPartitionState.nameOf(state.previousState()));
         }
         return json;
     }

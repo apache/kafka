@@ -106,18 +106,18 @@ public enum MirrorPartitionState {
     }
 
     public static MirrorPartitionState fromValue(byte value) {
-        switch (value) {
-            case 0: return LOG_ALIGNMENT;
-            case 1: return EPOCH_FENCING;
-            case 2: return ULE_RECOVERY;
-            case 3: return MIRRORING;
-            case 4: return PAUSING;
-            case 5: return PAUSED;
-            case 6: return STOPPING;
-            case 7: return STOPPED;
-            case 8: return FAILED;
-            case -1: return UNKNOWN;
-        }
-        throw new IllegalArgumentException("Illegal mirror state: " + value);
+        return switch (value) {
+            case 0 -> LOG_ALIGNMENT;
+            case 1 -> EPOCH_FENCING;
+            case 2 -> ULE_RECOVERY;
+            case 3 -> MIRRORING;
+            case 4 -> PAUSING;
+            case 5 -> PAUSED;
+            case 6 -> STOPPING;
+            case 7 -> STOPPED;
+            case 8 -> FAILED;
+            case -1 -> UNKNOWN;
+            default -> throw new IllegalArgumentException("Illegal mirror state: " + value);
+        };
     }
 }
