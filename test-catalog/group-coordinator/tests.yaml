@@ -2000,12 +2000,9 @@ org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImplTe
 org.apache.kafka.coordinator.group.streams.assignor.ProcessStateTest:
 - shouldAddActiveTaskToMember
 - shouldAddStandbyTaskToMember
-- shouldIncreaseCapacity
-- shouldReturnAllAssignedTasks
+- shouldComputeLoadFromTaskCountAndCapacity
 - shouldReturnFalseIfTaskIsNotAssigned
-- shouldReturnFalseWhenCapacityIsFull
 - shouldReturnTrueIfTaskIsAssigned
-- shouldReturnTrueWhenCapacityIsAvailable
 org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPickerTest:
 - shouldGiveUpPriorityKeyOnceEveryValueIsUsed
 - shouldKeepLaterTagKeyAfterGivingUpAnEarlierOne
