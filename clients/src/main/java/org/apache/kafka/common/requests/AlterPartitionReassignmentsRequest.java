@@ -68,6 +68,7 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
             readable, version), version);
     }
 
+    @Override
     public AlterPartitionReassignmentsRequestData data() {
         return data;
     }

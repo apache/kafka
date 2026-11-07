@@ -117,6 +117,7 @@ public class RecordHeaders implements Headers {
         return isReadOnly;
     }
 
+    @Override
     public Header[] toArray() {
         return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[0]);     
     }
@@ -187,6 +188,7 @@ public class RecordHeaders implements Headers {
             this.key = key;
         }
 
+        @Override
         protected Header makeNext() {
             while (true) {
                 if (original.hasNext()) {

@@ -388,6 +388,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    @Override
     public synchronized void flush() {
         verifyNotClosed();
 
@@ -399,6 +400,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             completeNext();
     }
 
+    @Override
     public List<PartitionInfo> partitionsFor(String topic) {
         if (this.partitionsForException != null) {
             throw this.partitionsForException;
