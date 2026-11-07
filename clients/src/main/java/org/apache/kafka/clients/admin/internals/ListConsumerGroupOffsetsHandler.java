@@ -82,8 +82,8 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
 
     private static Set<CoordinatorKey> coordinatorKeys(Collection<String> groupIds) {
         return groupIds.stream()
-           .map(CoordinatorKey::byGroupId)
-           .collect(Collectors.toSet());
+            .map(CoordinatorKey::byGroupId)
+            .collect(Collectors.toSet());
     }
 
     public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {
