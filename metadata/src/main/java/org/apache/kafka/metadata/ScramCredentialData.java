@@ -25,7 +25,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Represents the ACLs in the metadata image.
+ * Represents SCRAM credential data in the metadata image.
  * <p>
  * This class is thread-safe.
  */
