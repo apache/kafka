@@ -179,6 +179,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -1589,8 +1590,12 @@ public class GroupMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testSameRackIdKeepGroupEpochSource")
-    public void testSameRackIdKeepGroupEpochSource(String oldRackId, String newRackId) {
+    @CsvSource(value = {
+        "null, null",
+        "rack-a, null",
+        "rack-a, rack-a"
+    }, nullValues = "null")
+    public void testSameRackIdDoesNotTriggerEpochBump(String oldRackId, String newRackId) {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         Uuid fooTopicId = Uuid.randomUuid();
@@ -1641,14 +1646,6 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000),
             result.response()
-        );
-    }
-
-    private static Stream<Arguments> testSameRackIdKeepGroupEpochSource() {
-        return Stream.of(
-            Arguments.of(null, null),
-            Arguments.of("rack-a", null),
-            Arguments.of("rack-a", "rack-a")
         );
     }
 
