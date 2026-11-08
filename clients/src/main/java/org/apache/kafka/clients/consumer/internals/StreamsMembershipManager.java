@@ -1347,13 +1347,12 @@ public class StreamsMembershipManager implements RequestManager {
                 revokedTasksSinceApply.addAll(activeTasksToRevoke);
                 return assignTasks(assignedActiveTasks, previouslyAppliedAssignment, assignedStandbyTasks, assignedWarmupTasks, isGroupReady, assignmentToReconcile);
             }
-            // TODO: 여기도 null이 아니라 현재 Target을 반환하도록 해야하는거 아닐까?
+            // TODO : CHECK - This should be null? 
             return CompletableFuture.completedFuture(null);
         });
 
         // The current target assignment is captured to ensure that acknowledging the current assignment is done with
         // the same target assignment that was used when this reconciliation was initiated.
-        // TODO: ASH 이거 확인해봐야 함.  
         LocalAssignment currentTargetAssignment = targetAssignment;
         tasksRevokedAndAssigned.whenComplete((maybeAssignTasksResult, callbackError) -> {
             if (callbackError != null) {
