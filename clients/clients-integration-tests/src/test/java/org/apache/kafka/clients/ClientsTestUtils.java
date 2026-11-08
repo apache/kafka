@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.clients;
 
+import kafka.server.KafkaBroker;
+
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ReplicaInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -29,6 +33,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.Topic;
@@ -36,9 +41,12 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -302,6 +310,55 @@ public class ClientsTestUtils {
         }, () -> "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
                 "The current assignment is " + consumer.assignment()
         );
+    }
+
+    /**
+     * Fails the log directory that holds the leader replica of the given partition, while the leader broker keeps
+     * running, and waits for the leadership to move to another broker. Before that, the leader replica is moved to a
+     * log directory other than the metadata log directory, because failing the metadata log directory shuts the broker
+     * down, and the other replicas on that broker are moved out of that log directory, so that only the given
+     * partition is affected.
+     */
+    public static void failLeaderLogDir(ClusterInstance cluster, Admin admin, TopicPartition tp) throws Exception {
+        int leader = partitionLeader(admin, tp);
+        KafkaBroker broker = cluster.brokers().get(leader);
+        String metadataLogDir = new File(broker.config().metadataLogDir()).getAbsolutePath();
+        String logDir = broker.config().logDirs().stream()
+            .map(dir -> new File(dir).getAbsolutePath())
+            .filter(dir -> !dir.equals(metadataLogDir))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("Broker " + leader + " needs a log directory other than the metadata log directory"));
+        Map<TopicPartitionReplica, String> moves = new HashMap<>();
+        moves.put(new TopicPartitionReplica(tp.topic(), tp.partition(), leader), logDir);
+        admin.describeLogDirs(List.of(leader)).allDescriptions().get().get(leader).get(logDir).replicaInfos().keySet().stream()
+            .filter(other -> !other.equals(tp))
+            .forEach(other -> moves.put(new TopicPartitionReplica(other.topic(), other.partition(), leader), metadataLogDir));
+        admin.alterReplicaLogDirs(moves).all().get();
+        TestUtils.waitForCondition(() -> {
+            var dirs = admin.describeLogDirs(List.of(leader)).allDescriptions().get().get(leader);
+            var replicas = dirs.get(logDir).replicaInfos();
+            return replicas.size() == 1 && replicas.containsKey(tp) && !replicas.get(tp).isFuture() &&
+                dirs.values().stream().noneMatch(dir -> dir.replicaInfos().values().stream().anyMatch(ReplicaInfo::isFuture));
+        }, 60000, "The replicas on broker " + leader + " were not moved so that only " + tp + " is in " + logDir);
+
+        // Make the log directory inaccessible by replacing it with a file, and write a checkpoint so that the
+        // broker hits an IOException and marks the log directory offline.
+        File dir = new File(logDir);
+        Utils.delete(dir);
+        Files.createFile(dir.toPath());
+        broker.replicaManager().checkpointHighWatermarks();
+        TestUtils.waitForCondition(() -> !broker.logManager().isLogDirOnline(logDir),
+            "The log directory " + logDir + " was not marked offline");
+        TestUtils.waitForCondition(() -> {
+            int current = partitionLeader(admin, tp);
+            return current != leader && current != -1;
+        }, "The leadership of " + tp + " did not move away from broker " + leader);
+    }
+
+    private static int partitionLeader(Admin admin, TopicPartition tp) throws Exception {
+        var leader = admin.describeTopics(List.of(tp.topic())).allTopicNames().get().get(tp.topic())
+            .partitions().get(tp.partition()).leader();
+        return leader == null ? -1 : leader.id();
     }
 
     private static ProducerRecord<byte[], byte[]> sendRecord(
