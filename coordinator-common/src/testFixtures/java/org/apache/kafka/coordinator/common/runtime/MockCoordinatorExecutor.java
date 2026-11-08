@@ -86,7 +86,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     }
 
     public int size() {
-        return queue.size();
+        return tasks.size();
     }
 
     @Override
@@ -97,7 +97,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     public List<ExecutorResult<T>> poll() {
         List<ExecutorResult<T>> results = new ArrayList<>();
         for (ExecutorTask<?> task : queue) {
-            tasks.remove(task.key, task.task);
+            if (!tasks.remove(task.key, task.task)) continue;
             results.add(new ExecutorResult<>(task.key, task.execute()));
         }
         queue.clear();
