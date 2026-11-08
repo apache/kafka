@@ -273,6 +273,17 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
+    public void testGetTelemetryV0RejectsOneUuidClientInstanceId() throws Exception {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.ONE_UUID), true).build((short) 0);
+        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+
+        assertEquals(Errors.INVALID_REQUEST, response.error());
+        assertNull(clientMetricsManager.clientInstance(Uuid.ONE_UUID));
+    }
+
+    @Test
     public void testPushTelemetryV1UsesClientInstanceIdFromRequestHeader() throws Exception {
         clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultTestProperties());
         ClientMetricsTestUtils.TestClientTelemetryExporter exporter = new ClientMetricsTestUtils.TestClientTelemetryExporter();

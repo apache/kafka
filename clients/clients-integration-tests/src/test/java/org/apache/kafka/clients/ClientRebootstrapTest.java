@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -92,7 +93,7 @@ public class ClientRebootstrapTest {
 
         clusterInstance.shutdownBroker(broker0);
 
-        var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
+        var admin = clusterInstance.admin(Map.of(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
         try {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
             // Only the broker 1 is available for the admin client during the bootstrap.
@@ -160,7 +161,7 @@ public class ClientRebootstrapTest {
         // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
         clusterInstance.shutdownBroker(broker0);
 
-        var producer = clusterInstance.producer(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
+        var producer = clusterInstance.producer(Map.of(ProducerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
 
         // Only the broker 1 is available for the producer during the bootstrap.
         var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
@@ -248,7 +249,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var consumer = clusterInstance.consumer(Map.of(
-            CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
+            ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
             ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name)
         )) {
             // Only the server 1 is available for the consumer during the bootstrap.

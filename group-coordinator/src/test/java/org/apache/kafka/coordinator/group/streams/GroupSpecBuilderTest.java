@@ -198,7 +198,9 @@ public class GroupSpecBuilderTest {
     }
 
     @Test
-    public void testAssignorOffload() {
+    public void testGroupSpecImmutable() {
+        // The assignor may run on a background thread while the group continues to change, so
+        // the GroupSpec must not be affected by modifications made after it has been built.
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-1")
@@ -224,7 +226,6 @@ public class GroupSpecBuilderTest {
         GroupSpec groupSpec = new GroupSpecBuilder(AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1))
             .withMembers(members)
             .withTaskOffsets(taskOffsets)
-            .withAssignorOffload(true)
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.

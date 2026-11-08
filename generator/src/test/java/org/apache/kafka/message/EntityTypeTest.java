@@ -60,6 +60,10 @@ public class EntityTypeTest {
             FieldType.Int32FieldType.INSTANCE);
         EntityType.BROKER_ID.verifyTypeMatches("brokerIdField",
             new FieldType.ArrayType(FieldType.Int32FieldType.INSTANCE));
+        EntityType.MIRROR_NAME.verifyTypeMatches("mirrorNameField",
+            FieldType.StringFieldType.INSTANCE);
+        EntityType.MIRROR_NAME.verifyTypeMatches("mirrorNameField",
+            new FieldType.ArrayType(FieldType.StringFieldType.INSTANCE));
     }
 
     private static void expectException(Runnable r) {
@@ -79,5 +83,7 @@ public class EntityTypeTest {
                 new FieldType.ArrayType(FieldType.Int64FieldType.INSTANCE)));
         expectException(() -> EntityType.BROKER_ID.
             verifyTypeMatches("brokerIdField", FieldType.Int64FieldType.INSTANCE));
+        expectException(() -> EntityType.MIRROR_NAME.
+            verifyTypeMatches("mirrorNameField", FieldType.Int32FieldType.INSTANCE));
     }
 }

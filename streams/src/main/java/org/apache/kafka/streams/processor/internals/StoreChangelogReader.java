@@ -664,12 +664,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     entry.getValue().stateManager.changelogAsSource(entry.getKey()))
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
 
-            for (final TopicPartition partition : changelogsWithLimitOffsets) {
-                if (!changelogs.get(partition).bufferedRecords().isEmpty()) {
-                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
-                    lastUpdateOffsetTime = time.milliseconds();
-                    break;
-                }
+            if (changelogsWithLimitOffsets.stream().anyMatch(partition -> !changelogs.get(partition).bufferedRecords().isEmpty())) {
+                updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
+                lastUpdateOffsetTime = time.milliseconds();
             }
         }
     }
@@ -793,6 +790,8 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!changelogMetadata.bufferedRecords().isEmpty()) {
             return;
         }
+        // position() uses a zero timeout: this runs on every restore loop for every standby changelog
+        // (including paused ones while actives restore), so it must never block on an unresolved position
         try {
             final Long restoreEndOffset = changelogMetadata.restoreEndOffset;
             if (restoreEndOffset == null) {
@@ -801,18 +800,19 @@ public class StoreChangelogReader implements ChangelogReader {
                 // the next offset to fetch, not last-applied
                 final OptionalLong lag = restoreConsumer.currentLag(partition);
                 if (lag.isPresent() && lag.getAsLong() == 0L) {
-                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreConsumer.position(partition));
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreConsumer.position(partition, Duration.ZERO));
                 }
             } else if (restoreEndOffset > 0L) {
                 // source changelog: restoreEndOffset is the committed-offset limit; advance only up to
                 // that limit, never the live position past unapplied/uncommitted records
-                final long position = restoreConsumer.position(partition);
+                final long position = restoreConsumer.position(partition, Duration.ZERO);
                 if (position >= restoreEndOffset) {
                     stateManager.advanceRestoredOffsetTo(storeMetadata, restoreEndOffset);
                 }
             }
         } catch (final TimeoutException timeoutException) {
             // Leave the offset unchanged; the next restore loop retries.
+            log.debug("Position of standby changelog partition {} is not yet known, not advancing its restored offset", partition);
         }
     }
 

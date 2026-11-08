@@ -162,7 +162,7 @@ public class AdminMetadataTest {
     }
 
     @ClusterTest
-    public void testCreateExistingTopicsThrowTopicExistsException() throws Exception {
+    public void testCreateExistingTopicsThrowTopicExistsException() {
         String topic = "mytopic";
         clusterInstance.createTopic(topic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {

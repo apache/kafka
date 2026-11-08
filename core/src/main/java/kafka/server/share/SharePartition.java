@@ -69,7 +69,6 @@ import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -289,11 +288,6 @@ public class SharePartition implements AutoCloseable {
     private GapWindow persisterReadResultGapWindow;
 
     /**
-     * We maintain the latest fetch offset and its metadata to estimate the minBytes requirement more efficiently.
-     */
-    private final OffsetMetadata fetchOffsetMetadata;
-
-    /**
      * The delayed share fetch key is used to track the delayed share fetch requests that are waiting
      * for the respective share partition.
      */
@@ -403,7 +397,6 @@ public class SharePartition implements AutoCloseable {
         this.metadataProvider = metadataProvider;
         this.delayedRequestNotifier = delayedRequestNotifier;
         this.configProvider = configProvider;
-        this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
         this.sharePartitionMetrics = sharePartitionMetrics;
@@ -2505,26 +2498,6 @@ public class SharePartition implements AutoCloseable {
         return Optional.empty();
     }
 
-    protected void updateFetchOffsetMetadata(long nextFetchOffset, LogOffsetMetadata logOffsetMetadata) {
-        lock.writeLock().lock();
-        try {
-            fetchOffsetMetadata.updateOffsetMetadata(nextFetchOffset, logOffsetMetadata);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    protected Optional<LogOffsetMetadata> fetchOffsetMetadata(long nextFetchOffset) {
-        lock.readLock().lock();
-        try {
-            if (fetchOffsetMetadata.offsetMetadata() == null || fetchOffsetMetadata.offset() != nextFetchOffset)
-                return Optional.empty();
-            return Optional.of(fetchOffsetMetadata.offsetMetadata());
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
     // Visible for testing
     SharePartitionState partitionState() {
         lock.readLock().lock();
@@ -3580,32 +3553,6 @@ public class SharePartition implements AutoCloseable {
 
         void gapStartOffset(long gapStartOffset) {
             this.gapStartOffset = gapStartOffset;
-        }
-    }
-
-    /**
-     * FetchOffsetMetadata class is used to cache offset and its log metadata.
-     */
-    static final class OffsetMetadata {
-        // This offset could be different from offsetMetadata.messageOffset if it's in the middle of a batch.
-        private long offset;
-        private LogOffsetMetadata offsetMetadata;
-
-        OffsetMetadata() {
-            offset = -1;
-        }
-
-        long offset() {
-            return offset;
-        }
-
-        LogOffsetMetadata offsetMetadata() {
-            return offsetMetadata;
-        }
-
-        void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
-            this.offset = offset;
-            this.offsetMetadata = offsetMetadata;
         }
     }
 

@@ -27,8 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -48,9 +46,9 @@ public class KeepStickyExtraPartitionsTest {
     @Test
     public void testOwnersAboveTheMinQuotaKeepAnExtraPartition() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(T2, 0, 1, 2)))
-            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 3)))
-            .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2), mkTopicAssignment(T2, 4, 5, 6, 7)))
+            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0), T2, Set.of(0, 1, 2)))
+            .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(1), T2, Set.of(3)))
+            .withMember("C", Set.of(T1, T2), Map.of(T1, Set.of(2), T2, Set.of(4, 5, 6, 7)))
             .build();
         var describer = new TopicsFixture()
             .withTopic(T1, 3)
@@ -74,8 +72,8 @@ public class KeepStickyExtraPartitionsTest {
     @Test
     public void testOwnersOfTheSameSizeKeepInMemberOrder() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1), mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2, 3), mkTopicAssignment(T2, 2)))
+            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0, 1), T2, Set.of(0, 1)))
+            .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(2, 3), T2, Set.of(2)))
             .withMember("C", Set.of(T1, T2))
             .build();
         var describer = new TopicsFixture()
@@ -100,12 +98,9 @@ public class KeepStickyExtraPartitionsTest {
     @Test
     public void testOwnersWithTheSmallestAssignmentKeepTheExtraPartitions() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3), mkAssignment(
-                mkTopicAssignment(T1, 0, 1, 2), mkTopicAssignment(T2, 0, 1, 2), mkTopicAssignment(T3, 0, 1, 2)))
-            .withMember("B", Set.of(T1, T2, T3), mkAssignment(
-                mkTopicAssignment(T1, 3, 4, 5), mkTopicAssignment(T2, 3, 4, 5), mkTopicAssignment(T3, 3, 4, 5)))
-            .withMember("C", Set.of(T1, T2, T3), mkAssignment(
-                mkTopicAssignment(T1, 6, 7, 8), mkTopicAssignment(T2, 6, 7, 8), mkTopicAssignment(T3, 6, 7, 8)))
+            .withMember("A", Set.of(T1, T2, T3), Map.of(T1, Set.of(0, 1, 2), T2, Set.of(0, 1, 2), T3, Set.of(0, 1, 2)))
+            .withMember("B", Set.of(T1, T2, T3), Map.of(T1, Set.of(3, 4, 5), T2, Set.of(3, 4, 5), T3, Set.of(3, 4, 5)))
+            .withMember("C", Set.of(T1, T2, T3), Map.of(T1, Set.of(6, 7, 8), T2, Set.of(6, 7, 8), T3, Set.of(6, 7, 8)))
             .withMember("D", Set.of(T1, T2, T3))
             .build();
         var describer = new TopicsFixture()

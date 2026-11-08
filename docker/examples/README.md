@@ -1,100 +1,15 @@
-Kafka Docker Image Usage Guide
-==============================
+Kafka Docker Image Examples
+===========================
 
 Introduction
 ------------
 
-This document contains usage guide as well as examples for Docker image.
+This document contains examples for the Docker image.
 Docker Compose files are provided in this directory for the example use cases.
 
-Kafka server can be started using following ways:
-
-- Default configs
-- File input
-- Environment variables
-
-Installation Preparation
-------------
-
-Note that the `Docker` version **must be >= 20.10.4**.
-
-The prior Docker versions may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
-
-If you are using the prior version, you may encounter the following error during container startup:
-```text
-===> User
-uid=1000(appuser) gid=1000(appuser) groups=1000(appuser)
-===> Setting default values of environment variables if not already set.
-===> Configuring …
-Running in KRaft mode…
-/opt/kafka/config/ file not writable
-```
-
-To avoid this, **please upgrade Docker to 20.10.4 or later**.
-
-Running on default configs
---------------------------
-
-If no user provided configuration (file input or environment variables) is passed to the Docker container, the default KRaft configuration for single combined-mode node will be used.
-This default configuration is packaged in the Kafka tarball.
-
-Use input file for providing configs 
-------------------------------------
-
-- This method requires users to provide path to a local folder which contains the Kafka property files and mount it to Docker container using Docker volume.
-- It replaces the default KRaft configuration file present in Docker container.
-- The Command `docker run --volume /path/to/property/folder:/mnt/shared/config -p 9092:9092 apache/kafka:latest` can be used to mount the folder containing the property files.
-- Property files will be only read by the Docker container.
-
-Using Environment Variables
----------------------------
-
-When using the environment variables, you need to set all properties required to start the KRaft node.
-Therefore, the recommended way to use environment variables is via Docker Compose, which allows users to set all the properties that are needed.
-It is also possible to use the input file to have a common set of configurations, and then override specific node properties using the environment variables.
-
-- Kafka property defined via environment variables will override the value of that property defined in the user provided property file.
-- If properties are provided via environment variables only, all required properties must be specified.
-- The following rules must be used to construct the environment variable key name:
-    - Replace `.` with `_`
-    - Replace `_` with `__` (double underscore)
-    - Replace `-` with `___` (triple underscore)
-    - Prefix the result with `KAFKA_`
-    - Examples:
-        - For `abc.def`, use `KAFKA_ABC_DEF`
-        - For `abc-def`, use `KAFKA_ABC___DEF`
-        - For `abc_def`, use `KAFKA_ABC__DEF`
-        
-- To provide configs to log4j property files, following points should be considered:
-  - log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with Kafka).
-  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of `log4j.rootLogger` in `log4j2.yaml` and `tools-log4j2.yaml`.
-  - log4j loggers can be added to `log4j2.yaml` by setting them in `KAFKA_LOG4J_LOGGERS` environment variable in a single comma separated string.
-      - Example:
-          - Assuming that `KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2'` environment variable is provided to Docker container.
-          - `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j2.yaml` file inside Docker container.
-
-Running in SASL mode
---------------------
-
-- SASL mode requires a JAAS configuration file to be mounted into the Docker container and referenced via the `KAFKA_OPTS` environment variable.
-- Mount the directory containing the JAAS config file to `/etc/kafka/secrets` in the Docker container.
-- Set `KAFKA_OPTS` to `-Djava.security.auth.login.config=/etc/kafka/secrets/<jaas_config_filename>`.
-- Set `KAFKA_SASL_ENABLED_MECHANISMS` to the desired SASL mechanism (e.g. `GSSAPI` , `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`).
-- Ensure `KAFKA_ADVERTISED_LISTENERS` contains a `SASL_PLAINTEXT://` or `SASL_SSL://` listener.
-- For inter-broker SASL communication, set `KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL` to the desired SASL *mechanism* (e.g. `PLAIN`, `SCRAM-SHA-256`). To choose between `SASL_PLAINTEXT` and `SASL_SSL` for inter-broker traffic, set `KAFKA_INTER_BROKER_LISTENER_NAME` to a listener whose security protocol is mapped accordingly in `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`.
-- The Docker image `configure` script will log a warning if `KAFKA_OPTS` does not contain the `java.security.auth.login.config` property when SASL listeners are detected.
-- For more details on SASL mechanisms and configuration, refer to the [Kafka SASL authentication documentation](https://kafka.apache.org/documentation/#security_sasl).
-
-Running in SSL mode
--------------------
-        
-- Recommended way to run in ssl mode is by mounting secrets on `/etc/kafka/secrets` in Docker container and providing configs following through environment variables (`KAFKA_SSL_KEYSTORE_FILENAME`, `KAFKA_SSL_KEYSTORE_CREDENTIALS`, `KAFKA_SSL_KEY_CREDENTIALS`, `KAFKA_SSL_TRUSTSTORE_FILENAME` and `KAFKA_SSL_TRUSTSTORE_CREDENTIALS`) to let the Docker image scripts extract passwords and populate correct paths in `server.properties`.      
-- Please ensure appropriate `KAFKA_ADVERTISED_LISTENERS` are provided through environment variables to enable SSL mode in Kafka server, i.e. it should contain an `SSL` listener.
-- Alternatively property file input can be used to provide ssl properties.
-- Make sure you set location of truststore and keystore correctly when using file input. See example for file input in `docker-compose-files/single-node/file-input` for better clarity.
-- Note that advertised.listeners property needs to be provided along with SSL properties in file input and cannot be provided through environment variable separately.
-- In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or environment variables in it's entirety.
-- In case ssl properties are provided both through file input and environment variables, environment variable properties will override the file input properties, just as mentioned in the beginning of this section.
+For the usage guide of the Docker image (default configs, file input, environment variables, SASL and SSL modes),
+see the **Getting Started > Docker** page of the Kafka documentation on the website
+(source: [docs/getting-started/docker.md](../../docs/getting-started/docker.md)).
 
 Examples
 --------
