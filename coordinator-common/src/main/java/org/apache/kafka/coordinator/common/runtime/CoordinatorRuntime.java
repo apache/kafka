@@ -2089,8 +2089,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) throws NotCoordinatorException, CoordinatorLoadInProgressException {
         CoordinatorContext context = contextOrThrow(tp);
 
+        context.lock.lock();
         try {
-            context.lock.lock();
             if (context.state == CoordinatorState.ACTIVE) {
                 func.accept(context);
             } else if (context.state == CoordinatorState.LOADING) {
@@ -2118,8 +2118,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) {
         CoordinatorContext context = coordinators.get(tp);
         if (context != null) {
+            context.lock.lock();
             try {
-                context.lock.lock();
                 if (context.state == CoordinatorState.ACTIVE) {
                     func.accept(context);
                 }
