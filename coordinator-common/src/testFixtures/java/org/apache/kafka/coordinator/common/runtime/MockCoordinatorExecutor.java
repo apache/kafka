@@ -70,6 +70,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     private final Map<String, ExecutorTask<?>> tasks = new HashMap<>();
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
+    private final List<String> cancelledTasks = new ArrayList<>();
 
     @Override
     public <R> boolean schedule(
@@ -93,7 +94,13 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     @Override
     public void cancel(String key) {
-        tasks.remove(key);
+        if (tasks.remove(key) != null) {
+            cancelledTasks.add(key);
+        }
+    }
+
+    public List<String> cancelledTasks() {
+        return List.copyOf(cancelledTasks);
     }
 
     public List<ExecutorResult<T>> poll() {
@@ -112,7 +119,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
             ExecutorTask<?> task = it.next();
             if (task.key.equals(key)) {
                 it.remove();
-                tasks.remove(task.key, task.task);
+                if (!tasks.remove(task.key, task)) continue;
                 return new ExecutorResult<>(task.key, task.execute());
             }
         }
