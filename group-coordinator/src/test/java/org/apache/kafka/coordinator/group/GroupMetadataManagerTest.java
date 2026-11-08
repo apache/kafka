@@ -38023,7 +38023,6 @@ public class GroupMetadataManagerTest {
 
         // Assignor is scheduled on executor.
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-        assertEquals(1, context.executor.size());
 
         // Simulate a failed write to the log.
         context.rollback();
@@ -38042,8 +38041,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of()));
 
+        assertEquals(List.of(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)), context.executor.cancelledTasks());
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-        assertEquals(2, context.executor.size());
     }
 
     @Test
@@ -38127,7 +38126,74 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
 
-        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+        assertEquals(List.of(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)), context.executor.cancelledTasks());
+    }
+
+    @Test
+    public void testStreamsGroupAsyncTargetAssignmentCancelledWhenLastMemberLeaves() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology = "subtopology";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // Member joins the group and gets no assignment yet.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // Assignor for epoch 2 is scheduled on executor.
+        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+
+        // Member leaves the group.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+
+        // The member's target assignment is tombstoned.
+        assertRecordsEquals(
+            List.of(
+                StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                )), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, 0L)
+            ),
+            result.records()
+        );
+
+        // The assignor run is cancelled.
+        assertEquals(List.of(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)), context.executor.cancelledTasks());
     }
 
     @Test
@@ -38351,92 +38417,6 @@ public class GroupMetadataManagerTest {
                             )),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())
                     ))
-                )
-            ),
-            tasks
-        );
-    }
-
-    @Test
-    public void testStreamsGroupAsyncTargetAssignmentDiscardedWhenLastMemberLeaves() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-
-        String subtopology = "subtopology";
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology).setSourceTopics(List.of(fooTopicName))
-        ));
-
-        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 6)
-            .buildCoordinatorMetadataImage();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
-            .withStreamsGroupTaskAssignors(List.of(assignor))
-            .withMetadataImage(metadataImage)
-            .build();
-
-        // Member joins the group and gets no assignment yet.
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setProcessId("process-id")
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-
-        // Assignor for epoch 2 is scheduled on executor.
-        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-
-        // Member leaves the group.
-        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
-
-        // The member's target assignment is tombstoned.
-        assertRecordsEquals(
-            List.of(
-                StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, 0L)
-            ),
-            result.records()
-        );
-
-        // The assignor run is cancelled.
-        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-
-        // Assignor completes on executor.
-        assignor.prepareGroupAssignment(Map.of(
-            memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
-            )
-        ));
-
-        // The target assignment must be discarded, otherwise the assignment epoch would backslide to 2.
-        List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
-        assertEquals(
-            List.of(
-                new MockCoordinatorExecutor.ExecutorResult<>(
-                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
-                    new CoordinatorResult<>(List.of())
                 )
             ),
             tasks
