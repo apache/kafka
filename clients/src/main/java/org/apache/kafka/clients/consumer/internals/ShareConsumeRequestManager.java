@@ -983,19 +983,23 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
 
                 Errors partitionError = Errors.forCode(partitionData.errorCode());
-                if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                if (ShareFetchCollector.requiresMetadataUpdate(partitionError)) {
                     log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareFetch", tip, partitionError, partitionData.currentLeader());
-                    if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                    if ((partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH)
+                            && partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
                         partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
                             Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
 
                         maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
                     } else {
+                        // The cached leader may be stale, for example after KAFKA_STORAGE_ERROR, when the log dir of the
+                        // leader fails while the broker keeps running and the leadership moves to another broker.
                         shareSessionLeaderMap.remove(tip);
+                        if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID
+                                || partitionError == Errors.INCONSISTENT_TOPIC_ID) {
+                            shareSessionTopicIdMap.remove(tip.topicPartition());
+                        }
                     }
-                } else if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
-                    shareSessionLeaderMap.remove(tip);
-                    shareSessionTopicIdMap.remove(tip.topicPartition());
                 }
 
                 completedFetches.add(

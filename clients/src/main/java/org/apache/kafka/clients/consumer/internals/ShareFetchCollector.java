@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -38,6 +39,16 @@ import java.util.Set;
  * @param <V> Record value type
  */
 public class ShareFetchCollector<K, V> {
+
+    private static final Set<Errors> METADATA_UPDATE_ERRORS = EnumSet.of(
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            Errors.REPLICA_NOT_AVAILABLE,
+            Errors.KAFKA_STORAGE_ERROR,
+            Errors.FENCED_LEADER_EPOCH,
+            Errors.OFFSET_NOT_AVAILABLE,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.UNKNOWN_TOPIC_ID,
+            Errors.INCONSISTENT_TOPIC_ID);
 
     private final Logger log;
     private final ShareConsumerMetadata metadata;
@@ -148,24 +159,27 @@ public class ShareFetchCollector<K, V> {
         return completedFetch;
     }
 
+    /**
+     * Returns whether a partition error in a share fetch response means that the metadata needs to be updated
+     * before the partition is fetched again.
+     */
+    static boolean requiresMetadataUpdate(final Errors error) {
+        return METADATA_UPDATE_ERRORS.contains(error);
+    }
+
     private void handleInitializeErrors(final ShareCompletedFetch completedFetch, final Errors error) {
         final TopicIdPartition tp = completedFetch.partition;
 
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
-                error == Errors.OFFSET_NOT_AVAILABLE) {
-            log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-            metadata.requestUpdate(false);
-        } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-            log.warn("Received unknown topic or partition error in fetch for partition {}.", tp);
-            metadata.requestUpdate(false);
-        } else if (error == Errors.UNKNOWN_TOPIC_ID) {
-            log.warn("Received unknown topic ID error in fetch for partition {}.", tp);
-            metadata.requestUpdate(false);
-        } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
-            log.warn("Received inconsistent topic ID error in fetch for partition {}.", tp);
+        if (requiresMetadataUpdate(error)) {
+            if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                log.warn("Received unknown topic or partition error in fetch for partition {}.", tp);
+            } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                log.warn("Received unknown topic ID error in fetch for partition {}.", tp);
+            } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
+                log.warn("Received inconsistent topic ID error in fetch for partition {}.", tp);
+            } else {
+                log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
+            }
             metadata.requestUpdate(false);
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
