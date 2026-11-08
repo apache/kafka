@@ -29,8 +29,9 @@ import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.config.{ConfigException, SaslConfigs, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.raft.QuorumConfig
@@ -45,10 +46,13 @@ import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, Produce
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.function.Executable
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{mock, verify, verifyNoMoreInteractions, when}
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
@@ -1028,6 +1032,20 @@ class DynamicBrokerConfigTest {
     ctx.config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(TimeUnit.HOURS.toMillis(1), ctx.config.logRetentionTimeMillis)
     assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG))
+  }
+
+  @Test
+  def testValidateConfigTypesResolvesConfigProviders(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    try {
+      Files.write(providerFile, "token=42".getBytes(StandardCharsets.UTF_8))
+      val props = new Properties
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+      val validate: Executable = () => DynamicBrokerConfig.validateConfigTypes(props)
+      assertDoesNotThrow(validate, "validateConfigTypes should not throw")
+    } finally Files.deleteIfExists(providerFile)
   }
 }
 

@@ -17,11 +17,16 @@
 package kafka.server
 
 import kafka.utils.CoreUtils._
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.QuotaConfigs
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
+
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.util.Properties
 
 class DynamicConfigTest extends QuorumTestHarness {
   private final val nonExistentConfig: String = "some.config.that.does.not.exist"
@@ -67,5 +72,27 @@ class DynamicConfigTest extends QuorumTestHarness {
   def shouldFailIpConfigsWithBadHost(): Unit = {
     assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("RFC2606.invalid",
       propsWith(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "2")))
+  }
+
+  @Test
+  def shouldResolveConfigProvidersWhenValidatingBrokerConfigs(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    try {
+      val props = new Properties
+      props.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":threads}")
+
+      Files.write(providerFile, "threads=10".getBytes(StandardCharsets.UTF_8))
+      assertEquals(Integer.valueOf(10), DynamicConfig.Broker.validate(props).get(ServerConfigs.NUM_IO_THREADS_CONFIG))
+
+      // The error must report the unresolved value rather than the resolved one
+      Files.write(providerFile, ("threads=" + Long.MaxValue).getBytes(StandardCharsets.UTF_8))
+      val e = assertThrows(classOf[ConfigException], () => DynamicConfig.Broker.validate(props))
+      assertTrue(e.getMessage.contains("${file:"))
+      assertFalse(e.getMessage.contains(String.valueOf(Long.MaxValue)))
+    } finally {
+      Files.deleteIfExists(providerFile)
+    }
   }
 }
