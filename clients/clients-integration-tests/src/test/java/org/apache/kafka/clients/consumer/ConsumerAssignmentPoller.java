@@ -36,7 +36,7 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
     private final Set<TopicPartition> partitionAssignment = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean subscriptionChanged = false;
     private List<String> topicsSubscription;
-    private final ConsumerRebalanceListener rebalanceListener;
+    private final RebalanceListener rebalanceListener;
 
     public ConsumerAssignmentPoller(Consumer<byte[], byte[]> consumer, List<String> topicsToSubscribe) {
         this(consumer, topicsToSubscribe, Set.of(), null);
@@ -49,30 +49,31 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
     public ConsumerAssignmentPoller(Consumer<byte[], byte[]> consumer,
                                     List<String> topicsToSubscribe,
                                     Set<TopicPartition> partitionsToAssign,
-                                    ConsumerRebalanceListener userRebalanceListener) {
+                                    RebalanceListener userRebalanceListener) {
         super("daemon-consumer-assignment", false);
         this.consumer = consumer;
         this.partitionsToAssign = partitionsToAssign;
         this.topicsSubscription = topicsToSubscribe;
 
-        this.rebalanceListener = new ConsumerRebalanceListener() {
+        this.rebalanceListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 partitionAssignment.addAll(partitions);
                 if (userRebalanceListener != null)
-                    userRebalanceListener.onPartitionsAssigned(partitions);
+                    userRebalanceListener.onPartitionsAssigned(partitions, rebalanceConsumer);
             }
 
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 partitionAssignment.removeAll(partitions);
                 if (userRebalanceListener != null)
-                    userRebalanceListener.onPartitionsRevoked(partitions);
+                    userRebalanceListener.onPartitionsRevoked(partitions, rebalanceConsumer);
             }
         };
 
         if (partitionsToAssign.isEmpty()) {
-            consumer.subscribe(topicsToSubscribe, rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(topicsToSubscribe);
         } else {
             consumer.assign(List.copyOf(partitionsToAssign));
         }
@@ -107,7 +108,8 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
     @Override
     public void doWork() {
         if (subscriptionChanged) {
-            consumer.subscribe(topicsSubscription, rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(topicsSubscription);
             subscriptionChanged = false;
         }
         try {

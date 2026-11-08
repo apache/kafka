@@ -1305,6 +1305,7 @@ public class GroupCoordinatorConfigTest {
             Map<String, StreamsGroupMember> members,
             Map<String, TasksTuple> targetAssignment,
             Map<String, MemberTaskOffsets> taskOffsets,
+            Map<String, Integer> heartbeatVersions,
             SortedMap<String, ConfiguredSubtopology> subtopologies,
             int numWarmupReplicas,
             long acceptableRecoveryLag

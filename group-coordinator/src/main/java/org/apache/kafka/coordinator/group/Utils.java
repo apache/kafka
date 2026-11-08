@@ -190,7 +190,7 @@ public class Utils {
     }
 
     /**
-     * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
+     * Converts a ConsumerProtocolAssignment to a map of topic id and partition set.
      *
      * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
      * @param metadataImage              The Metadata image.
@@ -363,22 +363,6 @@ public class Utils {
         String error
     ) throws InvalidRequestException {
         if (value == null || !value.isEmpty()) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is not null and non-empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    static void throwIfNotNullOrEmpty(
-        Collection<?> value,
-        String error
-    ) throws InvalidRequestException {
-        if (value != null && !value.isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }

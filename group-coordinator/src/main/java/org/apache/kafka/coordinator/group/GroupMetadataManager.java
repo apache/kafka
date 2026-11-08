@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
@@ -268,8 +269,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
 
 
 /**
- * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
- * the hard and the soft state of the groups. This class has two kinds of methods:
+ * The GroupMetadataManager manages the metadata of all classic, consumer, share and streams groups.
+ * It holds the hard and the soft state of the groups. This class has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
  *    hard state via the replay methods.
@@ -473,7 +474,7 @@ public class GroupMetadataManager {
     private final CoordinatorTimer<CoordinatorRecord> timer;
 
     /**
-     * The executor to executor asynchronous tasks.
+     * The executor to execute asynchronous tasks.
      */
     private final CoordinatorExecutor<CoordinatorRecord> executor;
 
@@ -498,7 +499,7 @@ public class GroupMetadataManager {
     private final ConsumerGroupPartitionAssignor defaultConsumerGroupAssignor;
 
     /**
-     * The classic and consumer groups keyed by their name.
+     * The groups keyed by their name.
      */
     private final TimelineHashMap<String, Group> groups;
 
@@ -1103,8 +1104,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a streams group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
@@ -1317,15 +1317,15 @@ public class GroupMetadataManager {
         if (!consumerGroup.allMembersUseClassicProtocolExcept(fencedMembers)) {
             return false;
         } else if (consumerGroup.numMembers() - fencedMembers.size() <= 0) {
-            log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
+            log.debug("[GroupId {}] Skip downgrading the consumer group to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
         } else if (!config.consumerGroupMigrationPolicy().isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() - fencedMembers.size() > config.classicGroupMaxSize()) {
-            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
         }
@@ -1348,11 +1348,11 @@ public class GroupMetadataManager {
         if (!consumerGroup.allMembersUseClassicProtocolExcept(replacedMember)) {
             return false;
         } else if (!config.consumerGroupMigrationPolicy().isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() > config.classicGroupMaxSize()) {
-            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
         }
@@ -1401,10 +1401,10 @@ public class GroupMetadataManager {
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot downgrade the consumer group {}: fail to parse the Consumer Protocol {}.",
+            log.warn("[GroupId {}] Cannot downgrade the consumer group: fail to parse the Consumer Protocol {}.",
                 consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
 
-            throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
+            throw new GroupIdNotFoundException(String.format("Cannot downgrade the consumer group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
         }
         classicGroup.createClassicGroupRecords(records);
@@ -1432,19 +1432,19 @@ public class GroupMetadataManager {
      */
     private void validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!config.consumerGroupMigrationPolicy().isUpgradeEnabled()) {
-            log.info("Cannot upgrade classic group {} to consumer group because online upgrade is disabled.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because online upgrade is disabled.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because online upgrade is disabled.", classicGroup.groupId())
             );
         } else if (!classicGroup.usesConsumerGroupProtocol()) {
-            log.info("Cannot upgrade classic group {} to consumer group because the group does not use the consumer embedded protocol.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because the group does not use the consumer embedded protocol.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the group does not use the consumer embedded protocol.", classicGroup.groupId())
             );
         } else if (classicGroup.numMembers() > config.consumerGroupMaxSize()) {
-            log.info("Cannot upgrade classic group {} to consumer group because the group size exceeds the consumer group maximum size.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because the group size exceeds the consumer group maximum size.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the group size exceeds the consumer group maximum size.", classicGroup.groupId())
@@ -1461,7 +1461,7 @@ public class GroupMetadataManager {
      */
     private void throwIfClassicMemberCannotJoinConsumerGroup(ConsumerGroup consumerGroup) {
         if (config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
-            log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
+            log.info("[GroupId {}] Cannot join the consumer group with the classic protocol because the group migration is disabled.",
                 consumerGroup.groupId());
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", consumerGroup.groupId())
@@ -1496,14 +1496,14 @@ public class GroupMetadataManager {
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
+            log.warn("[GroupId {}] Cannot upgrade the classic group to consumer group because the embedded consumer protocol is malformed: {}.",
                 classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
             );
         } catch (UnsupportedVersionException e) {
-            log.warn("Cannot upgrade classic group {} to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
+            log.warn("[GroupId {}] Cannot upgrade the classic group to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because an unsupported custom assignor is in use. " +
@@ -1791,7 +1791,7 @@ public class GroupMetadataManager {
     }
     
     /**
-     * Validates if the received instanceId has been released from the group
+     * Validates if the received instanceId has been fenced from the group
      *
      * @param member                The consumer group member.
      * @param groupId               The consumer group id.
@@ -1859,7 +1859,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates if the received instanceId has been released from the group
+     * Validates whether a static member exists for the given instanceId.
      *
      * @param staticMember          The static member in the group.
      * @param receivedInstanceId    The instance id received in the request.
@@ -1890,7 +1890,8 @@ public class GroupMetadataManager {
      * Checks whether the streams group can accept a new member or not based on the
      * max group size defined.
      *
-     * @param group     The streams group.
+     * @param group      The streams group.
+     * @param instanceId The instance id.
      * @param memberId   The member id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
@@ -2128,10 +2129,13 @@ public class GroupMetadataManager {
      * @param ownedActiveTasks    The list of owned active tasks from the request or null.
      * @param ownedStandbyTasks   The list of owned standby tasks from the request or null.
      * @param ownedWarmupTasks    The list of owned warmup tasks from the request or null.
+     * @param taskOffsets         The changelog offsets for tasks from the request or null.
+     * @param taskEndOffsets      The changelog end offsets for tasks from the request or null.
+     * @param processId           The process ID from the request or null.
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
-     * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
+     * @param memberEndpointEpoch The last endpoint information epoch seen by the group member.
      * @param requestApiVersion   The api version of the StreamsGroupHeartbeat request.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
@@ -2205,7 +2209,6 @@ public class GroupMetadataManager {
         // 1. Create or update the member.
         StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateTopologyEpoch(topology != null ? OptionalInt.of(topology.epoch()) : OptionalInt.empty())
             .setClientId(clientId)
@@ -2216,17 +2219,22 @@ public class GroupMetadataManager {
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
                 new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
-            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+            updatedMemberBuilder
+                .setUserEndpoint(userEndpointMetadata)
+                .setRackId(rackId);
         } else {
             updatedMemberBuilder
-                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
+                .maybeUpdateRackId(Optional.ofNullable(rackId));
         }
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
-        // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
-        // to persist the change, and bump the group epoch later. We track whether (and why) the group epoch is bumped:
-        // RECOMPUTE re-runs the assignor to produce a new final target assignment; REFINE only advances the assignment epoch to move
-        // the in-memory refinement (warm-up promotion) forward without recomputing the final target.
+        // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written
+        // to the __consumer_offsets partition to persist the change, and bump the group epoch
+        // later. We track whether (and why) the group epoch is bumped: RECOMPUTE re-runs the
+        // assignor to produce a new final target assignment; REFINED only advances the assignment
+        // epoch to move the in-memory refinement (warm-up promotion) forward without recomputing
+        // the final target.
         AssignmentUpdate assignmentUpdate = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records)
             ? AssignmentUpdate.RECOMPUTE
             : AssignmentUpdate.NONE;
@@ -2287,6 +2295,7 @@ public class GroupMetadataManager {
         if (taskOffsets != null || taskEndOffsets != null) {
             group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
+        group.updateHeartbeatVersion(memberId, requestApiVersion);
 
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
@@ -2327,7 +2336,7 @@ public class GroupMetadataManager {
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topology epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -2354,7 +2363,6 @@ public class GroupMetadataManager {
             groupEpoch,
             Optional.of(updatedMember),
             updatedConfiguredTopology,
-            metadataImage,
             records,
             Optional.of(returnedStatus),
             currentAssignmentConfigs,
@@ -2413,11 +2421,13 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
+        // 3. The member reports all owned task sets, including when acknowledging an assignment or retrying after a heartbeat failure.
         boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
         boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
+        boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
 
-        // Echo the assignment back when joining or the assignment changed.
-        if (isJoining || assignedTaskChanged) {
+        // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
+        if (isJoining || assignedTaskChanged || hasOwnedTasksReported) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
@@ -2524,8 +2534,15 @@ public class GroupMetadataManager {
      *
      *  - If the topology of the group is uninitialized, it is initialized with the topology from the request. A corresponding
      *    record is added to records.
-     *  - If the topology of the group is initialized, and the request defines a topology, they are compared. If they
-     *    are not empty, an InvalidRequestException is thrown.
+     *  - If the topology of the group is initialized, and the request defines a topology with a lower epoch, the
+     *    request topology is ignored and the member is reported as stale.
+     *  - If the request defines a different topology with the same epoch as the group, a
+     *    StreamsInvalidTopologyEpochException is thrown.
+     *  - If the request defines a different topology with a higher epoch than the group, an InvalidRequestException
+     *    is thrown, since topology updates are not supported yet.
+     *  - If the request defines the same topology as the group, the group topology is returned.
+     *  - If the request does not define a topology, the topology of the group is returned, or an
+     *    IllegalStateException is thrown if the group does not have a topology yet.
      *
      * @param groupId  The group ID.
      * @param memberId The member ID.
@@ -2550,6 +2567,11 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
             } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+                if (group.topology().get().topologyEpoch() == topology.epoch()) {
+                    throw new StreamsInvalidTopologyEpochException(String.format(
+                        "The topology sent by the member differs from the group's topology with the same epoch %d. " +
+                            "Make sure all members of the group run the same topology.", topology.epoch()));
+                }
                 throw new InvalidRequestException("Topology updates are not supported yet.");
             } else {
                 log.debug("[GroupId {}][MemberId {}] Member joined with currently initialized topology {}", groupId, memberId, topology.epoch());
@@ -2654,9 +2676,8 @@ public class GroupMetadataManager {
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
-        // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
-        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
-        // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+        // changed, the group epoch is bumped and persisted by writing a ConsumerGroupMetadataValue
+        // record to the partition.
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Optional.ofNullable(rackId))
@@ -2848,9 +2869,8 @@ public class GroupMetadataManager {
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
-        // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
-        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
-        // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+        // changed, the group epoch is bumped and persisted by writing a ConsumerGroupMetadataValue
+        // record to the partition.
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Utils.toOptional(subscription.rackId()))
@@ -3029,9 +3049,8 @@ public class GroupMetadataManager {
 
         // 1. Create or update the member. If the member is new or has changed, a ShareGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
-        // changed, the subscription metadata is updated and persisted by writing a ShareGroupPartitionMetadataValue
-        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
-        // changed, and persisted by writing a ShareGroupMetadataValue record to the partition.
+        // changed, the group epoch is bumped and persisted by writing a ShareGroupMetadataValue
+        // record to the partition.
         ShareGroupMember updatedMember = new ShareGroupMember.Builder(member)
             .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
@@ -3150,8 +3169,8 @@ public class GroupMetadataManager {
 
         String groupId = group.groupId();
 
-        if (!shareGroupStatePartitionMetadata.containsKey(groupId) ||
-            shareGroupStatePartitionMetadata.get(groupId).initializedTopics().isEmpty()) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        if (info == null || info.initializedTopics().isEmpty()) {
             // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
@@ -3170,7 +3189,7 @@ public class GroupMetadataManager {
             }
         }
 
-        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(groupId).initializedTopics().entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : info.initializedTopics().entrySet()) {
             if (subscribedTopicNames.contains(entry.getValue().name())) {
                 // This topic is currently subscribed, so investigate further.
                 Set<Integer> currentAssignedPartitions = currentAssigned.get(entry.getKey());
@@ -3219,7 +3238,8 @@ public class GroupMetadataManager {
         // topics whose timestamp indicates that they are older than delta elapsed.
         subscriptionTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(topicMetadata -> {
-                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
+                InitMapValue alreadyInitializedValue = alreadyInitialized.get(topicMetadata.id());
+                Set<Integer> alreadyInitializedPartSet = alreadyInitializedValue != null ? alreadyInitializedValue.partitions() : Set.of();
                 if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.partitionCount()) {
                     // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
@@ -3242,6 +3262,7 @@ public class GroupMetadataManager {
      * @param groupId                 The share group id for which partitions need to be initialized.
      * @param groupEpoch              The group epoch of the share group.
      * @param subscriptionTopicNames  The subscription topic names for the share group.
+     * @param records                 The list to accumulate any new records.
      * @return An optional representing the persister initialize request.
      */
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
@@ -3270,8 +3291,8 @@ public class GroupMetadataManager {
         // applies. This is read before the records above are replayed, so a brand-new topic is
         // correctly absent here.
         Set<Uuid> alreadyKnownTopics = null;
-        if (shareGroupStatePartitionMetadata.containsKey(groupId)) {
-            ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        if (info != null) {
             alreadyKnownTopics = new HashSet<>();
             alreadyKnownTopics.addAll(info.initializedTopics().keySet());
             alreadyKnownTopics.addAll(info.initializingTopics().keySet());
@@ -3335,7 +3356,7 @@ public class GroupMetadataManager {
             finalInitializingMap.keySet().forEach(key -> {
                 if (currentDeleting.remove(key)) {
                     String topicName = metadataImage.topicMetadata(key).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
-                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", topicName, groupId);
+                    log.warn("[GroupId {}] Initializing topic {} for the share group found in deleting state as well, removing from deleting.", groupId, topicName);
                 }
             });
         }
@@ -3355,26 +3376,21 @@ public class GroupMetadataManager {
         Map<Uuid, InitMapValue> initialized,
         Map<Uuid, InitMapValue> initializing
     ) {
-        Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
         Set<Uuid> combinedTopicIdSet = new HashSet<>(initialized.keySet());
+        combinedTopicIdSet.addAll(initializing.keySet());
 
-        Set<Uuid> initializingSet = initializing.keySet();
-
-        combinedTopicIdSet.addAll(initializingSet);
+        Map<Uuid, InitMapValue> finalInitMap = new HashMap<>();
 
         for (Uuid topicId : combinedTopicIdSet) {
             InitMapValue initializedValue = initialized.get(topicId);
-            Set<Integer> finalPartitions = initializedValue != null ? new HashSet<>(initializedValue.partitions()) : new HashSet<>();
-            long timestamp = initializedValue != null ? initializedValue.timestamp() : -1;
-            String name = initializedValue != null ? initializedValue.name() : "UNKNOWN";
-
-            if (initializingSet.contains(topicId)) {
-                InitMapValue initializingValue = initializing.get(topicId);
-                finalPartitions.addAll(initializingValue.partitions());
-                timestamp = initializingValue.timestamp();
-                name = initializingValue.name();
+            InitMapValue initializingValue = initializing.get(topicId);
+            if (initializingValue == null) {
+                finalInitMap.put(topicId, initializedValue);
+            } else if (initializedValue == null) {
+                finalInitMap.put(topicId, initializingValue);
+            } else {
+                finalInitMap.put(topicId, initializingValue.withAddedPartitions(initializedValue.partitions()));
             }
-            finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
         }
 
         return finalInitMap;
@@ -3838,7 +3854,7 @@ public class GroupMetadataManager {
         // 3.3  Or the last refresh is older than the batch refresh max interval.
 
         // 0. The group is subscribed to regular expressions. We also take the one
-        //    that the current may have just introduced.
+        //    that the current member may have just introduced.
         if (!requireRefresh && group.subscribedRegularExpressions().isEmpty()) {
             return updateRegularExpressionStatus;
         }
@@ -4054,7 +4070,6 @@ public class GroupMetadataManager {
     }
 
     /**
-    /**
      * Reconciles the current assignment of the member towards the target assignment if needed.
      *
      * @param groupId                    The group id.
@@ -4183,7 +4198,7 @@ public class GroupMetadataManager {
      * @param ownedActiveTasks      The list of active tasks owned by the member.
      *                              This is reported in the StreamsGroupHeartbeat API, and
      *                              it could be null if not provided.
-     * @param ownedStandbyTasks     The list of standby owned by the member.
+     * @param ownedStandbyTasks     The list of standby tasks owned by the member.
      *                              This is reported in the StreamsGroupHeartbeat API, and
      *                              it could be null if not provided.
      * @param ownedWarmupTasks      The list of warmup tasks owned by the member.
@@ -4313,9 +4328,9 @@ public class GroupMetadataManager {
 
         group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
 
-        // Before 4.0, the coordinator used subscription metadata to keep topic metadata.
-        // After 4.1, the subscription metadata is replaced by the metadata hash. If there is subscription metadata in log,
-        // add a tombstone record to remove it.
+        // The coordinator used to keep the topic metadata in subscription metadata records. The
+        // metadata hash replaces them. If there is a subscription metadata record in the log, add
+        // a tombstone record to remove it.
         if (group.hasSubscriptionMetadataRecord()) {
             records.add(newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
         }
@@ -4455,7 +4470,6 @@ public class GroupMetadataManager {
             .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-            .withInvertedTargetAssignment(group.invertedTargetAssignment())
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(group.resolvedRegularExpressions())
             .withAssignorOffload(offloadAssignor)
@@ -4637,10 +4651,6 @@ public class GroupMetadataManager {
         }
 
         try {
-            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupStatePartitionMetadata.containsKey(group.groupId()) ?
-                stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
-                Map.of();
-
             UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
@@ -4650,14 +4660,18 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
+                group.groupId(),
+                ShareGroupStatePartitionMetadataInfo.EMPTY
+            );
+
             long startTimeMs = time.milliseconds();
             GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
-                .withInvertedTargetAssignment(group.invertedTargetAssignment())
                 .withMetadataImage(metadataImage)
+                .withShareGroupStatePartitionMetadata(statePartitionMetadata)
                 .build();
 
             TargetAssignmentBuilder assignmentResultBuilder =
@@ -4672,10 +4686,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
-                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
+                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs);
             }
 
             new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
@@ -4706,8 +4720,9 @@ public class GroupMetadataManager {
      *   <li>{@code NONE} - nothing changed; the group epoch is not bumped.</li>
      *   <li>{@code RECOMPUTE} - the group changed (membership, topology or configuration); bump the group epoch and re-run the
      *       assignor to produce a new final target assignment.</li>
-     *   <li>{@code REFINE} - a warm-up task has caught up; bump the group epoch to advance the in-memory refinement one step
-     *       WITHOUT re-running the assignor (the final target assignment is unchanged).</li>
+     *   <li>{@code REFINED} - a warm-up task has caught up; bump the group epoch to advance the
+     *       in-memory refinement one step WITHOUT re-running the assignor (the final target
+     *       assignment is unchanged).</li>
      * </ul>
      */
     private enum AssignmentUpdate {
@@ -4722,7 +4737,6 @@ public class GroupMetadataManager {
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
      * @param updatedMember        The updated member (optional).
-     * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
@@ -4734,7 +4748,6 @@ public class GroupMetadataManager {
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
         ConfiguredTopology configuredTopology,
-        CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
         AssignmentConfigs assignmentConfigs,
@@ -4818,10 +4831,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                    group.groupId(), groupEpoch, assignor, assignorTimeMs, assignmentResult.targetAssignment());
+                    group.groupId(), groupEpoch, assignor.name(), assignorTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
-                    group.groupId(), groupEpoch, assignor, assignorTimeMs);
+                    group.groupId(), groupEpoch, assignor.name(), assignorTimeMs);
             }
 
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
@@ -4879,6 +4892,7 @@ public class GroupMetadataManager {
             group.members(),
             targetAssignment,
             group.taskOffsets(),
+            group.heartbeatVersions(),
             Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
@@ -4978,7 +4992,6 @@ public class GroupMetadataManager {
                 group.groupEpoch(),
                 Optional.empty(),
                 group.configuredTopology().get(),
-                metadataImage,
                 records,
                 Optional.empty(),
                 group.lastAssignmentConfigs(),
@@ -4994,7 +5007,9 @@ public class GroupMetadataManager {
 
     /**
      * Handles leave request from a consumer group member.
+     *
      * @param groupId       The group id from the request.
+     * @param instanceId    The instance id from the request.
      * @param memberId      The member id from the request.
      * @param memberEpoch   The member epoch from the request.
      *
@@ -5034,9 +5049,12 @@ public class GroupMetadataManager {
 
     /**
      * Handles leave request from a streams group member.
-     * @param groupId       The group id from the request.
-     * @param memberId      The member id from the request.
-     * @param memberEpoch   The member epoch from the request.
+     *
+     * @param groupId             The group id from the request.
+     * @param instanceId          The instance id from the request.
+     * @param memberId            The member id from the request.
+     * @param memberEpoch         The member epoch from the request.
+     * @param shutdownApplication Whether all Streams clients in the group should shut down.
      *
      * @return A result containing the StreamsGroupHeartbeat response and
      *         a list of records to update the state machine.
@@ -5091,7 +5109,7 @@ public class GroupMetadataManager {
 
     /**
      * Handles the case when a static member decides to leave the group.
-     * The member is not actually fenced from the group, and instead it's
+     * The member is not actually fenced from the group, and instead its
      * member epoch is updated to -2 to reflect that a member using the given
      * instance id decided to leave the group and would be back within session
      * timeout.
@@ -5124,7 +5142,7 @@ public class GroupMetadataManager {
 
     /**
      * Handles the case when a static member decides to leave the group.
-     * The member is not actually fenced from the group, and instead it's
+     * The member is not actually fenced from the group, and instead its
      * member epoch is updated to -2 to reflect that a member using the given
      * instance id decided to leave the group and would be back within session
      * timeout.
@@ -5189,7 +5207,7 @@ public class GroupMetadataManager {
     }
 
     /**
-      * Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
+     * Fences a member from a consumer group and maybe downgrades the group to a classic group.
      *
      * @param group     The group.
      * @param member    The member.
@@ -5206,7 +5224,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Fences members from a consumer group and maybe downgrade the consumer group to a classic group.
+     * Fences members from a consumer group and maybe downgrades the group to a classic group.
      *
      * @param group     The group.
      * @param members   The members.
@@ -5296,6 +5314,7 @@ public class GroupMetadataManager {
      *
      * @param group       The group.
      * @param member      The member.
+     * @param response    The response of the CoordinatorResult.
      *
      * @return A list of records to be applied to the state.
      */
@@ -5544,7 +5563,7 @@ public class GroupMetadataManager {
             streamsGroupSessionTimeoutMs(groupId),
             TimeUnit.MILLISECONDS,
             true,
-            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired")
         );
     }
 
@@ -5697,8 +5716,9 @@ public class GroupMetadataManager {
     /**
      * Schedules (or reschedules) the session timeout for the share group member.
      *
-     * @param groupId       The group id.
-     * @param memberId      The member id.
+     * @param groupId          The group id.
+     * @param memberId         The member id.
+     * @param sessionTimeoutMs The session timeout.
      */
     private void scheduleShareGroupSessionTimeout(
         String groupId,
@@ -5759,7 +5779,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -5802,7 +5822,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -6087,18 +6107,17 @@ public class GroupMetadataManager {
         // record has up-to-date information.
         Map<Uuid, InitMapValue> finalInitializedMap = combineInitMaps(currentMap.initializedTopics(), enrichedTopicPartitionMap);
 
-        // Fetch initializing info from state metadata.
+        // Fetch initializing info from state metadata, and remove any entries which are already initialized.
         Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>();
-        currentMap.initializingTopics().forEach((k, v) -> finalInitializingMap.put(k, new InitMapValue(v.name(), new HashSet<>(v.partitions()), v.timestamp())));
-
-        // Remove any entries which are already initialized.
-        for (Map.Entry<Uuid, Set<Integer>> entry : topicPartitionMap.entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : currentMap.initializingTopics().entrySet()) {
             Uuid topicId = entry.getKey();
-            if (finalInitializingMap.containsKey(topicId)) {
-                Set<Integer> partitions = finalInitializingMap.get(topicId).partitions();
-                partitions.removeAll(entry.getValue());
-                if (partitions.isEmpty()) {
-                    finalInitializingMap.remove(topicId);
+            Set<Integer> initializedPartitions = topicPartitionMap.get(topicId);
+            if (initializedPartitions == null) {
+                finalInitializingMap.put(topicId, entry.getValue());
+            } else {
+                InitMapValue remaining = entry.getValue().withRemovedPartitions(initializedPartitions);
+                if (!remaining.partitions().isEmpty()) {
+                    finalInitializingMap.put(topicId, remaining);
                 }
             }
         }
@@ -6137,13 +6156,13 @@ public class GroupMetadataManager {
         for (Map.Entry<Uuid, InitMapValue> entry : initializingTopics.entrySet()) {
             Uuid topicId = entry.getKey();
             // If topicId to clean is not present in topicPartitionMap map, retain it.
-            if (!topicPartitionMap.containsKey(topicId)) {
+            Set<Integer> partitionsToClean = topicPartitionMap.get(topicId);
+            if (partitionsToClean == null) {
                 finalInitializingTopics.put(entry.getKey(), entry.getValue());
             } else {
-                Set<Integer> partitions = new HashSet<>(entry.getValue().partitions());
-                partitions.removeAll(topicPartitionMap.get(topicId));
-                if (!partitions.isEmpty()) {
-                    finalInitializingTopics.put(entry.getKey(), new InitMapValue(entry.getValue().name(), partitions, entry.getValue().timestamp()));
+                InitMapValue remaining = entry.getValue().withRemovedPartitions(partitionsToClean);
+                if (!remaining.partitions().isEmpty()) {
+                    finalInitializingTopics.put(entry.getKey(), remaining);
                 }
             }
         }
@@ -6191,16 +6210,13 @@ public class GroupMetadataManager {
     public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
         String groupId
     ) {
-        Map<Uuid, Set<Integer>> resultMap = new HashMap<>();
-
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
-        if (currentMap != null) {
-            currentMap.initializedTopics().forEach((topicId, initMapValue) -> {
-                resultMap.put(topicId, new HashSet<>(initMapValue.partitions()));
-            });
+
+        if (currentMap == null) {
+            return Map.of();
         }
 
-        return resultMap;
+        return stripInitValue(currentMap.initializedTopics());
     }
 
     /**
@@ -6624,10 +6640,10 @@ public class GroupMetadataManager {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = shareGroup.getOrMaybeCreateMember(memberId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupMemberMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupMemberMetadata tombstone without group", groupId, ex);
             return;
         } catch (UnknownMemberIdException ex) {
-            log.debug("ShareGroupMemberMetadata tombstone for groupId - {} without member - {}", groupId, memberId, ex);
+            log.debug("[GroupId {}] ShareGroupMemberMetadata tombstone without member {}", groupId, memberId, ex);
             return;
         }
 
@@ -6670,7 +6686,7 @@ public class GroupMetadataManager {
         try {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupMetadata tombstone without group", groupId, ex);
             return;
         }
 
@@ -6689,7 +6705,7 @@ public class GroupMetadataManager {
             }
             if (shareGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
+                    + " but did not receive ShareGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
         }
@@ -6779,7 +6795,7 @@ public class GroupMetadataManager {
 
     /**
      * Replays StreamsGroupTargetAssignmentMemberKey/Value to update the hard state of
-     * the consumer group.
+     * the streams group.
      * It updates the target assignment of the member or deletes it.
      *
      * @param key   A StreamsGroupTargetAssignmentMemberKey key.
@@ -6809,7 +6825,7 @@ public class GroupMetadataManager {
 
     /**
      * Replays StreamsGroupCurrentMemberAssignmentKey/Value to update the hard state of
-     * the consumer group.
+     * the streams group.
      * It updates the assignment of a member or deletes it.
      *
      * @param key   A StreamsGroupCurrentMemberAssignmentKey key.
@@ -6874,7 +6890,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupTargetAssignmentMember tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupTargetAssignmentMember tombstone without group", groupId, ex);
             return;
         }
 
@@ -6903,7 +6919,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupTargetAssignmentMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupTargetAssignmentMetadata tombstone without group", groupId, ex);
             return;
         }
 
@@ -6939,10 +6955,10 @@ public class GroupMetadataManager {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = group.getOrMaybeCreateMember(memberId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupCurrentMemberAssignment tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupCurrentMemberAssignment tombstone without group", groupId, ex);
             return;
         } catch (UnknownMemberIdException ex) {
-            log.debug("ShareGroupCurrentMemberAssignment tombstone for groupId - {} without member - {}", groupId, memberId, ex);
+            log.debug("[GroupId {}] ShareGroupCurrentMemberAssignment tombstone without member {}", groupId, memberId, ex);
             return;
         }
 
@@ -6979,7 +6995,7 @@ public class GroupMetadataManager {
             getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
             // Ignore tombstone if group not found.
-            log.debug("ShareGroupStatePartitionMetadata tombstone for non-existent share group {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupStatePartitionMetadata tombstone without group", groupId, ex);
         }
 
         if (value == null) {
@@ -7055,7 +7071,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Counts and updates the number of classic and consumer groups in different states.
+     * Counts and updates the number of classic, consumer, share and streams groups in different
+     * states.
      */
     public void updateGroupSizeCounter() {
         Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
@@ -7096,9 +7113,9 @@ public class GroupMetadataManager {
             switch (group.type()) {
                 case STREAMS:
                     StreamsGroup streamsGroup = (StreamsGroup) group;
-                    log.info("Loaded streams group {} with {} members.", groupId, streamsGroup.members().size());
+                    log.info("[GroupId {}] Loaded the streams group with {} members.", groupId, streamsGroup.members().size());
                     streamsGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in streams group {}.", memberId, groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the streams group.", groupId, memberId);
                         scheduleStreamsGroupSessionTimeout(groupId, memberId);
                         if (member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS) {
                             scheduleStreamsGroupRebalanceTimeout(
@@ -7113,10 +7130,14 @@ public class GroupMetadataManager {
 
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
+                    log.info("[GroupId {}] Loaded the consumer group with {} members.", groupId, consumerGroup.members().size());
                     consumerGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
-                        scheduleConsumerGroupSessionTimeout(groupId, memberId);
+                        log.debug("[GroupId {}] Loaded member {} in the consumer group.", groupId, memberId);
+                        scheduleConsumerGroupSessionTimeout(
+                            groupId,
+                            memberId,
+                            member.classicProtocolSessionTimeout().orElse(consumerGroupSessionTimeoutMs(groupId))
+                        );
                         if (member.state() == MemberState.UNREVOKED_PARTITIONS) {
                             scheduleConsumerGroupRebalanceTimeout(
                                 groupId,
@@ -7130,9 +7151,9 @@ public class GroupMetadataManager {
 
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
-                    log.info("Loaded classic group {} with {} members.", groupId, classicGroup.allMembers().size());
+                    log.info("[GroupId {}] Loaded the classic group with {} members.", groupId, classicGroup.allMembers().size());
                     classicGroup.allMembers().forEach(member -> {
-                        log.debug("Loaded member {} in classic group {}.", member.memberId(), groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the classic group.", groupId, member.memberId());
                         rescheduleClassicGroupMemberHeartbeat(classicGroup, member);
                     });
 
@@ -7148,15 +7169,15 @@ public class GroupMetadataManager {
 
                 case SHARE:
                     ShareGroup shareGroup = (ShareGroup) group;
-                    log.info("Loaded share group {} with {} members.", groupId, shareGroup.members().size());
+                    log.info("[GroupId {}] Loaded the share group with {} members.", groupId, shareGroup.members().size());
                     shareGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in share group {}.", memberId, groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the share group.", groupId, memberId);
                         scheduleShareGroupSessionTimeout(groupId, memberId);
                     });
                     break;
 
                 default:
-                    log.warn("Loaded group {} with an unknown group type {}.", groupId, group.type());
+                    log.warn("[GroupId {}] Loaded the group with an unknown group type {}.", groupId, group.type());
                     break;
             }
         });
@@ -7172,17 +7193,17 @@ public class GroupMetadataManager {
             switch (group.type()) {
                 case STREAMS:
                     StreamsGroup streamsGroup = (StreamsGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         streamsGroup.groupId(), streamsGroup.groupEpoch());
                     break;
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         consumerGroup.groupId(), consumerGroup.groupEpoch());
                     break;
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
-                    log.info("[GroupId={}] Unloading group metadata for generation {}.",
+                    log.info("[GroupId {}] Unloading group metadata for generation {}.",
                         classicGroup.groupId(), classicGroup.generationId());
 
                     classicGroup.transitionTo(DEAD);
@@ -7208,12 +7229,12 @@ public class GroupMetadataManager {
                     break;
                 case SHARE:
                     ShareGroup shareGroup = (ShareGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         shareGroup.groupId(), shareGroup.groupEpoch());
                     break;
 
                 default:
-                    log.warn("onUnloaded group with an unknown group type {}.", group.type());
+                    log.warn("[GroupId {}] Unloaded the group with an unknown group type {}.", group.groupId(), group.type());
                     break;
             }
         });
@@ -7379,8 +7400,9 @@ public class GroupMetadataManager {
         String memberId = request.memberId();
 
         boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
-        // Group is created if it does not exist and the member id is UNKNOWN. if member
-        // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
+        // Group is created if it does not exist and the member id is UNKNOWN. If the member id
+        // is specified but the group does not exist, the request is rejected with
+        // UNKNOWN_MEMBER_ID.
         ClassicGroup group;
         if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
             log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
@@ -7428,7 +7450,7 @@ public class GroupMetadataManager {
                 if (t != null) {
                     // We failed to write the empty group metadata. This will revert the snapshot, removing
                     // the newly created group.
-                    log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+                    log.warn("[GroupId {}] Failed to write empty metadata: {}", group.groupId(), t.getMessage());
 
                     responseFuture.complete(new JoinGroupResponseData()
                         .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
@@ -7454,19 +7476,19 @@ public class GroupMetadataManager {
      */
     private CoordinatorResult<Void, CoordinatorRecord> maybeCompleteJoinPhase(ClassicGroup group) {
         if (!group.isInState(PREPARING_REBALANCE)) {
-            log.debug("Cannot complete join phase of group {} because the group is in {} state.",
+            log.debug("[GroupId {}] Cannot complete join phase because the group is in {} state.",
                 group.groupId(), group.currentState());
             return EMPTY_RESULT;
         }
 
         if (group.previousState() == EMPTY) {
-            log.debug("Cannot complete join phase of group {} because this is an initial rebalance.",
+            log.debug("[GroupId {}] Cannot complete join phase because this is an initial rebalance.",
                 group.groupId());
             return EMPTY_RESULT;
         }
 
         if (!group.hasAllMembersJoined()) {
-            log.debug("Cannot complete join phase of group {} because not all the members have rejoined. " +
+            log.debug("[GroupId {}] Cannot complete join phase because not all the members have rejoined. " +
                 "Members={}, AwaitingJoinResponses={}, PendingJoinMembers={}.",
                 group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), group.numPendingJoinMembers());
             return EMPTY_RESULT;
@@ -7553,9 +7575,9 @@ public class GroupMetadataManager {
         String groupInstanceId = request.groupInstanceId();
         String existingMemberId = group.staticMemberId(groupInstanceId);
         if (existingMemberId != null) {
-            log.info("Static member with groupInstanceId={} and unknown member id joins " +
-                    "group {} in {} state. Replacing previously mapped member {} with this groupInstanceId.",
-                groupInstanceId, group.groupId(), group.currentState(), existingMemberId);
+            log.info("[GroupId {}] Static member with groupInstanceId={} and unknown member id joins " +
+                    "the group in {} state. Replacing previously mapped member {} with this groupInstanceId.",
+                group.groupId(), groupInstanceId, group.currentState(), existingMemberId);
 
             return updateStaticMemberThenRebalanceOrCompleteJoin(
                 context,
@@ -7566,9 +7588,9 @@ public class GroupMetadataManager {
                 responseFuture
             );
         } else {
-            log.info("Static member with groupInstanceId={} and unknown member id joins " +
-                    "group {} in {} state. Created a new member id {} for this member and added to the group.",
-                groupInstanceId, group.groupId(), group.currentState(), newMemberId);
+            log.info("[GroupId {}] Static member with groupInstanceId={} and unknown member id joins " +
+                    "the group in {} state. Created a new member id {} for this member and added to the group.",
+                group.groupId(), groupInstanceId, group.currentState(), newMemberId);
 
             return addMemberThenRebalanceOrCompleteJoin(context, request, group, newMemberId, responseFuture);
         }
@@ -7599,7 +7621,7 @@ public class GroupMetadataManager {
         if (JoinGroupRequest.requiresKnownMemberId(context.requestVersion())) {
             // If member id required, register the member in the pending member list and send
             // back a response to call for another join group request with allocated member id.
-            log.info("Dynamic member with unknown member id joins group {} in {} state. " +
+            log.info("[GroupId {}] Dynamic member with unknown member id joins the group in {} state. " +
                     "Created a new member id {} and requesting the member to rejoin with this id.",
                 group.groupId(), group.currentState(), newMemberId);
 
@@ -7619,7 +7641,7 @@ public class GroupMetadataManager {
                 .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
             );
         } else {
-            log.info("Dynamic member with unknown member id joins group {} in state {}. " +
+            log.info("[GroupId {}] Dynamic member with unknown member id joins the group in state {}. " +
                     "Created a new member id {} and added the member to the group.",
                 group.groupId(), group.currentState(), newMemberId);
 
@@ -7649,7 +7671,7 @@ public class GroupMetadataManager {
         String groupInstanceId = request.groupInstanceId();
 
         if (group.isInState(DEAD)) {
-            // If the group is marked as dead, it means the group was recently removed the group
+            // If the group is marked as dead, it means the group was recently removed
             // from the coordinator metadata; it is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
             // finding the correct coordinator and rejoin.
@@ -7669,8 +7691,8 @@ public class GroupMetadataManager {
                     groupInstanceId + " for pending member with memberId=" + memberId);
             }
 
-            log.info("Pending dynamic member with id {} joins group {} in {} state. Adding to the group now.",
-                memberId, group.groupId(), group.currentState());
+            log.info("[GroupId {}] Pending dynamic member with id {} joins the group in {} state. Adding to the group now.",
+                group.groupId(), memberId, group.currentState());
 
             return addMemberThenRebalanceOrCompleteJoin(
                 context,
@@ -7769,8 +7791,8 @@ public class GroupMetadataManager {
                 }
             } else {
                 // Group reached unexpected (Empty) state. Let the joining member reset their generation and rejoin.
-                log.warn("Attempt to add rejoining member {} of group {} in unexpected group state {}",
-                    memberId, group.groupId(), group.stateAsString());
+                log.warn("[GroupId {}] Attempt to add rejoining member {} in unexpected group state {}",
+                    group.groupId(), memberId, group.stateAsString());
 
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
@@ -7792,7 +7814,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Cannot find the group, skipping rebalance stage.", exception);
+            log.debug("[GroupId {}] Cannot find the group, skipping rebalance stage.", groupId, exception);
             return EMPTY_RESULT;
         }
         return completeClassicGroupJoin(group);
@@ -7828,17 +7850,17 @@ public class GroupMetadataManager {
                 timer.cancel(classicGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
             });
 
-            log.info("Group {} removed dynamic members who haven't joined: {}",
+            log.info("[GroupId {}] Removed dynamic members who haven't joined: {}",
                 groupId, notYetRejoinedDynamicMembers.keySet());
         }
 
         if (group.isInState(DEAD)) {
-            log.info("Group {} is dead, skipping rebalance stage.", groupId);
+            log.info("[GroupId {}] Group is dead, skipping rebalance stage.", groupId);
         } else if (!group.maybeElectNewJoinedLeader() && !group.allMembers().isEmpty()) {
             // If all members are not rejoining, we will postpone the completion
             // of rebalance preparing stage, and send out another delayed operation
             // until session timeout removes all the non-responsive members.
-            log.error("Group {} could not complete rebalance because no members rejoined.", groupId);
+            log.error("[GroupId {}] Could not complete rebalance because no members rejoined.", groupId);
 
             timer.schedule(
                 classicGroupJoinKey(groupId),
@@ -7852,7 +7874,7 @@ public class GroupMetadataManager {
         } else {
             group.initNextGeneration();
             if (group.isInState(EMPTY)) {
-                log.info("Group {} with generation {} is now empty.", groupId, group.generationId());
+                log.info("[GroupId {}] Group with generation {} is now empty.", groupId, group.generationId());
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
@@ -7861,7 +7883,7 @@ public class GroupMetadataManager {
                         // the previous generation written to the log will become active again (and most likely timeout).
                         // This should be safe since there are no active members in an empty generation, so we just warn.
                         Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
-                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), error.message());
+                        log.warn("[GroupId {}] Failed to write empty metadata: {}", group.groupId(), error.message());
                     }
                 });
 
@@ -7871,7 +7893,7 @@ public class GroupMetadataManager {
                 return new CoordinatorResult<>(records, appendFuture, false);
 
             } else {
-                log.info("Stabilized group {} generation {} with {} members.",
+                log.info("[GroupId {}] Stabilized group generation {} with {} members.",
                     groupId, group.generationId(), group.numMembers());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
@@ -7936,27 +7958,27 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Received notification of heartbeat expiration for member {} after group {} " +
-                "had already been deleted or upgraded.", memberId, groupId);
+            log.debug("[GroupId {}] Received notification of heartbeat expiration for member {} after the group " +
+                "had already been deleted or upgraded.", groupId, memberId);
             return EMPTY_RESULT;
         }
 
         if (group.isInState(DEAD)) {
-            log.info("Received notification of heartbeat expiration for member {} after group {} " +
+            log.info("[GroupId {}] Received notification of heartbeat expiration for member {} after the group " +
                     "had already been unloaded or deleted.",
-                memberId, group.groupId());
+                group.groupId(), memberId);
         } else if (group.isPendingMember(memberId)) {
-            log.info("Pending member {} in group {} has been removed after session timeout expiration.",
-                memberId, group.groupId());
+            log.info("[GroupId {}] Pending member {} has been removed after session timeout expiration.",
+                group.groupId(), memberId);
 
             return removePendingMemberAndUpdateClassicGroup(group, memberId);
         } else if (!group.hasMember(memberId)) {
-            log.debug("Member {} has already been removed from the group.", memberId);
+            log.debug("[GroupId {}] Member {} has already been removed from the group.", group.groupId(), memberId);
         } else {
             ClassicGroupMember member = group.member(memberId);
             if (!member.hasSatisfiedHeartbeat()) {
-                log.info("Member {} in group {} has failed, removing it from the group.",
-                    member.memberId(), group.groupId());
+                log.info("[GroupId {}] Member {} has failed, removing it from the group.",
+                    group.groupId(), member.memberId());
 
                 return removeMemberAndUpdateClassicGroup(
                     group,
@@ -8161,7 +8183,7 @@ public class GroupMetadataManager {
 
         group.transitionTo(PREPARING_REBALANCE);
 
-        log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
+        log.info("[GroupId {}] Preparing to rebalance the group in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
 
         return isInitialRebalance ? EMPTY_RESULT : maybeCompleteJoinElseSchedule(group);
@@ -8197,7 +8219,9 @@ public class GroupMetadataManager {
      * Try to complete the join phase of the initial rebalance.
      * Otherwise, extend the rebalance.
      *
-     * @param groupId The group under initial rebalance.
+     * @param groupId     The group under initial rebalance.
+     * @param delayMs     The delay of the initial rebalance.
+     * @param remainingMs The remaining time of the initial rebalance.
      *
      * @return The coordinator result that will be appended to the log.
      */
@@ -8210,7 +8234,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
+            log.debug("[GroupId {}] Cannot find the group, skipping the initial rebalance stage.", groupId, exception);
             return EMPTY_RESULT;
         }
 
@@ -8285,8 +8309,8 @@ public class GroupMetadataManager {
 
         for (ClassicGroupMember member : group.allMembers()) {
             if (!member.hasAssignment() && error == Errors.NONE) {
-                log.warn("Sending empty assignment to member {} of {} for " + "generation {} with no errors",
-                    member.memberId(), group.groupId(), group.generationId());
+                log.warn("[GroupId {}] Sending empty assignment to member {} for " + "generation {} with no errors",
+                    group.groupId(), member.memberId(), group.generationId());
             }
 
             if (group.completeSyncFuture(member,
@@ -8299,7 +8323,7 @@ public class GroupMetadataManager {
                 // Reset the session timeout for members after propagating the member's assignment.
                 // This is because if any member's session expired while we were still awaiting either
                 // the leader sync group or the append future, its expiration will be ignored and no
-                // future heartbeat expectations will not be scheduled.
+                // future heartbeat expectation will be scheduled.
                 rescheduleClassicGroupMemberHeartbeat(group, member);
             }
         }
@@ -8367,16 +8391,16 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
+            log.debug("[GroupId {}] Received notification of sync expiration for an unknown classic group.", groupId);
             return EMPTY_RESULT;
         }
 
         if (generationId != group.generationId()) {
-            log.error("Received unexpected notification of sync expiration for {} with an old " +
+            log.error("[GroupId {}] Received unexpected notification of sync expiration with an old " +
                 "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
         } else {
             if (group.isInState(DEAD) || group.isInState(EMPTY) || group.isInState(PREPARING_REBALANCE)) {
-                log.error("Received unexpected notification of sync expiration after group {} already " +
+                log.error("[GroupId {}] Received unexpected notification of sync expiration after the group already " +
                     "transitioned to {} state.", group.groupId(), group.stateAsString());
             } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
                 if (!group.hasReceivedSyncFromAllMembers()) {
@@ -8386,7 +8410,7 @@ public class GroupMetadataManager {
                         timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
                     });
 
-                    log.debug("Group {} removed members who haven't sent their sync requests: {}",
+                    log.debug("[GroupId {}] Removed members who haven't sent their sync requests: {}",
                         group.groupId(), pendingSyncMembers);
 
                     return prepareRebalance(group, "Removing " + pendingSyncMembers + " on pending sync request expiration");
@@ -8473,14 +8497,14 @@ public class GroupMetadataManager {
             String groupInstanceId = request.groupInstanceId();
             String selectedProtocolForNextGeneration = group.selectProtocol();
             if (group.protocolName().orElse("").equals(selectedProtocolForNextGeneration)) {
-                log.info("Static member which joins during Stable stage and doesn't affect " +
-                    "the selected protocol will not trigger a rebalance.");
+                log.info("[GroupId {}] Static member which joins during Stable stage and doesn't affect " +
+                    "the selected protocol will not trigger a rebalance.", group.groupId());
 
                 Map<String, byte[]> groupAssignment = group.groupAssignment();
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
                     if (t != null) {
-                        log.warn("Failed to persist metadata for group {} static member {} with " +
+                        log.warn("[GroupId {}] Failed to persist metadata for static member {} with " +
                             "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
@@ -8625,9 +8649,9 @@ public class GroupMetadataManager {
 
             // If this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
-                log.info("Assignment received from leader {} for group {} for generation {}. " +
+                log.info("[GroupId {}] Assignment received from leader {} for generation {}. " +
                     "The group has {} members, {} of which are static.",
-                    memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
+                    groupId, memberId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
                 // does not exist, fill with an empty assignment.
@@ -8645,8 +8669,8 @@ public class GroupMetadataManager {
                 assignment.putAll(membersWithMissingAssignment);
 
                 if (!membersWithMissingAssignment.isEmpty()) {
-                    log.warn("Setting empty assignments for members {} of {} for generation {}.",
-                        membersWithMissingAssignment, groupId, group.generationId());
+                    log.warn("[GroupId {}] Setting empty assignments for members {} for generation {}.",
+                        groupId, membersWithMissingAssignment, group.generationId());
                 }
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
@@ -8658,7 +8682,7 @@ public class GroupMetadataManager {
                         if (t != null) {
                             Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
                             resetAndPropagateAssignmentWithError(group, error);
-                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
+                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment " +
                                 "during SyncGroup (member: " + memberId + ").");
                         } else {
                             // Update group's assignment and propagate to all members.
@@ -8772,7 +8796,7 @@ public class GroupMetadataManager {
     ) {
         if (group.isInState(DEAD)) {
             // If the group is marked as dead, it means some other thread has just removed the group
-            // from the coordinator metadata; this is likely that the group has migrated to some other
+            // from the coordinator metadata; it is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
             // finding the correct coordinator and rejoin.
             return Optional.of(COORDINATOR_NOT_AVAILABLE);
@@ -8978,7 +9002,7 @@ public class GroupMetadataManager {
      * Validates that a streams group exists, that the given member is a current member of it,
      * and that {@code pushedEpoch} matches the group's current topology epoch. Used by the
      * StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
-     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / INVALID_REQUEST contract before consulting
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / STREAMS_INVALID_TOPOLOGY_EPOCH contract before consulting
      * the topology description plugin.
      *
      * <p>The epoch check rejects stale or out-of-order pushes so they cannot regress
@@ -8993,20 +9017,20 @@ public class GroupMetadataManager {
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
-     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
-     *                                  current topology epoch.
+     * @throws StreamsInvalidTopologyEpochException if {@code pushedEpoch} does not match the
+     *                                              group's current topology epoch.
      */
     public StreamsGroupMember validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
         int pushedEpoch,
         long committedOffset
-    ) throws GroupIdNotFoundException, UnknownMemberIdException, InvalidRequestException {
+    ) throws GroupIdNotFoundException, UnknownMemberIdException, StreamsInvalidTopologyEpochException {
         StreamsGroup group = streamsGroup(groupId, committedOffset);
         StreamsGroupMember member = group.getMemberOrThrow(memberId, committedOffset);
         int currentEpoch = group.currentTopologyEpoch();
         if (pushedEpoch != currentEpoch) {
-            throw new InvalidRequestException(
+            throw new StreamsInvalidTopologyEpochException(
                 "Topology epoch " + pushedEpoch + " does not match the group's current topology epoch "
                     + currentEpoch + ".");
         }
@@ -9420,7 +9444,7 @@ public class GroupMetadataManager {
             } else if (group.isPendingMember(member.memberId())) {
                 group.remove(member.memberId());
                 timer.cancel(classicGroupHeartbeatKey(group.groupId(), member.memberId()));
-                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+                log.info("[GroupId {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
                     group.groupId(), member.memberId(), reason);
 
                 memberResponses.add(
@@ -9498,12 +9522,12 @@ public class GroupMetadataManager {
     ) {
         ClassicGroupMember member = group.member(memberId);
         timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
-        log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+        log.info("[GroupId {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
             group.groupId(), memberId, reason);
 
         // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
         // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
-        // will retry the JoinGroup request if is still active.
+        // will retry the JoinGroup request if it is still active.
         group.completeJoinFuture(
             member,
             new JoinGroupResponseData()
@@ -9554,13 +9578,14 @@ public class GroupMetadataManager {
      * @return Optional of object representing the share group state delete request.
      */
     public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(String shareGroupId, List<CoordinatorRecord> records) {
-        if (!shareGroupStatePartitionMetadata.containsKey(shareGroupId)) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(shareGroupId);
+        if (info == null) {
             return Optional.empty();
         }
 
         Map<Uuid, InitMapValue> deleteCandidates = combineInitMaps(
-            shareGroupStatePartitionMetadata.get(shareGroupId).initializedTopics(),
-            shareGroupStatePartitionMetadata.get(shareGroupId).initializingTopics()
+            info.initializedTopics(),
+            info.initializingTopics()
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
@@ -9569,7 +9594,7 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        Set<Uuid> currentDeleting = info.deletingTopics();
         Map<Uuid, InitMapValue> deleteRetryCandidates = new HashMap<>();
         Set<Uuid> deletingToIgnore = new HashSet<>();
         if (!currentDeleting.isEmpty()) {
@@ -9592,11 +9617,11 @@ public class GroupMetadataManager {
         }
 
         if (!deletingToIgnore.isEmpty()) {
-            log.warn("Some topics for share group id {} were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
+            log.warn("[GroupId {}] Some topics for the share group were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
         }
 
         if (!deleteRetryCandidates.isEmpty()) {
-            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deleteRetryCandidates);
+            log.info("[GroupId {}] Existing deleting entries found in the share group - {}", shareGroupId, deleteRetryCandidates);
             deleteCandidates = combineInitMaps(deleteCandidates, deleteRetryCandidates);
         }
 
@@ -9659,10 +9684,7 @@ public class GroupMetadataManager {
             return deleteShareGroupStateRequestTopicsData;
         }
 
-        Map<Uuid, InitMapValue> initializedTopics = new HashMap<>();
-        currentMap.initializedTopics().forEach((topicId, initValue) -> {
-            initializedTopics.put(topicId, new InitMapValue(initValue.name(), new HashSet<>(initValue.partitions()), initValue.timestamp()));
-        });
+        Map<Uuid, InitMapValue> initializedTopics = new HashMap<>(currentMap.initializedTopics());
         Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         requestData.topics().forEach(topic -> {
@@ -9672,9 +9694,10 @@ public class GroupMetadataManager {
                 Uuid topicId = topicMetadata.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
-                if (initializedTopics.containsKey(topicId)) {
+                InitMapValue initializedTopic = initializedTopics.get(topicId);
+                if (initializedTopic != null) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    initializedTopics.get(topicId).partitions().forEach(partition ->
+                    initializedTopic.partitions().forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -9735,8 +9758,9 @@ public class GroupMetadataManager {
      * @param groupId   The group id from the request.
      * @param topics    The topic information for altering the share group's offsets from the request.
      *
-     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
-     *         and a list of records to update the state machine.
+     * @return A Result containing a pair of AlterShareGroupOffsets response and
+     *         InitializeShareGroupStateParameters and a list of records to update the state
+     *         machine.
      */
     public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
         String groupId,
@@ -10224,8 +10248,10 @@ public class GroupMetadataManager {
      * (the first entry of {@code group.streams.assignors}) is used. If the selected assignor is no
      * longer registered on the broker, the coordinator falls back to the default.
      *
+     * @param groupId         The group id.
      * @param maybeLogWarning Whether to warn about the fallback. Set to false on read-only paths such as
      *                        describe, which would otherwise log on every request.
+     * @return The assignor of the streams group.
      */
     // Visible for testing
     TaskAssignor streamsGroupAssignor(String groupId, boolean maybeLogWarning) {
@@ -10247,6 +10273,9 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignment configs of the provided streams group.
+     *
+     * @param groupId The group id.
+     * @return The assignment configs of the streams group.
      */
     private AssignmentConfigsImpl streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
@@ -10347,7 +10376,7 @@ public class GroupMetadataManager {
      * @param groupId   The group id.
      * @param memberId  The member id.
      *
-     * @return the sync key.
+     * @return the join key.
      */
     static String consumerGroupJoinKey(String groupId, String memberId) {
         return "join-" + groupId + "-" + memberId;

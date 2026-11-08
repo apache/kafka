@@ -1674,7 +1674,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
-        return localLog.collectAbortedTransactions(logStartOffset, startOffset, upperBoundOffset);
+        return localLog.collectAbortedTransactions(startOffset, upperBoundOffset);
     }
 
     /**
@@ -1812,12 +1812,33 @@ public class UnifiedLog implements AutoCloseable {
         return logStartOffset == logEndOffset();
     }
 
+    /**
+     * Find the first local record at or after startOffset whose timestamp is at least targetTimestamp.
+     */
     private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
         // Cache to avoid race conditions.
-        List<LogSegment> segments = logSegments();
-        for (LogSegment segment : segments) {
+        return searchOffsetInLocalLog(logSegments(), targetTimestamp, startOffset);
+    }
+
+    /**
+     * Find the first record at or after startOffset in the given snapshot of local segments whose timestamp is at
+     * least targetTimestamp. The segments must be sorted by base offset in ascending order.
+     * The starting offset may be below the first segment.
+     */
+    public Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(List<LogSegment> segments, long targetTimestamp,
+                                                                          long startOffset) throws IOException {
+        // Use base offsets to skip segments before the one containing startOffset without reading their tails.
+        int firstSegmentIndex = 0;
+        for (int i = 1; i < segments.size() && segments.get(i).baseOffset() <= startOffset; i++) {
+            firstSegmentIndex = i;
+        }
+        for (LogSegment segment : segments.subList(firstSegmentIndex, segments.size())) {
             if (segment.largestTimestamp() >= targetTimestamp) {
-                return segment.findOffsetByTimestamp(targetTimestamp, startOffset, config().maxDecompressedMessageBytes());
+                Optional<FileRecords.TimestampAndOffset> timestampAndOffset =
+                        segment.findOffsetByTimestamp(targetTimestamp, startOffset, config().maxDecompressedMessageBytes());
+                if (timestampAndOffset.isPresent()) {
+                    return timestampAndOffset;
+                }
             }
         }
         return Optional.empty();

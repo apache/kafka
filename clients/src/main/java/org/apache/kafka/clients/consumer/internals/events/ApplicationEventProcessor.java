@@ -24,13 +24,14 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -44,6 +45,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -60,18 +62,32 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private final Logger log;
     private final Metadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
+    private final ShareSubscriptionState shareSubscriptions;
     private final RequestManagers requestManagers;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final Metadata metadata,
-                                     final SubscriptionState subscriptions) {
+                                     final ConsumerSubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.shareSubscriptions = null;
+        this.metadataVersionSnapshot = metadata.updateVersion();
+    }
+
+    public ApplicationEventProcessor(final LogContext logContext,
+                                     final RequestManagers requestManagers,
+                                     final Metadata metadata,
+                                     final ShareSubscriptionState shareSubscriptions) {
+        this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.requestManagers = requestManagers;
+        this.metadata = metadata;
+        this.subscriptions = null;
+        this.shareSubscriptions = shareSubscriptions;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -247,6 +263,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final AsyncCommitEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.commitRequestManager.isEmpty()) {
             event.future().completeExceptionally(new KafkaException("Unable to async commit " +
                 "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
@@ -265,6 +283,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final SyncCommitEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.commitRequestManager.isEmpty()) {
             event.future().completeExceptionally(new KafkaException("Unable to sync commit " +
                 "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
@@ -305,6 +325,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * that will not be retried if the commit request fails.
      */
     private void process(final AssignmentChangeEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
             manager.updateTimerAndMaybeCommit(event.currentTimeMs());
@@ -336,6 +358,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member on the next poll.
      */
     private void process(final TopicSubscriptionChangeEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             try {
                 if (subscriptions.subscribe(event.topics())) {
@@ -372,6 +396,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * (joining the group if it's not already part of it).
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         try {
             subscriptions.subscribe(event.pattern());
             metadata.requestUpdateForNewTopics();
@@ -393,6 +419,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Note that this does not evaluate the pattern, it just passes it to the broker.
      */
     private void process(final TopicRe2JPatternSubscriptionChangeEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.consumerMembershipManager.isEmpty()) {
             event.future().completeExceptionally(
                 new KafkaException("MembershipManager is not available when processing a subscribe event"));
@@ -425,6 +453,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final UnsubscribeEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             CompletableFuture<Void> future = requestManagers.consumerHeartbeatRequestManager.get().membershipManager().leaveGroup();
             future.whenComplete(complete(event.future()));
@@ -439,6 +469,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ResetOffsetEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         try {
             Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
                     subscriptions.assignedPartitions() : event.topicPartitions();
@@ -546,13 +578,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final ShareSubscriptionChangeEvent event) {
+        Objects.requireNonNull(shareSubscriptions);
+
         if (requestManagers.shareHeartbeatRequestManager.isEmpty()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing a subscribe event");
             event.future().completeExceptionally(error);
             return;
         }
 
-        if (subscriptions.subscribeToShareGroup(event.topics()))
+        if (shareSubscriptions.subscribe(event.topics()))
             metadata.requestUpdateForNewTopics();
 
         requestManagers.shareHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
@@ -569,13 +603,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final ShareUnsubscribeEvent event) {
+        Objects.requireNonNull(shareSubscriptions);
+
         if (requestManagers.shareHeartbeatRequestManager.isEmpty()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
             event.future().completeExceptionally(error);
             return;
         }
 
-        subscriptions.unsubscribe();
+        shareSubscriptions.unsubscribe();
 
         CompletableFuture<Void> future = requestManagers.shareHeartbeatRequestManager.get().membershipManager().leaveGroup();
         // The future will be completed on heartbeat sent
@@ -616,9 +652,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final SeekUnvalidatedEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         try {
             event.offsetEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(event.partition(), epoch));
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                 event.offset(),
                 event.offsetEpoch(),
                 metadata.currentLeader(event.partition())
@@ -631,6 +669,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final PausePartitionsEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         try {
             Collection<TopicPartition> partitions = event.partitions();
             log.debug("Pausing partitions {}", partitions);
@@ -646,6 +686,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ResumePartitionsEvent event) {
+        Objects.requireNonNull(subscriptions);
+
         try {
             Collection<TopicPartition> partitions = event.partitions();
             log.debug("Resuming partitions {}", partitions);
@@ -803,11 +845,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
-     * {@link ConsumerNetworkThread}.
+     * {@link ConsumerNetworkThread}, for the regular consumer.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final Metadata metadata,
-                                                               final SubscriptionState subscriptions,
+                                                               final ConsumerSubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<>() {
             @Override
@@ -818,6 +860,28 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                         requestManagers,
                         metadata,
                         subscriptions
+                );
+            }
+        };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}, for the share consumer.
+     */
+    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final Metadata metadata,
+                                                               final ShareSubscriptionState shareSubscriptions,
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        return new CachedSupplier<>() {
+            @Override
+            protected ApplicationEventProcessor create() {
+                RequestManagers requestManagers = requestManagersSupplier.get();
+                return new ApplicationEventProcessor(
+                    logContext,
+                    requestManagers,
+                    metadata,
+                    shareSubscriptions
                 );
             }
         };
