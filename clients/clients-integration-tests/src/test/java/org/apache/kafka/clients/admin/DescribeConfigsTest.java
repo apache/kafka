@@ -101,6 +101,7 @@ public class DescribeConfigsTest {
                 return entry.get().source() == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
             }, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG + " was not applied as a cluster-wide config");
             assertEquals("compact,delete", entry.get().value());
+            assertEquals(ConfigEntry.ConfigType.LIST, entry.get().type());
         }
     }
 
@@ -117,6 +118,7 @@ public class DescribeConfigsTest {
             assertNotNull(entry);
             assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
             assertEquals("TLSv1.3,TLSv1.2", entry.value());
+            assertEquals(ConfigEntry.ConfigType.LIST, entry.type());
         }
     }
 
