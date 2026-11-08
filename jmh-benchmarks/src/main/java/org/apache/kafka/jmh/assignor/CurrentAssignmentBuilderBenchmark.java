@@ -153,7 +153,7 @@ public class CurrentAssignmentBuilderBenchmark {
         return new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
             .withTargetAssignment(member.memberEpoch(), targetAssignment)
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
     }
@@ -165,8 +165,32 @@ public class CurrentAssignmentBuilderBenchmark {
         return new CurrentAssignmentBuilder(memberWithUnsubscribedTopics)
             .withMetadataImage(metadataImage)
             .withTargetAssignment(memberWithUnsubscribedTopics.memberEpoch(), targetAssignment)
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
+    }
+
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public boolean assignmentIsSubscriptionConsistentSteadyState() {
+        // The steady-state cost of phase 1's state-derived check, replacing what used to be
+        // a single carried boolean comparison on the hot reconcile early-return path.
+        return CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+            member,
+            Map.of(),
+            metadataImage
+        );
+    }
+
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public boolean assignmentIsSubscriptionConsistentWithUnsubscribedTopics() {
+        return CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+            memberWithUnsubscribedTopics,
+            Map.of(),
+            metadataImage
+        );
     }
 }

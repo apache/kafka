@@ -53,7 +53,16 @@ public class DeferredEventCollection implements DeferredEvent {
         }
     }
 
+    /**
+     * Adds the given event, unless it is {@code null}. A {@code null} event represents
+     * an intermediate step of a chained coordinator write operation, appended without
+     * an event attached; only the chain's terminal step attaches one.
+     *
+     * @param event The event to add, or {@code null}.
+     * @return Whether the event was added.
+     */
     public boolean add(DeferredEvent event) {
+        if (event == null) return false;
         return events.add(event);
     }
 
