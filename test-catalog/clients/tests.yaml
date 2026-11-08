@@ -5899,6 +5899,7 @@ org.apache.kafka.common.utils.BytesTest:
 - equalsReflectsContentIdentityAndType
 - getReturnsUnderlyingArray
 - hashCodeIsConsistentAndContentBased
+- toStringEscapesNonPrintableCharacters
 - wrapEmptyArrayProducesEmptyBytes
 - wrapReturnsBytesBackedBySameArray
 - wrapReturnsNullForNullInput
