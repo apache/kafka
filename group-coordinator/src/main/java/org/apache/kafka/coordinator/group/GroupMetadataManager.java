@@ -170,9 +170,11 @@ import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopicMetadata;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
+import org.apache.kafka.coordinator.group.streams.topics.TopicIdAndPartition;
 import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -192,6 +194,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -201,6 +204,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -2328,7 +2333,7 @@ public class GroupMetadataManager {
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member.
         // The delta between the existing and the new target assignment is persisted to the partition.
-        UpdateTargetAssignmentResult<Map<String, TasksTuple>> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
+        UpdateTargetAssignmentResult<StreamsUpdateTargetResultAssignment> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
             Optional.of(updatedMember),
@@ -2350,7 +2355,7 @@ public class GroupMetadataManager {
             refinedGroupAssignment = refinedAssignmentForEpoch(
                 group,
                 updateTargetAssignmentResult.targetAssignmentEpoch(),
-                updateTargetAssignmentResult.targetAssignment,
+                updateTargetAssignmentResult.targetAssignment().tasks(), 
                 updatedConfiguredTopology
             );
         } else {
@@ -2396,12 +2401,48 @@ public class GroupMetadataManager {
         boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
         boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
         boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
+        
+        Optional<TopologyMetadataSnapshot> targetMetadataSnapshot = updateTargetAssignmentResult.targetAssignment().snapshot();
+        boolean topologyMetadataChanged = requestApiVersion >= 2 && !group.topologyMetadataSnapshot().equals(targetMetadataSnapshot);
 
         // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
-        if (isJoining || assignedTaskChanged || hasOwnedTasksReported) {
+        if (isJoining || assignedTaskChanged || hasOwnedTasksReported || topologyMetadataChanged) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
+
+            Optional<TopologyMetadataSnapshot> maybeTopologyMetadataSnapshot = updateTargetAssignmentResult.targetAssignment().snapshot();
+            if (requestApiVersion >= 2 && maybeTopologyMetadataSnapshot.isPresent()) {
+                TopologyMetadataSnapshot snapshot = maybeTopologyMetadataSnapshot.get();
+
+                Map<String, Map<String, ConfiguredTopicMetadata>> sourceTopicsBySubtopology = snapshot.sourceTopicsBySubtopology();
+                Map<String, Map<String, ConfiguredTopicMetadata>> repartitionSourceTopicsBySubtopology = snapshot.repartitionSourceTopicsBySubtopology();
+
+                List<StreamsGroupHeartbeatResponseData.SubTopology> responseSubtopologies =
+                    new ArrayList<>(sourceTopicsBySubtopology.size());
+
+                for (String subtopologyId : new TreeSet<>(sourceTopicsBySubtopology.keySet())) {
+                    Map<String, ConfiguredTopicMetadata> sourceTopics = sourceTopicsBySubtopology.get(subtopologyId);
+                    Map<String, ConfiguredTopicMetadata> repartitionSourceTopics = repartitionSourceTopicsBySubtopology.get(subtopologyId);
+
+                    responseSubtopologies.add(
+                        new StreamsGroupHeartbeatResponseData.SubTopology()
+                            .setSubtopologyId(subtopologyId)
+                            .setSourceTopics(
+                                createStreamsGroupHeartbeatResponseTopicMetadata(sourceTopics)
+                            )
+                            .setRepartitionSourceTopics(
+                                createStreamsGroupHeartbeatResponseTopicMetadata(
+                                    repartitionSourceTopics
+                                )
+                            )
+                            .setResolvedSourceTopicRegex(Collections.emptyList())
+                    );
+                }
+
+                response.setSubtopologies(responseSubtopologies);
+            }
+
         }
 
         // Drop stale per-member endpoint mappings.
@@ -4561,7 +4602,7 @@ public class GroupMetadataManager {
      *                             instead of re-running the assignor.
      * @return The target assignment epoch and the full per-member target assignment.
      */
-    private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
+    private UpdateTargetAssignmentResult<StreamsUpdateTargetResultAssignment> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
@@ -4580,7 +4621,10 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
             ));
 
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
+            return new UpdateTargetAssignmentResult<>(
+                group.assignmentEpoch(),
+                new StreamsUpdateTargetResultAssignment(Map.of(), group.topologyMetadataSnapshot())
+            );
         }
 
         // Apply the unwritten membership change (e.g. the relabelling of a replacing static member) to the
@@ -4599,7 +4643,10 @@ public class GroupMetadataManager {
 
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
+            return new UpdateTargetAssignmentResult<>(
+                group.assignmentEpoch(), 
+                new StreamsUpdateTargetResultAssignment(updatedMembersAndTargetAssignment.targetAssignment(), group.topologyMetadataSnapshot())
+            );
         }
 
         // The second condition rules out taking the shortcut while an assignment is still pending (deferred by the
@@ -4609,8 +4656,10 @@ public class GroupMetadataManager {
             // A refinement step only advances the assignment epoch of the unchanged final target so that members
             // re-reconcile toward the next in-memory intermediate assignment. The assignor is not run and the per-member target
             // assignment records are left untouched; only the (small) target-assignment metadata record carrying the epoch is written.
-            records.add(newStreamsGroupTargetAssignmentMetadataRecord(group.groupId(), groupEpoch, group.assignmentTimestamp()));
-            return new UpdateTargetAssignmentResult<>(groupEpoch, updatedMembersAndTargetAssignment.targetAssignment());
+            records.add(newStreamsGroupTargetAssignmentMetadataRecord(group.groupId(), groupEpoch, group.assignmentTimestamp(), group.topologyMetadataSnapshot()));
+            return new UpdateTargetAssignmentResult<>(groupEpoch,
+                new StreamsUpdateTargetResultAssignment(updatedMembersAndTargetAssignment.targetAssignment(), group.topologyMetadataSnapshot())
+            );
         }
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
@@ -4625,9 +4674,17 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")
             ));
 
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(),
+                new StreamsUpdateTargetResultAssignment(updatedMembersAndTargetAssignment.targetAssignment(), group.topologyMetadataSnapshot())
+            );
         }
 
+        Optional<TopologyMetadataSnapshot> metadataSnapshot = createOrReuseMetadataSnapshot(
+            group.topologyMetadataSnapshot(),
+            configuredTopology,
+            metadataImage
+        );
+        
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
             long startTimeMs = time.milliseconds();
@@ -4657,14 +4714,16 @@ public class GroupMetadataManager {
             }
 
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTopologyMetadataSnapshot(metadataSnapshot)
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
                 .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
                 .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
-
-            return new UpdateTargetAssignmentResult<>(groupEpoch, assignmentResult.targetAssignment());
+            return new UpdateTargetAssignmentResult<>(groupEpoch,
+                new StreamsUpdateTargetResultAssignment(assignmentResult.targetAssignment(), metadataSnapshot)
+            );
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
@@ -5278,7 +5337,8 @@ public class GroupMetadataManager {
         // assignment computation.
         if (group.members().size() == 1) {
             records.add(newStreamsGroupTargetAssignmentMetadataRecord(
-                group.groupId(), groupEpoch, 0L));
+                group.groupId(), groupEpoch, 0L, group.topologyMetadataSnapshot())
+            );
         }
 
         cancelTimers(group.groupId(), member.memberId());
@@ -6584,6 +6644,11 @@ public class GroupMetadataManager {
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
+            streamsGroup.setTopologyMetadataSnapshot(
+                Optional.ofNullable(value.topologyMetadataSnapshot())
+                    .map(GroupMetadataManager::fromRecordSnapshot)
+                    .orElse(null)
+            );
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -6597,6 +6662,7 @@ public class GroupMetadataManager {
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
             streamsGroup.setTargetAssignmentMetadata(-1, 0L);
+            streamsGroup.setTopologyMetadataSnapshot(null);
         }
     }
 
@@ -10194,5 +10260,154 @@ public class GroupMetadataManager {
     // Visibility for testing
     Map<String, ShareGroupStatePartitionMetadataInfo> shareGroupStatePartitionMetadata() {
         return shareGroupStatePartitionMetadata;
+    }
+
+    private static List<StreamsGroupHeartbeatResponseData.TopicMetadata> createStreamsGroupHeartbeatResponseTopicMetadata(
+        Map<String, ConfiguredTopicMetadata> topics
+    ) {
+
+        return topics.values().stream()
+            .sorted(Comparator.comparing(ConfiguredTopicMetadata::topicName))
+            .map(topic -> new StreamsGroupHeartbeatResponseData.TopicMetadata()
+                .setTopicName(topic.topicName())
+                .setResolvedMetadata(
+                    topic.topicIdAndPartition()
+                        .map(resolved ->
+                            new StreamsGroupHeartbeatResponseData.ResolvedTopicMetadata()
+                                .setTopicId(resolved.topicId())
+                                .setPartitionCount(resolved.partitionCount())
+                        )
+                        .orElse(null)
+                )
+            )
+            .toList();
+    }
+
+
+    public record TopologyMetadataSnapshot(
+        long metadataHash,
+        Map<String, Map<String, ConfiguredTopicMetadata>> sourceTopicsBySubtopology,
+        Map<String, Map<String, ConfiguredTopicMetadata>> repartitionSourceTopicsBySubtopology
+    ) {
+        public TopologyMetadataSnapshot {
+            sourceTopicsBySubtopology = immutableCopy(sourceTopicsBySubtopology);
+            repartitionSourceTopicsBySubtopology =
+                immutableCopy(repartitionSourceTopicsBySubtopology);
+        }
+
+        private static Map<String, Map<String, ConfiguredTopicMetadata>> immutableCopy(
+            Map<String, Map<String, ConfiguredTopicMetadata>> topicsBySubtopology
+        ) {
+            return topicsBySubtopology.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                    Map.Entry::getKey,
+                    entry -> Map.copyOf(entry.getValue())
+                ));
+        }
+    }
+
+    private static Optional<TopologyMetadataSnapshot> createOrReuseMetadataSnapshot(
+        final Optional<TopologyMetadataSnapshot> previousSnapshot,
+        final ConfiguredTopology configuredTopology,
+        final CoordinatorMetadataImage metadataImage
+    ) {
+        Optional<SortedMap<String, ConfiguredSubtopology>> configuredSubtopologies = configuredTopology.subtopologies();
+
+        if (configuredSubtopologies.isEmpty()) {
+            return Optional.empty();
+        }
+
+        long metadataHash = configuredTopology.metadataHash();
+
+        if (previousSnapshot.isPresent() && previousSnapshot.get().metadataHash() == metadataHash) {
+            return previousSnapshot;
+        }
+
+        Map<String, Map<String, ConfiguredTopicMetadata>> sourceTopicsBySubtopology = new TreeMap<>();
+        Map<String, Map<String, ConfiguredTopicMetadata>> repartitionSourceTopicsBySubtopology = new TreeMap<>();
+
+        for (Map.Entry<String, ConfiguredSubtopology> entry : configuredSubtopologies.get().entrySet()) {
+            String subtopologyId = entry.getKey();
+            ConfiguredSubtopology subtopology = entry.getValue();
+
+            sourceTopicsBySubtopology.put(
+                subtopologyId,
+                resolveTopicMetadata(subtopology.sourceTopics(), metadataImage)
+            );
+
+            repartitionSourceTopicsBySubtopology.put(
+                subtopologyId,
+                resolveTopicMetadata(
+                    subtopology.repartitionSourceTopics().keySet(),
+                    metadataImage
+                )
+            );
+        }
+
+        return Optional.of(
+            new TopologyMetadataSnapshot(
+                metadataHash,
+                sourceTopicsBySubtopology,
+                repartitionSourceTopicsBySubtopology
+            )
+        );
+    }
+
+
+    private static Map<String, ConfiguredTopicMetadata> resolveTopicMetadata(
+        final Set<String> topicNames,
+        final CoordinatorMetadataImage metadataImage
+    ) {
+        return topicNames.stream()
+            .collect(Collectors.toMap(
+                topicName -> topicName,
+                topicName -> new ConfiguredTopicMetadata(
+                    topicName,
+                    metadataImage.topicMetadata(topicName)
+                        .map(topic -> new TopicIdAndPartition(
+                            topic.id(),
+                            topic.partitionCount()
+                        ))
+                )
+            ));
+    }
+
+    private record StreamsUpdateTargetResultAssignment(Map<String, TasksTuple> tasks, Optional<TopologyMetadataSnapshot> snapshot) { }
+
+    private static TopologyMetadataSnapshot fromRecordSnapshot(
+        StreamsGroupTargetAssignmentMetadataValue.TopologyMetadataSnapshot recordSnapshot
+    ) {
+        Map<String, Map<String, ConfiguredTopicMetadata>> sourceTopicsBySubtopology = new TreeMap<>();
+        Map<String, Map<String, ConfiguredTopicMetadata>> repartitionSourceTopicsBySubtopology = new TreeMap<>();
+
+        for (StreamsGroupTargetAssignmentMetadataValue.SubtopologyMetadata subtopology : recordSnapshot.subtopologies()) {
+            String subtopologyId = subtopology.subtopologyId();
+            sourceTopicsBySubtopology.put(subtopologyId, fromRecordTopicMetadata(subtopology.sourceTopics()));
+            repartitionSourceTopicsBySubtopology.put(subtopologyId, fromRecordTopicMetadata(subtopology.repartitionSourceTopics()));
+        }
+
+        return new TopologyMetadataSnapshot(
+            recordSnapshot.metadataHash(),
+            sourceTopicsBySubtopology,
+            repartitionSourceTopicsBySubtopology
+        );
+    }
+
+    private static Map<String, ConfiguredTopicMetadata> fromRecordTopicMetadata(
+        List<StreamsGroupTargetAssignmentMetadataValue.TopicMetadata> recordTopics
+    ) {
+        Map<String, ConfiguredTopicMetadata> topics = new TreeMap<>();
+
+        for (StreamsGroupTargetAssignmentMetadataValue.TopicMetadata topic : recordTopics) {
+            Optional<TopicIdAndPartition> resolved = Optional.ofNullable(topic.resolvedMetadata())
+                .map(metadata -> new TopicIdAndPartition(
+                    metadata.topicId(),
+                    metadata.partitionCount()
+                ));
+
+            topics.put(topic.topicName(), new ConfiguredTopicMetadata(topic.topicName(), resolved));
+        }
+
+        return topics;
     }
 }

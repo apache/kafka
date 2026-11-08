@@ -32,6 +32,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
@@ -208,6 +209,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TasksTuple> targetAssignment;
 
     /**
+     * 
+     */
+    private final TimelineObject<Optional<GroupMetadataManager.TopologyMetadataSnapshot>> topologyMetadataSnapshot;
+
+    /**
      * These maps map each active/standby/warmup task to the process ID(s) of their current owner.
      * The mapping is of the form <code>subtopology -> partition -> memberId</code>.
      * When a member revokes a partition, it removes its process ID from this map.
@@ -342,6 +348,7 @@ public class StreamsGroup implements Group {
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
+        this.topologyMetadataSnapshot = new TimelineObject<>(snapshotRegistry, Optional.empty());
     }
 
     /**
@@ -452,6 +459,14 @@ public class StreamsGroup implements Group {
     public void setTargetAssignmentMetadata(int targetAssignmentEpoch, long targetAssignmentTimestamp) {
         this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
+    }
+
+    public void setTopologyMetadataSnapshot(GroupMetadataManager.TopologyMetadataSnapshot snapshot) {
+        this.topologyMetadataSnapshot.set(Optional.ofNullable(snapshot));
+    }
+
+    public Optional<GroupMetadataManager.TopologyMetadataSnapshot> topologyMetadataSnapshot() {
+        return this.topologyMetadataSnapshot.get();
     }
 
     /**

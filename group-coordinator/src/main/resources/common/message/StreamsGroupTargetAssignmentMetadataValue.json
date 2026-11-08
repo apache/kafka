@@ -20,10 +20,107 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "AssignmentEpoch", "versions": "0+", "type": "int32",
-      "about": "The assignment epoch." },
+    {
+      "name": "AssignmentEpoch",
+      "versions": "0+",
+      "type": "int32",
+      "about": "The assignment epoch."
+    },
     // Added in 4.3 (KIP-1263).
-    { "name": "AssignmentTimestamp", "versions": "0+", "taggedVersions": "0+", "tag": 0, "type": "int64", "default": 0, "ignorable": true,
-      "about": "The time at which the assignment calculation finished." }
+    {
+      "name": "AssignmentTimestamp",
+      "versions": "0+",
+      "taggedVersions": "0+",
+      "tag": 0,
+      "type": "int64",
+      "default": 0,
+      "ignorable": true,
+      "about": "The time at which the assignment calculation finished."
+    },
+    {
+      "name": "TopologyMetadataSnapshot",
+      "versions": "0+",
+      "taggedVersions": "0+",
+      "tag": 1,
+      "type": "TopologyMetadataSnapshot",
+      "nullableVersions": "0+",
+      "default": "null",
+      "ignorable": true,
+      "about": "The topic metadata snapshot associated with this target assignment. Null if unavailable.",
+      "fields": [
+        {
+          "name": "MetadataHash",
+          "versions": "0+",
+          "type": "int64",
+          "about": "The group metadata hash corresponding to this snapshot."
+        },
+        {
+          "name": "Subtopologies",
+          "versions": "0+",
+          "type": "[]SubtopologyMetadata",
+          "about": "The input topic metadata for each subtopology.",
+          "fields": [
+            {
+              "name": "SubtopologyId",
+              "versions": "0+",
+              "type": "string",
+              "about": "The subtopology identifier."
+            },
+            {
+              "name": "SourceTopics",
+              "versions": "0+",
+              "type": "[]TopicMetadata",
+              "about": "The source topics of this subtopology."
+            },
+            {
+              "name": "RepartitionSourceTopics",
+              "versions": "0+",
+              "type": "[]TopicMetadata",
+              "about": "The repartition source topics of this subtopology."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "commonStructs": [
+    {
+      "name": "TopicMetadata",
+      "versions": "0+",
+      "fields": [
+        {
+          "name": "TopicName",
+          "versions": "0+",
+          "type": "string",
+          "about": "The topic name."
+        },
+        {
+          "name": "ResolvedMetadata",
+          "versions": "0+",
+          "type": "ResolvedTopicMetadata",
+          "nullableVersions": "0+",
+          "default": "null",
+          "about": "The resolved topic metadata. Null if the topic could not be resolved in this snapshot."
+        }
+      ]
+    },
+    {
+      "name": "ResolvedTopicMetadata",
+      "versions": "0+",
+      "fields": [
+        {
+          "name": "TopicId",
+          "versions": "0+",
+          "type": "uuid",
+          "about": "The topic ID."
+        },
+        {
+          "name": "PartitionCount",
+          "versions": "0+",
+          "type": "int32",
+          "about": "The number of partitions."
+        }
+      ]
+    }
   ]
 }
