@@ -74,7 +74,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -314,33 +313,12 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldNotThrowExceptionIfGetPartitionInfoHasTopicDescriptionTimeout() {
-        final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
-
+    public void shouldAddTopicToTempUnknownIfGetPartitionInfoHasTopicDescriptionTimeout() {
         mockAdminClient.timeoutNextRequest(1);
-        final Set<String> topic1set = Set.of(topic1);
-        assertDoesNotThrow(
-                () -> internalTopicManager.getTopicPartitionInfo(topic1set, null)
-        );
+        final Set<String> tempUnknownTopics = new HashSet<>();
 
-        mockAdminClient.timeoutNextRequest(1);
-        final Set<String> topic2set = Set.of(topic2);
-        assertDoesNotThrow(
-                () -> internalTopicManager.getTopicPartitionInfo(topic2set, null)
-        );
-    }
-
-    @Test
-    public void shouldNotThrowExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
-        mockAdminClient.timeoutNextRequest(1);
-
-        final Set<String> topic1set = Set.of(topic1);
-        final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
-
-        assertDoesNotThrow(
-                () -> internalTopicManager.getNumPartitions(topic1set, topic2set)
-        );
+        assertEquals(Map.of(), internalTopicManager.getTopicPartitionInfo(Set.of(topic1), tempUnknownTopics));
+        assertEquals(Set.of(topic1), tempUnknownTopics);
     }
 
     @Test
