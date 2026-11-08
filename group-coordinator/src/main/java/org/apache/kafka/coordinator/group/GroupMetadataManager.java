@@ -4478,7 +4478,6 @@ public class GroupMetadataManager {
             .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(group.resolvedRegularExpressions())
-            .withAssignorOffload(offloadAssignor)
             .build();
         long groupSpecTimeMs = time.milliseconds() - groupSpecStartTimeMs;
 
