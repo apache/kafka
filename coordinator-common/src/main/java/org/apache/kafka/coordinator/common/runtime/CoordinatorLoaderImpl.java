@@ -266,8 +266,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     try {
                         coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
                     } catch (Deserializer.UnknownRecordTypeException ex) {
-                        LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
-                            " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
+                        LOG.warn("Unknown record type {} while loading records from {}." +
+                            " Ignoring it. It could be left over from an aborted upgrade.", ex.unknownType(), tp);
                     } catch (RuntimeException ex) {
                         String msg = String.format("Deserializing record %s from %s failed.", record, tp);
                         LOG.error(msg, ex);
