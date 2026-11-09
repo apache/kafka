@@ -837,7 +837,17 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_2_UUID, 1)))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(metadataImage, members, HETEROGENEOUS);
+        // Initialize all partitions so topic 2 is revoked only because no member subscribes to it
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
+            metadataImage,
+            members,
+            HETEROGENEOUS,
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2, 3), 0L),
+                TOPIC_2_UUID, new InitMapValue(TOPIC_2_NAME, Set.of(0, 1), 0L),
+                TOPIC_3_UUID, new InitMapValue(TOPIC_3_NAME, Set.of(0, 1), 0L)
+            )
+        );
         GroupAssignment computedAssignment = assignor.assign(groupSpec, subscribedTopicMetadata);
 
         assertEquals(Set.of(MEMBER_A, MEMBER_B), computedAssignment.members().keySet());
