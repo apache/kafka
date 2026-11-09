@@ -128,6 +128,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                             deltaTable.baseAddOrReplace(element);
                         }
                     }
+                    list.clear();
                 }
             }
         }
@@ -429,6 +430,9 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                 }
                 out.clear();
             }
+            // The elements of the tier are back in the current state. Drop them from the tier
+            // so that iterating over the snapshot does not return them twice.
+            tier.deltaTable = null;
         }
     }
 
