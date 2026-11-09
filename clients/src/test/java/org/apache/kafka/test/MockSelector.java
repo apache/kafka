@@ -115,9 +115,8 @@ public class MockSelector implements Selectable {
     }
 
     /**
-     * Simulate the remote end refusing a pending connection (e.g. "Connection refused"). As with the real
-     * {@link org.apache.kafka.common.network.Selector}, the connection id will be reported in
-     * {@link #disconnected()} with state {@link ChannelState#NOT_CONNECTED} on the next {@link #poll(long)}.
+     * Simulate a refused connection, reported by {@link #disconnected()} as
+     * {@link ChannelState#NOT_CONNECTED} on the next {@link #poll(long)}.
      */
     public void serverConnectionRefused(String id) {
         this.disconnected.put(id, ChannelState.NOT_CONNECTED);

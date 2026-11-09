@@ -1836,7 +1836,6 @@ public class NetworkClientTest {
 
     @Test
     public void testImmediateConnectionRefusedAfterBootstrapResolutionIsNotBootstrapResolutionException() throws InterruptedException {
-        // connect() itself fails with a ConnectException.
         List<String> connectAttempts = new ArrayList<>();
         MockSelector refusingSelector = new MockSelector(time) {
             @Override
@@ -1848,8 +1847,7 @@ public class NetworkClientTest {
         verifyConnectionRefusedAfterBootstrapResolution(refusingSelector, connectAttempts, id -> { });
     }
 
-    // Bootstrap resolution succeeds but all connections are refused past bootstrap.resolve.timeout.ms;
-    // this must be a regular connection failure, not a BootstrapResolutionException.
+    // Connection failures after successful bootstrap resolution must not trigger the resolution timeout.
     private void verifyConnectionRefusedAfterBootstrapResolution(MockSelector refusingSelector,
                                                                  List<String> connectAttempts,
                                                                  Consumer<String> refuseConnection) throws InterruptedException {
@@ -1874,7 +1872,6 @@ public class NetworkClientTest {
             }, "Bootstrap DNS resolution should complete");
             List<Node> bootstrapNodes = metadata.fetch().nodes();
 
-            // Refuse every attempt, advancing time past the resolve timeout and reconnect backoff each round.
             int handledAttempts = 0;
             for (int round = 0; round < 3; round++) {
                 client.poll(0, time.milliseconds());
@@ -1895,7 +1892,6 @@ public class NetworkClientTest {
                 time.sleep(bootstrapResolveTimeoutMs + 2 * reconnectBackoffMaxMsTest);
             }
 
-            // No bootstrap failure is reported and the resolved bootstrap nodes are retained.
             assertDoesNotThrow(metadata::maybeThrowBootstrapFatalException);
             assertDoesNotThrow(metadata::maybeThrowAnyException);
             assertEquals(new HashSet<>(bootstrapNodes), new HashSet<>(metadata.fetch().nodes()));
