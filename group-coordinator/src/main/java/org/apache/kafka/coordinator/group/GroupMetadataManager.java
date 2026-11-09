@@ -7213,7 +7213,7 @@ public class GroupMetadataManager {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
-        CoordinatorResult<Void, CoordinatorRecord> result = EMPTY_RESULT;
+        CoordinatorResult<Void, CoordinatorRecord> result;
         List<CoordinatorRecord> records = new ArrayList<>();
 
         String groupId = request.groupId();
@@ -7246,6 +7246,7 @@ public class GroupMetadataManager {
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
             );
+            result = maybeCompleteJoinPhase(group);
         } else if (isUnknownMember) {
             result = classicGroupJoinNewMember(
                 context,
