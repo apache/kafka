@@ -290,7 +290,7 @@ public class UtilsTest {
     }
 
     private void doTestToArrayInvalid(ByteBuffer buffer) {
-        assertThrows(BufferUnderflowException.class, () -> Utils.toArray(buffer, 0, -1));
+        assertThrows(IllegalArgumentException.class, () -> Utils.toArray(buffer, 0, -1));
         assertThrows(BufferUnderflowException.class, () -> Utils.toArray(buffer, 0, 6));
         assertThrows(BufferUnderflowException.class, () -> Utils.toArray(buffer, 2, 4));
     }
@@ -359,7 +359,7 @@ public class UtilsTest {
         // -2
         byte[] input = {-1, -1, -1, -2};
         final ByteBuffer buffer = ByteBuffer.wrap(input);
-        assertThrows(BufferUnderflowException.class, () -> Utils.getNullableSizePrefixedArray(buffer));
+        assertThrows(NegativeArraySizeException.class, () -> Utils.getNullableSizePrefixedArray(buffer));
     }
 
     @Test
@@ -431,7 +431,7 @@ public class UtilsTest {
     }
 
     private void doTestReadBytesInvalid(ByteBuffer buffer) {
-        assertThrows(BufferUnderflowException.class, () -> Utils.readBytes(buffer, 0, -1));
+        assertThrows(IllegalArgumentException.class, () -> Utils.readBytes(buffer, 0, -1));
         assertThrows(BufferUnderflowException.class, () -> Utils.readBytes(buffer, 0, 6));
         assertThrows(BufferUnderflowException.class, () -> Utils.readBytes(buffer, 2, 4));
     }

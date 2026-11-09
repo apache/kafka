@@ -301,7 +301,10 @@ public final class Utils {
      * @param size The number of bytes to read into the array
      */
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
-        if (size < 0 || size > buffer.remaining() - offset) {
+        if (size < 0) {
+            throw new IllegalArgumentException("Invalid size: " + size);
+        }
+        if (size > buffer.remaining() - offset) {
             // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
             throw new BufferUnderflowException();
         }
@@ -337,7 +340,7 @@ public final class Utils {
      * @return The array
      */
     public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
-        if (size < -1 || size > buffer.remaining()) {
+        if (size > buffer.remaining()) {
             // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
             throw new BufferUnderflowException();
         }
@@ -717,7 +720,10 @@ public final class Utils {
      * Read a buffer into a Byte array for the given offset and length
      */
     public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
-        if (length < 0 || length > buffer.limit() - offset) {
+        if (length < 0) {
+            throw new IllegalArgumentException("Invalid length: " + length);
+        }
+        if (length > buffer.limit() - offset) {
             // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
             throw new BufferUnderflowException();
         }
