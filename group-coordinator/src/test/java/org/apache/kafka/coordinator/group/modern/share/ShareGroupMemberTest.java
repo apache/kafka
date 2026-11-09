@@ -127,16 +127,6 @@ public class ShareGroupMemberTest {
     }
 
     @Test
-    public void testSetSubscribedTopicNamesWithNull() {
-        ShareGroupMember member = new ShareGroupMember.Builder("member-id")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setSubscribedTopicNames(null)
-            .build();
-
-        assertEquals(Set.of("foo", "bar"), member.subscribedTopicNames());
-    }
-
-    @Test
     public void testUpdateWithShareGroupMemberMetadataValue() {
         ShareGroupMemberMetadataValue record = new ShareGroupMemberMetadataValue()
             .setClientId("client-id")
@@ -153,6 +143,16 @@ public class ShareGroupMemberTest {
         assertEquals("client-id", member.clientId());
         assertEquals("host-id", member.clientHost());
         assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
+    }
+
+    @Test
+    public void testSetSubscribedTopicNamesWithNull() {
+        ShareGroupMember member = new ShareGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(null)
+            .build();
+
+        assertEquals(Set.of("foo", "bar"), member.subscribedTopicNames());
     }
 
     @Test
