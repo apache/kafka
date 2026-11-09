@@ -62,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = ServerLogConfigs.NUM_PARTITIONS_CONFIG, value = "2"),
         @ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "false"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
         @ClusterConfigProperty(key = JmxReporter.EXCLUDE_CONFIG, value = MetricsTest.KAFKA_SERVER_PREFIX + "=ClusterId")
     }
@@ -78,9 +77,11 @@ public class MetricsTest {
     }
 
     @ClusterTest
-    public void testMetricsReporterAfterDeletingTopic() {
+    public void testMetricsReporterAfterDeletingTopic() throws Exception {
         var topic = "test-topic-metric";
         cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(topic);
+        assertFalse(topicMetricGroups(topic).isEmpty(), "Topic metrics don't exist");
         cluster.deleteTopic(topic);
         assertEquals(Set.of(), topicMetricGroups(topic), "Topic metrics exists after deleteTopic");
     }
@@ -136,7 +137,7 @@ public class MetricsTest {
     }
 
     @ClusterTest
-    public void testUpdateJMXFilter(ClusterInstance cluster) throws Exception {
+    public void testUpdateJMXFilter() throws Exception {
         // Verify previously exposed metrics are removed and existing matching metrics are added.
         cluster.brokers().values().forEach(broker -> broker.kafkaYammerMetrics().reconfigure(
             Map.of(JmxReporter.EXCLUDE_CONFIG, "kafka.controller:type=KafkaController,name=ActiveControllerCount")));
@@ -146,7 +147,7 @@ public class MetricsTest {
     }
 
     @ClusterTest
-    public void testGeneralBrokerTopicMetricsAreGreedilyRegistered(ClusterInstance cluster) throws Exception {
+    public void testGeneralBrokerTopicMetricsAreGreedilyRegistered() throws Exception {
         var topic = "test-broker-topic-metric";
         cluster.createTopic(topic, 2, (short) 1);
 
