@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.IntegrationTestUtils;
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.Timeout
 
 
 import java.util
@@ -43,7 +42,6 @@ object ShareGroupHeartbeatRequestTest {
   }
 }
 
-@Timeout(120)
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))

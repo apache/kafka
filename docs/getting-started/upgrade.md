@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.5.0
+
+### Upgrading Servers to 4.5.0 from any version 3.3.x through 4.4.0
+
+### Notable changes in 4.5.0
+
+  * `ssl.principal.mapping.rules` now builds the principal name from the same full match that is used to check the rule. Previously, a rule that is not anchored with both `^` and `$`, or that uses alternation, could build the name from a shorter match or apply the replacement twice. For example, `RULE:CN=(.*?),OU=(.*?)/$1/` mapped `CN=bob,OU=eng` to `bobeng` instead of `bob`. Rules anchored with `^` and `$`, such as the documented examples, are not affected. If you use such rules, check that ACLs, quotas and `super.users` refer to the corrected principal names before upgrading.
+
 ## Upgrading to 4.4.0
 
 ### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0

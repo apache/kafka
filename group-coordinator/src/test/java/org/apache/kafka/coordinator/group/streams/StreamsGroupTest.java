@@ -1418,6 +1418,23 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testAsDescribedGroupUsesConfiguredTopologyWithoutStreamsTopology() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-configured-only");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        ConfiguredTopology configuredTopology = new ConfiguredTopology(3, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty());
+        group.setGroupEpoch(3);
+        group.setConfiguredTopology(configuredTopology);
+        group.setTargetAssignmentMetadata(3, 12345L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
+
+        assertEquals(configuredTopology.asStreamsGroupDescribeTopology(), describedGroup.topology());
+    }
+
+    @Test
     public void testAsDescribedGroupFallbackToStreamsTopologyWhenConfiguredTopologyEmpty() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-fallback");

@@ -52,35 +52,35 @@ public class ShareSubscriptionStateTest {
         assertTrue(state.assignedTopicIds().isEmpty());
         assertTrue(state.fetchablePartitions().isEmpty());
         assertFalse(state.hasAutoAssignedPartitions());
-        assertTrue(state.hasNoSubscriptionOrUserAssignment());
+        assertFalse(state.isSubscribed());
     }
 
     @Test
-    public void testSubscribeToShareGroup() {
-        assertTrue(state.subscribeToShareGroup(Set.of(topic)));
+    public void testSubscribe() {
+        assertTrue(state.subscribe(Set.of(topic)));
         assertEquals(Set.of(topic), state.subscription());
         assertTrue(state.hasAutoAssignedPartitions());
-        assertFalse(state.hasNoSubscriptionOrUserAssignment());
+        assertTrue(state.isSubscribed());
 
         // Subscribing to the same set again reports no change...
-        assertFalse(state.subscribeToShareGroup(Set.of(topic)));
+        assertFalse(state.subscribe(Set.of(topic)));
 
         // ...but a different set does.
-        assertTrue(state.subscribeToShareGroup(Set.of(topic, topic1)));
+        assertTrue(state.subscribe(Set.of(topic, topic1)));
         assertEquals(Set.of(topic, topic1), state.subscription());
     }
 
     @Test
     public void testSubscribeToEmptySetStillMarksSubscribed() {
         // Even subscribing to an empty set marks the consumer as subscribed to a share group.
-        assertFalse(state.subscribeToShareGroup(Set.of()));
+        assertFalse(state.subscribe(Set.of()));
         assertTrue(state.hasAutoAssignedPartitions());
-        assertFalse(state.hasNoSubscriptionOrUserAssignment());
+        assertTrue(state.isSubscribed());
     }
 
     @Test
     public void testMetadataTopics() {
-        state.subscribeToShareGroup(Set.of(topic, topic1));
+        state.subscribe(Set.of(topic, topic1));
         assertEquals(Set.of(topic, topic1), state.metadataTopics());
         assertTrue(state.needsMetadata(topic));
         assertTrue(state.needsMetadata(topic1));
@@ -89,7 +89,7 @@ public class ShareSubscriptionStateTest {
 
     @Test
     public void testAssignFromSubscribedPreservesOrder() {
-        state.subscribeToShareGroup(Set.of(topic));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(List.of(tp0, tp1, t1p0));
 
         assertEquals(List.of(tp0, tp1, t1p0), state.fetchablePartitions());
@@ -98,7 +98,7 @@ public class ShareSubscriptionStateTest {
 
     @Test
     public void testAssignFromSubscribedReplacesPreviousAssignment() {
-        state.subscribeToShareGroup(Set.of(topic));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(List.of(tp0, tp1));
         state.assignFromSubscribed(List.of(t1p0));
 
@@ -108,7 +108,7 @@ public class ShareSubscriptionStateTest {
 
     @Test
     public void testMovePartitionToEndRoundRobin() {
-        state.subscribeToShareGroup(Set.of(topic, topic1));
+        state.subscribe(Set.of(topic, topic1));
         state.assignFromSubscribed(List.of(tp0, tp1, t1p0));
 
         // Move the head to the end - mimics the round-robin used when fetching.
@@ -128,7 +128,7 @@ public class ShareSubscriptionStateTest {
 
     @Test
     public void testUnsubscribeClearsAllState() {
-        state.subscribeToShareGroup(Set.of(topic));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(List.of(tp0, tp1));
         state.setAssignedTopicIds(Set.of(Uuid.randomUuid()));
 
@@ -139,12 +139,12 @@ public class ShareSubscriptionStateTest {
         assertTrue(state.assignedTopicIds().isEmpty());
         assertTrue(state.fetchablePartitions().isEmpty());
         assertFalse(state.hasAutoAssignedPartitions());
-        assertTrue(state.hasNoSubscriptionOrUserAssignment());
+        assertFalse(state.isSubscribed());
     }
 
     @Test
     public void testEnablePartitionsAwaitingCallbackIsNoOp() {
-        state.subscribeToShareGroup(Set.of(topic));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(List.of(tp0, tp1));
 
         // No-op for share consumers: the assignment and its fetchability are unchanged.
@@ -154,7 +154,7 @@ public class ShareSubscriptionStateTest {
 
     @Test
     public void testMarkPendingRevocationIsNoOp() {
-        state.subscribeToShareGroup(Set.of(topic));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(List.of(tp0, tp1));
 
         // No-op for share consumers: revoked partitions remain assigned and fetchable until the

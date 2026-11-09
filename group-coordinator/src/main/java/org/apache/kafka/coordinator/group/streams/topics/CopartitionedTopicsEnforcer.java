@@ -44,9 +44,11 @@ public class CopartitionedTopicsEnforcer {
      * The constructor for the class.
      *
      * @param log                         The logger.
-     * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
-     *                                    as well as any partition number decisions that have already been made. In particular, we expect
-     *                                    the number of partitions for all topics in all co-partitions groups to be defined.
+     * @param topicPartitionCountProvider Returns the number of partitions for a given topic,
+     *                                    representing the current state of the broker as well as
+     *                                    any partition number decisions that have already been
+     *                                    made. In particular, we expect the number of partitions
+     *                                    for all topics in all co-partition groups to be defined.
      */
     public CopartitionedTopicsEnforcer(final Logger log,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {
@@ -88,13 +90,16 @@ public class CopartitionedTopicsEnforcer {
         final int numPartitionsToUseForRepartitionTopics;
 
         if (copartitionedTopics.equals(repartitionTopicPartitionCounts.keySet())) {
+            final Set<String> fixedRepartitionTopicsInGroup = copartitionedTopics.stream()
+                .filter(fixedRepartitionTopics::contains)
+                .collect(Collectors.toSet());
 
             // if there's at least one repartition topic with fixed number of partitions
             // validate that they all have same number of partitions
-            if (!fixedRepartitionTopics.isEmpty()) {
+            if (!fixedRepartitionTopicsInGroup.isEmpty()) {
                 numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
                     repartitionTopicPartitionCounts,
-                    fixedRepartitionTopics
+                    fixedRepartitionTopicsInGroup
                 );
             } else {
                 // If all topics for this co-partition group are repartition topics,

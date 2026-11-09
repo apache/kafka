@@ -426,4 +426,26 @@ public class ListDeserializerTest {
         );
     }
 
+    @Test
+    public void shouldThrowIfListSizeIsLargerThanRemainingBytesCanHold() {
+        final byte[] corruptedData = new byte[] {
+            (byte) Serdes.ListSerde.SerializationStrategy.CONSTANT_SIZE.ordinal(),
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x02, // encodes number of null entries == 2
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, // encodes null index 0
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, // encodes null index 1
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x11  // encodes number of entries == 17
+        };
+
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
+
+        final SerializationException exception = assertThrows(
+            SerializationException.class,
+            () -> testDeserializer.deserialize(null, corruptedData)
+        );
+        assertEquals(
+            "Corrupted byte[]. The declared number of list entries cannot be larger than the number of entries the remaining bytes can hold.",
+            exception.getMessage()
+        );
+    }
+
 }

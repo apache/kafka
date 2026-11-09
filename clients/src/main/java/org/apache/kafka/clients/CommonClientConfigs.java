@@ -265,6 +265,9 @@ public class CommonClientConfigs {
             "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
 
+    public static final String SOURCE_CLUSTER_ID_CONFIG = "source.cluster.id";
+    public static final String SOURCE_CLUSTER_ID_DOC = "The source cluster ID. Automatically recovered from the source cluster if not present.";
+
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = "metadata.cluster.check.enable";
     public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = "Whether the client should send cluster and node information " +
             "when connecting to a broker to enable it to check for a misrouted connection. This configuration is ignored if " +
