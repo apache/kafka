@@ -27,8 +27,8 @@ import java.util.stream.Collectors;
 
 /**
  * This enum contains the different Kafka metadata versions.
- * These versions are used during upgrades - users can configure which API version brokers use when communicating with each other.
- * This setting only affects inter-broker communication.
+ * Metadata versions govern compatibility during cluster upgrades, including interactions
+ * between brokers, controllers, and clients.
  * For client-broker communication, the client determines the API version to use.
  * <br>
  * Note that the order of the versions in this enum is important.
@@ -144,7 +144,7 @@ public enum MetadataVersion {
     // 2. Keep at least one unstable MetadataVersion after LATEST_PRODUCTION.
     // 3. When updating LATEST_PRODUCTION, keep LATEST_STABLE_METADATA_VERSION in
     //    tests/kafkatest/version.py aligned with it and move this entire comment
-    //    block below the new LATEST_PRODUCTION constant.
+    //    block below the MetadataVersion that LATEST_PRODUCTION points to.
     //
 
     // New version for the Kafka 4.5.0 release.
