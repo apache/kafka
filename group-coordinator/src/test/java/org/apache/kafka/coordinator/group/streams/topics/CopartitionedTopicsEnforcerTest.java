@@ -238,4 +238,48 @@ public class CopartitionedTopicsEnforcerTest {
         ), enforced);
     }
 
+    @Test
+    public void shouldIgnoreFixedRepartitionTopicsOutsideTheCopartitionGroup() {
+        final Map<String, Integer> topicPartitionCounts = Map.of(
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 5,
+            REPARTITION_TOPIC_3, 15
+        );
+        final CopartitionedTopicsEnforcer enforcer =
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
+
+        final Map<String, Integer> enforced = enforcer.enforce(
+            Set.of(REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
+            Set.of(REPARTITION_TOPIC_1),
+            Set.of(REPARTITION_TOPIC_2, REPARTITION_TOPIC_3)
+        );
+
+        assertEquals(Map.of(
+            REPARTITION_TOPIC_2, 15,
+            REPARTITION_TOPIC_3, 15
+        ), enforced);
+    }
+
+    @Test
+    public void shouldValidateOnlyFixedRepartitionTopicsInTheCopartitionGroup() {
+        final Map<String, Integer> topicPartitionCounts = Map.of(
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 5,
+            REPARTITION_TOPIC_3, 20
+        );
+        final CopartitionedTopicsEnforcer enforcer =
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
+
+        final Map<String, Integer> enforced = enforcer.enforce(
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
+            Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_3),
+            Set.of(REPARTITION_TOPIC_2)
+        );
+
+        assertEquals(Map.of(
+            REPARTITION_TOPIC_1, 10,
+            REPARTITION_TOPIC_2, 10
+        ), enforced);
+    }
+
 }

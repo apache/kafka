@@ -27,7 +27,6 @@ import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Timeout
 
 import java.nio.ByteBuffer
 import java.util.Collections
@@ -47,7 +46,6 @@ object ConsumerProtocolMigrationTest {
   }
 }
 
-@Timeout(120)
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(

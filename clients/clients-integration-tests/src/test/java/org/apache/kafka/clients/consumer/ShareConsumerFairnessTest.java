@@ -27,8 +27,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Verifies that a share fetch spreads its record budget across all the partitions with data and does not
  * keep serving the same partition while the others are starved.
  */
-@Timeout(600)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {

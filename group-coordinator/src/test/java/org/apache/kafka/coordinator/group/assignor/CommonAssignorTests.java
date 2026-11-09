@@ -87,7 +87,7 @@ public class CommonAssignorTests {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             subscriptionType
@@ -109,7 +109,7 @@ public class CommonAssignorTests {
                 new Assignment(firstAssignment.members().get(memberId).partitions())
             ));
         }
-        GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+        GroupSpec groupSpecWithAssignment = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             membersWithAssignment,
             subscriptionType
@@ -169,7 +169,7 @@ public class CommonAssignorTests {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             subscriptionType
@@ -206,7 +206,7 @@ public class CommonAssignorTests {
                     new Assignment(firstAssignment.members().get(memberId).partitions())
                 ));
             }
-            GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+            GroupSpec groupSpecWithAssignment = new GroupSpecImpl.ConsumerGroupSpec(
                 metadataImage,
                 membersWithAssignment,
                 subscriptionType

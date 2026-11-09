@@ -625,10 +625,15 @@ public class LocalLog {
         }
     }
 
-    public List<AbortedTxn> collectAbortedTransactions(long logStartOffset, long baseOffset, long upperBoundOffset) {
-        Optional<LogSegment> segmentEntry = segments.floorSegment(baseOffset);
+    /**
+     * Collect the aborted transactions that may have data in [startOffset, upperBoundOffset): those ending at or after
+     * startOffset and starting before upperBoundOffset, scanning the transaction indexes from the segment containing
+     * startOffset.
+     */
+    public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
+        Optional<LogSegment> segmentEntry = segments.floorSegment(startOffset);
         List<AbortedTxn> allAbortedTxns = new ArrayList<>();
-        segmentEntry.ifPresent(logSegment -> collectAbortedTransactions(logStartOffset, upperBoundOffset, logSegment, allAbortedTxns::addAll));
+        segmentEntry.ifPresent(logSegment -> collectAbortedTransactions(startOffset, upperBoundOffset, logSegment, allAbortedTxns::addAll));
         return allAbortedTxns;
     }
 

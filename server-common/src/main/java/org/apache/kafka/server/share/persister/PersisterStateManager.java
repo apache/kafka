@@ -77,7 +77,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
@@ -245,7 +244,6 @@ public class PersisterStateManager {
     public abstract class PersisterStateManagerHandler implements RequestCompletionHandler {
         protected Node coordinatorNode;
         private final ExponentialBackoffManager findCoordBackoff;
-        private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
         // Index of the combined response, shared across the handlers of one coalesced request; assigned
         // before onComplete and read-and-cleared by lookupPartitionResult (KAFKA-20803).
@@ -265,8 +263,6 @@ public class PersisterStateManager {
                 RETRY_BACKOFF_EXP_BASE,
                 backoffMaxMs,
                 RETRY_BACKOFF_JITTER);
-            this.onCompleteCallback = response -> {
-            }; // noop
             partitionKey = SharePartitionKey.getInstance(groupId, topicId, partition);
         }
 
@@ -436,10 +432,6 @@ public class PersisterStateManager {
 
         @Override
         public void onComplete(ClientResponse response) {
-            if (onCompleteCallback != null) {
-                onCompleteCallback.accept(response);
-            }
-
             // We don't know if FIND_COORD or actual REQUEST. Let's err on side of request.
             if (response == null) {
                 requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR, new NetworkException("Did not receive any response (response = null)"));
@@ -570,16 +562,6 @@ public class PersisterStateManager {
         }
 
         protected abstract boolean isBatchable();
-
-        /**
-         * This method can be called by child class objects to register a callback
-         * which will be called when the onComplete cb is called on request completion.
-         *
-         * @param callback
-         */
-        protected void setOnCompleteCallback(Consumer<ClientResponse> callback) {
-            this.onCompleteCallback = callback;
-        }
     }
 
     public class InitializeStateHandler extends PersisterStateManagerHandler {
@@ -620,8 +602,7 @@ public class PersisterStateManager {
             int partition,
             int stateEpoch,
             long startOffset,
-            CompletableFuture<InitializeShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            CompletableFuture<InitializeShareGroupStateResponse> result
         ) {
             this(
                 groupId,
@@ -819,8 +800,7 @@ public class PersisterStateManager {
             long startOffset,
             int deliveryCompleteCount,
             List<PersisterStateBatch> batches,
-            CompletableFuture<WriteShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            CompletableFuture<WriteShareGroupStateResponse> result
         ) {
             this(
                 groupId,
@@ -987,8 +967,7 @@ public class PersisterStateManager {
             CompletableFuture<ReadShareGroupStateResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts,
-            Consumer<ClientResponse> onCompleteCallback
+            int maxRPCRetryAttempts
         ) {
             super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
             this.leaderEpoch = leaderEpoch;
@@ -1006,8 +985,7 @@ public class PersisterStateManager {
             Uuid topicId,
             int partition,
             int leaderEpoch,
-            CompletableFuture<ReadShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            CompletableFuture<ReadShareGroupStateResponse> result
         ) {
             this(
                 groupId,
@@ -1017,8 +995,7 @@ public class PersisterStateManager {
                 result,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_FIND_COORD_ATTEMPTS,
-                onCompleteCallback
+                MAX_FIND_COORD_ATTEMPTS
             );
         }
 
@@ -1168,8 +1145,7 @@ public class PersisterStateManager {
             CompletableFuture<ReadShareGroupStateSummaryResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts,
-            Consumer<ClientResponse> onCompleteCallback
+            int maxRPCRetryAttempts
         ) {
             super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
             this.leaderEpoch = leaderEpoch;
@@ -1187,8 +1163,7 @@ public class PersisterStateManager {
             Uuid topicId,
             int partition,
             int leaderEpoch,
-            CompletableFuture<ReadShareGroupStateSummaryResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            CompletableFuture<ReadShareGroupStateSummaryResponse> result
         ) {
             this(
                 groupId,
@@ -1198,8 +1173,7 @@ public class PersisterStateManager {
                 result,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_FIND_COORD_ATTEMPTS,
-                onCompleteCallback
+                MAX_FIND_COORD_ATTEMPTS
             );
         }
 
@@ -1363,8 +1337,7 @@ public class PersisterStateManager {
             String groupId,
             Uuid topicId,
             int partition,
-            CompletableFuture<DeleteShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            CompletableFuture<DeleteShareGroupStateResponse> result
         ) {
             this(
                 groupId,

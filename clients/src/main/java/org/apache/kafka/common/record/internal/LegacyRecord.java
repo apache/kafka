@@ -272,6 +272,7 @@ public final class LegacyRecord {
         return this.buffer;
     }
 
+    @Override
     public String toString() {
         if (magic() > 0)
             return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, %s=%d, key=%d bytes, value=%d bytes)",
@@ -293,6 +294,7 @@ public final class LegacyRecord {
                                  value() == null ? 0 : value().limit());
     }
 
+    @Override
     public boolean equals(Object other) {
         if (this == other)
             return true;
@@ -304,6 +306,7 @@ public final class LegacyRecord {
         return this.buffer.equals(record.buffer);
     }
 
+    @Override
     public int hashCode() {
         return buffer.hashCode();
     }

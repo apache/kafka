@@ -327,11 +327,20 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             else if (ScramMechanism.isScram(mechanism))
                 callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
             else if (mechanism.equals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM))
-                callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
+                callbackHandler = unsecuredOAuthBearerValidatorCallbackHandler(prefix);
             else
                 callbackHandler = new SaslServerCallbackHandler();
             saslCallbackHandlers.put(mechanism, callbackHandler);
         }
+    }
+
+    private AuthenticateCallbackHandler unsecuredOAuthBearerValidatorCallbackHandler(String mechanismPrefix) {
+        String listenerPrefix = listenerName == null ? "" : listenerName.configPrefix();
+        log.warn("Using the unsecured OAUTHBEARER validator, which accepts unsigned tokens and must not be used in production, " +
+            "because {} is not set. Set it to a secure validator such as " +
+            "org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler.",
+            listenerPrefix + mechanismPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG);
+        return new OAuthBearerUnsecuredValidatorCallbackHandler();
     }
 
     private void createConnectionsMaxReauthMsMap(Map<String, ?> configs) {

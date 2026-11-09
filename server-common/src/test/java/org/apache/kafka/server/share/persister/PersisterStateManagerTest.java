@@ -690,8 +690,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -1912,8 +1911,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2022,8 +2020,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2142,8 +2139,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2259,8 +2255,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2350,8 +2345,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2409,8 +2403,7 @@ class PersisterStateManagerTest {
             new CompletableFuture<>(),
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         );
         handler.addRequestToNodeMap(coordinatorNode, handler);
 
@@ -2497,8 +2490,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2613,8 +2605,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            null
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -2680,8 +2671,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            null
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -2785,8 +2775,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -2894,8 +2883,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3013,8 +3001,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3129,8 +3116,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3219,8 +3205,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3278,8 +3263,7 @@ class PersisterStateManagerTest {
             new CompletableFuture<>(),
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         );
         handler.addRequestToNodeMap(coordinatorNode, handler);
 
@@ -3364,8 +3348,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            null
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3478,8 +3461,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            null
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -3545,8 +3527,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            null
+            2
         ));
 
         stateManager.enqueue(handler);

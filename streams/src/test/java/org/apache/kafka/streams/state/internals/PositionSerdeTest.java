@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.streams.query.Position;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PositionSerdeTest {
 
@@ -55,5 +57,68 @@ public class PositionSerdeTest {
         final byte[] padded = Arrays.copyOf(bytes, bytes.length * 8);
 
         assertEquals(POSITION, PositionSerde.deserialize(ByteBuffer.wrap(padded)));
+    }
+
+    @Test
+    public void shouldRoundTripPosition() {
+        assertEquals(POSITION, PositionSerde.deserialize(PositionSerde.serialize(POSITION)));
+    }
+
+    @Test
+    public void shouldRoundTripEmptyPosition() {
+        final Position position = Position.emptyPosition();
+
+        assertEquals(position, PositionSerde.deserialize(PositionSerde.serialize(position)));
+    }
+
+    @Test
+    public void shouldRejectTopicCountLargerThanRemainingBuffer() {
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + 1 + 4);
+        buffer.put((byte) 0);
+        buffer.putInt(1 << 30);
+        buffer.putInt(1);
+        buffer.put((byte) 't');
+        buffer.putInt(0);
+        buffer.flip();
+
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
+    }
+
+    @Test
+    public void shouldRejectNegativeTopicCount() {
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 4);
+        buffer.put((byte) 0);
+        buffer.putInt(-1);
+        buffer.flip();
+
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
+    }
+
+    @Test
+    public void shouldRejectPartitionCountLargerThanRemainingBuffer() {
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + 1 + 4 + 4 + 8);
+        buffer.put((byte) 0);
+        buffer.putInt(1);
+        buffer.putInt(1);
+        buffer.put((byte) 't');
+        buffer.putInt(1 << 30);
+        buffer.putInt(0);
+        buffer.putLong(0L);
+        buffer.flip();
+
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
+    }
+
+    @Test
+    public void shouldRejectNegativePartitionCount() {
+        final ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + 4 + 1 + 4);
+        buffer.put((byte) 0);
+        buffer.putInt(1);
+        buffer.putInt(1);
+        buffer.put((byte) 't');
+        buffer.putInt(-1);
+        buffer.flip();
+
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
     }
 }

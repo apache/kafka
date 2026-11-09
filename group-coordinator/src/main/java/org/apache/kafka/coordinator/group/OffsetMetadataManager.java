@@ -502,7 +502,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Validates an TxnOffsetCommit request.
+     * Validates a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual request.
@@ -553,7 +553,7 @@ public class OffsetMetadataManager {
      * Validates an OffsetFetch request.
      *
      * @param request               The actual request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      */
     private void validateOffsetFetch(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -680,7 +680,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Handles an TxnOffsetCommit request.
+     * Handles a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The TxnOffsetCommit request.
@@ -889,9 +889,9 @@ public class OffsetMetadataManager {
      * Fetch offsets for a given Group.
      *
      * @param request               The OffsetFetchRequestGroup request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -973,9 +973,9 @@ public class OffsetMetadataManager {
      * Fetch all offsets for a given Group.
      *
      * @param request               The OffsetFetchRequestGroup request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -1087,6 +1087,7 @@ public class OffsetMetadataManager {
             return false;
         }
 
+        int numRecordsBefore = records.size();
         AtomicBoolean allOffsetsExpired = new AtomicBoolean(true);
         OffsetExpirationCondition condition = offsetExpirationCondition.get();
 
@@ -1106,7 +1107,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size() - numRecordsBefore);
 
         // We don't want to remove the group if there are ongoing transactions with undeleted offsets.
         return allOffsetsExpired.get() && !openTransactions.contains(groupId);

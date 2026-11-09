@@ -104,6 +104,7 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
@@ -130,6 +131,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -19369,6 +19371,55 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupHeartbeatAssignorFailureDoesNotAddMember() {
+        String groupId = "share-group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String memberId3 = Uuid.randomUuid().toString();
+
+        ShareGroupPartitionAssignor assignor = mock(ShareGroupPartitionAssignor.class);
+        when(assignor.name()).thenReturn("share");
+        when(assignor.assign(any(), any()))
+            .thenReturn(new GroupAssignment(Map.of()))
+            .thenThrow(new PartitionAssignorException("Assignment failed."))
+            .thenReturn(new GroupAssignment(Map.of()));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 1)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        // Member 1 joins the group.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of("foo")));
+
+        // Member 2 fails to join because the target assignment computation fails.
+        assertThrows(UnknownServerException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of("foo"))));
+
+        // Member 3 joins the group. The failed member 2 does not count towards the group size.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of("foo")));
+        assertEquals(Set.of(memberId1, memberId3), context.groupMetadataManager.shareGroup(groupId).members().keySet());
+    }
+
+    @Test
     public void testShareGroupDeleteTombstones() {
         String groupId = "share-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -21358,6 +21409,112 @@ public class GroupMetadataManagerTest {
 
         assertEquals(StreamsGroupState.NOT_READY, context.streamsGroupState(groupId));
         assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testStreamsGroupMemberJoiningWithReorderedCopartitionGroups() {
+        // First - [[3, 2], [1, 0]]
+        // Second - [[1, 0], [2, 3]]
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId("subtopology1")
+                .setSourceTopics(List.of("foo", "bar", "baz", "qux"))
+                .setCopartitionGroups(List.of(
+                    new CopartitionGroup().setSourceTopics(List.of((short) 3, (short) 2)),
+                    new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 0))
+                ))
+        ));
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 3)
+                .addTopic(Uuid.randomUuid(), "bar", 3)
+                .addTopic(Uuid.randomUuid(), "baz", 3)
+                .addTopic(Uuid.randomUuid(), "qux", 3)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+
+        Topology reorderedTopology = topology.duplicate();
+        reorderedTopology.subtopologies().get(0).setCopartitionGroups(List.of(
+            new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 0)),
+            new CopartitionGroup().setSourceTopics(List.of((short) 2, (short) 3))
+        ));
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(reorderedTopology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertEquals(Errors.NONE.code(), result.response().data().errorCode());
+        assertTrue(result.response().data().memberEpoch() > 0);
+        assertTrue(result.records().stream().noneMatch(
+            record -> record.key() instanceof StreamsGroupTopologyKey)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupMemberJoiningWithDifferentCopartitionGroups() {
+        // First -> [[0, 1], [2, 3]]
+        // Second -> [[0, 2], [1, 3]]
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setEpoch(1).setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId("subtopology1")
+                .setSourceTopics(List.of("foo", "bar", "baz", "qux"))
+                .setCopartitionGroups(List.of(
+                    new CopartitionGroup().setSourceTopics(List.of((short) 0, (short) 1)),
+                    new CopartitionGroup().setSourceTopics(List.of((short) 2, (short) 3))
+                ))
+        ));
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 3)
+                .addTopic(Uuid.randomUuid(), "bar", 3)
+                .addTopic(Uuid.randomUuid(), "baz", 3)
+                .addTopic(Uuid.randomUuid(), "qux", 3)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+
+        // Keep the epoch and topics unchanged, but change which topics must be copartitioned.
+        Topology changedTopology = topology.duplicate();
+        changedTopology.subtopologies().get(0).setCopartitionGroups(List.of(
+            new CopartitionGroup().setSourceTopics(List.of((short) 0, (short) 2)),
+            new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 3))
+        ));
+        StreamsInvalidTopologyEpochException exception = assertThrows(StreamsInvalidTopologyEpochException.class, () -> context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(changedTopology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())));
+
+        assertEquals(
+            "The topology sent by the member differs from the group's topology with the same epoch 1. Make sure all members of the group run the same topology.", 
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -30493,6 +30650,26 @@ public class GroupMetadataManagerTest {
         assertRecordEquals(record, result.records().get(0));
         // Make sure the timeline map is not modified yet.
         assertEquals(snapshotMetadataInitializeRecordMap, context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingTopics());
+    }
+
+    @Test
+    public void testInitializeShareGroupStateWithMissingOrNonShareGroup() {
+        String groupId = "unknown-group-id";
+        Map<Uuid, Set<Integer>> topicPartitionMap = Map.of(Uuid.randomUuid(), Set.of(0, 1));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        assertEquals(
+            new CoordinatorResult<>(List.of(), null),
+            context.groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap)
+        );
+
+        // The group id belongs to a consumer group.
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(groupId, true);
+        assertEquals(
+            new CoordinatorResult<>(List.of(), null),
+            context.groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap)
+        );
     }
 
     @Test

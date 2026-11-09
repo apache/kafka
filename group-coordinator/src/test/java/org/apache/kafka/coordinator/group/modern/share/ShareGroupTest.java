@@ -82,6 +82,7 @@ public class ShareGroupTest {
         // Create a member.
         member = shareGroup.getOrMaybeCreateMember("member-id", true);
         assertEquals("member-id", member.memberId());
+        assertFalse(shareGroup.hasMember("member-id"));
 
         // Add member to the group.
         shareGroup.updateMember(member);

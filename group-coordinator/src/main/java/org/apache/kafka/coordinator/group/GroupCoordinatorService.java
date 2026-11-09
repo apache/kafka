@@ -387,14 +387,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private volatile CoordinatorMetadataImage metadataImage = null;
 
     /**
+     * Constructor.
      *
-     * @param logContext                The log context.
-     * @param config                    The group coordinator config.
-     * @param runtime                   The runtime.
-     * @param groupCoordinatorMetrics   The group coordinator metrics.
-     * @param groupConfigManager        The group config manager.
-     * @param persister                 The persister.
-     * @param timer                     The timer.
+     * @param logContext                            The log context.
+     * @param config                                The group coordinator config.
+     * @param runtime                               The runtime.
+     * @param groupCoordinatorMetrics               The group coordinator metrics.
+     * @param groupConfigManager                    The group config manager.
+     * @param persister                             The persister.
+     * @param timer                                 The timer.
+     * @param partitionMetadataClient               The partition metadata client.
+     * @param streamsGroupTopologyDescriptionPlugin The streams group topology description plugin,
+     *                                              if one is configured.
+     * @param time                                  The time.
      */
     GroupCoordinatorService(
         LogContext logContext,
@@ -431,7 +436,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Throws CoordinatorNotAvailableException if the not active.
+     * Throws CoordinatorNotAvailableException if the coordinator is not active.
      */
     private void throwIfNotActive() {
         if (!isActive.get()) {
@@ -567,7 +572,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
      *
      * @param request The request to validate.
      * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
      */
     private static void throwIfStreamsGroupHeartbeatRequestIsInvalid(
         StreamsGroupHeartbeatRequestData request
@@ -904,7 +908,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         return topicData;
                     })
                     .iterator()));
-        // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
+        // don't uninitialize share group state here, as we regard this alter share group offsets
+        // request failed.
         return data;
     }
 
@@ -2195,10 +2200,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private boolean shouldComputeSharePartitionLag(PartitionStateSummaryData partitionData) {
-        // The share partition lag would be computed for a share partition ony if -
+        // The share partition lag would be computed for a share partition only if -
         // 1. The read summary result for the partition is successful.
-        // 3. The start offset is initialized.
-        // 4. The delivery complete count is initialized.
+        // 2. The start offset is initialized.
+        // 3. The delivery complete count is initialized.
         return partitionData.errorCode() == Errors.NONE.code() &&
             partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET &&
             partitionData.deliveryCompleteCount() != PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT;
@@ -2682,7 +2687,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
      * @param exception         The exception to handle.
-     * @return The OffsetFetchRequestGroup response.
+     * @return The OffsetFetchResponseGroup response.
      */
     private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
         String operationName,

@@ -36,11 +36,11 @@ import org.apache.kafka.common.utils.LogCaptureAppender
 import org.apache.kafka.coordinator.group.{ConsumerGroupMigrationPolicy, GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
+import org.apache.kafka.coordinator.mirror.ClusterMirrorBrokerConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -980,17 +980,17 @@ class KafkaConfigTest {
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
         /** Cluster mirror configs */
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
 
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")

@@ -31,9 +31,10 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Responsible for configuring the number of partitions in repartitioning topics. It computes a fix-point iteration, deriving the number of
- * partitions for each repartition topic based on the number of partitions of the source topics of the topology, if the number of
- * partitions is not explicitly set in the topology.
+ * Responsible for configuring the number of partitions in repartitioning topics. It computes a
+ * fixed-point iteration, deriving the number of partitions for each repartition topic based on the
+ * number of partitions of the source topics of the topology, if the number of partitions is not
+ * explicitly set in the topology.
  */
 public class RepartitionTopics {
 
@@ -46,8 +47,10 @@ public class RepartitionTopics {
      *
      * @param log                          The logger.
      * @param subtopologies                The subtopologies for the requested topology.
-     * @param topicPartitionCountProvider  Returns the number of partitions for a given topic, representing the current state of the
-     *                                     broker. This class requires the number of partition for all source topics to be defined.
+     * @param topicPartitionCountProvider  Returns the number of partitions for a given topic,
+     *                                     representing the current state of the broker. This class
+     *                                     requires the number of partitions for all source topics
+     *                                     to be defined.
      */
     public RepartitionTopics(final Logger log,
                              final Collection<Subtopology> subtopologies,
@@ -58,7 +61,7 @@ public class RepartitionTopics {
     }
 
     /**
-     * Returns the set of the number of partitions for each repartition topic.
+     * Returns the number of partitions for each repartition topic.
      *
      * @return the map of repartition topics for the requested topology to their required number of partitions.
      *
