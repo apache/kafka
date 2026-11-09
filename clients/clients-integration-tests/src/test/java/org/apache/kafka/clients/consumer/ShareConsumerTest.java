@@ -1863,6 +1863,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         }
         cluster.waitTopicCreation(topic, 1);
         alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareIsolationLevel(groupId, "read_committed");
 
         // Broker 2 leaves the ISR, so only broker 1 has offsets 0-49.
         cluster.shutdownBroker(2);
