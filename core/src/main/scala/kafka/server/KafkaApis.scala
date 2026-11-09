@@ -1899,11 +1899,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAddPartitionsToTxnRequest(request: Request, requestLocal: RequestLocal): Unit = {
+    val originalRequest = request.body(classOf[AddPartitionsToTxnRequest])
     val addPartitionsToTxnRequest =
-      if (request.context.effectiveApiVersion() < 4)
-        request.body(classOf[AddPartitionsToTxnRequest]).normalizeRequest()
+      if (originalRequest.version < 4)
+        originalRequest.normalizeRequest()
       else
-        request.body(classOf[AddPartitionsToTxnRequest])
+        originalRequest
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
