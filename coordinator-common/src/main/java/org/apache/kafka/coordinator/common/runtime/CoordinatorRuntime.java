@@ -2545,12 +2545,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @return List of {@link TopicPartition} whose coordinators are active.
      */
     public List<TopicPartition> activeCoordinators() {
-        if (coordinators == null || coordinators.isEmpty()) {
+        if (coordinators.isEmpty()) {
             return List.of();
         }
 
         return coordinators.entrySet().stream()
-            .filter(entry -> entry.getValue().state.equals(CoordinatorState.ACTIVE))
+            .filter(entry -> entry.getValue().state == CoordinatorState.ACTIVE)
             .map(Map.Entry::getKey)
             .toList();
     }
