@@ -66,10 +66,12 @@ class PartitionGroup extends AbstractPartitionGroup {
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
+    private final Sensor totalInputBufferBytesSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
     private int totalBuffered;
+    private long totalBytesBuffered;
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
     private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
@@ -79,6 +81,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                    final Function<TopicPartition, OptionalLong> lagProvider,
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
+                   final Sensor totalInputBufferBytesSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
@@ -87,7 +90,9 @@ class PartitionGroup extends AbstractPartitionGroup {
         this.enforcedProcessingSensor = enforcedProcessingSensor;
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
+        this.totalInputBufferBytesSensor = totalInputBufferBytesSensor;
         totalBuffered = 0;
+        totalBytesBuffered = 0L;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
     }
@@ -216,6 +221,7 @@ class PartitionGroup extends AbstractPartitionGroup {
             if (!newInputPartitions.contains(topicPartition)) {
                 // if partition is removed should delete its queue
                 totalBuffered -= queueEntry.getValue().size();
+                totalBytesBuffered -= queueEntry.getValue().getTotalBytesBuffered();
                 queuesIterator.remove();
                 removedPartitions.add(topicPartition);
             }
@@ -250,10 +256,13 @@ class PartitionGroup extends AbstractPartitionGroup {
         if (queue != null) {
             // get the first record from this queue.
             final int oldSize = queue.size();
+            final long oldBytes = queue.getTotalBytesBuffered();
             record = queue.poll(wallClockTime);
+            final long newBytes = queue.getTotalBytesBuffered();
 
             if (record != null) {
                 totalBuffered -= oldSize - queue.size();
+                totalBytesBuffered -= oldBytes - newBytes;
                 logger.trace("Partition {} polling next record:, oldSize={}, newSize={}, totalBuffered={}, recordTimestamp={}",
                     queue.partition(), oldSize, queue.size(), totalBuffered, record.timestamp);
 
@@ -274,6 +283,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                 } else {
                     recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }
+                totalInputBufferBytesSensor.record(totalBytesBuffered, wallClockTime);
             }
         } else {
             logger.trace("Partition pulling nextRecord: no queue available");
@@ -290,7 +300,9 @@ class PartitionGroup extends AbstractPartitionGroup {
         }
 
         final int oldSize = recordQueue.size();
+        final long oldBytes = recordQueue.getTotalBytesBuffered();
         final int newSize = recordQueue.addRawRecords(rawRecords);
+        final long newBytes = recordQueue.getTotalBytesBuffered();
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
@@ -305,6 +317,8 @@ class PartitionGroup extends AbstractPartitionGroup {
         }
 
         totalBuffered += newSize - oldSize;
+        totalBytesBuffered += newBytes - oldBytes;
+        totalInputBufferBytesSensor.record(totalBytesBuffered);
 
         return newSize;
     }
@@ -360,6 +374,22 @@ class PartitionGroup extends AbstractPartitionGroup {
         return totalBuffered;
     }
 
+    @Override
+    long totalBytesBuffered() {
+        return totalBytesBuffered;
+    }
+
+    @Override
+    Set<TopicPartition> getNonEmptyTopicPartitions() {
+        final Set<TopicPartition> nonEmpty = new HashSet<>();
+        for (final Map.Entry<TopicPartition, RecordQueue> entry : partitionQueues.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                nonEmpty.add(entry.getKey());
+            }
+        }
+        return nonEmpty;
+    }
+
     // for testing only
     boolean allPartitionsBufferedLocally() {
         return allBuffered;
@@ -372,6 +402,7 @@ class PartitionGroup extends AbstractPartitionGroup {
         }
         nonEmptyQueuesByTime.clear();
         totalBuffered = 0;
+        totalBytesBuffered = 0L;
         streamTime = RecordQueue.UNKNOWN;
         fetchedLags.clear();
     }

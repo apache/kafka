@@ -1848,12 +1848,38 @@ public class TaskManager {
 
     /**
      * Resumes polling in the main consumer for all partitions for which
-     * the corresponding record queues have capacity (again).
+     * the corresponding record queues have capacity (again), except for {@code excludedPartitions},
+     * which the StreamThread input-buffer bytes guard paused and resumes itself.
      */
-    public void resumePollingForPartitionsWithAvailableSpace() {
+    public void resumePollingForPartitionsWithAvailableSpace(final Set<TopicPartition> excludedPartitions) {
         for (final StreamTask t: tasks.activeInitializedTasks()) {
-            t.resumePollingForPartitionsWithAvailableSpace();
+            t.resumePollingForPartitionsWithAvailableSpace(excludedPartitions);
         }
+    }
+
+    public long getInputBufferSizeInBytes() {
+        long total = 0L;
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
+            total += t.totalBytesBuffered();
+        }
+        return total;
+    }
+
+    public Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> result = new HashSet<>();
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
+            result.addAll(t.getNonEmptyTopicPartitions());
+        }
+        return result;
+    }
+
+    // The partitions getActiveTask can route polled records to; any other partition has no task to receive them.
+    public Set<TopicPartition> activeInitializedInputPartitions() {
+        final Set<TopicPartition> result = new HashSet<>();
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
+            result.addAll(t.inputPartitions());
+        }
+        return result;
     }
 
     /**
