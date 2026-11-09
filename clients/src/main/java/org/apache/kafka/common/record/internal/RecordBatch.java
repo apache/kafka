@@ -65,6 +65,15 @@ public interface RecordBatch extends Iterable<Record> {
     int NO_PARTITION_LEADER_EPOCH = -1;
 
     /**
+     * The number of batches per producer id and partition whose metadata the broker retains for duplicate
+     * detection. Once this many batches have been appended after a batch, a retry of that batch is no longer
+     * recognised as a duplicate and fails with {@code OUT_OF_ORDER_SEQUENCE_NUMBER}. The idempotent producer
+     * therefore caps {@code max.in.flight.requests.per.connection} at this value, and does not assign sequences
+     * to new batches while that could push its oldest in-flight batch out of this window.
+     */
+    int NUM_BATCHES_RETAINED_PER_PRODUCER = 5;
+
+    /**
      * Check whether the checksum of this batch is correct.
      *
      * @return true If so, false otherwise

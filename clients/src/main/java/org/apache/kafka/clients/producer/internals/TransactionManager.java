@@ -99,14 +99,6 @@ import java.util.function.Supplier;
 public class TransactionManager {
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
-    /**
-     * The number of batches per producer id whose metadata the broker retains for duplicate detection, matching
-     * {@code ProducerStateEntry.NUM_BATCHES_TO_RETAIN}. Once this many batches have been appended after a batch,
-     * a retry of that batch is no longer recognised as a duplicate and fails with
-     * {@code OUT_OF_ORDER_SEQUENCE_NUMBER}.
-     */
-    static final int NUM_BATCHES_RETAINED_BY_BROKER = 5;
-
     private final Logger log;
     private final String transactionalId;
     private final int transactionTimeoutMs;
@@ -864,10 +856,10 @@ public class TransactionManager {
     /**
      * Returns true if sending another new batch to the partition could push its oldest in-flight batch out of the
      * broker's deduplication window. Every batch sent after the oldest in-flight batch may be appended before that
-     * batch is retried, so at most {@code NUM_BATCHES_RETAINED_BY_BROKER - 1} of them may exist at any time.
+     * batch is retried, so at most {@code RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1} of them may exist at any time.
      */
     synchronized boolean wouldExceedBrokerDeduplicationWindow(TopicPartition topicPartition) {
-        return txnPartitionMap.numBatchesAheadOfOldestInflight(topicPartition) >= NUM_BATCHES_RETAINED_BY_BROKER - 1;
+        return txnPartitionMap.numBatchesAheadOfOldestInflight(topicPartition) >= RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1;
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {

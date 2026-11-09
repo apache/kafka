@@ -2410,7 +2410,7 @@ public class SenderTest {
 
         // Each `runOnce` drains at most one batch per partition. No response is given yet, so the batches stay in
         // flight and fill up the window the broker retains for duplicate detection.
-        int window = TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER;
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
         for (int i = 0; i < window; i++) {
             appendToAccumulator(tp0);
             sender.runOnce();
@@ -2469,7 +2469,7 @@ public class SenderTest {
         // The leader moves to another broker. The following batches are sent there and acknowledged, so the new
         // leader now holds four batches after the stuck one in its deduplication window.
         client.updateMetadata(metadataWithTp0Leader(newLeader, 101));
-        int window = TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER;
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
         for (int i = 1; i < window; i++) {
             Future<RecordMetadata> future = appendToAccumulator(tp0);
             runUntilRequestsInFlight(newLeader, 1);
@@ -2545,7 +2545,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        int window = TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER;
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
         List<Future<RecordMetadata>> futures = new ArrayList<>();
         for (int i = 0; i < window; i++) {
             futures.add(appendToAccumulator(tp0));

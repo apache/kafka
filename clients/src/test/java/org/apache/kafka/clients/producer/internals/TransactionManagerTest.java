@@ -642,7 +642,7 @@ public class TransactionManagerTest {
         initializeIdempotentProducerId(producerId, epoch);
 
         List<ProducerBatch> batches = new ArrayList<>();
-        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER; i++) {
+        for (int i = 0; i < RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER; i++) {
             assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
             batches.add(writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(i)));
         }
@@ -666,7 +666,7 @@ public class TransactionManagerTest {
         initializeIdempotentProducerId(producerId, epoch);
 
         List<ProducerBatch> batches = new ArrayList<>();
-        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER; i++) {
+        for (int i = 0; i < RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER; i++) {
             batches.add(writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(i)));
         }
         assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
@@ -827,7 +827,7 @@ public class TransactionManagerTest {
         assertEquals(2, transactionManager.sequenceNumber(tp0));
 
         // Only batch 1 is ahead of batch 0, so three more batches fit in the window.
-        for (int i = 0; i < TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER - 2; i++) {
+        for (int i = 0; i < RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 2; i++) {
             assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
             writeIdempotentBatchWithValue(transactionManager, tp0, String.valueOf(10 + i));
         }
