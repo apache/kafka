@@ -1340,8 +1340,8 @@ public class AbstractHerderTest {
 
         ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
 
-        assertEquals(1, result.configs().size());
-        ConfigValueInfo redacted = result.configs().get(0).configValue();
+        assertEquals(1, result.values().size());
+        ConfigValueInfo redacted = result.values().get(0).configValue();
         assertEquals(TEST_REF, redacted.value());
         assertTrue(redacted.errors().isEmpty());
         assertTrue(redacted.recommendedValues().isEmpty());
@@ -1358,7 +1358,7 @@ public class AbstractHerderTest {
 
         ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
 
-        ConfigValueInfo redacted = result.configs().get(0).configValue();
+        ConfigValueInfo redacted = result.values().get(0).configValue();
         assertEquals(TEST_REF, redacted.value());
         assertEquals(1, redacted.errors().size());
         assertFalse(redacted.errors().get(0).contains("some-value"));
@@ -1378,12 +1378,12 @@ public class AbstractHerderTest {
 
         ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
 
-        assertEquals(2, result.configs().size());
-        ConfigValueInfo nameResult = result.configs().get(0).configValue();
+        assertEquals(2, result.values().size());
+        ConfigValueInfo nameResult = result.values().get(0).configValue();
         assertEquals("my-connector", nameResult.value());
         assertTrue(nameResult.errors().isEmpty());
 
-        ConfigValueInfo tasksResult = result.configs().get(1).configValue();
+        ConfigValueInfo tasksResult = result.values().get(1).configValue();
         assertEquals(TEST_REF, tasksResult.value());
         assertFalse(tasksResult.errors().get(0).contains("some-value"));
     }

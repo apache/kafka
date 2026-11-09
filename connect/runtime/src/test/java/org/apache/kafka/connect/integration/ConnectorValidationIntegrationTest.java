@@ -524,7 +524,7 @@ public class ConnectorValidationIntegrationTest {
 
         ConfigInfos result = connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
 
-        ConfigValueInfo nameValue = result.configs().stream()
+        ConfigValueInfo nameValue = result.values().stream()
                 .map(ConfigInfo::configValue)
                 .filter(v -> NAME_CONFIG.equals(v.name()))
                 .findFirst()
@@ -532,7 +532,7 @@ public class ConnectorValidationIntegrationTest {
 
         assertNotEquals(VALUE, nameValue.value());
         assertEquals(placeholder, nameValue.value());
-        for (ConfigInfo info : result.configs()) {
+        for (ConfigInfo info : result.values()) {
             ConfigValueInfo cv = info.configValue();
             assertNotEquals(VALUE, cv.value());
         }
@@ -562,7 +562,7 @@ public class ConnectorValidationIntegrationTest {
 
         ConfigInfos result = connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
 
-        ConfigValueInfo tasksMaxValue = result.configs().stream()
+        ConfigValueInfo tasksMaxValue = result.values().stream()
                 .map(ConfigInfo::configValue)
                 .filter(v -> TASKS_MAX_CONFIG.equals(v.name()))
                 .findFirst()
@@ -573,7 +573,7 @@ public class ConnectorValidationIntegrationTest {
         for (String error : tasksMaxValue.errors()) {
             assertFalse(error.contains(value));
         }
-        for (ConfigInfo info : result.configs()) {
+        for (ConfigInfo info : result.values()) {
             for (String error : info.configValue().errors()) {
                 assertFalse(error.contains(value));
             }
@@ -604,7 +604,7 @@ public class ConnectorValidationIntegrationTest {
         ConfigInfos result = connect.validateConnectorConfig(
                 config.get(CONNECTOR_CLASS_CONFIG), config);
 
-        for (ConfigInfo info : result.configs()) {
+        for (ConfigInfo info : result.values()) {
             ConfigValueInfo cv = info.configValue();
             assertNotEquals(VALUE, cv.value());
             for (String error : cv.errors()) {
