@@ -41,6 +41,7 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InternalTopicManagerTest {
@@ -106,6 +107,99 @@ class InternalTopicManagerTest {
 
         Optional<Map<String, ConfiguredSubtopology>> expectedConfiguredTopology = Optional.of(makeExpectedConfiguredSubtopologies());
         assertEquals(expectedConfiguredTopology, configuredTopology.subtopologies());
+    }
+
+    @Test
+    void testConfigureTopicsIgnoresUnrelatedFixedRepartitionTopicsForCopartitionGroup() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "left", 2)
+            .addTopic(Uuid.randomUuid(), "right", 4)
+            .addTopic(Uuid.randomUuid(), "other-a", 1)
+            .addTopic(Uuid.randomUuid(), "other-b", 1)
+            .build();
+
+        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(
+            LOG, "test-group", "test-member", 0, makeTopologyWithUnrelatedFixedRepartitionTopics(),
+            new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+
+        assertEquals(
+            Optional.of(Status.MISSING_INTERNAL_TOPICS),
+            configuredTopology.topicConfigurationException().map(TopicConfigurationException::status));
+        final Map<String, CreatableTopic> toCreate = configuredTopology.internalTopicsToBeCreated();
+        assertEquals(4, toCreate.get("left-repartition").numPartitions());
+        assertEquals(4, toCreate.get("right-repartition").numPartitions());
+        assertEquals(3, toCreate.get("fixed-3-repartition").numPartitions());
+        assertEquals(5, toCreate.get("fixed-5-repartition").numPartitions());
+
+        final ConfiguredSubtopology joinSubtopology = configuredTopology.subtopologies().orElseThrow().get("join-sub");
+        assertEquals(4, joinSubtopology.numberOfTasks());
+        assertEquals(4, joinSubtopology.repartitionSourceTopics().get("left-repartition").numberOfPartitions());
+        assertEquals(4, joinSubtopology.repartitionSourceTopics().get("right-repartition").numberOfPartitions());
+    }
+
+    @Test
+    void testConfigureTopicsCreatesMissingCopartitionedRepartitionTopicWithPartitionCountOfExistingSibling() {
+        // "left-repartition" already exists with more partitions than its sources suggest, "right-repartition" is missing.
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "left", 2)
+            .addTopic(Uuid.randomUuid(), "right", 4)
+            .addTopic(Uuid.randomUuid(), "other-a", 1)
+            .addTopic(Uuid.randomUuid(), "other-b", 1)
+            .addTopic(Uuid.randomUuid(), "left-repartition", 6)
+            .build();
+
+        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(
+            LOG, "test-group", "test-member", 0, makeTopologyWithUnrelatedFixedRepartitionTopics(),
+            new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+
+        final Map<String, CreatableTopic> toCreate = configuredTopology.internalTopicsToBeCreated();
+        assertEquals(6, toCreate.get("right-repartition").numPartitions());
+        assertNull(toCreate.get("left-repartition"));
+    }
+
+    /**
+     * The join subtopology copartitions two flexible repartition topics whose source topics have 2 and 4 partitions.
+     * Elsewhere in the topology, two unrelated repartition topics have fixed, different partition counts.
+     */
+    private static StreamsTopology makeTopologyWithUnrelatedFixedRepartitionTopics() {
+        return new StreamsTopology(0, Map.of(
+            "left-sub", new Subtopology()
+                .setSubtopologyId("left-sub")
+                .setSourceTopics(List.of("left"))
+                .setRepartitionSinkTopics(List.of("left-repartition")),
+            "right-sub", new Subtopology()
+                .setSubtopologyId("right-sub")
+                .setSourceTopics(List.of("right"))
+                .setRepartitionSinkTopics(List.of("right-repartition")),
+            "join-sub", new Subtopology()
+                .setSubtopologyId("join-sub")
+                .setRepartitionSourceTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo().setName("left-repartition"),
+                    new StreamsGroupTopologyValue.TopicInfo().setName("right-repartition")
+                ))
+                .setCopartitionGroups(List.of(
+                    new StreamsGroupTopologyValue.CopartitionGroup()
+                        .setRepartitionSourceTopics(List.of((short) 0, (short) 1))
+                )),
+            "other-a-sub", new Subtopology()
+                .setSubtopologyId("other-a-sub")
+                .setSourceTopics(List.of("other-a"))
+                .setRepartitionSinkTopics(List.of("fixed-3-repartition")),
+            "fixed-3-sub", new Subtopology()
+                .setSubtopologyId("fixed-3-sub")
+                .setRepartitionSourceTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo().setName("fixed-3-repartition").setPartitions(3)
+                )),
+            "other-b-sub", new Subtopology()
+                .setSubtopologyId("other-b-sub")
+                .setSourceTopics(List.of("other-b"))
+                .setRepartitionSinkTopics(List.of("fixed-5-repartition")),
+            "fixed-5-sub", new Subtopology()
+                .setSubtopologyId("fixed-5-sub")
+                .setRepartitionSourceTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo().setName("fixed-5-repartition").setPartitions(5)
+                ))
+        ));
     }
 
     private static Map<String, ConfiguredSubtopology> makeExpectedConfiguredSubtopologies() {
