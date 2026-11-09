@@ -256,4 +256,9 @@ public class ReadOnlyTask implements Task {
     public long approximateNumUncommittedBytes() {
         throw new UnsupportedOperationException("This task is read-only");
     }
+
+    @Override
+    public long maxStoreUncommittedBytes() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
 }
