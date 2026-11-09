@@ -120,7 +120,7 @@ public class ShareGroupMember extends ModernGroupMember {
         }
 
         public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
-            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
+            if (subscribedTopicList != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
@@ -234,7 +234,7 @@ public class ShareGroupMember extends ModernGroupMember {
             .setClientHost(clientHost)
             .setClientId(clientId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames));
+            .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames));
     }
 
     private static List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
@@ -269,7 +269,7 @@ public class ShareGroupMember extends ModernGroupMember {
 
     @Override
     public int hashCode() {
-        int result = memberId != null ? memberId.hashCode() : 0;
+        int result = memberId.hashCode();
         result = 31 * result + memberEpoch;
         result = 31 * result + previousMemberEpoch;
         result = 31 * result + Objects.hashCode(state);
