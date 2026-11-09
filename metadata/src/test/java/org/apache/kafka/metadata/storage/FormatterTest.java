@@ -488,7 +488,8 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext context = testEnv.newFormatter();
             context.formatter.setFeatureLevel(MirrorVersion.FEATURE_NAME, (short) 1);
-            assertThrows(IllegalArgumentException.class, context.formatter::run);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, context.formatter::run);
+            assertTrue(e.getMessage().contains("No feature:mirror.version with feature level 1"), e.getMessage());
         }
     }
 
