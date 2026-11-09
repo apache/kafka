@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
 import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -335,6 +336,21 @@ public class AssignmentsManagerTest {
             short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
             assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
             assertEquals(requestHeaderVersion, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
+        }
+    }
+
+    @Test
+    public void testRequestVersionFallsBackToMinimumMetadataVersion() throws Exception {
+        MetadataImage image = new MetadataImage(TEST_IMAGE.provenance(), FeaturesImage.EMPTY, TEST_IMAGE.cluster(),
+            TEST_IMAGE.topics(), TEST_IMAGE.configs(), TEST_IMAGE.clientQuotas(), TEST_IMAGE.producerIds(),
+            TEST_IMAGE.acls(), TEST_IMAGE.scram(), TEST_IMAGE.delegationTokens());
+        try (TestEnv testEnv = new TestEnv(image)) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
+
+            short requestHeaderVersion = MetadataVersion.MINIMUM_VERSION.assignReplicasToDirsRequestHeaderVersion();
+            short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
         }
     }
 

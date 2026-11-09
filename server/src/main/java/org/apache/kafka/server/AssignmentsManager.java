@@ -35,6 +35,7 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
@@ -353,8 +354,10 @@ public final class AssignmentsManager {
         log.info("maybeSendAssignments: sending {} assignments; invalidated {} assignments " +
             "prior to sending.", newInFlight.size(), numInvalid);
         if (!newInFlight.isEmpty()) {
+            // The metadata version is unknown until the first metadata image is loaded.
+            MetadataVersion metadataVersion = image.features().metadataVersion().orElse(MetadataVersion.MINIMUM_VERSION);
             sendAssignments(image.cluster().brokerEpoch(nodeId), newInFlight,
-                image.features().metadataVersionOrThrow().assignReplicasToDirsRequestHeaderVersion());
+                metadataVersion.assignReplicasToDirsRequestHeaderVersion());
         }
     }
 
