@@ -2532,16 +2532,15 @@ public class GroupMetadataManager {
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
         if (topology != null) {
-            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
                 StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-                return streamsTopologyFromRequest;
+                return StreamsTopology.fromRecord(recordValue);
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
-            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+            } else if (!group.topology().get().matches(topology)) {
                 if (group.topology().get().topologyEpoch() == topology.epoch()) {
                     throw new StreamsInvalidTopologyEpochException(String.format(
                         "The topology sent by the member differs from the group's topology with the same epoch %d. " +
