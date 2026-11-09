@@ -370,7 +370,6 @@ public class GroupOffsetsResetter {
         String duration = opts.resetByDurationOpt();
         Duration durationParsed = Duration.parse(duration);
         Instant now = Instant.now();
-        durationParsed.negated().addTo(now);
         long timestamp = now.minus(durationParsed).toEpochMilli();
         Map<TopicPartition, GroupOffsetsResetter.LogOffsetResult> logTimestampOffsets =
             getLogTimestampOffsets(partitionsToReset, timestamp);
