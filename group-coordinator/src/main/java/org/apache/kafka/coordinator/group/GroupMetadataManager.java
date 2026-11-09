@@ -8770,10 +8770,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a classic group HeartbeatRequest to a consumer group. A response with
-     * REBALANCE_IN_PROGRESS is returned if 1) the member epoch is smaller than the
-     * group epoch, 2) the member is in UNREVOKED_PARTITIONS, or 3) the member is in
-     * UNRELEASED_PARTITIONS and all its partitions pending assignment are free.
+     * Handle a classic group HeartbeatRequest to a consumer group. The target
+     * assignment is updated first if the target assignment lags behind the group
+     * epoch. A response with REBALANCE_IN_PROGRESS is returned if 1) the member
+     * epoch is smaller than the target assignment epoch, 2) the member is in
+     * UNREVOKED_PARTITIONS, or 3) the member is in UNRELEASED_PARTITIONS and all
+     * its partitions pending assignment are free.
      *
      * @param group          The ConsumerGroup.
      * @param context        The request context.
