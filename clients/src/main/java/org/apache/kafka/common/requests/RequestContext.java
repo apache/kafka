@@ -33,6 +33,8 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
+import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
+
 public class RequestContext implements AuthorizableRequestContext {
     /**
      * The original header from the client request. For an unsupported {@link ApiVersionsRequest},
@@ -128,10 +130,9 @@ public class RequestContext implements AuthorizableRequestContext {
      * @throws InvalidRequestException if the request body cannot be parsed
      */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
-        if (isApiVersionsFallback()) {
-            // Unsupported ApiVersion requests are treated as fallback version requests and are not parsed
-            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(),
-                ApiKeys.API_VERSIONS_FALLBACK_VERSION, header.apiVersion());
+        if (isUnsupportedApiVersionsRequest()) {
+            // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
+            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
         } else if (!header.isApiVersionSupported()) {
             // The request header is only partially parsed for unsupported versions (see RequestHeader#parse),
@@ -182,8 +183,8 @@ public class RequestContext implements AuthorizableRequestContext {
         return new ResponseHeader(header.correlationId(), header.apiKey().responseHeaderVersion(responseVersion));
     }
 
-    private boolean isApiVersionsFallback() {
-        return header.apiKey().isFallbackVersion(header.apiVersion());
+    private boolean isUnsupportedApiVersionsRequest() {
+        return header.apiKey() == API_VERSIONS && !header.isApiVersionSupported();
     }
 
     /**
@@ -194,8 +195,9 @@ public class RequestContext implements AuthorizableRequestContext {
      * To retrieve the API version in the original client request, use {@link #requestVersion()} instead.
      */
     public short effectiveApiVersion() {
-        if (isApiVersionsFallback())
-            return ApiKeys.API_VERSIONS_FALLBACK_VERSION;
+        // Use v0 when serializing an unhandled ApiVersion response
+        if (isUnsupportedApiVersionsRequest())
+            return 0;
         return header.apiVersion();
     }
 

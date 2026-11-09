@@ -204,7 +204,7 @@ class ControllerApis(
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
-      request.context.effectiveApiVersion,
+      deleteTopicsRequest.version,
       authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, true, false, 1),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names, (n: String) => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names, (n: String) => n))
@@ -465,7 +465,7 @@ class ControllerApis(
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
     } else {
       requestHelper.sendResponseMaybeThrottle(request,
-        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4))
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, apiVersionRequest.version < 4))
     }
     CompletableFuture.completedFuture[Unit](())
   }
@@ -966,14 +966,14 @@ class ControllerApis(
 
     if (!allowTokenRequests(request)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.effectiveApiVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(createTokenRequest.version, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
     } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.effectiveApiVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(createTokenRequest.version, requestThrottleMs,
           Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
         CompletableFuture.completedFuture[Unit](())
     } else {
@@ -986,7 +986,7 @@ class ControllerApis(
         .thenApply[Unit] { response =>
            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
              CreateDelegationTokenResponse.prepareResponse(
-               request.context.effectiveApiVersion,
+               createTokenRequest.version,
                requestThrottleMs,
                Errors.forCode(response.errorCode()),
                new KafkaPrincipal(response.principalType(), response.principalName()),
