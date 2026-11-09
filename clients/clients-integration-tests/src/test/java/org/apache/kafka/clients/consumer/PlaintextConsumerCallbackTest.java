@@ -521,8 +521,9 @@ public class PlaintextConsumerCallbackTest {
                     "Timed out before expected rebalance completed"
             );
 
+            // unsubscribe() invokes onPartitionsRevoked (no poll)
             consumer.unsubscribe();
-            assertEquals(1, revokedCount.get());
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke onPartitionsRevoked");
 
             // The listener registered before unsubscribe() should still be invoked after re-subscribing
             consumer.subscribe(List.of(topic));
@@ -532,7 +533,8 @@ public class PlaintextConsumerCallbackTest {
                     "Timed out waiting for the rebalance listener to be invoked after re-subscribing"
             );
         }
-        assertEquals(2, revokedCount.get());
+        // close() invokes onPartitionsRevoked
+        assertEquals(2, revokedCount.get(), "close() should invoke onPartitionsRevoked");
     }
 
     private void triggerOnPartitionsAssignedConsumerAware(

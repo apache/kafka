@@ -704,7 +704,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *     <li>{@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} will be invoked when the rebalance completes (even if no new partitions are assigned to the consumer)</li>
      * </ul>
      * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
-     * also only be invoked during that time.
+     * also only be invoked during that time. The exception is giving up the assignment on {@link #unsubscribe()} or
+     * {@link #close()}, which invokes {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} (or
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)}) as part of that call.
      *
      * The provided listener will immediately override any listener set in a previous call to subscribe.
      * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
@@ -869,6 +871,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * If the consumer owns partitions assigned by the group, the rebalance listener is invoked to give them up
+     * ({@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}, or
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)}) as part of this call, without requiring a call
+     * to {@link #poll(Duration)}.
      * <p>
      * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
      * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,

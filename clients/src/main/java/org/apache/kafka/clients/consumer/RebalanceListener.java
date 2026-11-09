@@ -60,8 +60,11 @@ import java.util.Collection;
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
- * This callback will only execute in the user thread as part of the {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)} call
- * whenever partition assignment changes.
+ * These callbacks only execute in the user thread, as part of the {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)} call
+ * whenever partition assignment changes. The callbacks to give up partitions
+ * ({@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} and
+ * {@link #onPartitionsLost(Collection, RebalanceConsumer) onPartitionsLost}) are also invoked as part of
+ * {@link KafkaConsumer#unsubscribe()} and {@link KafkaConsumer#close()}, when the consumer gives up its assignment.
  * <p>
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
  * always invoke {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} for that partition
@@ -92,15 +95,17 @@ import java.util.Collection;
  * It is possible
  * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
  * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
- * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
- * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
- * Also if the callback function implementation itself throws an exception, this exception will be propagated to the current
- * invocation of {@link KafkaConsumer#poll(java.time.Duration)} as well.
+ * invocation of {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)},
+ * {@link KafkaConsumer#unsubscribe() unsubscribe()} or {@link KafkaConsumer#close() close()} in which this callback
+ * is being executed. This means it is not necessary to catch these exceptions and re-attempt to wakeup or interrupt
+ * the consumer thread.
+ * Also if the callback function implementation itself throws an exception, this exception will be propagated to that
+ * same invocation as well.
  * <p>
  * Note that callbacks only serve as notification of an assignment change.
  * They cannot be used to express acceptance of the change.
  * Hence throwing an exception from a callback does not affect the assignment in any way,
- * as it will be propagated all the way up to the {@link KafkaConsumer#poll(java.time.Duration)} call.
+ * as it will be propagated all the way up to the consumer call in which the callback is being executed.
  * If user captures the exception in the caller, the callback is still assumed successful and no further retries will be attempted.
  *
  * <h3>Relation to {@link ConsumerRebalanceListener}</h3>
@@ -177,8 +182,10 @@ public interface RebalanceListener {
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
      * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
-     * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
-     * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     * invocation of {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)},
+     * {@link KafkaConsumer#unsubscribe() unsubscribe()} or {@link KafkaConsumer#close() close()} in which this
+     * callback is being executed. This means it is not necessary to catch these exceptions and re-attempt to wakeup
+     * or interrupt the consumer thread.
      * <p>
      * The {@link RebalanceConsumer} parameter exposes only operations safe during a rebalance (e.g. offset commits,
      * seeks, position queries). It is valid only for the duration of this callback; storing a reference and using it
@@ -247,8 +254,10 @@ public interface RebalanceListener {
      * It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
      * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
-     * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
-     * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     * invocation of {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)},
+     * {@link KafkaConsumer#unsubscribe() unsubscribe()} or {@link KafkaConsumer#close() close()} in which this
+     * callback is being executed. This means it is not necessary to catch these exceptions and re-attempt to wakeup
+     * or interrupt the consumer thread.
      * <p>
      * The {@link RebalanceConsumer} parameter is valid only for the duration of this callback; storing a reference
      * and using it later will throw {@link IllegalStateException}.
