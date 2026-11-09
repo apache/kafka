@@ -98,6 +98,8 @@
 
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
+              files="SimConsumer.java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(OffsetFetcher|RequestResponse)Test.java"/>
@@ -287,6 +289,8 @@
               files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorServiceTopologyDescriptionTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
     <suppress checks="JavaNCSS"
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
+              files="HeartbeatSimulation.java"/>
 
     <!-- coordinator-common -->
     <suppress checks="JavaNCSS"

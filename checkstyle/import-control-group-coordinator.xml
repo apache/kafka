@@ -78,6 +78,7 @@
             <allow pkg="com.dynatrace.hash4j.hashing" />
             <allow pkg="org.apache.kafka.metadata" />
             <allow class="org.apache.logging.log4j.Level" />
+            <allow class="org.apache.logging.log4j.core.config.Configurator" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
                 <allow pkg="org.HdrHistogram" />
