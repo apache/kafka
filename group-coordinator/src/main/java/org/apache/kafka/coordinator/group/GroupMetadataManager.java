@@ -7242,6 +7242,7 @@ public class GroupMetadataManager {
 
         if (!acceptJoiningMember(group, memberId)) {
             group.remove(memberId);
+            timer.cancel(classicGroupHeartbeatKey(groupId, memberId));
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())

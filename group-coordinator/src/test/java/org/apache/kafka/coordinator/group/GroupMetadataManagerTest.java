@@ -7045,10 +7045,12 @@ public class GroupMetadataManagerTest {
 
         // member-3 has not rejoined yet, so the join phase must not complete.
         assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), rejoin.apply("member-2").join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", "member-2")));
         assertFalse(member0.isDone());
         assertFalse(member1.isDone());
 
         assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), rejoin.apply("member-3").join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", "member-3")));
         assertTrue(member0.isDone());
         assertTrue(member1.isDone());
         assertEquals(Errors.NONE.code(), member0.join().errorCode());
@@ -7110,6 +7112,7 @@ public class GroupMetadataManagerTest {
         assertEquals(1, group.numPendingJoinMembers());
 
         assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), join.apply(pendingMember2Id).join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", pendingMember2Id)));
         assertTrue(pendingMember1.isDone());
         assertTrue(member0.isDone());
         assertEquals(Errors.NONE.code(), pendingMember1.join().errorCode());
