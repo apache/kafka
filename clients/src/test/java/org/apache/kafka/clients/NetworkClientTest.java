@@ -1821,7 +1821,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testConnectionRefusedAfterBootstrapResolutionIsNotBootstrapResolutionException() throws InterruptedException {
+    public void testConnectionRefusedAfterBootstrapResolution() throws InterruptedException {
         // The remote end refuses the connection, reported as a NOT_CONNECTED disconnect on a later poll.
         List<String> connectAttempts = new ArrayList<>();
         MockSelector refusingSelector = new MockSelector(time, address -> false) {
@@ -1835,7 +1835,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testImmediateConnectionRefusedAfterBootstrapResolutionIsNotBootstrapResolutionException() throws InterruptedException {
+    public void testImmediateConnectionRefusedAfterBootstrapResolution() throws InterruptedException {
         List<String> connectAttempts = new ArrayList<>();
         MockSelector refusingSelector = new MockSelector(time) {
             @Override
