@@ -73,25 +73,26 @@ import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
 
 /**
- * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
- * or the transaction coordinator.
+ * The CoordinatorRuntime provides a framework to implement coordinators such as the group
+ * coordinator and the share coordinator.
  *
- * The runtime framework maps each underlying partitions (e.g. __consumer_offsets) that the broker is a
- * leader of to a coordinator replicated state machine. A replicated state machine holds the hard and soft
- * state of all the objects (e.g. groups or offsets) assigned to the partition. The hard state is stored in
- * timeline datastructures backed by a SnapshotRegistry. The runtime supports two type of operations
- * on state machines: (1) Writes and (2) Reads.
+ * The runtime framework maps each underlying partition (e.g. a partition of __consumer_offsets)
+ * that the broker is a leader of to a coordinator replicated state machine. A replicated state
+ * machine holds the hard and soft state of all the objects (e.g. groups or offsets) assigned to the
+ * partition. The hard state is stored in timeline datastructures backed by a SnapshotRegistry. The
+ * runtime supports two types of operations on state machines: (1) Writes and (2) Reads.
  *
- * (1) A write operation, aka a request, can read the full and potentially **uncommitted** state from state
- * machine to handle the operation. A write operation typically generates a response and a list of
- * records. The records are applied to the state machine and persisted to the partition. The response
- * is parked until the records are committed and delivered when they are.
+ * (1) A write operation, aka a request, can read the full and potentially uncommitted state from
+ * the state machine to handle the operation. A write operation typically generates a response and a
+ * list of records. The records are applied to the state machine and persisted to the partition. The
+ * response is parked until the records are committed and delivered when they are.
  *
- * (2) A read operation, aka a request, can only read the committed state from the state machine to handle
- * the operation. A read operation typically generates a response that is immediately completed.
+ * (2) A read operation, aka a request, can only read the committed state from the state machine to
+ * handle the operation. A read operation typically generates a response that is immediately
+ * completed.
  *
  * The runtime framework exposes an asynchronous, future based, API to the world. All the operations
- * are executed by an CoordinatorEventProcessor. The processor guarantees that operations for a
+ * are executed by a CoordinatorEventProcessor. The processor guarantees that operations for a
  * single partition or state machine are not processed concurrently.
  *
  * @param <S> The type of the state machine.
@@ -323,7 +324,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private static class CoordinatorBatch {
         /**
          * The base (or first) offset of the batch. If the batch fails
-         * for any reason, the state machines is rolled back to it.
+         * for any reason, the state machine is rolled back to it.
          */
         final long baseOffset;
 
@@ -780,8 +781,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Fails the current batch, reverts to the snapshot to the base/start offset of the
-         * batch, fails all the associated events.
+         * Fails the current batch, reverts the state machine to the snapshot at the base offset
+         * of the batch and fails all the associated events.
+         *
+         * @param t The exception to complete the associated events with.
          */
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
@@ -890,7 +893,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Appends records to the log and replay them to the state machine.
+         * Appends records to the log and replays them to the state machine.
          *
          * @param producerId        The producer id.
          * @param producerEpoch     The producer epoch.
@@ -1150,13 +1153,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     public interface CoordinatorWriteOperation<S, T, U> {
         /**
          * Generates the records needed to implement this coordinator write operation. In general,
-         * this operation should not modify the hard state of the coordinator. That modifications
+         * this operation should not modify the hard state of the coordinator. Those modifications
          * will happen later on, when the records generated by this function are applied to the
          * coordinator.
          *
          * @param coordinator The coordinator state machine.
          * @return A result containing a list of records and the RPC result.
-         * @throws KafkaException
+         * @throws KafkaException If the operation fails.
          */
         CoordinatorResult<T, U> generateRecordsAndResult(S coordinator) throws KafkaException;
     }
@@ -1245,7 +1248,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          *
          * @param name                  The operation name.
          * @param tp                    The topic partition that the operation is applied to.
-         * @param writeTimeout          The write operation timeout
+         * @param writeTimeout          The write operation timeout.
          * @param op                    The write operation.
          */
         CoordinatorWriteEvent(
@@ -1275,7 +1278,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param producerId                The producer id.
          * @param producerEpoch             The producer epoch.
          * @param verificationGuard         The verification guard.
-         * @param writeTimeout              The write operation timeout
+         * @param writeTimeout              The write operation timeout.
          * @param op                        The write operation.
          */
         CoordinatorWriteEvent(
@@ -1400,13 +1403,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     public interface CoordinatorReadOperation<S, T> {
         /**
          * Generates the response to implement this coordinator read operation. A read
-         * operation received the last committed offset. It must use it to ensure that
+         * operation receives the last committed offset. It must use it to ensure that
          * it does not read uncommitted data from the timeline data structures.
          *
          * @param state     The coordinator state machine.
          * @param offset    The last committed offset.
          * @return A response.
-         * @throws KafkaException
+         * @throws KafkaException If the operation fails.
          */
         T generateResponse(S state, long offset) throws KafkaException;
     }
@@ -1872,7 +1875,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final Timer timer;
 
     /**
-     * The write operation timeout
+     * The write operation timeout.
      */
     private final Duration writeTimeout;
 
@@ -1892,7 +1895,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final PartitionWriter partitionWriter;
 
     /**
-     * The coordinator loaded used by the runtime.
+     * The coordinator loader used by the runtime.
      */
     private final CoordinatorLoader<U> loader;
 
@@ -2012,8 +2015,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Throws a NotCoordinatorException exception if the runtime is not
-     * running.
+     * Throws a NotCoordinatorException if the runtime is not running.
      */
     private void throwIfNotRunning() {
         if (!isRunning.get()) {
@@ -2050,18 +2052,22 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * @return The coordinator context or a new context if it does not exist.
+     * Returns the context of the given partition and creates it if it does not exist.
      * Package private for testing.
+     *
+     * @param tp    The topic partition.
+     * @return The coordinator context.
      */
     CoordinatorContext maybeCreateContext(TopicPartition tp) {
         return coordinators.computeIfAbsent(tp, CoordinatorContext::new);
     }
 
     /**
-     * @return The coordinator context or thrown an exception if it does
-     * not exist.
-     * @throws NotCoordinatorException
-     * Package private for testing.
+     * Returns the context of the given partition. Package private for testing.
+     *
+     * @param tp    The topic partition.
+     * @return The coordinator context.
+     * @throws NotCoordinatorException If the coordinator does not exist.
      */
     CoordinatorContext contextOrThrow(TopicPartition tp) throws NotCoordinatorException {
         CoordinatorContext context = coordinators.get(tp);
@@ -2080,8 +2086,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      *
      * @param tp    The topic partition.
      * @param func  The function that will receive the context.
-     * @throws NotCoordinatorException
-     * @throws CoordinatorLoadInProgressException
+     * @throws NotCoordinatorException            If the coordinator does not exist or is neither
+     *                                            active nor loading.
+     * @throws CoordinatorLoadInProgressException If the coordinator is loading.
      */
     private void withActiveContextOrThrow(
         TopicPartition tp,
@@ -2189,7 +2196,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param producerId        The producer id.
      * @param producerEpoch     The producer epoch.
      * @param op                The write operation.
-     * @param apiVersion        The Version of the Txn_Offset_Commit request
+     * @param apiVersion        The version of the TxnOffsetCommit request.
      *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
@@ -2494,7 +2501,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * Closes the runtime. This closes all the coordinators currently registered
      * in the runtime.
      *
-     * @throws Exception
+     * @throws Exception Declared by {@link AutoCloseable}. Failures to close the components
+     *                   are logged and not thrown.
      */
     public void close() throws Exception {
         if (!isRunning.compareAndSet(true, false)) {

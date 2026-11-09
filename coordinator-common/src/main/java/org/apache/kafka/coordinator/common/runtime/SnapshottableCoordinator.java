@@ -227,9 +227,9 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     }
 
     /**
-     * @return The snapshot registry.
+     * Returns the snapshot registry. Only used for testing.
      *
-     * Only used for testing.
+     * @return The snapshot registry.
      */
     synchronized SnapshotRegistry snapshotRegistry() {
         return this.snapshotRegistry;

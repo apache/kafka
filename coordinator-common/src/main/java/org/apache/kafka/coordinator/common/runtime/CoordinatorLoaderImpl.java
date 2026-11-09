@@ -44,7 +44,7 @@ import java.util.function.Function;
 
 /**
  * Coordinator loader which reads records from a partition and replays them
- * to a group coordinator.
+ * to a coordinator.
  *
  * @param <T> The record type.
  */
@@ -95,10 +95,12 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition
-     * and applying them to the Replayable object.
+     * and applying them to the CoordinatorPlayback object.
      *
      * @param tp          The TopicPartition to read from.
      * @param coordinator The object to apply records to.
+     * @return A future completed with the summary of the load once all the records are applied, or
+     *         completed exceptionally if the load fails.
      */
     @Override
     public CompletableFuture<LoadSummary> load(TopicPartition tp, CoordinatorPlayback<T> coordinator) {
