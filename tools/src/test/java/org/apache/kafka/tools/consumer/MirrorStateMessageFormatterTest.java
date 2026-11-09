@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsKey;
 import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsValue;
 import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateKey;
 import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValue;
+import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValueJsonConverter;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -253,13 +254,7 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
         }
 
         JsonNode data = new ObjectMapper().readTree(output.toByteArray()).path("value").path("data");
-        MirrorPartitionStateValue roundTripped = new MirrorPartitionStateValue()
-            .setState((byte) data.get("state").intValue())
-            .setLeaderEpoch(data.get("leaderEpoch").intValue())
-            .setStateEpoch(data.get("stateEpoch").intValue())
-            .setErrorMessage(data.get("errorMessage").textValue())
-            .setRetryAttempt((short) data.get("retryAttempt").intValue())
-            .setPreviousState((byte) data.get("previousState").intValue());
+        MirrorPartitionStateValue roundTripped = MirrorPartitionStateValueJsonConverter.read(data, (short) 0);
         assertEquals(STATE_VALUE, roundTripped);
         assertEquals(MirrorPartitionState.FAILED, MirrorPartitionState.fromValue(roundTripped.state()));
         assertEquals(MirrorPartitionState.MIRRORING, MirrorPartitionState.fromValue(roundTripped.previousState()));
