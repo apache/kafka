@@ -292,7 +292,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         builder.build().filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered,
-                Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -345,7 +345,7 @@ public class MemoryRecordsTest {
                                     // delete the records
                                     return false;
                                 }
-                            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
                     // Verify filter result
                     assertEquals(numRecords, filterResult.messagesRead());
@@ -406,7 +406,7 @@ public class MemoryRecordsTest {
                     protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                         return false;
                     }
-                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
         // Verify filter result
         assertEquals(0, filterResult.messagesRead());
@@ -453,7 +453,7 @@ public class MemoryRecordsTest {
                         protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                             return false;
                         }
-                    }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                    }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
             // Verify filter result
             assertEquals(0, filterResult.outputBuffer().position());
@@ -529,7 +529,7 @@ public class MemoryRecordsTest {
                 return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
             }
         };
-        builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -631,7 +631,7 @@ public class MemoryRecordsTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return true;
             }
-        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -668,7 +668,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -744,7 +744,7 @@ public class MemoryRecordsTest {
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                    filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                    filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
             filtered.flip();
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -837,7 +837,7 @@ public class MemoryRecordsTest {
 
             MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer)
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
-                            BufferSupplier.NO_CACHING);
+                            BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
             buffer.position(buffer.position() + result.bytesRead());
             result.outputBuffer().flip();
@@ -885,7 +885,7 @@ public class MemoryRecordsTest {
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(
                 new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered, Integer.MAX_VALUE,
-                BufferSupplier.NO_CACHING);
+                BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
         filtered.flip();
 
@@ -1004,7 +1004,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);

@@ -148,11 +148,17 @@ public class MemoryRecords extends AbstractRecords {
      *                                    dominate the cost of decompressing and iterating over the records in the
      *                                    batch. As such, a supplier that reuses buffers will have a significant
      *                                    performance impact.
+     * @param maxRecordBodySize           The maximum declared (decompressed) body size of a single record; a record
+     *                                    exceeding it is rejected with an {@link org.apache.kafka.common.InvalidRecordException}
+     *                                    before its body is allocated. Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for
+     *                                    no limit beyond the array-length ceiling.
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
     public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
-                                 int maxRecordBatchSize, BufferSupplier decompressionBufferSupplier) {
-        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
+                                 int maxRecordBatchSize, BufferSupplier decompressionBufferSupplier,
+                                 int maxRecordBodySize) {
+        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier,
+            maxRecordBodySize);
     }
 
     /**
@@ -161,7 +167,7 @@ public class MemoryRecords extends AbstractRecords {
      */
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
-                                         BufferSupplier decompressionBufferSupplier) {
+                                         BufferSupplier decompressionBufferSupplier, int maxRecordBodySize) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
@@ -182,7 +188,7 @@ public class MemoryRecords extends AbstractRecords {
             List<Record> retainedRecords = new ArrayList<>();
 
             final BatchFilterResult iterationResult = filterBatch(batch, decompressionBufferSupplier, filterResult, filter,
-                    batchMagic, true, retainedRecords);
+                    batchMagic, true, retainedRecords, maxRecordBodySize);
             boolean containsTombstones = iterationResult.containsTombstones;
             boolean writeOriginalBatch = iterationResult.writeOriginalBatch;
             long maxOffset = iterationResult.maxOffset;
@@ -246,10 +252,11 @@ public class MemoryRecords extends AbstractRecords {
                                                  RecordFilter filter,
                                                  byte batchMagic,
                                                  boolean writeOriginalBatch,
-                                                 List<Record> retainedRecords) {
+                                                 List<Record> retainedRecords,
+                                                 int maxRecordBodySize) {
         long maxOffset = -1;
         boolean containsTombstones = false;
-        try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
+        try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier, maxRecordBodySize)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
                 filterResult.messagesRead += 1;

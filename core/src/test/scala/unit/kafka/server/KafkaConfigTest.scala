@@ -1222,6 +1222,8 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
         case TopicConfig.MAX_MESSAGE_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 20000, () => config.maxDecompressedMessageBytes)
         case TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
         case TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG =>

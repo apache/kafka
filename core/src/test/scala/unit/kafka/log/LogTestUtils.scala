@@ -66,6 +66,7 @@ object LogTestUtils {
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
                       cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
                       maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
+                      maxDecompressedMessageBytes: Int = LogConfig.DEFAULT_MAX_DECOMPRESSED_MESSAGE_BYTES,
                       indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
                       segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
                       fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
@@ -82,6 +83,7 @@ object LogTestUtils {
     logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs: java.lang.Long)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes: Integer)
+    logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes: Integer)
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes: Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes: Integer)
     logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs: java.lang.Long)

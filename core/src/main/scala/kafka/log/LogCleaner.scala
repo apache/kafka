@@ -684,7 +684,8 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
-            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, upperBoundOffsetOfCleaningRound, stats, currentTime = currentTime)
+            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, upperBoundOffsetOfCleaningRound, stats, currentTime = currentTime,
+            maxRecordBodySize = log.config.maxDecompressedMessageBytes)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -733,6 +734,8 @@ private[log] class Cleaner(val id: Int,
    * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
    * @param stats Collector for cleaning statistics
    * @param currentTime The time at which the clean was initiated
+   * @param maxRecordBodySize The maximum decompressed per-record body size of the corresponding topic; records
+   *                          exceeding it are rejected with an InvalidRecordException before allocation
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
@@ -745,7 +748,8 @@ private[log] class Cleaner(val id: Int,
                              lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord],
                              upperBoundOffsetOfCleaningRound: Long,
                              stats: CleanerStats,
-                             currentTime: Long): Unit = {
+                             currentTime: Long,
+                             maxRecordBodySize: Int): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
       var discardBatchRecords: Boolean = _
 
@@ -810,7 +814,7 @@ private[log] class Cleaner(val id: Int,
       sourceRecords.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
+      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier, maxRecordBodySize)
 
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
@@ -1057,7 +1061,7 @@ private[log] class Cleaner(val id: Int,
       checkDone(log.topicPartition)
 
       full = buildOffsetMapForSegment(log.topicPartition, segment, map, start, nextSegmentStartOffset, log.config.maxMessageSize,
-        transactionMetadata, stats)
+        transactionMetadata, stats, log.config.maxDecompressedMessageBytes)
       if (full)
         debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
     }
@@ -1075,6 +1079,8 @@ private[log] class Cleaner(val id: Int,
    * @param maxLogMessageSize The maximum size in bytes for record allowed
    * @param transactionMetadata The state of ongoing transactions for the log between offset range to build
    * @param stats Collector for cleaning statistics
+   * @param maxRecordBodySize The maximum decompressed per-record body size of the corresponding topic; records
+   *                          exceeding it are rejected with an InvalidRecordException before allocation
    *
    * @return If the map was filled whilst loading from this segment
    */
@@ -1085,7 +1091,8 @@ private[log] class Cleaner(val id: Int,
                                        nextSegmentStartOffset: Long,
                                        maxLogMessageSize: Int,
                                        transactionMetadata: CleanedTransactionMetadata,
-                                       stats: CleanerStats): Boolean = {
+                                       stats: CleanerStats,
+                                       maxRecordBodySize: Int): Boolean = {
     var position = segment.offsetIndex.lookup(startOffset).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
@@ -1113,7 +1120,7 @@ private[log] class Cleaner(val id: Int,
             // Note that abort markers are supported in v2 and above, which means count is defined.
             stats.indexMessagesRead(batch.countOrNull)
           } else {
-            val recordsIterator = batch.streamingIterator(decompressionBufferSupplier)
+            val recordsIterator = batch.streamingIterator(decompressionBufferSupplier, maxRecordBodySize)
             try {
               for (record <- recordsIterator.asScala) {
                 if (record.hasKey && record.offset >= startOffset) {

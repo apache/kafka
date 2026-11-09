@@ -188,6 +188,10 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
+    // Default is the JVM array-length limit, i.e. effectively unlimited / no additional limit beyond
+    // the existing array-length OutOfMemoryError guard, so the per-record limit only takes effect when
+    // an operator configures it below this value.
+    public static final int DEFAULT_MAX_DECOMPRESSED_MESSAGE_BYTES = ServerLogConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_DEFAULT;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
      * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
@@ -281,6 +285,8 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.RETENTION_MS_DOC)
                 .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
                         TopicConfig.MAX_MESSAGE_BYTES_DOC)
+                .define(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_DECOMPRESSED_MESSAGE_BYTES,
+                        between(1, Records.SOFT_MAX_ARRAY_LENGTH), MEDIUM, TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_DOC)
                 .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.INDEX_INTERVAL_BYTES_DOC)
                 .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM,
@@ -379,6 +385,7 @@ public class LogConfig extends AbstractConfig {
 
     private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
+    private final int maxDecompressedMessageBytes;
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
@@ -400,6 +407,7 @@ public class LogConfig extends AbstractConfig {
         this.retentionSize = getLong(TopicConfig.RETENTION_BYTES_CONFIG);
         this.retentionMs = getLong(TopicConfig.RETENTION_MS_CONFIG);
         this.maxMessageSize = getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+        this.maxDecompressedMessageBytes = getInt(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
         this.indexInterval = getInt(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG);
         this.fileDeleteDelayMs = getLong(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG);
         this.deleteRetentionMs = getLong(TopicConfig.DELETE_RETENTION_MS_CONFIG);
@@ -485,6 +493,11 @@ public class LogConfig extends AbstractConfig {
     // Exposed as a method so it can be mocked
     public int maxMessageSize() {
         return maxMessageSize;
+    }
+
+    // Exposed as a method so it can be mocked
+    public int maxDecompressedMessageBytes() {
+        return maxDecompressedMessageBytes;
     }
 
     public long randomSegmentJitter() {

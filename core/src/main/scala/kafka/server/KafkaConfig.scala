@@ -369,6 +369,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
   def backgroundThreads = getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG)
   def numIoThreads = getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
+
+  def maxDecompressedMessageBytes = getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG)
   val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
   val connectionSetupTimeoutMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
   val connectionSetupTimeoutMaxMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
@@ -1152,6 +1154,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis: java.lang.Long)
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageMaxBytes)
+    logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes)
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes)
     logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs)
     logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs)
