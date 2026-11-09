@@ -2093,6 +2093,7 @@ org.apache.kafka.streams.processor.internals.InternalTopicConfigTest:
 - shouldUseSuppliedConfigsForVersionedChangelogConfig
 - shouldUseSuppliedConfigsForWindowedChangelogConfig
 org.apache.kafka.streams.processor.internals.InternalTopicManagerTest:
+- shouldBackOffBetweenRoundsWhenTopicIsMarkedForDeletion
 - shouldCleanUpWhenCreateTopicsResultsDoNotContainTopic
 - shouldCleanUpWhenCreateTopicsTimesOut
 - shouldCleanUpWhenUnexpectedExceptionIsThrownDuringSetup
@@ -2104,6 +2105,7 @@ org.apache.kafka.streams.processor.internals.InternalTopicManagerTest:
 - shouldExhaustRetriesOnMarkedForDeletionTopic
 - shouldExhaustRetriesOnTimeoutExceptionForMakeReady
 - shouldLogWhenTopicNotFoundAndNotThrowException
+- shouldNotBackOffPerTopicWhenCreatingATopicBatch
 - shouldNotCreateTopicIfExistsWithDifferentPartitions
 - shouldNotCreateTopicsWithEmptyInput
 - shouldNotThrowExceptionForEmptyTopicMap

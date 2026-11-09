@@ -79,6 +79,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testRetryableTimerWithCustomBackoff
 - testScheduleLoading
 - testScheduleLoadingAfterLoadingFailure
+- testScheduleLoadingWhenOnLoadedFails
 - testScheduleLoadingWithFailure
 - testScheduleLoadingWithStalePartitionEpoch
 - testScheduleNonAtomicWriteOperation
