@@ -24,6 +24,9 @@ public enum MirrorVersion implements FeatureVersion {
     MV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables cluster mirroring (KIP-1279).
+    // It depends on IBP_4_5_IV1 for the LeaderEpoch field in PartitionChangeRecord.
+    // If IBP_4_5_IV1 is promoted before MV_1 is production-ready, move the bootstrap
+    // version to a later MetadataVersion, so that new clusters keep mirroring off by default.
     MV_1(1, MetadataVersion.IBP_4_5_IV1, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_5_IV1.featureLevel()));
 
     public static final String FEATURE_NAME = "mirror.version";
