@@ -524,12 +524,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (!newState.canTransitionFrom(state)) {
                 throw new IllegalStateException("Cannot transition from " + state + " to " + newState);
             }
-            CoordinatorState oldState = state;
 
             log.debug("Transition from {} to {}.", state, newState);
             switch (newState) {
                 case LOADING:
-                    state = CoordinatorState.LOADING;
+                    setState(CoordinatorState.LOADING);
                     SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
                     coordinator = new SnapshottableCoordinator<>(
                         logContext,
@@ -550,27 +549,36 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     break;
 
                 case ACTIVE:
-                    state = CoordinatorState.ACTIVE;
+                    setState(CoordinatorState.ACTIVE);
                     highWatermarklistener = new HighWatermarkListener();
                     partitionWriter.registerListener(tp, highWatermarklistener);
                     coordinator.onLoaded(metadataImage);
                     break;
 
                 case FAILED:
-                    state = CoordinatorState.FAILED;
+                    setState(CoordinatorState.FAILED);
                     unload();
                     break;
 
                 case CLOSED:
-                    state = CoordinatorState.CLOSED;
+                    setState(CoordinatorState.CLOSED);
                     unload();
                     break;
 
                 default:
                     throw new IllegalArgumentException("Transitioning to " + newState + " is not supported.");
             }
+        }
 
-            runtimeMetrics.recordPartitionStateChange(oldState, state);
+        /**
+         * Sets the state and records the partition state change.
+         *
+         * @param newState The new state.
+         */
+        private void setState(CoordinatorState newState) {
+            CoordinatorState oldState = state;
+            state = newState;
+            runtimeMetrics.recordPartitionStateChange(oldState, newState);
         }
 
         /**
