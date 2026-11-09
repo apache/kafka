@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -868,6 +869,14 @@ public class RequestResponseTest {
     public void testListGroupRequestV5FailsWithRequireCommittedOffsets() {
         ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(true);
         assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 5));
+    }
+
+    @Test
+    public void testListGroupRequestV4FailsWithRequireCommittedOffsetsAndDowngradableTypes() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setTypesFilter(List.of(GroupType.CLASSIC.toString(), GroupType.CONSUMER.toString()))
+                .setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 4));
     }
 
     @Test

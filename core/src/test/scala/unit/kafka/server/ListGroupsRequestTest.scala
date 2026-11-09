@@ -47,7 +47,11 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     testListGroups(false)
   }
 
-  @ClusterTest
+  // grp-3's member never heartbeats again, so keep its session alive for the states filter assertion.
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, value = "600000"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "600000")
+  ))
   def testListGroupsWithRequireCommittedOffsets(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -104,6 +108,10 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       useNewProtocol = false,
       version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
     )
+
+    // The filter is combined with the states filter.
+    assertEquals(Set("grp-1"), listGroupIds(requireCommittedOffsets = true, statesFilter = List(ClassicGroupState.EMPTY.toString)))
+
     deleteOffset(
       groupId = "grp-1",
       topic = "foo",
@@ -113,6 +121,19 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
     assertEquals(Set("grp-3"), listGroupIds(requireCommittedOffsets = true))
     assertEquals(Set("grp-1", "grp-2", "grp-3"), listGroupIds(requireCommittedOffsets = false))
+
+    // grp-4 is created by an offset commit without group membership.
+    commitOffset(
+      groupId = "grp-4",
+      memberId = "",
+      memberEpoch = -1,
+      topic = "foo",
+      topicId = topicId,
+      partition = 0,
+      offset = 10L,
+      expectedError = Errors.NONE
+    )
+    assertEquals(Set("grp-3", "grp-4"), listGroupIds(requireCommittedOffsets = true))
   }
 
   @ClusterTest(
@@ -178,9 +199,13 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     assertEquals(Set("share-grp"), listGroupIds(requireCommittedOffsets = false, typesFilter = List(Group.GroupType.SHARE.toString)))
   }
 
-  private def listGroupIds(requireCommittedOffsets: Boolean, typesFilter: List[String] = List.empty): Set[String] = {
+  private def listGroupIds(
+    requireCommittedOffsets: Boolean,
+    statesFilter: List[String] = List.empty,
+    typesFilter: List[String] = List.empty
+  ): Set[String] = {
     listGroups(
-      statesFilter = List.empty,
+      statesFilter = statesFilter,
       typesFilter = typesFilter,
       requireCommittedOffsets = requireCommittedOffsets
     ).map(_.groupId).toSet

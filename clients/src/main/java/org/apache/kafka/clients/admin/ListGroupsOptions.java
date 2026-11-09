@@ -93,9 +93,9 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
     /**
      * If set to true, only groups with at least one committed offset will be returned by listGroups().
-     * Otherwise, all groups are returned. The filter is combined with the group state, group type and
-     * protocol type filters. Share groups never have committed offsets, so they are never returned
-     * when this option is set.
+     * Otherwise, groups are returned whether or not they have committed offsets. A group is returned
+     * only if it also matches the group state, group type and protocol type filters. Share groups never
+     * have committed offsets, so they are never returned when this option is set.
      * <p>
      * This operation is supported by brokers with version 4.5.0 or later. The request to an older
      * broker fails with {@link org.apache.kafka.common.errors.UnsupportedVersionException}. In a
