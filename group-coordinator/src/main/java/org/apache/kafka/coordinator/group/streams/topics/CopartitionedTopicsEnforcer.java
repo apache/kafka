@@ -88,13 +88,16 @@ public class CopartitionedTopicsEnforcer {
         final int numPartitionsToUseForRepartitionTopics;
 
         if (copartitionedTopics.equals(repartitionTopicPartitionCounts.keySet())) {
+            final Set<String> fixedRepartitionTopicsInGroup = copartitionedTopics.stream()
+                .filter(fixedRepartitionTopics::contains)
+                .collect(Collectors.toSet());
 
             // if there's at least one repartition topic with fixed number of partitions
             // validate that they all have same number of partitions
-            if (!fixedRepartitionTopics.isEmpty()) {
+            if (!fixedRepartitionTopicsInGroup.isEmpty()) {
                 numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
                     repartitionTopicPartitionCounts,
-                    fixedRepartitionTopics
+                    fixedRepartitionTopicsInGroup
                 );
             } else {
                 // If all topics for this co-partition group are repartition topics,
