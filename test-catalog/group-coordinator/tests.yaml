@@ -718,6 +718,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testShareGroupDescribeRequest
 - testShareGroupDynamicConfigs
 - testShareGroupEvaluatedConfigs
+- testShareGroupHeartbeatAssignorFailureDoesNotAddMember
 - testShareGroupHeartbeatDoesNotBumpGroupEpochDuringAssignmentDelay
 - testShareGroupHeartbeatInitializeMixedNewAndExpandedTopics
 - testShareGroupHeartbeatInitializeOnPartitionUpdate
