@@ -98,6 +98,14 @@ public class ConsumerGroupTest {
         );
     }
 
+    private static ConsumerGroupMember member(String memberId, MemberState state, int memberEpoch) {
+        return new ConsumerGroupMember.Builder(memberId)
+            .setState(state)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
+            .build();
+    }
+
     @Test
     public void testGetOrCreateMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
@@ -522,6 +530,221 @@ public class ConsumerGroupTest {
         consumerGroup.removeMember("member2");
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+    }
+
+    @Test
+    public void testUpdateMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<ConsumerGroup.ConsumerGroupState> states = new ArrayList<>();
+
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+
+        // A member at a previous epoch.
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 1));
+        states.add(consumerGroup.state());
+
+        // The member at the previous epoch moves to the assignment epoch.
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        // Updating a member with an identical state keeps the group stable.
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        // A reconciled member moves back to UNREVOKED_PARTITIONS.
+        consumerGroup.updateMember(member("member1", MemberState.UNREVOKED_PARTITIONS, 2));
+        states.add(consumerGroup.state());
+
+        // Updating a member with an identical state keeps the group reconciling.
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        // A stable member that moves past the assignment epoch is not reconciled to it.
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        states.add(consumerGroup.state());
+
+        assertEquals(
+            List.of(
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING
+            ),
+            states
+        );
+    }
+
+    @Test
+    public void testSetTargetAssignmentMetadataGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<ConsumerGroup.ConsumerGroupState> states = new ArrayList<>();
+
+        // The members are updated before the assignment epoch is set.
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member3", MemberState.UNREVOKED_PARTITIONS, 2));
+        consumerGroup.setGroupEpoch(2);
+        states.add(consumerGroup.state());
+
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        states.add(consumerGroup.state());
+
+        // The member that is not stable becomes stable.
+        consumerGroup.updateMember(member("member3", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        // The assignment epoch moves ahead of every member.
+        consumerGroup.setGroupEpoch(3);
+        states.add(consumerGroup.state());
+        consumerGroup.setTargetAssignmentMetadata(3, 12346L);
+        states.add(consumerGroup.state());
+
+        // Members reach the new assignment epoch one by one.
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
+        states.add(consumerGroup.state());
+        consumerGroup.updateMember(member("member3", MemberState.STABLE, 3));
+        states.add(consumerGroup.state());
+
+        // Setting the same assignment epoch again keeps the state.
+        consumerGroup.setTargetAssignmentMetadata(3, 12347L);
+        states.add(consumerGroup.state());
+
+        // The assignment epoch moves to an epoch where only one member is reconciled.
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 4));
+        consumerGroup.setGroupEpoch(4);
+        consumerGroup.setTargetAssignmentMetadata(4, 12348L);
+        states.add(consumerGroup.state());
+
+        assertEquals(
+            List.of(
+                ConsumerGroup.ConsumerGroupState.ASSIGNING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.ASSIGNING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.RECONCILING
+            ),
+            states
+        );
+    }
+
+    @Test
+    public void testSetTargetAssignmentMetadataAfterMembersReconciled() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        consumerGroup.setGroupEpoch(3);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
+        consumerGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+    }
+
+    @Test
+    public void testRemoveMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<ConsumerGroup.ConsumerGroupState> states = new ArrayList<>();
+
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.UNREVOKED_PARTITIONS, 2));
+        consumerGroup.updateMember(member("member3", MemberState.STABLE, 1));
+        consumerGroup.updateMember(member("member4", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        // Removing one of two unreconciled members.
+        consumerGroup.removeMember("member3");
+        states.add(consumerGroup.state());
+
+        // Removing a reconciled member does not reconcile the group.
+        consumerGroup.removeMember("member1");
+        states.add(consumerGroup.state());
+
+        // Removing the last unreconciled member.
+        consumerGroup.removeMember("member2");
+        states.add(consumerGroup.state());
+
+        // Removing a member that does not exist keeps the state.
+        consumerGroup.removeMember("member5");
+        states.add(consumerGroup.state());
+
+        // A static member is replaced by a member with a different member id.
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member6")
+            .setInstanceId("instance")
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(1)
+            .build());
+        states.add(consumerGroup.state());
+        consumerGroup.removeMember("member6");
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("member7")
+            .setInstanceId("instance")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(1)
+            .build());
+        states.add(consumerGroup.state());
+
+        assertEquals(
+            List.of(
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE
+            ),
+            states
+        );
+    }
+
+    @Test
+    public void testGroupStateRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "foo");
+        List<ConsumerGroup.ConsumerGroupState> states = new ArrayList<>();
+
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        consumerGroup.setGroupEpoch(3);
+        consumerGroup.setTargetAssignmentMetadata(3, 12346L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        consumerGroup.removeMember("member2");
+        states.add(consumerGroup.state());
+
+        // The number of stable members at each member epoch is back to the one at the snapshot.
+        snapshotRegistry.revertToSnapshot(1);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        states.add(consumerGroup.state());
+
+        snapshotRegistry.revertToSnapshot(0);
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        states.add(consumerGroup.state());
+
+        assertEquals(
+            List.of(
+                ConsumerGroup.ConsumerGroupState.STABLE,
+                ConsumerGroup.ConsumerGroupState.RECONCILING,
+                ConsumerGroup.ConsumerGroupState.STABLE
+            ),
+            states
+        );
     }
 
     @Test
