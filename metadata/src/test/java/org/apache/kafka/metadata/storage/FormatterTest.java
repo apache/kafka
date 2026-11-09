@@ -478,7 +478,8 @@ public class FormatterTest {
             context.formatter.setReleaseVersion(MetadataVersion.IBP_4_5_IV0);
             context.formatter.setUnstableFeatureVersionsEnabled(true);
             context.formatter.setFeatureLevel(MirrorVersion.FEATURE_NAME, (short) 1);
-            assertThrows(IllegalArgumentException.class, context.formatter::run);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, context.formatter::run);
+            assertTrue(e.getMessage().contains("depends on metadata.version level " + MetadataVersion.IBP_4_5_IV1.featureLevel()), e.getMessage());
         }
     }
 
