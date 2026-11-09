@@ -5901,7 +5901,8 @@ public class GroupMetadataManager {
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
      * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response. The result
+     *         is empty if the group does not exist or is not a share group.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
@@ -5911,7 +5912,13 @@ public class GroupMetadataManager {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
-        ShareGroup group = (ShareGroup) groups.get(groupId);
+        ShareGroup group;
+        try {
+            group = shareGroup(groupId);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
+            return new CoordinatorResult<>(List.of(), null);
+        }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
