@@ -19,6 +19,7 @@ package org.apache.kafka.server;
 import kafka.server.BrokerServer;
 
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AllocateProducerIdsRequest;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
@@ -164,7 +165,7 @@ public class AllocateProducerIdsRequestTest {
     private AllocateProducerIdsResponse allocateProducerIds(int controllerId, int brokerId, long brokerEpoch) throws IOException {
         var request = new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData()
             .setBrokerId(brokerId)
-            .setBrokerEpoch(brokerEpoch), (short) 3).build();
+            .setBrokerEpoch(brokerEpoch), ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion())).build();
         int port = cluster.controllers().get(controllerId).socketServer().boundPort(cluster.controllerListenerName());
         return IntegrationTestUtils.connectAndReceive(request, port);
     }
