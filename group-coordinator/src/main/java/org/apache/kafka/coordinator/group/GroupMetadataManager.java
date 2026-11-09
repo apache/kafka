@@ -8799,14 +8799,31 @@ public class GroupMetadataManager {
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
 
+        int groupEpoch = group.groupEpoch();
+        SubscriptionType subscriptionType = group.subscriptionType();
+
+        if (group.hasMetadataExpired(time.milliseconds())) {
+            // The subscription metadata is updated when the refresh deadline has been reached.
+            UpdateSubscriptionMetadataResult result = updateSubscriptionMetadata(
+                group,
+                false,
+                member,
+                member,
+                records
+            );
+
+            groupEpoch = result.groupEpoch;
+            subscriptionType = result.subscriptionType;
+        }
+
         // Update the target assignment if the group epoch is larger than the target assignment epoch.
         // The delta between the existing and the new target assignment is persisted to the partition.
         UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
             group,
-            group.groupEpoch(),
+            groupEpoch,
             member,
             member,
-            group.subscriptionType(),
+            subscriptionType,
             records
         );
 
