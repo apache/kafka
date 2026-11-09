@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +101,7 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         assertTrue(taskCalled.get());
         assertTrue(operationCalled.get());
@@ -157,11 +159,53 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         assertTrue(taskCalled.get());
         assertTrue(operationCalled.get());
         assertFalse(executor.isScheduled(TASK_KEY));
         assertTrue(task.get().isReleased());
+    }
+
+    @Test
+    public void testTaskCancelledBeforeBeingSubmitted() {
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
+            LOG_CONTEXT,
+            executorService,
+            scheduler
+        );
+
+        AtomicBoolean taskCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskRunnable<String> taskRunnable = () -> {
+            taskCalled.set(true);
+            return null;
+        };
+
+        AtomicBoolean operationCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskOperation<String, String> taskOperation = (result, exception) -> {
+            operationCalled.set(true);
+            return null;
+        };
+
+        executor.schedule(
+            TASK_KEY,
+            taskRunnable,
+            taskOperation
+        );
+        CoordinatorExecutorImpl<String>.Task<?> task = executor.task(TASK_KEY);
+
+        // Cancel the task before its batch is written. The task must
+        // not be submitted when the batch is written.
+        executor.cancel(TASK_KEY);
+        executor.onBatchWritten();
+
+        assertFalse(taskCalled.get());
+        assertFalse(operationCalled.get());
+        assertFalse(executor.isScheduled(TASK_KEY));
+        assertTrue(task.isReleased());
+        verify(executorService, never()).submit(any(Runnable.class));
     }
 
     @Test
@@ -206,6 +250,7 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         assertFalse(taskCalled.get());
         assertFalse(operationCalled.get());
@@ -249,6 +294,7 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         // The result of the task is dropped and the write
         // operation is not scheduled.
@@ -310,9 +356,106 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         assertTrue(taskCalled.get());
         assertFalse(operationCalled.get());
+    }
+
+    @Test
+    public void testTaskRevertedBeforeBeingSubmitted() {
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
+            LOG_CONTEXT,
+            executorService,
+            scheduler
+        );
+
+        // The tasks are submitted but never run, so they stay scheduled.
+        when(executorService.submit(any(Runnable.class))).thenReturn(CompletableFuture.completedFuture(null));
+
+        AtomicBoolean taskCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskRunnable<String> taskRunnable = () -> {
+            taskCalled.set(true);
+            return null;
+        };
+
+        AtomicBoolean operationCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskOperation<String, String> taskOperation = (result, exception) -> {
+            operationCalled.set(true);
+            return null;
+        };
+
+        // Schedule a task in an earlier batch, which is written.
+        executor.schedule(
+            TASK_KEY + 0,
+            taskRunnable,
+            taskOperation
+        );
+        executor.onBatchWritten();
+
+        // Schedule a task in the current batch.
+        executor.schedule(
+            TASK_KEY + 1,
+            taskRunnable,
+            taskOperation
+        );
+        CoordinatorExecutorImpl<String>.Task<?> task = executor.task(TASK_KEY + 1);
+
+        // Revert the current batch before it is written. Its task must be
+        // cancelled without being submitted. The task from the earlier batch
+        // must be kept.
+        executor.onBatchReverted();
+
+        assertFalse(taskCalled.get());
+        assertFalse(operationCalled.get());
+        assertTrue(executor.isScheduled(TASK_KEY + 0));
+        assertFalse(executor.isScheduled(TASK_KEY + 1));
+        assertTrue(task.isReleased());
+        verify(executorService, times(1)).submit(any(Runnable.class));
+    }
+
+    @Test
+    public void testTaskSubmissionRejected() {
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
+            LOG_CONTEXT,
+            executorService,
+            scheduler
+        );
+
+        when(executorService.submit(any(Runnable.class))).thenThrow(new RejectedExecutionException());
+
+        AtomicBoolean taskCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskRunnable<String> taskRunnable = () -> {
+            taskCalled.set(true);
+            return null;
+        };
+
+        AtomicBoolean operationCalled = new AtomicBoolean(false);
+        CoordinatorExecutor.TaskOperation<String, String> taskOperation = (result, exception) -> {
+            operationCalled.set(true);
+            return null;
+        };
+
+        executor.schedule(
+            TASK_KEY,
+            taskRunnable,
+            taskOperation
+        );
+        CoordinatorExecutorImpl<String>.Task<?> task = executor.task(TASK_KEY);
+
+        // Write the batch. The submission is rejected, so the task must
+        // be cancelled.
+        executor.onBatchWritten();
+
+        assertFalse(taskCalled.get());
+        assertFalse(operationCalled.get());
+        assertFalse(executor.isScheduled(TASK_KEY));
+        assertTrue(task.isReleased());
+        verify(executorService).submit(any(Runnable.class));
     }
 
     @Test
@@ -355,6 +498,7 @@ public class CoordinatorExecutorImplTest {
             taskRunnable,
             taskOperation
         );
+        executor.onBatchWritten();
 
         assertTrue(taskCalled.get());
         assertFalse(operationCalled.get());
@@ -411,6 +555,7 @@ public class CoordinatorExecutorImplTest {
                 taskOperation
             );
         }
+        executor.onBatchWritten();
 
         assertEquals(2, tasks.size());
         tasks.forEach(task -> assertFalse(task.isReleased()));
