@@ -87,7 +87,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     ) {
         if (offset > lastWrittenOffset) {
             throw new IllegalStateException("New offset " + offset + " of " + tp +
-                " must be smaller than " + lastWrittenOffset + ".");
+                " must be less than or equal to " + lastWrittenOffset + ".");
         }
 
         log.debug("Revert last written offset of {} to {}.", tp, offset);

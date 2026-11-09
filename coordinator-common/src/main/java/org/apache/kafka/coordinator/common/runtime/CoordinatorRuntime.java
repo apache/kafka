@@ -213,11 +213,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (eventProcessor == null)
                 throw new IllegalArgumentException("Event processor must be set.");
             if (partitionWriter == null)
-                throw new IllegalArgumentException("Partition write must be set.");
+                throw new IllegalArgumentException("Partition writer must be set.");
             if (loader == null)
                 throw new IllegalArgumentException("Loader must be set.");
             if (coordinatorShardBuilderSupplier == null)
-                throw new IllegalArgumentException("State machine supplier must be set.");
+                throw new IllegalArgumentException("Coordinator shard builder supplier must be set.");
             if (time == null)
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
@@ -233,7 +233,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (appendLingerMs == null)
                 appendLingerMs = OptionalInt.empty();
             if (appendLingerMs.isPresent() && appendLingerMs.getAsInt() < 0)
-                throw new IllegalArgumentException("AppendLinger must be empty or >= 0");
+                throw new IllegalArgumentException("AppendLinger must be empty or >= 0.");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
             if (cachedBufferMaxBytesSupplier == null)
@@ -1785,7 +1785,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
         @Override
         public String toString() {
-            return "InternalEvent(name=" + name + ")";
+            return "CoordinatorInternalEvent(name=" + name + ")";
         }
     }
 
@@ -1842,14 +1842,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 context.deferredEventQueue.completeUpTo(newHighWatermark);
                                 coordinatorMetrics.onUpdateLastCommittedOffset(tp, newHighWatermark);
                             } else {
-                                log.debug("Ignored high watermark updated for {} to {} because the coordinator is not active.",
+                                log.debug("Ignored high watermark update for {} to {} because the coordinator is not active.",
                                     tp, newHighWatermark);
                             }
                         } finally {
                             context.lock.unlock();
                         }
                     } else {
-                        log.debug("Ignored high watermark updated for {} to {} because the coordinator does not exist.",
+                        log.debug("Ignored high watermark update for {} to {} because the coordinator does not exist.",
                             tp, newHighWatermark);
                     }
                 }));
@@ -2372,7 +2372,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         int partitionEpoch
     ) {
         throwIfNotRunning();
-        log.info("Scheduling loading of metadata from {} with epoch {}", tp, partitionEpoch);
+        log.info("Scheduling loading of metadata from {} with epoch {}.", tp, partitionEpoch);
 
         // Touch the state to make the runtime immediately aware of the new coordinator.
         maybeCreateContext(tp);
@@ -2404,7 +2404,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             log.error("Cannot load coordinator {} in state {}.", tp, context.state);
                     }
                 } else {
-                    log.info("Ignored loading metadata from {} since current epoch {} is larger than or equals to {}.",
+                    log.info("Ignored loading metadata from {} since current epoch {} is larger than or equal to {}.",
                         context.tp, context.epoch, partitionEpoch);
                 }
             } finally {
@@ -2426,7 +2426,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         OptionalInt partitionEpoch
     ) {
         throwIfNotRunning();
-        log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
+        log.info("Scheduling unloading of metadata for {} with epoch {}.", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
             CoordinatorContext context = coordinators.get(tp);
@@ -2473,7 +2473,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorMetadataImage newImage
     ) {
         throwIfNotRunning();
-        log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
+        log.debug("Scheduling the application of a new metadata image with version {}.", newImage.version());
 
         // Update global image.
         metadataImage = newImage;
