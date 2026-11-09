@@ -121,6 +121,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
@@ -2868,5 +2870,39 @@ public class GroupCoordinatorShardTest {
 
         assertEquals(allGroups, coordinator.listGroups(List.of(), List.of(), false, 100L));
         verifyNoInteractions(offsetMetadataManager);
+    }
+
+    @Test
+    public void testListGroupsWithRequireCommittedOffsetsAndStatesAndTypesFilters() {
+        OffsetMetadataManagerTest.OffsetMetadataManagerTestContext context =
+            new OffsetMetadataManagerTest.OffsetMetadataManagerTestContext.Builder().build();
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            context.groupMetadataManager,
+            context.offsetMetadataManager,
+            context.time,
+            context.timer,
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        // All four groups are empty. Committing an offset to an unknown group creates a simple classic group.
+        context.commitOffset("classic-with-offsets", "foo", 0, 100L, 1);
+        context.getOrMaybeCreateGroup(Group.GroupType.CLASSIC, "classic-without-offsets");
+        context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-with-offsets");
+        context.commitOffset("consumer-with-offsets", "foo", 0, 100L, 1);
+        context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-without-offsets");
+
+        BiFunction<List<String>, List<String>, Set<String>> listGroupIds = (statesFilter, typesFilter) ->
+            coordinator.listGroups(statesFilter, typesFilter, true, Long.MAX_VALUE).stream()
+                .map(ListGroupsResponseData.ListedGroup::groupId)
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets"), listGroupIds.apply(List.of(), List.of()));
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of()));
+        assertEquals(Set.of(), listGroupIds.apply(List.of("Stable"), List.of()));
+        assertEquals(Set.of("consumer-with-offsets"), listGroupIds.apply(List.of(), List.of("consumer")));
+        assertEquals(Set.of("classic-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of("classic")));
     }
 }

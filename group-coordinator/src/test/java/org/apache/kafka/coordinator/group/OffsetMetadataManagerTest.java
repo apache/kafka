@@ -3304,8 +3304,52 @@ public class OffsetMetadataManagerTest {
         context.commit();
         assertTrue(context.hasCommittedOffsets("group-id"));
 
-        // Deleting the last offset removes the group.
+        // Deleting the last offset removes the group once the deletion is committed.
         context.replay(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 0));
+        assertTrue(context.hasCommittedOffsets("group-id"));
+        context.commit();
+        assertFalse(context.hasCommittedOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsetsWithCommittedAndPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        long producerId = 10L;
+        context.commitOffset("group-id", "foo", 0, 100L, 1);
+        context.commitOffset(producerId, "group-id", "foo", 1, 100L, 1, context.time.milliseconds());
+        context.commit();
+        assertTrue(context.hasCommittedOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsetsIgnoresAbortedTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        long producerId = 10L;
+        context.commitOffset(producerId, "group-id", "foo", 0, 100L, 1, context.time.milliseconds());
+        context.commit();
+        assertFalse(context.hasCommittedOffsets("group-id"));
+
+        context.replayEndTransactionMarker(producerId, TransactionResult.ABORT);
+        context.commit();
+        assertFalse(context.hasCommittedOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsetsUntilExpiredOffsetsAreDeleted() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withOffsetsRetentionMinutes(1)
+            .build();
+        context.commitOffset("group-id", "foo", 0, 100L, 1);
+        context.commit();
+
+        // The offset is eligible for expiration but has not been deleted yet.
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+        assertTrue(context.hasCommittedOffsets("group-id"));
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        assertTrue(context.cleanupExpiredOffsets("group-id", records));
+        assertEquals(List.of(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 0)), records);
+        assertTrue(context.hasCommittedOffsets("group-id"));
         context.commit();
         assertFalse(context.hasCommittedOffsets("group-id"));
     }

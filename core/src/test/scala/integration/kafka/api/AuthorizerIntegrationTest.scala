@@ -2338,6 +2338,58 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testListGroupApiWithRequireCommittedOffsets(groupProtocol: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, WRITE, ALLOW)), topicResource)
+    val producer = createProducer()
+    sendRecords(producer, numRecords = 1, tp)
+
+    // group commits an offset; group2 has an active member that never commits.
+    val group2 = "other group"
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), new ResourcePattern(GROUP, group2, LITERAL))
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    val noAutoCommitProps = new Properties
+    noAutoCommitProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val consumer = createConsumer(configOverrides = noAutoCommitProps)
+    consumer.subscribe(util.Set.of(topic))
+    consumeRecords(consumer)
+    consumer.commitSync()
+
+    val otherConsumerProps = new Properties
+    otherConsumerProps.putAll(noAutoCommitProps)
+    otherConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group2)
+    val otherConsumer = createConsumer(configOverrides = otherConsumerProps)
+    otherConsumer.subscribe(util.Set.of(topic))
+    consumeRecords(otherConsumer)
+
+    val adminClient = createAdminClient()
+    def listGroupIds(requireCommittedOffsets: Boolean): Set[String] =
+      adminClient.listGroups(ListGroupsOptions.forConsumerGroups().requireCommittedOffsets(requireCommittedOffsets))
+        .all().get().asScala.map(_.groupId()).toSet
+
+    // Cluster describe permission lists every group, so the filter alone decides.
+    removeAllClientAcls()
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), clusterResource)
+    assertEquals(Set(group, group2), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set(group), listGroupIds(requireCommittedOffsets = true))
+
+    // With access to group2 only, the filter removes the only authorized group.
+    removeAllClientAcls()
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), new ResourcePattern(GROUP, group2, LITERAL))
+    assertEquals(Set(group2), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set(), listGroupIds(requireCommittedOffsets = true))
+
+    // With access to group only, the filter keeps it.
+    removeAllClientAcls()
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), groupResource)
+    assertEquals(Set(group), listGroupIds(requireCommittedOffsets = true))
+    otherConsumer.close()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteGroupApiWithDeleteGroupAcl(groupProtocol: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
 
