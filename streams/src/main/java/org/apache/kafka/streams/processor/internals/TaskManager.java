@@ -1876,6 +1876,15 @@ public class TaskManager {
     }
 
     /**
+     * Pause or resume processing and punctuation on the processing threads, if they are enabled.
+     */
+    void setProcessingThreadsPaused(final boolean paused) {
+        if (schedulingTaskManager != null) {
+            schedulingTaskManager.setProcessingPaused(paused);
+        }
+    }
+
+    /**
      * Take records and add them to each respective task
      *
      * @param records Records, can be null

@@ -588,7 +588,8 @@ public class Selector implements Selectable, AutoCloseable {
                     //not come up in the next poll() and so we need to remember this channel for the
                     //next poll call otherwise data may be stuck in said buffers forever. If we attempt
                     //to process buffered data and no progress is made, the channel buffered status is
-                    //cleared to avoid the overhead of checking every time.
+                    //cleared to avoid the overhead of checking every time. A channel that has received an
+                    //end of stream (e.g. a TLS close_notify) stays buffered until a read reports it.
                     keysWithBufferedRead.add(key);
                 }
 

@@ -34,7 +34,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorBrokerConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -54,6 +54,7 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -98,7 +99,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
         AddPartitionsToTxnConfig.CONFIG_DEF,
-        ClusterMirrorConfigs.brokerConfigDef()
+        ClusterMirrorBrokerConfig.CONFIG_DEF
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
@@ -154,12 +155,26 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG));
     }
 
+    public List<String> absoluteLogDirs() {
+        return toAbsolutePaths(logDirs());
+    }
+
     public List<String> cordonedLogDirs() {
         List<String> configuredCordonedLogDirs = getList(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG);
         if (configuredCordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
             return logDirs();
         }
         return configuredCordonedLogDirs;
+    }
+
+    public List<String> absoluteCordonedLogDirs() {
+        return toAbsolutePaths(cordonedLogDirs());
+    }
+
+    private static List<String> toAbsolutePaths(List<String> paths) {
+        return paths.stream()
+            .map(path -> new File(path).getAbsolutePath())
+            .toList();
     }
 
     public int numIoThreads() {
@@ -991,6 +1006,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public int maxIncrementalFetchSessionCacheSlots() {
         return getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG);
+    }
+
+    public int messageMaxArrayLength() {
+        return getInt(ServerConfigs.MESSAGE_MAX_ARRAY_LENGTH_CONFIG);
     }
 
     public int fetchMaxBytes() {

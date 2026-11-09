@@ -84,8 +84,8 @@ public class CompactArrayOf extends DocumentedType {
         int size = n - 1;
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
-        if (size > MessageUtil.MAX_ARRAY_LENGTH)
-            throw new SchemaException("Error reading array of size " + size + ", which exceeds the maximum allowed size of " + MessageUtil.MAX_ARRAY_LENGTH);
+        if (size > MessageUtil.maxArrayLength())
+            throw new SchemaException("Error reading array of size " + size + ", which exceeds the maximum allowed size of " + MessageUtil.maxArrayLength());
 
         List<Object> values = new ArrayList<>(Math.min(size, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY));
         for (int i = 0; i < size; i++)

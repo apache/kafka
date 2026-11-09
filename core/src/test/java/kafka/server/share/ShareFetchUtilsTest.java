@@ -207,6 +207,47 @@ public class ShareFetchUtilsTest {
     }
 
     @Test
+    public void testProcessFetchResponsePreservesFetchOrder() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        when(sp0.acquire(anyString(), any(ShareAcquireMode.class), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), any(ShareAcquireMode.class), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp2.acquire(anyString(), any(ShareAcquireMode.class), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(ShareAcquiredRecords.empty());
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+        sharePartitions.put(tp1, sp1);
+        sharePartitions.put(tp2, sp2);
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
+            new CompletableFuture<>(), List.of(tp0, tp1, tp2), BATCH_OPTIMIZED, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+
+        FetchPartitionData fetchPartitionData = new FetchPartitionData(Errors.NONE, 0L, 0L,
+            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false);
+        // The partitions are read in an order which differs from the request order.
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp2, 0, fetchPartitionData),
+            new ShareFetchPartitionData(tp0, 0, fetchPartitionData),
+            new ShareFetchPartitionData(tp1, 0, fetchPartitionData)
+        );
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(PartitionMetadataProvider.class), EXCEPTION_HANDLER);
+
+        // The share session re-orders its partitions from the response, hence the response must keep the
+        // order in which the partitions were read.
+        assertEquals(List.of(tp2, tp0, tp1), new ArrayList<>(resultData.keySet()));
+    }
+
+    @Test
     public void testProcessFetchResponseWithLsoMovementForTopicPartition() {
         String groupId = "grp";
 

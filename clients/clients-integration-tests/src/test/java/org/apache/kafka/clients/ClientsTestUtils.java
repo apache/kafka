@@ -29,6 +29,8 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -36,6 +38,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.test.TestUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +56,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -62,6 +66,9 @@ public class ClientsTestUtils {
 
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
+    private static final String TRANSACTION_STATUS_HEADER_KEY = "transactionStatus";
+    private static final byte[] COMMITTED_VALUE = "committed".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ABORTED_VALUE = "aborted".getBytes(StandardCharsets.UTF_8);
 
     private ClientsTestUtils() {}
 
@@ -367,6 +374,16 @@ public class ClientsTestUtils {
                 return exceptedException.isInstance(e);
             }
         }, "Continuous poll not fail");
+    }
+
+    public static Header transactionStatusHeader(boolean willBeCommitted) {
+        return new RecordHeader(TRANSACTION_STATUS_HEADER_KEY, willBeCommitted ? COMMITTED_VALUE : ABORTED_VALUE);
+    }
+
+    public static void assertTransactionCommitted(ConsumerRecord<?, ?> record) {
+        Header header = record.headers().lastHeader(TRANSACTION_STATUS_HEADER_KEY);
+        assertNotNull(header, "Expected transaction status header");
+        assertArrayEquals(COMMITTED_VALUE, header.value(), "Expected committed status");
     }
 
     /**

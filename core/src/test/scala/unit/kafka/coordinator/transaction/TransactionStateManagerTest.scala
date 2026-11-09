@@ -19,6 +19,7 @@ package kafka.coordinator.transaction
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
+import java.util.concurrent.atomic.AtomicLong
 import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.server.ReplicaManager
@@ -40,16 +41,17 @@ import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, Reque
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.partition.PartitionListener
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
-import org.mockito.Mockito.{RETURNS_DEFAULTS, atLeastOnce, mock, reset, times, verify, when, withSettings}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyShort}
+import org.mockito.Mockito.{RETURNS_DEFAULTS, atLeastOnce, mock, never, reset, times, verify, when, withSettings}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
@@ -200,6 +202,138 @@ class TransactionStateManagerTest {
     assertEquals(None, cachedProducerEpoch(metadata1.transactionalId))
     assertEquals(Some(metadata2.producerEpoch), cachedProducerEpoch(metadata2.transactionalId))
   }
+
+  @Test
+  def testLoadWaitsForHighWatermarkToReachLogEndOffset(): Unit = {
+    val listener = prepareTxnLogAboveHighWatermark()
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    val partitionListener = listener.getValue
+    assertEquals(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS), transactionManager.getTransactionState(transactionalId1))
+
+    // the high watermark advances but doesn't reach the log end offset yet
+    partitionListener.onHighWatermarkUpdated(topicPartition, 1L)
+    assertEquals(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS), transactionManager.getTransactionState(transactionalId1))
+    verify(replicaManager, never()).removeListener(topicPartition, partitionListener)
+
+    partitionListener.onHighWatermarkUpdated(topicPartition, 2L)
+    verify(replicaManager).removeListener(topicPartition, partitionListener)
+    val cachedMetadata = transactionManager.getTransactionState(transactionalId1).fold(
+      err => throw new AssertionError(s"$transactionalId1's transaction state access returns error $err"),
+      entry => entry.getOrElse(throw new AssertionError(s"$transactionalId1's transaction state was not loaded into the cache"))
+    )
+    assertEquals(txnMetadata1, cachedMetadata.transactionMetadata)
+    assertTrue(transactionManager.loadingPartitions.isEmpty)
+  }
+
+  @Test
+  def testLoadAbandonedWhenPartitionIsNotOnline(): Unit = {
+    prepareTxnLogAboveHighWatermark(online = false)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    assertEquals(Left(Errors.NOT_COORDINATOR), transactionManager.getTransactionState(transactionalId1))
+    assertTrue(transactionManager.loadingPartitions.isEmpty)
+    verify(logMockOf(topicPartition), never()).read(anyLong(), anyInt(), any(), anyBoolean())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("follower", "failed", "deleted"))
+  def testLoadAbandonedWhenPartitionTransitionsBeforeHighWatermarkReachesLogEndOffset(transition: String): Unit = {
+    val listener = prepareTxnLogAboveHighWatermark()
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    val partitionListener = listener.getValue
+    assertEquals(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS), transactionManager.getTransactionState(transactionalId1))
+
+    transition match {
+      case "follower" => partitionListener.onBecomingFollower(topicPartition)
+      case "failed" => partitionListener.onFailed(topicPartition)
+      case "deleted" => partitionListener.onDeleted(topicPartition)
+    }
+    verify(replicaManager).removeListener(topicPartition, partitionListener)
+    assertEquals(Left(Errors.NOT_COORDINATOR), transactionManager.getTransactionState(transactionalId1))
+    assertTrue(transactionManager.loadingPartitions.isEmpty)
+    verify(logMockOf(topicPartition), never()).read(anyLong(), anyInt(), any(), anyBoolean())
+  }
+
+  @Test
+  def testLoadAtNewLeaderEpochWhileWaitingForHighWatermark(): Unit = {
+    val listener = prepareTxnLogAboveHighWatermark()
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    // the leader epoch is bumped while the load at the previous epoch waits for the high watermark
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch + 1, (_, _, _, _) => ())
+    val Seq(oldEpochListener, newEpochListener) = listener.getAllValues.asScala.toSeq.takeRight(2)
+    assertEquals(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS), transactionManager.getTransactionState(transactionalId1))
+
+    oldEpochListener.onHighWatermarkUpdated(topicPartition, 2L)
+    newEpochListener.onHighWatermarkUpdated(topicPartition, 2L)
+    val cachedMetadata = transactionManager.getTransactionState(transactionalId1).fold(
+      err => throw new AssertionError(s"$transactionalId1's transaction state access returns error $err"),
+      entry => entry.getOrElse(throw new AssertionError(s"$transactionalId1's transaction state was not loaded into the cache"))
+    )
+    assertEquals(coordinatorEpoch + 1, cachedMetadata.coordinatorEpoch)
+    assertTrue(transactionManager.loadingPartitions.isEmpty)
+  }
+
+  @Test
+  def testLoadWhenHighWatermarkReachesLogEndOffsetDuringListenerRegistration(): Unit = {
+    val listener = prepareTxnLogAboveHighWatermark()
+    val highWatermark = new AtomicLong(0L)
+    when(logMockOf(topicPartition).highWatermark).thenAnswer(_ => highWatermark.get)
+    // the high watermark advances after it's read but before the listener is added, so the listener isn't
+    // notified of the update
+    when(replicaManager.maybeAddListener(ArgumentMatchers.eq(topicPartition), listener.capture())).thenAnswer { _ =>
+      highWatermark.set(2L)
+      true
+    }
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    // the check after registration finishes the wait and removes the listener, and since the wait is then finished
+    // the registration removes it again
+    verify(replicaManager, times(2)).removeListener(topicPartition, listener.getValue)
+    assertTrue(transactionManager.getTransactionState(transactionalId1).exists(_.isDefined))
+    assertTrue(transactionManager.loadingPartitions.isEmpty)
+  }
+
+  @Test
+  def testLoadWithoutWaitingWhenHighWatermarkAlreadyReachedOnRegistration(): Unit = {
+    val listener = prepareTxnLogAboveHighWatermark()
+    // the high watermark catches up between reading it and registering the listener
+    when(replicaManager.maybeAddListener(ArgumentMatchers.eq(topicPartition), listener.capture())).thenAnswer { invocation =>
+      invocation.getArgument[PartitionListener](1).onHighWatermarkUpdated(topicPartition, 2L)
+      true
+    }
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    // the callback finishes the wait and removes the listener before it's added, so the registration removes it
+    // again once it's added
+    verify(replicaManager, times(2)).removeListener(topicPartition, listener.getValue)
+    assertTrue(transactionManager.getTransactionState(transactionalId1).exists(_.isDefined))
+  }
+
+  // Prepares a log with two records for transactionalId1 where the high watermark is below the log end offset.
+  // The tests advance the high watermark by invoking the captured listener directly; on a real leader the
+  // updates come from the followers fetching (or from the ISR shrinking).
+  private def prepareTxnLogAboveHighWatermark(online: Boolean = true): ArgumentCaptor[PartitionListener] = {
+    txnMetadata1.state(TransactionState.ONGOING)
+    txnMetadata1.addPartitions(util.Set.of(new TopicPartition("topic1", 0)))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2))
+    txnMetadata1.state(TransactionState.PREPARE_COMMIT)
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2))
+    prepareTxnLog(topicPartition, 0L, MemoryRecords.withRecords(0L, Compression.NONE, txnRecords.toArray: _*))
+
+    val logMock = logMockOf(topicPartition)
+    when(logMock.logEndOffset).thenReturn(2L)
+    when(logMock.highWatermark).thenReturn(0L)
+
+    val listener: ArgumentCaptor[PartitionListener] = ArgumentCaptor.forClass(classOf[PartitionListener])
+    when(replicaManager.maybeAddListener(ArgumentMatchers.eq(topicPartition), listener.capture())).thenReturn(online)
+    listener
+  }
+
+  private def logMockOf(topicPartition: TopicPartition): UnifiedLog =
+    replicaManager.getLog(topicPartition).get
 
   @Test
   def testDeleteLoadingPartition(): Unit = {
@@ -772,6 +906,28 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def shouldNotExpireTransactionalIdsOfPartitionWaitingToBeReloaded(): Unit = {
+    loadTransactionsForPartitions(Seq(partitionId))
+    expectLogConfig(Seq(partitionId), ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT)
+    txnMetadata1.txnLastUpdateTimestamp(time.milliseconds() - txnConfig.transactionalIdExpirationMs)
+    txnMetadata1.state(TransactionState.COMPLETE_COMMIT)
+    transactionManager.putTransactionStateIfNotExists(txnMetadata1)
+
+    // the leader epoch is bumped and the reload waits for the high watermark to reach the log end offset
+    val logMock = mock(classOf[UnifiedLog])
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(logMock.logEndOffset).thenReturn(2L)
+    when(logMock.highWatermark).thenReturn(0L)
+    when(replicaManager.maybeAddListener(ArgumentMatchers.eq(topicPartition), any[PartitionListener]())).thenReturn(true)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 1, (_, _, _, _) => ())
+
+    val appendedRecords = mutable.Map.empty[TopicIdPartition, mutable.Buffer[MemoryRecords]]
+    expectTransactionalIdExpiration(Errors.NONE, appendedRecords)
+    transactionManager.removeExpiredTransactionalIds()
+    assertEquals(Map.empty, appendedRecords)
+  }
+
+  @Test
   def shouldRemoveCompleteCommitExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.COMPLETE_COMMIT)
     verifyMetadataDoesntExist(transactionalId1)
@@ -1100,7 +1256,7 @@ class TransactionStateManagerTest {
     // let the time advance to trigger the background thread loading
     scheduler.tick()
 
-    verify(replicaManager).getLog(topicPartition)
+    verify(replicaManager, times(2)).getLog(topicPartition)
     verify(logMock).logStartOffset
     verify(logMock).read(ArgumentMatchers.eq(startOffset),
       anyInt(),

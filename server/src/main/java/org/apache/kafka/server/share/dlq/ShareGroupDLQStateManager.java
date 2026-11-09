@@ -68,6 +68,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -84,6 +86,7 @@ public class ShareGroupDLQStateManager {
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
     private final LogReader logReader;
+    private final Executor fetchExecutor;
     private final ShareGroupMetrics shareGroupMetrics;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
@@ -103,7 +106,8 @@ public class ShareGroupDLQStateManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader
+        LogReader logReader,
+        Executor fetchExecutor
     ) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
@@ -129,11 +133,16 @@ public class ShareGroupDLQStateManager {
             throw new IllegalArgumentException("LogReader must not be null.");
         }
 
+        if (fetchExecutor == null) {
+            throw new IllegalArgumentException("Fetch executor must not be null.");
+        }
+
         this.time = time;
         this.timer = timer;
         this.cacheHelper = cacheHelper;
         this.shareGroupMetrics = shareGroupMetrics;
         this.logReader = logReader;
+        this.fetchExecutor = fetchExecutor;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
             client,
@@ -185,14 +194,14 @@ public class ShareGroupDLQStateManager {
             return future;
         }
 
-        // Resolve round 1's source records here - on the calling thread for local offsets and, for
-        // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
-        // resolution finishes. Later rounds (if the range needs more than one produce request) are
+        // Resolve round 1's source records asynchronously - local offsets are read on the fetch executor
+        // and tiered offsets on the remote-storage reader pool - and enqueue only once resolution
+        // finishes. Later rounds (if the range needs more than one produce request) are
         // resolved the same way from handleProduceResponse(), each with its own fresh decompression
         // budget. Records are only read when copy is enabled for the group and the DLQ is correctly
         // configured (validated above); otherwise we enqueue immediately.
         if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-            requestHandler.resolveRound().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+            requestHandler.resolveRoundAsync().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
         } else {
             enqueue(requestHandler);
         }
@@ -269,8 +278,8 @@ public class ShareGroupDLQStateManager {
         // The original source records for the CURRENT round only, resolved before this round is added
         // to the node map (see resolveRound()): once for round 1 (before this handler is first
         // enqueued), then again for each subsequent round after a successful produce response advances
-        // nextOffsetToSend. Volatile because resolution runs off the sender thread - on the calling
-        // thread for local offsets and, for tiered offsets, on the remote-storage reader pool - while
+        // nextOffsetToSend. Volatile because resolution runs off the sender thread - on the fetch
+        // executor for local offsets and, for tiered offsets, on the remote-storage reader pool - while
         // this value is read on the sender thread when the produce request is built. Memoized per round:
         // set once per round and reused for every retry of that round, so retries never re-fetch.
         private volatile Map<Long, Record> resolvedRecordData = Map.of();
@@ -656,7 +665,7 @@ public class ShareGroupDLQStateManager {
                                 // to what's left to send) before rejoining the node map, mirroring the
                                 // "resolved before eligible for coalescing" invariant dlq() establishes for round 1.
                                 nextOffsetToSend = lastOffsetIncludedThisRound + 1;
-                                resolveRound().whenComplete((ignored, err) -> addRequestToNodeMap(dlqPartitionLeaderNode(), this));
+                                resolveRoundAsync().whenComplete((ignored, err) -> addRequestToNodeMap(dlqPartitionLeaderNode(), this));
                             } else {
                                 this.result.complete(null);
                             }
@@ -705,9 +714,31 @@ public class ShareGroupDLQStateManager {
         }
 
         /**
+         * Runs {@link #resolveRound()} on the fetch executor, so the log read it starts never blocks the
+         * calling thread: round 1 is called from the thread completing a share partition's persister
+         * write, and later rounds from the sender thread. Like {@link #resolveRound()}, the returned
+         * future always completes normally, including when the executor rejects the task, in which case
+         * this round is produced with headers only.
+         */
+        CompletableFuture<Void> resolveRoundAsync() {
+            CompletableFuture<Void> resolved = new CompletableFuture<>();
+            try {
+                fetchExecutor.execute(() -> resolveRound().whenComplete((ignored, err) -> resolved.complete(null)));
+            } catch (RejectedExecutionException e) {
+                LOG.warn("Unable to schedule the fetch of original record data for {}. " +
+                    "DLQ records will be produced with headers only for this round.", this, e);
+                this.resolvedRecordData = Map.of();
+                this.lastResolvedOffsetThisRound = param.lastOffset();
+                resolved.complete(null);
+            }
+            return resolved;
+        }
+
+        /**
          * Resolves the source records for the CURRENT round only - the window starting at
-         * {@link #nextOffsetToSend} - reading from the local log on the calling thread and, for any
-         * offsets tiered to remote storage, asynchronously on the remote-storage reader pool. The result
+         * {@link #nextOffsetToSend} - reading from the local log on the thread running this method (the
+         * fetch executor, when called through {@link #resolveRoundAsync()}) and, for any offsets tiered
+         * to remote storage, asynchronously on the remote-storage reader pool. The result
          * is memoized in {@link #resolvedRecordData} and reused for every retry of this same round (this
          * method is only ever called once per round - see {@link #dlq} for round 1 and
          * {@link #handleProduceResponse} for subsequent rounds - so a round's data is never re-fetched by

@@ -50,22 +50,22 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
     }
     /**
-     * Classic group size gauge counters keyed by the metric name.
+     * Classic group size gauge counters keyed by the group state.
      */
     private volatile Map<ClassicGroupState, Long> classicGroupGauges;
 
     /**
-     * Consumer group size gauge counters keyed by the metric name.
+     * Consumer group size gauge counters keyed by the group state.
      */
     private volatile Map<ConsumerGroupState, Long> consumerGroupGauges;
 
     /**
-     * Share group size gauge counters keyed by the metric name.
+     * Share group size gauge counters keyed by the group state.
      */
     private volatile Map<ShareGroupState, Long> shareGroupGauges;
 
     /**
-     * Streams group size gauge counters keyed by the metric name.
+     * Streams group size gauge counters keyed by the group state.
      */
     private volatile Map<StreamsGroupState, Long> streamsGroupGauges;
 
