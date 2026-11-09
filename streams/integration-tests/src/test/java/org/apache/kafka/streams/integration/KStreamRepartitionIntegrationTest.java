@@ -868,7 +868,7 @@ public class KStreamRepartitionIntegrationTest {
 
         kafkaStreams.start();
 
-        latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         kafkaStreamsInstances.add(kafkaStreams);
 
         return kafkaStreams;
