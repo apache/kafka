@@ -1151,6 +1151,10 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.coordinator.group.assignor.Uniform2Assignor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.coordinator.group.streams.AssignmentRefinerImpl",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
