@@ -25263,9 +25263,18 @@ public class GroupMetadataManagerTest {
     @Test
     public void testClassicGroupJoinWithEmptyStreamsGroup() throws Exception {
         String streamsGroupId = "streams-group-id";
+        String subtopologyId = "subtopology-1";
+        String topicName = "foo";
+        StreamsTopology topology = new StreamsTopology(1, Map.of(subtopologyId,
+            new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of(topicName))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10).withTopology(topology))
             .build();
+
+        // The empty streams group is subscribed to the topics of its topology.
+        assertEquals(Set.of(streamsGroupId), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(streamsGroupId)
@@ -25286,6 +25295,10 @@ public class GroupMetadataManagerTest {
             Group.GroupType.CLASSIC,
             context.groupMetadataManager.getOrMaybeCreateClassicGroup(streamsGroupId, false).type()
         );
+
+        // The streams group is removed without replaying its tombstones. It must no longer be
+        // subscribed to the topics of its topology.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
     }
 
     @Test
