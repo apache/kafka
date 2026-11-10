@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -123,49 +124,38 @@ public class KafkaMetricTest {
     }
 
     /**
-     * testing kafkaMetric that do not have recordingLevel
-     * should always return true for isActive
+     * Metrics without an owning sensor are always enabled.
      */
     @Test
-    public void testKafkaMetricWithoutRecordingLevel() {
+    public void testKafkaMetricWithoutSensor() {
         Measurable metricValueProvider = (config, now) -> 0;
         KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, new MetricConfig(), new MockTime());
-        assertTrue(metric.isActive());
+        assertTrue(KafkaMetric.InternalAccess.isEnabled(metric));
     }
 
-    /**
-     * Testing kafkaMetric with recording level set to TRACE
-     * config level changing from info -> trace
-     */
-
     @Test
-    public void testKafkaMetricWithRecordingLevelTrace() {
+    public void testKafkaMetricFollowsRecordingEnabledSupplier() {
         Measurable metricValueProvider = (config, now) -> 0;
-        Sensor.RecordingLevel recordingLevel = Sensor.RecordingLevel.TRACE;
-        MetricConfig metricConfig = new MetricConfig();
-        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, metricConfig, new MockTime(), recordingLevel);
-        assertFalse(metric.isActive());
-        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        assertFalse(metric.isActive());
-        metricConfig.recordLevel(Sensor.RecordingLevel.TRACE);
-        assertTrue(metric.isActive());
+        AtomicBoolean enabled = new AtomicBoolean(false);
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider,
+                new MetricConfig(), new MockTime(), enabled::get);
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
+        enabled.set(true);
+        assertTrue(KafkaMetric.InternalAccess.isEnabled(metric));
+        enabled.set(false);
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
     }
 
-    /**
-     * Testing kafkaMetric with recording level set to INFO
-     * config level changing from info -> trace
-     */
     @Test
-    public void testKafkaMetricWithRecordingLevelInfo() {
+    public void testKafkaMetricConfigDoesNotOverrideRecordingEnabledSupplier() {
         Measurable metricValueProvider = (config, now) -> 0;
-        Sensor.RecordingLevel recordingLevel = Sensor.RecordingLevel.INFO;
         MetricConfig metricConfig = new MetricConfig();
-        KafkaMetric kafkaMetric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, metricConfig, new MockTime(), recordingLevel);
-        assertTrue(kafkaMetric.isActive());
-        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        assertTrue(kafkaMetric.isActive());
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider,
+                metricConfig, new MockTime(), () -> false);
         metricConfig.recordLevel(Sensor.RecordingLevel.TRACE);
-        assertTrue(kafkaMetric.isActive());
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
+        metric.config(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
     }
 
     private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {

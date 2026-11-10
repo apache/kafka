@@ -179,8 +179,8 @@ public class KafkaMetricsCollector implements MetricsCollector {
             KafkaMetric metric = entry.getValue();
 
             try {
-                if (!metric.isActive()) {
-                    log.warn("Skipping inactive kafkaMetric {}", metricKey.name());
+                if (!KafkaMetric.InternalAccess.isEnabled(metric)) {
+                    log.trace("Skipping inactive kafkaMetric {}", metricKey.name());
                     continue;
                 }
                 collectMetric(metricsEmitter, metricKey, metric);

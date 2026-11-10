@@ -23,7 +23,7 @@ import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Objects;
-import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 @InterfaceAudience.Public
 public final class KafkaMetric implements Metric {
@@ -33,7 +33,7 @@ public final class KafkaMetric implements Metric {
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;
     private volatile MetricConfig config;
-    private final Optional<Sensor.RecordingLevel> recordingLevel;
+    private final BooleanSupplier recordingEnabled;
     // public for testing
     /**
      * Create a metric to monitor an object that implements MetricValueProvider.
@@ -46,32 +46,26 @@ public final class KafkaMetric implements Metric {
     @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
                        MetricConfig config, Time time) {
-        this.metricName = metricName;
-        this.lock = lock;
-        this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");
-        this.config = config;
-        this.time = time;
-        this.recordingLevel = Optional.empty();
+        this(lock, metricName, valueProvider, config, time, null);
     }
 
     /**
-     * Constructor for KafkaMetric having recording level.
+     * Create a metric with a supplier for recording eligibility.
      * @param lock The lock used to prevent race condition
      * @param metricName The name of the metric
      * @param valueProvider The metric value provider associated with this metric
      * @param config The configuration of the metric
      * @param time The time instance to use with the metrics
-     * @param recordingLevel The recording level of the metric
+     * @param recordingEnabled supplies reference to determine if the metric is enabled or not
      */
-
-    public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
-                       MetricConfig config, Time time, Sensor.RecordingLevel recordingLevel) {
+    KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
+                MetricConfig config, Time time, BooleanSupplier recordingEnabled) {
         this.metricName = metricName;
         this.lock = lock;
         this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");
         this.config = config;
         this.time = time;
-        this.recordingLevel = Optional.ofNullable(recordingLevel);
+        this.recordingEnabled = recordingEnabled != null ? recordingEnabled : () -> true;
     }
 
     /**
@@ -106,13 +100,11 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
-     * The method determines if the metric is active based on the recording level and the metric's configuration.
+     * Determine whether recording is enabled by the owning sensor, or true for standalone metrics.
      * @return true if the metric is active, false otherwise
      */
-    public boolean isActive() {
-        return recordingLevel
-                .map(level -> level.shouldRecord(config.recordLevel().id))
-                .orElse(true);
+    private boolean isActive() {
+        return recordingEnabled.getAsBoolean();
     }
 
     /**
@@ -158,6 +150,24 @@ public final class KafkaMetric implements Metric {
     public void config(MetricConfig config) {
         synchronized (lock) {
             this.config = config;
+        }
+    }
+
+    /**
+     * Internal access to KafkaMetric for use by the metrics system. This is not intended for use by end users.
+     */
+    @InterfaceAudience.Private
+    public static final class InternalAccess {
+        private InternalAccess() {
+        }
+
+        /**
+         * Returns whether the metrics recording level is enabled
+         * @param metric the metric to check
+         * @return true if the metric is enabled, false otherwise
+         */
+        public static boolean isEnabled(KafkaMetric metric) {
+            return metric.isActive();
         }
     }
 

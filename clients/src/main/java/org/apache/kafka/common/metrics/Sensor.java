@@ -297,7 +297,7 @@ public final class Sensor {
         stats.add(new StatAndConfig(Objects.requireNonNull(stat), () -> statConfig));
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
-            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time, this.recordingLevel);
+            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time, this::shouldRecord);
             if (!metrics.containsKey(metric.metricName())) {
                 KafkaMetric existingMetric = registry.registerMetric(metric);
                 if (existingMetric != null) {
@@ -340,7 +340,7 @@ public final class Sensor {
                 Objects.requireNonNull(stat),
                 statConfig,
                 time,
-                this.recordingLevel
+                this::shouldRecord
             );
             KafkaMetric existingMetric = registry.registerMetric(metric);
             if (existingMetric != null) {

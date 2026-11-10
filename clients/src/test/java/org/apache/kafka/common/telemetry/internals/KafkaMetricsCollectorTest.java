@@ -24,11 +24,14 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -622,6 +625,48 @@ public class KafkaMetricsCollectorTest {
         assertTrue(result2.stream().anyMatch(metric ->
                 metric.key().name().equals("test.domain.group1.name1")));
 
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCollectMetricUsesSensorConfigWithStatOverride(boolean compoundStat) {
+        Sensor sensor = metrics.sensor("debug-sensor", Sensor.RecordingLevel.DEBUG);
+        MetricConfig statConfig = new MetricConfig().samples(5);
+        MetricName rateName = metrics.metricName("rate", "group1", tags);
+        if (compoundStat) {
+            sensor.add(new Meter(rateName, metricName), statConfig);
+        } else {
+            sensor.add(metricName, new CumulativeSum(), statConfig);
+        }
+
+        // The sensor records at DEBUG even though the statistic configuration defaults to INFO.
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        assertTrue(sensor.shouldRecord());
+        sensor.record(3.0);
+        collector.collect(testEmitter);
+        assertEquals(3.0, metricByName(testEmitter.emittedMetrics(), "test.domain.group1.name1").doubleValue(), 0.0);
+        if (compoundStat) {
+            assertTrue(testEmitter.emittedMetrics().stream().anyMatch(metric ->
+                    metric.key().name().equals("test.domain.group1.rate")));
+        }
+
+        // A higher statistic recording level must not enable a disabled sensor's metrics.
+        testEmitter.reset();
+        metrics.config().recordLevel(Sensor.RecordingLevel.INFO);
+        statConfig.recordLevel(Sensor.RecordingLevel.TRACE);
+        assertFalse(sensor.shouldRecord());
+        sensor.record(7.0);
+        collector.collect(testEmitter);
+        assertFalse(testEmitter.emittedMetrics().stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")
+                        || metric.key().name().equals("test.domain.group1.rate")));
+
+        // Re-enabling the sensor is reflected without registering the metrics again.
+        testEmitter.reset();
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        sensor.record(2.0);
+        collector.collect(testEmitter);
+        assertEquals(5.0, metricByName(testEmitter.emittedMetrics(), "test.domain.group1.name1").doubleValue(), 0.0);
     }
 
     private static SinglePointMetric metricByName(List<SinglePointMetric> metrics, String name) {
