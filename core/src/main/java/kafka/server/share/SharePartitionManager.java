@@ -522,7 +522,8 @@ public class SharePartitionManager implements AutoCloseable {
         if (isFull(shareSessionEpoch)) {
             ShareSessionKey key = shareSessionKey(groupId, memberId);
             if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-                if (cache.get(key) == null) {
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -560,7 +561,7 @@ public class SharePartitionManager implements AutoCloseable {
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, memberId);
                 ShareSession shareSession = cache.get(key);
-                if (shareSession == null) {
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }
@@ -591,8 +592,9 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id in the share fetch request.
      * @param memberId The member id in the share fetch request.
      * @param shareSessionEpoch The epoch of share session utilized in the share fetch request.
+     * @param clientConnectionId The client connection id.
      */
-    public void acknowledgeSessionUpdate(String groupId, String memberId, int shareSessionEpoch) {
+    public void acknowledgeSessionUpdate(String groupId, String memberId, int shareSessionEpoch, String clientConnectionId) {
         if (shareSessionEpoch == ShareRequestMetadata.INITIAL_EPOCH) {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
@@ -600,7 +602,7 @@ public class SharePartitionManager implements AutoCloseable {
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, memberId);
                 ShareSession shareSession = cache.get(key);
-                if (shareSession == null) {
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId)) {
                     log.debug("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
                 }

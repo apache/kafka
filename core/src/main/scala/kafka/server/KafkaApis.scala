@@ -3695,7 +3695,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // Updating the cache for Share Session Handling
-      sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, shareSessionEpoch)
+      sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, shareSessionEpoch, request.context.connectionId)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))

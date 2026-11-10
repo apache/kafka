@@ -457,7 +457,7 @@ public class SharePartitionManagerTest {
 
         // Test trying to create a new session with an invalid epoch
         assertThrows(InvalidShareSessionEpochException.class, () -> sharePartitionManager.newContext(groupId, reqData2, EMPTY_PART_LIST,
-            shareSessionKey2.memberId(), 5, true, "id-2"));
+            shareSessionKey2.memberId(), 5, true, CONNECTION_ID));
 
         // Test trying to create a new session with a non-existent session key
         String memberId4 = Uuid.randomUuid().toString();
@@ -523,7 +523,7 @@ public class SharePartitionManagerTest {
 
         assertThrows(InvalidShareSessionEpochException.class,
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
-                Uuid.randomUuid().toString(), ShareRequestMetadata.INITIAL_EPOCH));
+                Uuid.randomUuid().toString(), ShareRequestMetadata.INITIAL_EPOCH, CONNECTION_ID));
     }
 
     @Test
@@ -536,7 +536,7 @@ public class SharePartitionManagerTest {
         // The share session corresponding to this memberId has not been created yet. This should throw an exception.
         assertThrows(ShareSessionNotFoundException.class,
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
-                Uuid.randomUuid().toString(), ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)));
+                Uuid.randomUuid().toString(), ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH), CONNECTION_ID));
     }
 
     @Test
@@ -562,7 +562,7 @@ public class SharePartitionManagerTest {
         // The expected epoch from the share session should be 1, but we are passing 2. This should throw an exception.
         assertThrows(InvalidShareSessionEpochException.class,
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
-                memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))));
+                memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)), CONNECTION_ID));
     }
 
     @Test
@@ -588,7 +588,7 @@ public class SharePartitionManagerTest {
         // The expected epoch from the share session should be 1, and we are passing the same. So, execution should be successful.
         assertDoesNotThrow(
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
-                memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)));
+                memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH), CONNECTION_ID));
     }
 
     @Test
@@ -614,7 +614,29 @@ public class SharePartitionManagerTest {
         // The expected epoch from the share session should be 1, but we are passing the Final Epoch (-1). This should throw an exception.
         assertDoesNotThrow(
             () -> sharePartitionManager.acknowledgeSessionUpdate("grp",
-                memberId, ShareRequestMetadata.FINAL_EPOCH));
+                memberId, ShareRequestMetadata.FINAL_EPOCH, CONNECTION_ID));
+    }
+
+    @Test
+    public void testShareSessionRequestFromAnotherConnection() {
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(new ShareSessionCache(10))
+            .build();
+
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        sharePartitionManager.newContext(groupId, List.of(tp0), EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID);
+
+        assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.newContext(groupId, EMPTY_PART_LIST, EMPTY_PART_LIST,
+            memberId, 1, false, "id-2"));
+        assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.newContext(groupId, EMPTY_PART_LIST, EMPTY_PART_LIST,
+            memberId, ShareRequestMetadata.FINAL_EPOCH, false, "id-2"));
+        assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.acknowledgeSessionUpdate(groupId,
+            memberId, 1, "id-2"));
+        assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.acknowledgeSessionUpdate(groupId,
+            memberId, ShareRequestMetadata.FINAL_EPOCH, "id-2"));
+        assertDoesNotThrow(() -> sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, 1, CONNECTION_ID));
     }
 
     @Test
