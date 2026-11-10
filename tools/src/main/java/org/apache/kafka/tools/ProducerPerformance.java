@@ -212,8 +212,8 @@ public class ProducerPerformance {
         }
         if (producerProps != null)
             for (String prop : producerProps) {
-                String[] pieces = prop.split("=");
-                if (pieces.length != 2)
+                String[] pieces = prop.split("=", 2);
+                if (pieces.length != 2 || pieces[1].isEmpty())
                     throw new IllegalArgumentException("Invalid property: " + prop);
                 props.put(pieces[0], pieces[1]);
             }
