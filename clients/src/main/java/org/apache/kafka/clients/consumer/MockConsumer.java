@@ -188,6 +188,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(topics, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
@@ -202,6 +203,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(pattern, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public synchronized void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
@@ -216,6 +218,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(pattern, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {

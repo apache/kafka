@@ -56,8 +56,8 @@ public interface Consumer<K, V> extends Closeable {
     void subscribe(Collection<String> topics);
 
     /**
-     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
-     *             {@link #subscribe(Collection)} instead.
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #setRebalanceListener(RebalanceListener)}
+     *             followed by {@link #subscribe(Collection)} instead.
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
     @Deprecated(since = "4.5", forRemoval = true)
@@ -70,8 +70,8 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
-     *             {@link #subscribe(Pattern)} instead.
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #setRebalanceListener(RebalanceListener)}
+     *             followed by {@link #subscribe(Pattern)} instead.
      * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
      */
     @Deprecated(since = "4.5", forRemoval = true)
@@ -84,8 +84,8 @@ public interface Consumer<K, V> extends Closeable {
     void subscribe(Pattern pattern);
 
     /**
-     * @deprecated Since 4.5. Use {@link #setRebalanceListener(RebalanceListener)} followed by
-     *             {@link #subscribe(SubscriptionPattern)} instead.
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #setRebalanceListener(RebalanceListener)}
+     *             followed by {@link #subscribe(SubscriptionPattern)} instead.
      * @see KafkaConsumer#subscribe(SubscriptionPattern, ConsumerRebalanceListener)
      */
     @Deprecated(since = "4.5", forRemoval = true)
