@@ -522,7 +522,7 @@ public class AdminAlterConfigsTest {
             Map<String, String> invalidConfigs = new HashMap<>();
             invalidConfigs.put(TopicConfig.RETENTION_BYTES_CONFIG, null);
             invalidConfigs.put(TopicConfig.COMPRESSION_TYPE_CONFIG, "producer");
-            NewTopic newTopic = new NewTopic(topic, 2, (short) 3);
+            NewTopic newTopic = new NewTopic(topic, 2, (short) clusterInstance.brokers().size());
             assertFutureThrows(InvalidConfigurationException.class,
                 admin.createTopics(List.of(newTopic.configs(invalidConfigs))).all(),
                 "Null value not supported for topic configs: retention.bytes"

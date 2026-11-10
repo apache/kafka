@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.logger.LoggingController;
 
 import org.apache.logging.log4j.core.config.Configurator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +65,12 @@ public class AdminLoggerConfigTest {
         brokerLoggerResource = new ConfigResource(
             ConfigResource.Type.BROKER_LOGGER,
             String.valueOf(clusterInstance.brokerIds().iterator().next()));
+    }
+
+    @AfterEach
+    public void tearDown() {
+        // Don't leave the altered logger levels behind for other test classes running in this JVM.
+        Configurator.reconfigure();
     }
 
     @ClusterTest
