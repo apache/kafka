@@ -117,6 +117,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineObject<ConsumerGroupState> state;
 
     /**
+     * The number of stable members at each member epoch.
+     */
+    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
      * The static group members.
      */
     private final TimelineHashMap<String, String> staticMembers;
@@ -155,11 +160,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
-    /**
-     * The number of stable members at each member epoch.
-     */
-    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
-
     public ConsumerGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -168,6 +168,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         super(snapshotRegistry, groupId);
         this.log = logContext.logger(ConsumerGroup.class);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
+        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -176,7 +177,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
-        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**

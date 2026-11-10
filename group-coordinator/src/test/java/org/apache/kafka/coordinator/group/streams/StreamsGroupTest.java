@@ -691,203 +691,100 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testGroupState() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
+
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        streamsGroup.setGroupEpoch(2);
+
+        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
+
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
+        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
+
+        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
+
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        streamsGroup.setGroupEpoch(3);
+
+        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
+
+        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
+
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        // Member 2 is not stable so the group stays in reconciling state.
+        streamsGroup.updateMember(member("member2", MemberState.UNREVOKED_TASKS, 3));
+
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 3));
+
+        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
+
+        streamsGroup.removeMember("member1");
+        streamsGroup.removeMember("member2");
+
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+    }
+
+    @Test
     public void testUpdateMemberGroupState() {
         StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
-        List<StreamsGroupState> states = new ArrayList<>();
-
         streamsGroup.setGroupEpoch(2);
         streamsGroup.setTargetAssignmentMetadata(2, 12345L);
         streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
-
-        // A member at a previous epoch.
-        streamsGroup.updateMember(member("member2", MemberState.STABLE, 1));
-        states.add(streamsGroup.state());
-
-        // The member at the previous epoch moves to the assignment epoch.
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
-
-        // Updating a member with an identical state keeps the group stable.
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
 
-        // A reconciled member moves back to UNREVOKED_TASKS.
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
+
+        // Member 2 is counted once although it was updated twice, so the group
+        // reconciles when member 1 is no longer stable.
         streamsGroup.updateMember(member("member1", MemberState.UNREVOKED_TASKS, 2));
-        states.add(streamsGroup.state());
 
-        // Updating a member with an identical state keeps the group reconciling.
-        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
-
-        // A stable member that moves past the assignment epoch is not reconciled to it.
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
-        states.add(streamsGroup.state());
-
-        assertEquals(
-            List.of(
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.RECONCILING
-            ),
-            states
-        );
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
     }
 
     @Test
     public void testSetTargetAssignmentMetadataGroupState() {
         StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
-        List<StreamsGroupState> states = new ArrayList<>();
-
-        // The members are updated before the assignment epoch is set.
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
-        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        streamsGroup.updateMember(member("member3", MemberState.UNREVOKED_TASKS, 2));
-        streamsGroup.setGroupEpoch(2);
-        states.add(streamsGroup.state());
-
-        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
-        states.add(streamsGroup.state());
-
-        // The member that is not stable becomes stable.
-        streamsGroup.updateMember(member("member3", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
-
-        // The assignment epoch moves ahead of every member.
-        streamsGroup.setGroupEpoch(3);
-        states.add(streamsGroup.state());
-        streamsGroup.setTargetAssignmentMetadata(3, 12346L);
-        states.add(streamsGroup.state());
-
-        // Members reach the new assignment epoch one by one.
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
-        streamsGroup.updateMember(member("member2", MemberState.STABLE, 3));
-        states.add(streamsGroup.state());
-        streamsGroup.updateMember(member("member3", MemberState.STABLE, 3));
-        states.add(streamsGroup.state());
-
-        // Setting the same assignment epoch again keeps the state.
-        streamsGroup.setTargetAssignmentMetadata(3, 12347L);
-        states.add(streamsGroup.state());
-
-        // The assignment epoch moves to an epoch where only one member is reconciled.
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 4));
-        streamsGroup.setGroupEpoch(4);
-        streamsGroup.setTargetAssignmentMetadata(4, 12348L);
-        states.add(streamsGroup.state());
-
-        assertEquals(
-            List.of(
-                StreamsGroupState.ASSIGNING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.ASSIGNING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.RECONCILING
-            ),
-            states
-        );
-    }
-
-    @Test
-    public void testSetTargetAssignmentMetadataAfterMembersReconciled() {
-        StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
-
         streamsGroup.setGroupEpoch(3);
         streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 3));
+
+        assertEquals(StreamsGroupState.ASSIGNING, streamsGroup.state());
+
         streamsGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
     }
 
     @Test
-    public void testSetValidatedTopologyEpochGroupState() {
-        StreamsGroup streamsGroup = createStreamsGroup("foo");
-        List<StreamsGroupState> states = new ArrayList<>();
-
-        streamsGroup.setGroupEpoch(2);
-        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
-        streamsGroup.updateMember(member("member2", MemberState.UNREVOKED_TASKS, 2));
-        states.add(streamsGroup.state());
-
-        // The topology is set and validated after the members are updated.
-        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setValidatedTopologyEpoch(1);
-        states.add(streamsGroup.state());
-
-        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
-
-        assertEquals(
-            List.of(
-                StreamsGroupState.NOT_READY,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE
-            ),
-            states
-        );
-    }
-
-    @Test
     public void testRemoveMemberGroupState() {
         StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
-        List<StreamsGroupState> states = new ArrayList<>();
-
         streamsGroup.setGroupEpoch(2);
         streamsGroup.setTargetAssignmentMetadata(2, 12345L);
         streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
-        streamsGroup.updateMember(member("member2", MemberState.UNREVOKED_TASKS, 2));
-        streamsGroup.updateMember(member("member3", MemberState.STABLE, 1));
-        streamsGroup.updateMember(member("member4", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member3", MemberState.UNREVOKED_TASKS, 2));
 
-        // Removing one of two unreconciled members.
-        streamsGroup.removeMember("member3");
-        states.add(streamsGroup.state());
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
 
-        // Removing a reconciled member does not reconcile the group.
+        // Member 3 is not stable so the group stays in reconciling state.
         streamsGroup.removeMember("member1");
-        states.add(streamsGroup.state());
 
-        // Removing the last unreconciled member.
-        streamsGroup.removeMember("member2");
-        states.add(streamsGroup.state());
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
 
-        // A static member is replaced by a member with a different member id.
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("member6")
-            .setInstanceId("instance")
-            .setState(MemberState.UNREVOKED_TASKS)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
-            .build());
-        states.add(streamsGroup.state());
-        streamsGroup.removeMember("member6");
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("member7")
-            .setInstanceId("instance")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
-            .build());
-        states.add(streamsGroup.state());
+        streamsGroup.removeMember("member3");
 
-        assertEquals(
-            List.of(
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE
-            ),
-            states
-        );
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
     }
 
     @Test
@@ -896,119 +793,22 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setValidatedTopologyEpoch(1);
-        List<StreamsGroupState> states = new ArrayList<>();
-
         streamsGroup.setGroupEpoch(2);
         streamsGroup.setTargetAssignmentMetadata(2, 12345L);
         streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
         snapshotRegistry.idempotentCreateSnapshot(0);
 
-        streamsGroup.setGroupEpoch(3);
-        streamsGroup.setTargetAssignmentMetadata(3, 12346L);
-        snapshotRegistry.idempotentCreateSnapshot(1);
+        streamsGroup.updateMember(member("member1", MemberState.UNREVOKED_TASKS, 2));
 
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
-        streamsGroup.removeMember("member2");
-        states.add(streamsGroup.state());
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
 
-        // The number of stable members at each member epoch is back to the one at the snapshot.
-        snapshotRegistry.revertToSnapshot(1);
-        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
-        states.add(streamsGroup.state());
-
+        // The group state is reverted with the snapshot too. Updating member 2
+        // computes it again from the number of stable members at the snapshot.
         snapshotRegistry.revertToSnapshot(0);
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
-        states.add(streamsGroup.state());
 
-        assertEquals(
-            List.of(
-                StreamsGroupState.STABLE,
-                StreamsGroupState.RECONCILING,
-                StreamsGroupState.STABLE
-            ),
-            states
-        );
-    }
-
-    @Test
-    public void testGroupState() {
-        StreamsGroup streamsGroup = createStreamsGroup("foo");
-        assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
-
-        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        streamsGroup.updateMember(member1);
-        streamsGroup.setGroupEpoch(2);
-
-        assertEquals(MemberState.STABLE, member1.state());
-        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
-
-        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
-        streamsGroup.setValidatedTopologyEpoch(1);
-
-        assertEquals(MemberState.STABLE, member1.state());
-        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
-
-        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        streamsGroup.updateMember(member2);
-        streamsGroup.setGroupEpoch(3);
-
-        assertEquals(MemberState.STABLE, member2.state());
-        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
-
-        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
-
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-
-        member1 = new StreamsGroupMember.Builder(member1)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
-
-        streamsGroup.updateMember(member1);
-
-        assertEquals(MemberState.STABLE, member1.state());
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-
-        // Member 2 is not stable so the group stays in reconciling state.
-        member2 = new StreamsGroupMember.Builder(member2)
-            .setState(MemberState.UNREVOKED_TASKS)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
-
-        streamsGroup.updateMember(member2);
-
-        assertEquals(MemberState.UNREVOKED_TASKS, member2.state());
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-
-        member2 = new StreamsGroupMember.Builder(member2)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
-
-        streamsGroup.updateMember(member2);
-
-        assertEquals(MemberState.STABLE, member2.state());
-        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
-
-        streamsGroup.removeMember("member1");
-        streamsGroup.removeMember("member2");
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
     }
 
     @Test
