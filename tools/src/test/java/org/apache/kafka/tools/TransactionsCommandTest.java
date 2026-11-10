@@ -328,6 +328,174 @@ public class TransactionsCommandTest {
     }
 
     @Test
+    public void testDescribeCompletedTransactionUsesLastUpdateTime() throws Exception {
+        String transactionalId = "foo";
+        int coordinatorId = 5;
+        long transactionStartTime = time.milliseconds();
+        long transactionLastUpdateTime = transactionStartTime + 2500;
+
+        assertDescribeRow(transactionalId, new TransactionDescription(
+            coordinatorId,
+            TransactionState.COMPLETE_COMMIT,
+            12345L,
+            15,
+            10000,
+            OptionalLong.of(transactionStartTime),
+            OptionalLong.of(transactionLastUpdateTime),
+            Set.of(new TopicPartition("bar", 0))
+        ), List.of(
+            String.valueOf(coordinatorId),
+            transactionalId,
+            "12345",
+            "15",
+            "CompleteCommit",
+            "10000",
+            String.valueOf(transactionStartTime),
+            "2500",
+            "bar-0"
+        ));
+    }
+
+    @Test
+    public void testDescribeCompletedTransactionWithoutLastUpdateTime() throws Exception {
+        String transactionalId = "foo";
+        int coordinatorId = 5;
+        long transactionStartTime = time.milliseconds();
+        time.sleep(5000);
+
+        assertDescribeRow(transactionalId, new TransactionDescription(
+            coordinatorId,
+            TransactionState.COMPLETE_ABORT,
+            12345L,
+            15,
+            10000,
+            OptionalLong.of(transactionStartTime),
+            Set.of(new TopicPartition("bar", 0))
+        ), List.of(
+            String.valueOf(coordinatorId),
+            transactionalId,
+            "12345",
+            "15",
+            "CompleteAbort",
+            "10000",
+            String.valueOf(transactionStartTime),
+            "-1",
+            "bar-0"
+        ));
+    }
+
+    @Test
+    public void testDescribeOngoingTransactionIgnoresLastUpdateTime() throws Exception {
+        String transactionalId = "foo";
+        int coordinatorId = 5;
+        long transactionStartTime = time.milliseconds();
+        time.sleep(5000);
+
+        assertDescribeRow(transactionalId, new TransactionDescription(
+            coordinatorId,
+            TransactionState.ONGOING,
+            12345L,
+            15,
+            10000,
+            OptionalLong.of(transactionStartTime),
+            OptionalLong.of(transactionStartTime + 100),
+            Set.of(new TopicPartition("bar", 0))
+        ), List.of(
+            String.valueOf(coordinatorId),
+            transactionalId,
+            "12345",
+            "15",
+            "Ongoing",
+            "10000",
+            String.valueOf(transactionStartTime),
+            "5000",
+            "bar-0"
+        ));
+    }
+
+    @Test
+    public void testDescribeTransactionWithoutStartTime() throws Exception {
+        String transactionalId = "foo";
+        int coordinatorId = 5;
+
+        assertDescribeRow(transactionalId, new TransactionDescription(
+            coordinatorId,
+            TransactionState.EMPTY,
+            12345L,
+            15,
+            10000,
+            OptionalLong.empty(),
+            OptionalLong.of(time.milliseconds()),
+            Set.of(new TopicPartition("bar", 0))
+        ), List.of(
+            String.valueOf(coordinatorId),
+            transactionalId,
+            "12345",
+            "15",
+            "Empty",
+            "10000",
+            "None",
+            "None",
+            "bar-0"
+        ));
+    }
+
+    @Test
+    public void testDescribeCompletedTransactionWithClockSkew() throws Exception {
+        String transactionalId = "foo";
+        int coordinatorId = 5;
+        long transactionStartTime = 5_000L;
+        long transactionLastUpdateTime = 4_000L;
+
+        assertDescribeRow(transactionalId, new TransactionDescription(
+            coordinatorId,
+            TransactionState.COMPLETE_COMMIT,
+            12345L,
+            15,
+            10000,
+            OptionalLong.of(transactionStartTime),
+            OptionalLong.of(transactionLastUpdateTime),
+            Set.of(new TopicPartition("bar", 0))
+        ), List.of(
+            String.valueOf(coordinatorId),
+            transactionalId,
+            "12345",
+            "15",
+            "CompleteCommit",
+            "10000",
+            String.valueOf(transactionStartTime),
+            "-1",
+            "bar-0"
+        ));
+    }
+
+    private void assertDescribeRow(
+        String transactionalId,
+        TransactionDescription description,
+        List<String> expectedRow
+    ) throws Exception {
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "describe",
+            "--transactional-id",
+            transactionalId
+        };
+
+        DescribeTransactionsResult describeResult = Mockito.mock(DescribeTransactionsResult.class);
+        Mockito.when(describeResult.description(transactionalId)).thenReturn(completedFuture(description));
+        Mockito.when(admin.describeTransactions(Set.of(transactionalId))).thenReturn(describeResult);
+
+        execute(args);
+        assertNormalExit();
+
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(2, table.size());
+        assertEquals(TransactionsCommand.DescribeTransactionsCommand.HEADERS, table.get(0));
+        assertEquals(expectedRow, table.get(1));
+    }
+
+    @Test
     public void testListTransactionsWithTransactionalIdPattern() throws Exception {
         String[] args = new String[] {
             "--bootstrap-server",

@@ -17,7 +17,8 @@
   "apiKey": 65,
   "type": "response",
   "name": "DescribeTransactionsResponse",
-  "validVersions": "0",
+  // Version 1 adds TransactionLastUpdateTimeMs, the time the transaction state last changed (KIP-994).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"
@@ -37,6 +38,8 @@
           "about": "The timeout in milliseconds for the transaction."},
         { "name": "TransactionStartTimeMs", "type": "int64", "versions": "0+",
           "about": "The start time of the transaction in milliseconds."},
+        { "name": "TransactionLastUpdateTimeMs", "type": "int64", "versions": "1+", "default": -1, "ignorable": true,
+          "about": "The time in milliseconds when the transaction state last changed."},
         { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
           "about": "The current producer id associated with the transaction."},
         { "name": "ProducerEpoch", "type": "int16", "versions": "0+",

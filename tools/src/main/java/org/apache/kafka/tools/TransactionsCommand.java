@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -427,9 +428,9 @@ public abstract class TransactionsCommand {
             final String transactionStartTimeMsColumnValue;
 
             if (result.transactionStartTimeMs().isPresent()) {
-                long transactionStartTimeMs = result.transactionStartTimeMs().getAsLong();
+                final long transactionStartTimeMs = result.transactionStartTimeMs().getAsLong();
                 transactionStartTimeMsColumnValue = String.valueOf(transactionStartTimeMs);
-                transactionDurationMsColumnValue = String.valueOf(time.milliseconds() - transactionStartTimeMs);
+                transactionDurationMsColumnValue = transactionDurationMs(result, transactionStartTimeMs);
             } else {
                 transactionStartTimeMsColumnValue = "None";
                 transactionDurationMsColumnValue = "None";
@@ -448,6 +449,22 @@ public abstract class TransactionsCommand {
             );
 
             ToolsUtils.prettyPrintTable(HEADERS, List.of(row), out);
+        }
+
+        private String transactionDurationMs(TransactionDescription result, long transactionStartTimeMs) {
+            if (isCompleted(result.state())) {
+                if (result.transactionLastUpdateTimeMs().isPresent()) {
+                    final long durationMs = result.transactionLastUpdateTimeMs().getAsLong() - transactionStartTimeMs;
+                    // A failover can restore the two timestamps from different broker clocks.
+                    return durationMs < 0 ? "-1" : String.valueOf(durationMs);
+                }
+                return "-1";
+            }
+            return String.valueOf(time.milliseconds() - transactionStartTimeMs);
+        }
+
+        private static boolean isCompleted(TransactionState state) {
+            return state == TransactionState.COMPLETE_COMMIT || state == TransactionState.COMPLETE_ABORT;
         }
     }
 

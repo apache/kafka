@@ -2575,8 +2575,10 @@ class TransactionCoordinatorTest {
 
   @Test
   def testDescribeTransactions(): Unit = {
+    val txnStartTimestamp = time.milliseconds()
+    val txnLastUpdateTimestamp = txnStartTimestamp + 25
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, txnStartTimestamp, txnLastUpdateTimestamp, TV_0)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -2588,7 +2590,8 @@ class TransactionCoordinatorTest {
     assertEquals(producerId, result.producerId)
     assertEquals(producerEpoch, result.producerEpoch)
     assertEquals(txnTimeoutMs, result.transactionTimeoutMs)
-    assertEquals(time.milliseconds(), result.transactionStartTimeMs)
+    assertEquals(txnStartTimestamp, result.transactionStartTimeMs)
+    assertEquals(txnLastUpdateTimestamp, result.transactionLastUpdateTimeMs)
 
     val addedPartitions = result.topics.stream.flatMap(topicData =>
         topicData.partitions.stream
@@ -2598,6 +2601,33 @@ class TransactionCoordinatorTest {
     assertEquals(partitions, addedPartitions)
 
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def testDescribeTransactionsCompleteCommit(): Unit = {
+    val txnStartTimestamp = time.milliseconds()
+    val txnLastUpdateTimestamp = txnStartTimestamp + 40
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.COMPLETE_COMMIT, partitions, txnStartTimestamp, txnLastUpdateTimestamp, TV_0)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(Errors.NONE, Errors.forCode(result.errorCode))
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(TransactionState.COMPLETE_COMMIT.stateName, result.transactionState)
+    assertEquals(txnStartTimestamp, result.transactionStartTimeMs)
+    assertEquals(txnLastUpdateTimestamp, result.transactionLastUpdateTimeMs)
+
+    // KAFKA-15546: a completed transaction's timestamps must not follow the clock.
+    time.sleep(100)
+    val describedAgain = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(txnStartTimestamp, describedAgain.transactionStartTimeMs)
+    assertEquals(txnLastUpdateTimestamp, describedAgain.transactionLastUpdateTimeMs)
+
+    verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
   private def validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(state: TransactionState): Unit = {

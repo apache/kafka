@@ -224,6 +224,47 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
             DescribeTransactionsResult result = env.adminClient().describeTransactions(singleton(transactionalId));
             KafkaFuture<TransactionDescription> future = result.description(transactionalId);
             assertEquals(expected, future.get());
+            assertEquals(OptionalLong.empty(), future.get().transactionLastUpdateTimeMs());
+        }
+    }
+
+    @Test
+    public void testDescribeTransactionsIncludesLastUpdateTime() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "foo";
+            Node coordinator = env.cluster().nodes().iterator().next();
+            long transactionStartTimeMs = 1500L;
+            long transactionLastUpdateTimeMs = 4500L;
+            TransactionDescription expected = new TransactionDescription(
+                coordinator.id(), TransactionState.COMPLETE_COMMIT, 12345L,
+                15, 10000L, OptionalLong.of(transactionStartTimeMs),
+                OptionalLong.of(transactionLastUpdateTimeMs), emptySet());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof FindCoordinatorRequest,
+                prepareFindCoordinatorResponse(Errors.NONE, transactionalId, coordinator)
+            );
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof DescribeTransactionsRequest,
+                new DescribeTransactionsResponse(new DescribeTransactionsResponseData().setTransactionStates(
+                    singletonList(new DescribeTransactionsResponseData.TransactionState()
+                        .setErrorCode(Errors.NONE.code())
+                        .setProducerEpoch((short) expected.producerEpoch())
+                        .setProducerId(expected.producerId())
+                        .setTransactionalId(transactionalId)
+                        .setTransactionTimeoutMs(10000)
+                        .setTransactionStartTimeMs(transactionStartTimeMs)
+                        .setTransactionLastUpdateTimeMs(transactionLastUpdateTimeMs)
+                        .setTransactionState(expected.state().toString())
+                    )
+                )),
+                coordinator
+            );
+
+            DescribeTransactionsResult result = env.adminClient().describeTransactions(singleton(transactionalId));
+            KafkaFuture<TransactionDescription> future = result.description(transactionalId);
+            assertEquals(expected, future.get());
         }
     }
 
