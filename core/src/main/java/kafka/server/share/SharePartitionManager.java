@@ -516,6 +516,7 @@ public class SharePartitionManager implements AutoCloseable {
         Boolean isAcknowledgeDataPresent,
         String clientConnectionId
     ) {
+        maybeThrowIfConnectionUsedByAnotherSession(groupId, memberId, clientConnectionId);
         ShareFetchContext context;
         // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
@@ -599,6 +600,7 @@ public class SharePartitionManager implements AutoCloseable {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
         } else {
+            maybeThrowIfConnectionUsedByAnotherSession(groupId, memberId, clientConnectionId);
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, memberId);
                 ShareSession shareSession = cache.get(key);
@@ -618,6 +620,15 @@ public class SharePartitionManager implements AutoCloseable {
                 cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
+        }
+    }
+
+    private void maybeThrowIfConnectionUsedByAnotherSession(String groupId, String memberId, String clientConnectionId) {
+        ShareSessionKey key = shareSessionKey(groupId, memberId);
+        ShareSessionKey connectionKey = cache.connectionShareSessionKey(clientConnectionId);
+        if (connectionKey != null && !connectionKey.equals(key)) {
+            log.debug("Share session error for {}: the connection is used by share session {}", key, connectionKey);
+            throw Errors.SHARE_SESSION_NOT_FOUND.exception();
         }
     }
 
