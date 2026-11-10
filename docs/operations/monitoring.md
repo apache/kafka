@@ -856,7 +856,7 @@ kafka.server:type=ControllerMutation,user=([-.\w]+),client-id=([-.\w]+)
 <td>
 
 Three attributes. mutation-rate indicates the rate of partition mutations in partitions/sec for topic creation, partition creation and topic deletion. tokens indicates the number of remaining tokens in the token bucket. A negative value indicates that the quota is exhausted and throttling is applied. throttle-time indicates the average time in ms the client was throttled. Ideally = 0. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
-In KRaft mode, the active controller records partition mutations for CreateTopics, CreatePartitions, and DeleteTopics requests.
+The active controller records partition mutations for CreateTopics, CreatePartitions, and DeleteTopics requests.
 This includes automatic topic creation requests sent by brokers.
 </td> </tr>
 <tr>  
