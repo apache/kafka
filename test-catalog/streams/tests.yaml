@@ -2013,7 +2013,9 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldNotRetryWhenPositionThrowsTimeoutExceptionAndTaskTimeoutIsZero
 - shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull
 - shouldReadCheckpointOffsets
+- shouldReportLargestStoreUncommittedBytes
 - shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered
+- shouldReportZeroMaxStoreUncommittedBytesBeforeStoresAreRegistered
 - shouldRestoreRecordsFromCheckpointToHighWatermark
 - shouldRestoreRecordsUpToHighwatermark
 - shouldRetryAtLeastOnceWhenEndOffsetsThrowsTimeoutException
@@ -2043,6 +2045,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateTaskTest:
 - shouldCommitOffsetsWhenStateIsFlushed
 - shouldCommitStateManagerWithOffsets
 - shouldDelegateApproximateNumUncommittedBytesToStateManager
+- shouldDelegateMaxStoreUncommittedBytesToStateManager
 - shouldInitializeContext
 - shouldInitializeProcessorTopology
 - shouldInitializeStateManager
@@ -2422,7 +2425,9 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldRegisterPersistentUnloggedStore
 - shouldReportChangelogAsSource
 - shouldReportHasCorruptedStores
+- shouldReportLargestStoreUncommittedBytes
 - shouldReportTaskType
+- shouldReportZeroMaxStoreUncommittedBytesWithoutStores
 - shouldRestoreNonTimestampedStoreWithNoConverter
 - shouldRestoreStoreWithRestoreCallback
 - shouldRestoreTimestampedStoreWithConverter
@@ -3033,6 +3038,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotPopulateWireTopologyDescriptionWhenPushDisabled
 - shouldNotProcessOrPunctuateWhileUncommittedBytesExceedLimit
 - shouldNotProcessWhenPartitionRevoked
+- shouldNotProcessWhenUncommittedBytesPlusLargestStoreExceedLimit
 - shouldNotPurgeBeforeThePurgeInterval
 - shouldNotRecordFailedStreamThread
 - shouldNotReturnDataAfterTaskMigrated
@@ -3045,6 +3051,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldProcessWhenPartitionAssigned
 - shouldProcessWhenRunning
 - shouldProcessWhenStarting
+- shouldProcessWhenUncommittedBytesPlusLargestStoreAreWithinLimit
 - shouldPublishTaskOffsetSumSnapshotOnEveryIteration
 - shouldPunctuateActiveTask
 - shouldPunctuateWithTimestampPreservedInProcessorContext
@@ -4204,8 +4211,10 @@ org.apache.kafka.streams.state.internals.AbstractTransactionBufferTest:
 - boundStagingOnlyToExclusiveReturnsHeadMapExclusive
 - boundStagingOnlyToInclusiveReturnsHeadMapInclusive
 - byteCountAccumulatesAcrossMultipleStages
+- byteCountCountsOverwrittenKeyOnce
 - byteCountReflectsStagedTombstone
 - byteCountReflectsStagedValue
+- byteCountReplacesValueWithTombstone
 - commitClearsPendingWritesAndBytes
 - commitFlushesTombstoneToBase
 - commitFlushesWritesToBase
@@ -6960,13 +6969,18 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedWindowStoreWithHeader
 - shouldNotCollectExecutionInfoWhenNotRequested
 org.apache.kafka.streams.state.internals.RocksDBTransactionBufferTest:
 - shouldAllowStageAfterDeleteRangeToOverride
+- shouldCommitLastOverwriteToOtherCF
+- shouldCommitPutAfterRangeDeleteOnOtherCF
 - shouldCommitRangeDeleteToRocksDB
 - shouldCommitRangeDeleteWithOverridingPut
 - shouldCommitStagedWritesToRocksDB
 - shouldCommitWritesAcrossCFsAtomically
+- shouldCountOtherCFWritesInUncommittedBytes
+- shouldDiscardOtherCFWritesOnRollback
 - shouldHandleConcurrentStageDeleteRangeAndNonOwnerReads
 - shouldHideDeletedRangeFromPointReads
 - shouldHideDeletedRangeFromScans
+- shouldKeepDataCFWriteWhenOtherCFRangeDeleted
 - shouldMergeStagedWritesInAllScan
 - shouldMergeStagedWritesInOwnerAllScan
 - shouldMergeStagedWritesInRangeScan
