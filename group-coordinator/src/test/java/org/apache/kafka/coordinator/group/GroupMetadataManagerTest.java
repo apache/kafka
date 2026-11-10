@@ -26186,8 +26186,8 @@ public class GroupMetadataManagerTest {
         assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
         // Replay the ConsumerGroupMemberMetadata tombstone without the ConsumerGroupCurrentMemberAssignment
-        // and ConsumerGroupTargetAssignmentMember tombstones, as can happen when the coordinator loads
-        // concurrently with compaction. The member is removed along with its target assignment.
+        // and ConsumerGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
         assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
@@ -26240,8 +26240,8 @@ public class GroupMetadataManagerTest {
         assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
         // Replay the ConsumerGroupMetadata tombstone without the member and
-        // ConsumerGroupTargetAssignmentMetadata tombstones, as can happen when the coordinator loads
-        // concurrently with compaction. The group is removed along with its topic subscriptions.
+        // ConsumerGroupTargetAssignmentMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
@@ -26366,8 +26366,8 @@ public class GroupMetadataManagerTest {
         assertEquals(12345L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
 
         // Replay the ConsumerGroupTargetAssignmentMetadata tombstone without the
-        // ConsumerGroupTargetAssignmentMember tombstone, as can happen when the coordinator loads
-        // concurrently with compaction. The target assignment is removed along with the epoch.
+        // ConsumerGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
@@ -26451,8 +26451,8 @@ public class GroupMetadataManagerTest {
         assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
         // Replay the ShareGroupMemberMetadata tombstone without the ShareGroupCurrentMemberAssignment
-        // and ShareGroupTargetAssignmentMember tombstones, as can happen when the coordinator loads
-        // concurrently with compaction. The member is removed along with its target assignment.
+        // and ShareGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
         assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
@@ -26497,9 +26497,9 @@ public class GroupMetadataManagerTest {
         assertTrue(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey("foo"));
 
         // Replay the ShareGroupMetadata tombstone without the member, ShareGroupTargetAssignmentMetadata
-        // and ShareGroupStatePartitionMetadata tombstones, as can happen when the coordinator loads
-        // concurrently with compaction. The group is removed along with its topic subscriptions and
-        // its state partition metadata.
+        // and ShareGroupStatePartitionMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions and its state partition
+        // metadata.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
@@ -26569,8 +26569,8 @@ public class GroupMetadataManagerTest {
         assertEquals(12345L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
 
         // Replay the ShareGroupTargetAssignmentMetadata tombstone without the
-        // ShareGroupTargetAssignmentMember tombstone, as can happen when the coordinator loads
-        // concurrently with compaction. The target assignment is removed along with the epoch.
+        // ShareGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
