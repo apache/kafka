@@ -26903,8 +26903,8 @@ public class GroupMetadataManagerTest {
 
         // The target assignment still has a member, i.e. the StreamsGroupTargetAssignmentMember
         // tombstone has not been seen. This can happen when the coordinator loads while compaction
-        // removed it. The metadata tombstone is authoritative: it replays the missing member
-        // target assignment tombstone and resets the assignment epoch.
+        // removed it. The metadata tombstone is authoritative: the target assignment is removed
+        // along with the epoch.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
