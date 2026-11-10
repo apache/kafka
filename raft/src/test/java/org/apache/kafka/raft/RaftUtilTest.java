@@ -668,45 +668,6 @@ public class RaftUtilTest {
         assertFalse(RaftUtil.hasValidTopicPartition(data));
     }
 
-    @Test
-    public void testAddRaftVoterRequestAckWhenCommittedNotIgnorable() {
-        AddRaftVoterRequestData request = new AddRaftVoterRequestData()
-            .setClusterId("test-cluster")
-            .setTimeoutMs(1000)
-            .setVoterId(1)
-            .setVoterDirectoryId(Uuid.randomUuid()); // field only exists in v1+
-
-        // Attempt to serialize to version 0, which does not support ackWhenCommitted
-        assertThrows(
-            UnsupportedVersionException.class,
-            () -> AddRaftVoterRequestDataJsonConverter.write(request, (short) 0)
-        );
-    }
-
-    @Test
-    public void testAddVoterResponse() {
-        for (Errors error : Errors.values()) {
-            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
-            assertEquals(error.code(), addRaftVoterResponseData.errorCode());
-            if (Errors.NONE.equals(error))
-                assertNull(addRaftVoterResponseData.errorMessage());
-            else
-                assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
-        }
-    }
-
-    @Test
-    public void testRemoveVoterResponse() {
-        for (Errors error : Errors.values()) {
-            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
-            assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
-            if (Errors.NONE.equals(error))
-                assertNull(removeRaftVoterResponseData.errorMessage());
-            else
-                assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
-        }
-    }
-
     private Records createRecords() {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 

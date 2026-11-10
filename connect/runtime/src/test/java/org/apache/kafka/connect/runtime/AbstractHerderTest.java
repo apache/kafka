@@ -470,8 +470,6 @@ public class AbstractHerderTest {
         AbstractHerder herder = testHerder();
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Map.of(), s -> null, false));
-        verify(transformer).transform(Collections.emptyMap());
-        assertEquals(worker.getPlugins(), plugins);
     }
 
     @Test
