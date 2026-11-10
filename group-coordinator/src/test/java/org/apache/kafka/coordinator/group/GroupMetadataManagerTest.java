@@ -26190,7 +26190,7 @@ public class GroupMetadataManagerTest {
         // concurrently with compaction. The member is removed along with its target assignment.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
-        assertFalse(context.groupMetadataManager.consumerGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
@@ -26371,7 +26371,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
-        assertFalse(context.groupMetadataManager.consumerGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
     }
 
     @Test
@@ -26455,7 +26455,7 @@ public class GroupMetadataManagerTest {
         // concurrently with compaction. The member is removed along with its target assignment.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
-        assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
@@ -26574,7 +26574,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
-        assertFalse(context.groupMetadataManager.shareGroup("foo").targetAssignment().containsKey("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
     }
 
     @Test
@@ -26686,7 +26686,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.streamsGroup("foo").hasMember("m1"));
-        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
     }
 
     @Test
@@ -26909,7 +26909,7 @@ public class GroupMetadataManagerTest {
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
-        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
     }
 
     @Test
