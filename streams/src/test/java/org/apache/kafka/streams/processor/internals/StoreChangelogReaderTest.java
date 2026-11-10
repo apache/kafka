@@ -1483,6 +1483,34 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldPauseRestoringActiveChangelogsWhenUpdatingStandbyTasks() {
+        setupActiveStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId activeTaskId = new TaskId(0, 0);
+        final TaskId standbyTaskId = new TaskId(0, 1);
+        when(activeStateManager.taskId()).thenReturn(activeTaskId);
+        when(standbyStateManager.taskId()).thenReturn(standbyTaskId);
+        when(standbyStateManager.taskType()).thenReturn(STANDBY);
+        when(standbyStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(storeMetadataOne.store()).thenReturn(store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(storeMetadataOne.offset()).thenReturn(5L);
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+
+        changelogReader.register(tp, activeStateManager);
+        changelogReader.register(tp1, standbyStateManager);
+        changelogReader.restore(Map.of(activeTaskId, mock(Task.class), standbyTaskId, mock(Task.class)));
+        changelogReader.transitToUpdateStandby();
+
+        changelogReader.restore(Collections.singletonMap(standbyTaskId, mock(Task.class)));
+
+        assertEquals(Set.of(tp), consumer.paused());
+        assertEquals(STANDBY_UPDATING, changelogReader.state());
+    }
+
+    @Test
     public void shouldTransitStateBackToActiveRestoringAfterRemovingLastTask() {
         when(standbyStateManager.taskType()).thenReturn(STANDBY);
         final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);

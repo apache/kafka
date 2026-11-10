@@ -445,9 +445,6 @@ public class DefaultStateUpdater implements StateUpdater {
             try {
                 exceptionsAndFailedTasks.add(exceptionAndTask);
                 pausedTasks.remove(exceptionAndTask.task().id());
-                if (exceptionAndTask.task().isActive()) {
-                    maybeTransitionChangelogReader();
-                }
             } finally {
                 exceptionsAndFailedTasksLock.unlock();
             }
@@ -768,7 +765,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void maybeTransitionChangelogReader() {
             if (updatingTasks.isEmpty() && !changelogReader.isRestoringActive()) {
                 changelogReader.enforceRestoreActive();
-            } else if (onlyStandbyTasksUpdating() && changelogReader.isRestoringActive()) {
+            } else if (changelogReader.isRestoringActive() && onlyStandbyTasksUpdating()) {
                 changelogReader.transitToUpdateStandby();
             }
         }

@@ -1306,9 +1306,9 @@ class DefaultStateUpdaterTest {
 
         when(topologyMetadata.isPaused(task1.id().topologyName())).thenReturn(false).thenReturn(true);
 
-        stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
+        stateUpdater.start();
 
         verifyPausedTasks(task1);
         verifyUpdatingTasks(task2);

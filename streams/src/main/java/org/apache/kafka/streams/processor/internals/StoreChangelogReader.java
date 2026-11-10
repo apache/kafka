@@ -448,6 +448,15 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
+    private Set<TopicPartition> activeRestoringChangelogs(final Map<TaskId, Task> tasks) {
+        return changelogs.values().stream()
+            .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
+                metadata.stateManager.taskType() == Task.TaskType.ACTIVE &&
+                tasks.containsKey(metadata.stateManager.taskId()))
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
+            .collect(Collectors.toSet());
+    }
+
     private Set<TopicPartition> standbyRestoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
@@ -494,7 +503,7 @@ public class StoreChangelogReader implements ChangelogReader {
     public long restore(final Map<TaskId, Task> tasks) {
         initializeChangelogs(tasks, registeredChangelogs());
 
-        if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
+        if (!activeRestoringChangelogs(tasks).isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
         }
 
@@ -574,9 +583,9 @@ public class StoreChangelogReader implements ChangelogReader {
                                        final Set<TopicPartition> restoringChangelogs) {
         if (state == ChangelogReaderState.ACTIVE_RESTORING) {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
-        }
-        if (state == ChangelogReaderState.STANDBY_UPDATING) {
+        } else {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
+            restoreConsumer.pause(activeRestoringChangelogs());
         }
     }
 
