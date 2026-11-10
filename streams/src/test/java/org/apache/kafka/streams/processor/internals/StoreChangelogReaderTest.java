@@ -871,6 +871,36 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldSkipPausedActiveChangelogAfterPositionTimeout() {
+        setupActiveStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+        when(storeMetadata.offset()).thenReturn(10L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public long position(final TopicPartition partition) {
+                throw new TimeoutException("KABOOM!");
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.register(tp, activeStateManager);
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+
+        changelogReader.transitToUpdateStandby();
+        changelogReader.restore(Collections.emptyMap());
+
+        assertEquals(Set.of(tp), consumer.paused());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+    }
+
+    @Test
     public void shouldThrowIfPositionFail() {
         setupActiveStateManager();
         setupStoreMetadata();

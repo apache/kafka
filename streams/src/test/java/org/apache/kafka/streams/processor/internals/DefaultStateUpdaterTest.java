@@ -830,6 +830,23 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldRestoreActiveModeAfterLastStandbyTaskRemoved() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final StateUpdater.RemovedTaskResult removedTask =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
+
+        assertEquals(new StateUpdater.RemovedTaskResult(task), removedTask);
+        verify(changelogReader).enforceRestoreActive();
+    }
+
+    @Test
     public void shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved() throws Exception {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1293,7 +1310,7 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        // Shutdown waits for the pause transition and contributes the second enforceRestoreActive call during cleanup.
         stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(2)).enforceRestoreActive();
         verify(changelogReader, times(1)).transitToUpdateStandby();
@@ -1432,9 +1449,10 @@ class DefaultStateUpdaterTest {
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
-        assertEquals(Optional.empty(), stateUpdater.fatalException());
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        // Shutdown waits for the resumed standby transition and contributes the second enforceRestoreActive call
+        // during cleanup.
         stateUpdater.shutdown(Duration.ofMinutes(1));
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
         verify(changelogReader, times(2)).transitToUpdateStandby();
         verify(changelogReader, times(2)).enforceRestoreActive();
     }

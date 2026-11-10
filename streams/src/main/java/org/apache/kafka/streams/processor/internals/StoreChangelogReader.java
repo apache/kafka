@@ -530,12 +530,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 final Task task = tasks.get(taskId);
+                if (task == null) {
+                    continue;
+                }
 
                 try {
                     final ChangelogMetadata changelogMetadata = changelogs.get(partition);
                     totalRestored += restoreChangelog(task, changelogMetadata);
                 } catch (final TimeoutException timeoutException) {
-                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                    task.maybeInitTaskTimeoutOrThrow(
                         time.milliseconds(),
                         timeoutException
                     );
@@ -586,6 +589,8 @@ public class StoreChangelogReader implements ChangelogReader {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
         } else {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
+            // Paused active tasks keep their changelogs registered and restoring, so pause them explicitly while
+            // updating standbys.
             final Set<TopicPartition> activeRestoringChangelogs = activeRestoringChangelogs();
             if (!activeRestoringChangelogs.isEmpty()) {
                 restoreConsumer.pause(activeRestoringChangelogs);
