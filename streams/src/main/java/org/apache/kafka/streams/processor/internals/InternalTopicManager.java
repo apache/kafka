@@ -220,7 +220,7 @@ public class InternalTopicManager {
                 ));
 
                 if (!descriptionsForTopic.isEmpty() || !configsForTopic.isEmpty()) {
-                    Utils.sleep(100);
+                    time.sleep(100);
                 }
             }
 
@@ -462,7 +462,7 @@ public class InternalTopicManager {
                     backoffMs,
                     deadlineMs - currentWallClockMs
                 );
-                Utils.sleep(backoffMs);
+                time.sleep(backoffMs);
             }
         }
         log.debug("Completed describing topics");
@@ -816,7 +816,7 @@ public class InternalTopicManager {
             ));
 
             if (!createResultForTopic.isEmpty()) {
-                Utils.sleep(100);
+                time.sleep(100);
             }
         }
     }
@@ -881,7 +881,7 @@ public class InternalTopicManager {
                 ));
 
                 if (!deleteResultForTopic.isEmpty()) {
-                    Utils.sleep(100);
+                    time.sleep(100);
                 }
             }
 
@@ -926,8 +926,6 @@ public class InternalTopicManager {
             this.onTimeout = onTimeout;
         }
     }
-
-
 
     private void maybeSleep(final List<Set<String>> resultSetsStillToValidate,
                             final long deadline,
