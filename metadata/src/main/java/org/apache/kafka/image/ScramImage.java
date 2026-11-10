@@ -46,7 +46,11 @@ public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> m
     public static final ScramImage EMPTY = new ScramImage(Map.of());
 
     public ScramImage {
-        mechanisms = Collections.unmodifiableMap(mechanisms);
+        Map<ScramMechanism, Map<String, ScramCredentialData>> wrapped = new HashMap<>(mechanisms.size());
+        for (var entry : mechanisms.entrySet()) {
+            wrapped.put(entry.getKey(), Collections.unmodifiableMap(entry.getValue()));
+        }
+        mechanisms = Collections.unmodifiableMap(wrapped);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
