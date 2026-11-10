@@ -152,6 +152,9 @@ class InternalTopicManagerTest {
             LOG, "test-group", "test-member", 0, makeTopologyWithUnrelatedFixedRepartitionTopics(),
             new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
+        assertEquals(
+            Optional.of(Status.MISSING_INTERNAL_TOPICS),
+            configuredTopology.topicConfigurationException().map(TopicConfigurationException::status));
         final Map<String, CreatableTopic> toCreate = configuredTopology.internalTopicsToBeCreated();
         assertEquals(6, toCreate.get("right-repartition").numPartitions());
         assertNull(toCreate.get("left-repartition"));
