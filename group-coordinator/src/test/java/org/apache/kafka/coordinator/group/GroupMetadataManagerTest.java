@@ -26677,6 +26677,23 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithoutCurrentMemberAssignment() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Only the StreamsGroupMemberMetadata record of the member is replayed, so the member
+        // has no member epoch.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+            "foo",
+            streamsGroupMemberBuilderWithDefaults("m1").build()
+        ));
+
+        // The member tombstone is authoritative and removes the member.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").members());
+    }
+
+    @Test
     public void testReplayStreamsGroupMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();

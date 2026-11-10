@@ -6616,7 +6616,7 @@ public class GroupMetadataManager {
             }
 
             List<String> inconsistencies = new ArrayList<>();
-            if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
+            if (!Objects.equals(oldMember.memberEpoch(), LEAVE_GROUP_MEMBER_EPOCH)) {
                 inconsistencies.add("still has a current assignment");
             }
             if (streamsGroup.targetAssignment().containsKey(memberId)) {
