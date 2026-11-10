@@ -15390,7 +15390,8 @@ public class GroupMetadataManagerTest {
                         .setSupportedProtocols(protocols)
                 )
                 .setMemberEpoch(10)
-                .build()))
+                .build())
+            .withAssignmentEpoch(10))
             .build();
 
         // Heartbeat to schedule the session timeout.
@@ -15496,6 +15497,217 @@ public class GroupMetadataManagerTest {
             context.assertSessionTimeout(groupId, memberId, sessionTimeout);
             context.assertJoinTimeout(groupId, memberId, rebalanceTimeout);
         });
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerGroupTriggersRebalanceWithOnlyClassicMembers() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = List.of(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    List.of(fooTopicName),
+                    null,
+                    List.of(
+                        new TopicPartition(fooTopicName, 0),
+                        new TopicPartition(fooTopicName, 1),
+                        new TopicPartition(fooTopicName, 2)
+                    )
+                ))))
+        );
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        // Consumer group with two members.
+        // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
+        // The migration policy does not allow the group to be downgraded.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                ))))
+            .build();
+
+        // Member 2 leaves the group, bumping the group epoch. The new assignment is not computed
+        // yet and no members using the consumer protocol remain to trigger it.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> leaveResult = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setHeartbeatIntervalMs(0),
+            leaveResult.response()
+        );
+
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId2),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId2),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                )))
+            ),
+            leaveResult.records()
+        );
+
+        // Member 1 heartbeats and is told to rebalance.
+        CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> result = context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setGenerationId(10)
+        );
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), result.response().errorCode());
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerGroupRefreshesMetadata() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        // The group's metadata hash is computed when foo has 3 partitions. foo has since grown to 6 partitions.
+        CoordinatorMetadataImage oldMetadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = List.of(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    List.of(fooTopicName),
+                    null,
+                    List.of(
+                        new TopicPartition(fooTopicName, 0),
+                        new TopicPartition(fooTopicName, 1),
+                        new TopicPartition(fooTopicName, 2)
+                    )
+                ))))
+        );
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+
+        // Consumer group with a single member using the classic protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member)
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, oldMetadataImage)
+                ))))
+            .build();
+
+        // The metadata refresh flag should be true.
+        ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
+        assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+
+        // The member heartbeats, refreshes the metadata, bumps the group epoch and is told to rebalance.
+        CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> result = context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setGenerationId(10)
+        );
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), result.response().errorCode());
+
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                )))
+            ),
+            result.records()
+        );
+
+        // Check next refresh time.
+        assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
+        assertEquals(context.time.milliseconds() + Integer.MAX_VALUE, consumerGroup.metadataRefreshDeadline().deadlineMs);
+        assertEquals(11, consumerGroup.metadataRefreshDeadline().epoch);
     }
 
     @Test
@@ -15623,7 +15835,8 @@ public class GroupMetadataManagerTest {
                             .setSupportedProtocols(protocols)
                     )
                     .setMemberEpoch(10)
-                    .build()))
+                    .build())
+                .withAssignmentEpoch(10))
             .build();
 
         // Heartbeat to schedule the session timeout.
