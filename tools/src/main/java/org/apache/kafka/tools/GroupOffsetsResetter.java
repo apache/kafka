@@ -467,7 +467,10 @@ public class GroupOffsetsResetter {
                     .map(partitionInfo -> new TopicPartition(topic, partitionInfo.partition()))
                     .filter(topicPartitions::contains)
                     .forEach(noneLeaderPartitions::add);
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
                 if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
                     throw new RuntimeException(e);
                 // A deleted topic has no leader for any of its partitions
