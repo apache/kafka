@@ -1426,6 +1426,58 @@ public class RecordAccumulatorTest {
 
     @ParameterizedTest
     @MethodSource("allocationStrategies")
+    public void testAdaptiveBuiltInPartitionerExcludesEmptyPartitionsOfUnavailableNode(String allocationStrategy) throws Exception {
+        // Mock random number generator with just sequential integer.
+        mockRandom = new AtomicInteger();
+
+        // Create accumulator with partitioner config to enable adaptive partitioning.
+        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100, false, "");
+        int batchSize = 128;
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, null, 3200, batchSize, 1024 * 1024,
+            Compression.NONE, 0, config);
+
+        // Add a batch to each partition, so that adaptive partitioning is used. Then empty the deque
+        // of partition2, as if its batch had been drained. partition1 and partition2 are led by node1.
+        byte[] largeValue = new byte[batchSize];
+        for (int p : new int[]{partition1, partition2, partition3}) {
+            accum.append(topic, p, 0L, null, largeValue, Record.EMPTY_HEADERS,
+                null, maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+        accum.getDeque(tp2).clear();
+
+        // node1 hasn't been drainable for longer than the availability timeout.
+        accum.updateNodeLatencyStats(node1.id(), time.milliseconds() - 200, true);
+        accum.updateNodeLatencyStats(node1.id(), time.milliseconds(), false);
+        accum.ready(metadataCache, time.milliseconds());
+
+        // Set up callbacks so that we know what partition is chosen.
+        final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
+        RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
+            @Override
+            public void setPartition(int p) {
+                partition.set(p);
+            }
+
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+
+            }
+        };
+
+        // Do one append, because partition gets switched after append.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+            callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
+
+        // Both partitions of node1 are excluded, including partition2 which has no batches.
+        for (int c = 10; c-- > 0; ) {
+            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+                callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
+            assertEquals(partition3, partition.get());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
     public void testBuiltInPartitionerFractionalBatches(String allocationStrategy) throws Exception {
         // Test how we avoid creating fractional batches with high linger.ms (see
         // BuiltInPartitioner.updatePartitionInfo).
