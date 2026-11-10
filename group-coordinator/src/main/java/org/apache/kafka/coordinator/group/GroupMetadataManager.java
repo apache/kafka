@@ -1508,10 +1508,12 @@ public class GroupMetadataManager {
     ) {
         Group group = groups.remove(groupId);
 
-        // Clean up the state kept outside of the group. The group may still be subscribed to
-        // topics or have share state partition metadata here: when the group coordinator loads
-        // concurrently with compaction, intermediate tombstone records can be missed, so the
-        // group metadata tombstone is treated as authoritative.
+        // Clean up the state kept outside of the group: its topic subscriptions and, for a share
+        // group, its state partition metadata. This is the only clean up when the group is
+        // removed without replaying its tombstones, as convertToClassicGroup,
+        // maybeDeleteEmptyConsumerGroup and maybeDeleteEmptyStreamsGroup do. It is also needed
+        // when the group metadata tombstone is replayed and compaction removed some of the other
+        // tombstones of the group: the group metadata tombstone is treated as authoritative.
         if (group instanceof ModernGroup<?> modernGroup) {
             modernGroup.subscribedTopicNames().keySet()
                 .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName));
