@@ -252,8 +252,11 @@ class PartitionGroup extends AbstractPartitionGroup {
 
             if (record != null) {
                 totalBuffered -= oldSize - queue.size();
-                logger.trace("Partition {} polling next record:, oldSize={}, newSize={}, totalBuffered={}, recordTimestamp={}",
-                    queue.partition(), oldSize, queue.size(), totalBuffered, record.timestamp);
+                // KAFKA-21372: runs per record; guard the multi-argument trace calls to skip the varargs array and boxing
+                if (logger.isTraceEnabled()) {
+                    logger.trace("Partition {} polling next record:, oldSize={}, newSize={}, totalBuffered={}, recordTimestamp={}",
+                        queue.partition(), oldSize, queue.size(), totalBuffered, record.timestamp);
+                }
 
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
@@ -268,7 +271,9 @@ class PartitionGroup extends AbstractPartitionGroup {
                     final long oldStreamTime = streamTime;
                     streamTime = record.timestamp;
                     recordLatenessSensor.record(0, wallClockTime);
-                    logger.trace("Partition {} stream time updated from {} to {}", queue.partition(), oldStreamTime, streamTime);
+                    if (logger.isTraceEnabled()) {
+                        logger.trace("Partition {} stream time updated from {} to {}", queue.partition(), oldStreamTime, streamTime);
+                    }
                 } else {
                     recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }

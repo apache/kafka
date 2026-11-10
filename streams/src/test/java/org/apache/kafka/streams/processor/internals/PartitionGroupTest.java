@@ -61,8 +61,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class PartitionGroupTest {
 
@@ -902,6 +905,28 @@ public class PartitionGroupTest {
                 "Partition topic-2 has current lag 0 and current time is 0. " +
                 "Waiting for new data to be produced for configured idle time 1 (deadline is 1).",
             result.getLogMessage().orElseThrow());
+    }
+
+    @Test
+    public void shouldNotBuildTraceLogArgumentsInNextRecordWhenTraceIsDisabled() {
+        // KAFKA-21372: nextRecord runs per record, so its trace calls must not build their arguments
+        final RecordQueue queue = spy(queue1);
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(mkEntry(partition1, queue)),
+            tp -> OptionalLong.of(0L),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            maxTaskIdleMs
+        );
+        group.addRawRecords(partition1, List.of(
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue)));
+        clearInvocations(queue);
+
+        assertNotNull(group.nextRecord(new RecordInfo(), time.milliseconds()));
+        assertEquals(1L, group.streamTime());
+        verify(queue, never()).partition();
     }
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
