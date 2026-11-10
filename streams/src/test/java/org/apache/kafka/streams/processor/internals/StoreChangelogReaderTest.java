@@ -1498,16 +1498,28 @@ public class StoreChangelogReaderTest {
         when(storeMetadata.offset()).thenReturn(5L);
         when(storeMetadataOne.offset()).thenReturn(5L);
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+        final Task activeTask = mock(Task.class);
+        final Task standbyTask = mock(Task.class);
+        final Map<TaskId, Task> tasks = Map.of(activeTaskId, activeTask, standbyTaskId, standbyTask);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.register(tp1, standbyStateManager);
-        changelogReader.restore(Map.of(activeTaskId, mock(Task.class), standbyTaskId, mock(Task.class)));
+        changelogReader.restore(tasks);
         changelogReader.transitToUpdateStandby();
 
-        changelogReader.restore(Collections.singletonMap(standbyTaskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(standbyTaskId, standbyTask));
 
         assertEquals(Set.of(tp), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
+
+        changelogReader.enforceRestoreActive();
+        changelogReader.restore(tasks);
+
+        assertEquals(Set.of(tp1), consumer.paused());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
+
+        changelogReader.transitToUpdateStandby();
+        assertThrows(IllegalStateException.class, () -> changelogReader.restore(tasks));
     }
 
     @Test
