@@ -122,6 +122,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -1612,6 +1613,48 @@ public class SaslAuthenticatorTest {
          */
         delay(1000L);
         assertClientConnectionDisconnects(node);
+        server.verifyReauthenticationMetrics(0, 1);
+    }
+
+    /**
+     * A re-authentication rejected for changing principals must stay failed while its close is delayed,
+     * even if the client sends more data before the close.
+     */
+    @Test
+    public void testDataAfterRejectedReauthenticationIsNotProcessed() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, TimeUnit.HOURS.toMillis(1));
+        Map<String, Object> serverOptions = new HashMap<>();
+        serverOptions.put("user_" + TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        serverOptions.put("user_otheruser", "otherpassword");
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), serverOptions);
+        server = NetworkTestUtils.createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol,
+                new TestSecurityConfig(saslServerConfigs), credentialCache, (int) TimeUnit.HOURS.toMillis(1), time);
+
+        createClientConnection(SecurityProtocol.PLAINTEXT, node);
+        sendHandshakeRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE.latestVersion());
+        authenticateUsingSaslPlainAndCheckConnection(node, true);
+
+        sendHandshakeRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE.latestVersion());
+        SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
+                .setAuthBytes(Utils.utf8("\u0000otheruser\u0000otherpassword"))).build();
+        RequestHeader header = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, request.version(), "someclient", nextCorrelationId++);
+        selector.send(new NetworkSend(node, request.toSend(header)));
+        Map<?, ?> delayedClosingChannels = NetworkTestUtils.delayedClosingChannels(server.selector());
+        TestUtils.waitForCondition(() -> {
+            selector.poll(50);
+            return !delayedClosingChannels.isEmpty();
+        }, "Timeout waiting for the re-authentication to fail");
+
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(Utils.utf8("after-failure")))));
+        long endMs = System.currentTimeMillis() + 500;
+        while (System.currentTimeMillis() < endMs) {
+            selector.poll(50);
+            assertTrue(selector.completedReceives().isEmpty(), "Data after a rejected re-authentication was processed");
+        }
+        assertFalse(server.selector().channels().get(0).ready());
         server.verifyReauthenticationMetrics(0, 1);
     }
 

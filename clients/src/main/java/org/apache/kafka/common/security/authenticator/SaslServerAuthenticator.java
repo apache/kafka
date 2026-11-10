@@ -256,7 +256,8 @@ public class SaslServerAuthenticator implements Authenticator {
             if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
                 return;
 
-            if (saslServer != null && saslServer.isComplete()) {
+            // A failed authentication stays failed while its close is delayed, even though its SaslServer is complete
+            if (saslState != SaslState.FAILED && saslServer != null && saslServer.isComplete()) {
                 setSaslState(SaslState.COMPLETE);
                 return;
             }
