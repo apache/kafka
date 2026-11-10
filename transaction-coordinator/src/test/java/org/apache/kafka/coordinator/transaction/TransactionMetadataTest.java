@@ -899,6 +899,55 @@ public class TransactionMetadataTest {
         assertEquals(Set.of(), unmatchedStates);
     }
 
+    @Test
+    public void testNextProducerEpochCannotBeSetForTxnThatWasNotKept() {
+        // nextProducerEpoch marks a transaction kept with InitProducerId(keepPreparedTxn=true), so completing a
+        // regular transaction must not set it (e.g. to the bumped epoch).
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_ID,
+            (short) 735,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            30000,
+            TransactionState.ONGOING,
+            Set.of(new TopicPartition("topic", 0)),
+            time.milliseconds(),
+            time.milliseconds(),
+            TV_2);
+
+        assertThrows(IllegalArgumentException.class, () -> txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT,
+            TV_2, RecordBatch.NO_PRODUCER_ID, (short) 736, time.milliseconds(), false));
+        assertEquals(Optional.empty(), txnMetadata.pendingState());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"})
+    public void testNextProducerEpochCannotBeCarriedOverOutsideKeptTxn(TransactionState state) {
+        // A metadata that has nextProducerEpoch set in a state where the transaction cannot be kept is corrupted,
+        // any transition from it is rejected rather than writing it to the log.
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            producerId,
+            (short) 735,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            (short) 736,
+            30000,
+            state,
+            Set.of(),
+            time.milliseconds(),
+            time.milliseconds(),
+            TV_2);
+
+        assertThrows(IllegalArgumentException.class, () -> txnMetadata.prepareIncrementProducerEpoch(30000,
+            Optional.empty(), time.milliseconds()));
+        assertEquals(Optional.empty(), txnMetadata.pendingState());
+    }
+
     private void testRotateProducerIdInOngoingState(TransactionState state, TransactionVersion clientTransactionVersion) {
         short producerEpoch = (short) (Short.MAX_VALUE - 1);
 

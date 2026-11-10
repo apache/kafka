@@ -49,12 +49,16 @@ public record TxnTransitMetadata(
     // the 2PC protocol perspective) it needs to preserve the producerId / epoch of
     // the transaction (that will be used for sending markers), but update the
     // producerId / epoch that's going to be used by client (so that we could fence
-    // stale client requests).  For backward compatibility (in case of server
-    // downgrade) we keep the producerId / epoch of the transaction in the
-    // producer* fields and the other pair in the nextProducer* fields, so
-    // we have to do a little bit of switcheroo:
-    //  - in the absence of nextProducer* fields the producer* represent both
-    //  - the presence of nextProducer* fields means that producer* represent ongoing transaction
+    // stale client requests):
+    //  - without the nextProducer* fields, the producer* fields are both the
+    //    transaction's and the client's identity;
+    //  - with the nextProducer* fields set, the producer* fields stay the identity
+    //    of the ongoing transaction (frozen for the markers), and the nextProducer*
+    //    fields are the client's identity.
+    // The producer* fields always describe the ongoing transaction, so if the server
+    // is downgraded (and ignores nextProducerEpoch), the transaction is still completed
+    // with the right markers (e.g. aborted on a new InitProducerId); only the
+    // client-facing identity is lost, so stale client instances aren't fenced by it.
     // Note that we check hasNextProducerEpoch because nextProducerId could
     // be set in other conditions, not related to "prepared" 2PC transactions
     public long clientProducerId() {

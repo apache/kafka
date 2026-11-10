@@ -42,6 +42,11 @@ public class TransactionMetadata {
     private long nextProducerId;
     private short producerEpoch;
     private short lastProducerEpoch;
+    // Set (i.e. not NO_PRODUCER_EPOCH) only while an ongoing transaction kept by InitProducerId(keepPreparedTxn=true)
+    // is being completed: it is the client-facing epoch, which determines the epoch of the next transaction, while
+    // producerEpoch is frozen to be used for the markers of the kept transaction.  hasNextProducerEpoch() is how the
+    // kept transaction is detected (see clientProducerEpoch()), so it must not be set for a regular transaction
+    // (e.g. to producerEpoch + 1), even though the next transaction's epoch is known there too.
     private short nextProducerEpoch;
     private int txnTimeoutMs;
     private TransactionState state;
@@ -120,9 +125,16 @@ public class TransactionMetadata {
     // the 2PC protocol perspective) it needs to preserve the producerId / epoch of
     // the transaction (that will be used for sending markers), but update the
     // producerId / epoch that's going to be used by client (so that we could fence
-    // stale client requests). For backward compatibility (in case of server
-    // downgrade) we keep the producerId / epoch of the transaction in the
-    // producer* fields and the other pair in the nextProducer* fields.
+    // stale client requests):
+    //  - without the nextProducer* fields, the producer* fields are both the
+    //    transaction's and the client's identity;
+    //  - with the nextProducer* fields set, the producer* fields stay the identity
+    //    of the ongoing transaction (frozen for the markers), and the nextProducer*
+    //    fields are the client's identity.
+    // The producer* fields always describe the ongoing transaction, so if the server
+    // is downgraded (and ignores nextProducerEpoch), the transaction is still completed
+    // with the right markers (e.g. aborted on a new InitProducerId); only the
+    // client-facing identity is lost, so stale client instances aren't fenced by it.
     // Note that we check hasNextProducerEpoch because nextProducerId could
     // be set in other conditions, not related to "prepared" 2PC transactions
     public long clientProducerId() {
@@ -304,6 +316,12 @@ public class TransactionMetadata {
                                                    short nextProducerEpoch,
                                                    long updateTimestamp,
                                                    boolean noPartitionAdded) {
+        // The client-facing epoch can only be carried over for a transaction kept with
+        // InitProducerId(keepPreparedTxn=true), see the nextProducerEpoch field.
+        if (nextProducerEpoch != RecordBatch.NO_PRODUCER_EPOCH && !hasNextProducerEpoch())
+            throw new IllegalArgumentException("Illegal next producer epoch " + nextProducerEpoch + " for transactionalId " +
+                transactionalId + " that wasn't kept with InitProducerId(keepPreparedTxn=true)");
+
         TransitionData data = new TransitionData(newState);
         if (clientTransactionVersion.supportsEpochBump()) {
             if (producerEpoch == Short.MAX_VALUE && newState == TransactionState.PREPARE_ABORT) {
@@ -348,6 +366,10 @@ public class TransactionMetadata {
         // reaches MAX but the client only sees the transition as MAX-1 followed by 0.
         // When an epoch overflow occurs, we set the producerId to nextProducerId and reset the epoch to 0,
         // but lastProducerEpoch remains MAX-1 to maintain consistency with what the client last saw.
+        // If the transaction was kept with InitProducerId(keepPreparedTxn=true), the client-facing identity
+        // (nextProducerId / nextProducerEpoch, already bumped by prepareAbortOrCommit) becomes the producerId /
+        // producerEpoch.  In that case the epoch is 0 only if the client-facing epoch overflowed, and
+        // lastProducerEpoch is the client-facing epoch the client last saw, which is not necessarily MAX-1.
         if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
             data.producerId = nextProducerId;
             data.producerEpoch = hasNextProducerEpoch() ? nextProducerEpoch : 0;
@@ -415,6 +437,13 @@ public class TransactionMetadata {
         // to Dead.
         if (data.state != TransactionState.DEAD && data.producerEpoch < 0)
             throw new IllegalArgumentException("Illegal new producer epoch " + data.producerEpoch);
+
+        // The next producer epoch is only set for an ongoing transaction kept with InitProducerId(keepPreparedTxn=true)
+        // until it is completed, see the nextProducerEpoch field.
+        if (data.nextProducerEpoch != RecordBatch.NO_PRODUCER_EPOCH && data.state != TransactionState.ONGOING &&
+                data.state != TransactionState.PREPARE_EPOCH_FENCE && data.state != TransactionState.PREPARE_COMMIT &&
+                data.state != TransactionState.PREPARE_ABORT)
+            throw new IllegalArgumentException("Illegal next producer epoch " + data.nextProducerEpoch + " for state " + data.state);
 
         // check that the new state transition is valid and update the pending state if necessary
         if (data.state.validPreviousStates().contains(this.state)) {

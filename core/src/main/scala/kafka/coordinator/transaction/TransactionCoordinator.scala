@@ -250,8 +250,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       //      could be a retry after a valid epoch bump that the producer never received the response for
       // The checks are done against the client-facing identity: if InitProducerId(keepPreparedTxn=true) was used, the
       // producerId / producerEpoch are frozen to be used for the transaction markers.  In that case prevProducerId
-      // refers to the frozen producerId rather than to a previous client-facing producer ID, so check 3 doesn't apply
-      // (InitProducerId(keepPreparedTxn=true) itself never has the expected producer ID and epoch).
+      // refers to the frozen producerId rather than to a previous client-facing producer ID, so check 3 doesn't apply.
+      // Note that these checks never run for InitProducerId(keepPreparedTxn=true): it is rejected with INVALID_REQUEST
+      // if the expected producer ID and epoch are set, so they only apply to a subsequent InitProducerId with
+      // keepPreparedTxn=false (e.g. an epoch bump after an abortable error).
       txnMetadata.clientProducerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
         producerIdAndEpoch.producerId == txnMetadata.clientProducerId ||
         (!txnMetadata.hasNextProducerEpoch && producerIdAndEpoch.producerId == txnMetadata.prevProducerId &&
@@ -480,8 +482,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             } else if (txnMetadata.hasNextProducerEpoch) {
               // InitProducerId(keepPreparedTxn=true) kept the ongoing transaction, it can only be committed
               // or aborted, so adding partitions is not allowed regardless of the identity in the request
-              // (including the frozen producerId / producerEpoch used for the markers).  A well-behaving
-              // client never adds partitions in this state.
+              // (including the frozen producerId / producerEpoch used for the markers).  This can only happen
+              // if the client violates the protocol: after InitProducerId(keepPreparedTxn=true) the producer is
+              // in the prepared state and doesn't let the application send records or offsets, only commit or
+              // abort the kept transaction.
               Left(Errors.INVALID_TXN_STATE)
             } else if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
@@ -1047,18 +1051,20 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata.inLock(() => {
                       // Sanity check that the metadata didn't change while the PREPARE_* transition was being
-                      // appended to the log.  It cannot change: other transitions are blocked while a transition
-                      // is pending, the PREPARE_* transition doesn't change the producerId, and a coordinator
-                      // reload is detected by the coordinator epoch check above.  We check with the copy of the
+                      // appended to the log.  It's not expected to fail: other transitions are blocked while a
+                      // transition is pending, the PREPARE_* transition doesn't change the producerId, and a
+                      // coordinator reload is detected by the coordinator epoch check above.  It is kept as a
+                      // safeguard against sending markers with a wrong producer id / epoch.  We check with the copy of the
                       // producerId / producerEpoch in txnMetadata rather than with the request: if
                       // InitProducerId(keepPreparedTxn=true) was used, the request has the client-facing producer
                       // id / epoch (nextProducerId / nextProducerEpoch), while txnMetadata.producerId / producerEpoch
                       // are frozen to be used for the markers.
                       if (txnMetadata.producerId != producerIdCopy)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-                      // This is the transaction V2 path: the PREPARE_* transition bumps the producer epoch for the
-                      // markers (producerEpochCopy + 1), except when aborting with the producer epoch at
-                      // Short.MaxValue, which doesn't bump it (producerEpochCopy), see prepareAbortOrCommit.
+                      // This is the transaction V2 path: the PREPARE_* transition normally bumps the producer epoch
+                      // for the markers (producerEpochCopy + 1).  The only case where the epoch stays the same
+                      // (producerEpochCopy) is aborting a transaction whose producer epoch is already at
+                      // Short.MaxValue, which can't be bumped any further, see prepareAbortOrCommit.
                       else if (txnMetadata.producerEpoch != producerEpochCopy && txnMetadata.producerEpoch != producerEpochCopy + 1)
                         Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)
