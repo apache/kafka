@@ -17,8 +17,12 @@
 
 package org.apache.kafka.jmh.common;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.network.RequestConvertToJson;
 
@@ -35,6 +39,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -54,7 +59,21 @@ public class ProduceRequestBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-        this.produceRequest = ProduceRequest.builder(new ProduceRequestData())
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
+            new SimpleRecord("value".getBytes(StandardCharsets.UTF_8)));
+        ProduceRequestData.TopicProduceDataCollection topicData = new ProduceRequestData.TopicProduceDataCollection();
+        for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
+            ProduceRequestData.TopicProduceData topic = new ProduceRequestData.TopicProduceData()
+                .setTopicId(Uuid.randomUuid());
+            for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                topic.partitionData().add(new ProduceRequestData.PartitionProduceData()
+                    .setIndex(partitionId)
+                    .setRecords(records));
+            }
+            topicData.add(topic);
+        }
+
+        this.produceRequest = ProduceRequest.builder(new ProduceRequestData().setTopicData(topicData))
                 .build(ApiKeys.PRODUCE.latestVersion());
     }
 
