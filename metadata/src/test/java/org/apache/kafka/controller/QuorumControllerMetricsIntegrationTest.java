@@ -116,7 +116,8 @@ public class QuorumControllerMetricsIntegrationTest {
                 );
             } else {
                 // Directly call QuorumController.renounce.
-                controlEnv.activeController().forceRenounce().get(30, TimeUnit.SECONDS);
+                QuorumController active = controlEnv.activeController();
+                active.forceRenounce(active.curClaimEpoch()).get(30, TimeUnit.SECONDS);
             }
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                 for (QuorumController controller : controlEnv.controllers()) {

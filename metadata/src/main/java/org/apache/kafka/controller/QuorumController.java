@@ -1266,10 +1266,11 @@ public final class QuorumController implements Controller {
         }
     }
 
-    public CompletableFuture<Void> forceRenounce() {
+    @Override
+    public CompletableFuture<Void> forceRenounce(int epoch) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         appendControlEvent("forceRenounce", () -> {
-            if (isActiveController())
+            if (isActiveController() && curClaimEpoch == epoch)
                 renounce();
             future.complete(null);
         });

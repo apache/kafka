@@ -144,7 +144,7 @@ public class KRaftMigrationDriverTest {
             .setZkRecordConsumer(new NoOpRecordConsumer())
             .setInitialZkLoadHandler(metadataPublisher -> { })
             .setFaultHandler(new MockFaultHandler("test"))
-            .setMigrationConflictFaultHandler(new MockFaultHandler("test migration conflict"))
+            .setMigrationConflictHandler(epoch -> { })
             .setQuorumFeatures(QUORUM_FEATURES)
             .setConfigSchema(KafkaConfigSchema.EMPTY)
             .setControllerMetrics(metrics)
@@ -426,11 +426,11 @@ public class KRaftMigrationDriverTest {
             }
         };
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationWithMigrationConflictException");
-        MockFaultHandler migrationConflictFaultHandler = new MockFaultHandler("testMigrationWithMigrationConflictException-conflict");
+        CompletableFuture<Integer> conflictEpoch = new CompletableFuture<>();
         KRaftMigrationDriver.Builder builder = defaultTestBuilder()
             .setZkMigrationClient(migrationClient)
             .setFaultHandler(faultHandler)
-            .setMigrationConflictFaultHandler(migrationConflictFaultHandler)
+            .setMigrationConflictHandler(conflictEpoch::complete)
             .setPropagator(metadataPropagator);
         try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
@@ -452,14 +452,79 @@ public class KRaftMigrationDriverTest {
                 new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             // claimControllerLeadership succeeds, but the subsequent setMigrationRecoveryState call always throws, so
-            // the driver marks itself inactive and notifies the migration conflict fault handler instead of reaching DUAL_WRITE.
-            TestUtils.waitForCondition(() -> migrationConflictFaultHandler.firstException() != null,
-                "Waiting for the migration conflict fault handler to be called");
-            assertEquals(MigrationConflictException.class, migrationConflictFaultHandler.firstException().getCause().getClass());
+            // the driver marks itself inactive and notifies the migration conflict handler of the epoch it ran in
+            // instead of reaching DUAL_WRITE.
+            assertEquals(1, conflictEpoch.get(1, TimeUnit.MINUTES));
             assertEquals(MigrationDriverState.INACTIVE, driver.migrationState().get(1, TimeUnit.MINUTES));
 
             // The conflict is not be reported to the ordinary fault handler.
             Assertions.assertNull(faultHandler.firstException());
+        }
+    }
+
+    @Test
+    public void testMigrationConflictDuringMetadataChangeReportsEventEpoch() throws Exception {
+        AtomicBoolean conflictOnNextWrite = new AtomicBoolean(false);
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        CountDownLatch releaseWrite = new CountDownLatch(1);
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient(),
+                CapturingMigrationClient.EMPTY_BATCH_SUPPLIER) {
+            @Override
+            public ZkMigrationLeadershipState setMigrationRecoveryState(ZkMigrationLeadershipState state) {
+                if (conflictOnNextWrite.getAndSet(false)) {
+                    writeStarted.countDown();
+                    try {
+                        releaseWrite.await();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    throw new MigrationConflictException("Some conflict exception");
+                }
+                return super.setMigrationRecoveryState(state);
+            }
+        };
+        CompletableFuture<Integer> conflictEpoch = new CompletableFuture<>();
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setMigrationConflictHandler(conflictEpoch::complete)
+            .setPropagator(new CountingMetadataPropagator());
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+            setupDeltaForMigration(delta, true);
+
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            // The next delta persists the migration state, which blocks until we release it and then conflicts.
+            conflictOnNextWrite.set(true);
+            provenance = new MetadataProvenance(200, 1, 2);
+            delta = new MetadataDelta(image);
+            image = delta.apply(provenance);
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
+            assertTrue(writeStarted.await(1, TimeUnit.MINUTES));
+
+            // While the write is in flight, the driver moves on to a new epoch.
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 2));
+            releaseWrite.countDown();
+
+            // The conflict is reported for the epoch the event ran in, not the epoch current when it was handled.
+            assertEquals(1, conflictEpoch.get(1, TimeUnit.MINUTES));
         }
     }
 

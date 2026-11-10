@@ -546,7 +546,7 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<Void> forceRenounce() {
+    public CompletableFuture<Void> forceRenounce(int epoch) {
         return CompletableFuture.completedFuture(null);
     }
 }

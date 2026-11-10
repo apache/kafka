@@ -1700,7 +1700,7 @@ public class QuorumControllerTest {
             ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
             migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
             migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
-            active.forceRenounce().get(30, TimeUnit.SECONDS);
+            active.forceRenounce(active.curClaimEpoch()).get(30, TimeUnit.SECONDS);
 
             // Ensure next controller doesn't see the topic from partial migration
             QuorumController newActive = controlEnv.activeController(true);
@@ -1800,13 +1800,29 @@ public class QuorumControllerTest {
             QuorumController active = controlEnv.activeController(true);
             int previousEpoch = active.curClaimEpoch();
 
-            active.forceRenounce().get(20, TimeUnit.SECONDS);
-
-            assertEquals(-1, active.curClaimEpoch());
+            active.forceRenounce(previousEpoch).get(20, TimeUnit.SECONDS);
 
             // A new election should follow, electing either the same node at a higher epoch or a different node.
             QuorumController newActive = controlEnv.activeController(true);
             assertTrue(newActive.curClaimEpoch() > previousEpoch);
+        }
+    }
+
+    @Test
+    public void testForceRenounceIsNoOpForStaleEpoch() throws Throwable {
+        try (
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+                        build();
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                        build()
+        ) {
+            QuorumController active = controlEnv.activeController(true);
+            int currentEpoch = active.curClaimEpoch();
+
+            // An epoch other than the one we are currently active in must not cause us to resign.
+            active.forceRenounce(currentEpoch - 1).get(20, TimeUnit.SECONDS);
+
+            assertEquals(currentEpoch, active.curClaimEpoch());
         }
     }
 
@@ -1828,7 +1844,7 @@ public class QuorumControllerTest {
             int previousEpoch = active.curClaimEpoch();
 
             // Should complete without error, and without attempting to resign, since it's not the active controller.
-            inactive.forceRenounce().get(20, TimeUnit.SECONDS);
+            inactive.forceRenounce(previousEpoch).get(20, TimeUnit.SECONDS);
 
             assertEquals(-1, inactive.curClaimEpoch());
             // The real active controller is unaffected.

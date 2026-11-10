@@ -443,5 +443,8 @@ public interface Controller extends AclMutator, AutoCloseable {
      */
     void close() throws InterruptedException;
 
-    CompletableFuture<Void> forceRenounce();
+    /**
+     * Renounce leadership if this controller is still active in the given epoch.
+     */
+    CompletableFuture<Void> forceRenounce(int epoch);
 }

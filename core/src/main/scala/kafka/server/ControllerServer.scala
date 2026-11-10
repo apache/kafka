@@ -304,17 +304,13 @@ class ControllerServer(
             fatal = false,
             () => {}
           ))
-          .setMigrationConflictFaultHandler(sharedServer.faultHandlerFactory.build(
-            "zk migration conflict",
-            fatal = false,
-            () => {
-              try {
-                controller.forceRenounce().get(10, TimeUnit.SECONDS)
-              } catch {
-                case e: TimeoutException => sharedServer.fatalQuorumControllerFaultHandler.handleFault("Failed to renounce leadership", e)
-              }
+          .setMigrationConflictHandler((epoch: Int) => {
+            try {
+              controller.forceRenounce(epoch).get(10, TimeUnit.SECONDS)
+            } catch {
+              case e: TimeoutException => sharedServer.fatalQuorumControllerFaultHandler.handleFault("Failed to renounce leadership", e)
             }
-          ))
+          })
           .setQuorumFeatures(quorumFeatures)
           .setConfigSchema(configSchema)
           .setControllerMetrics(quorumControllerMetrics)
