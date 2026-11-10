@@ -22,11 +22,13 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
@@ -437,7 +439,19 @@ public class KafkaChannel implements AutoCloseable {
             return 0;
 
         midWrite = true;
-        return send.writeTo(transportLayer);
+        if (!OperatingSystem.IS_LINUX)
+            return send.writeTo(transportLayer);
+
+        // A send often has many small parts, e.g. a header and the records of each partition, and with
+        // TCP_NODELAY every part leaves as its own segment. With TCP_NODELAY off during the write the kernel
+        // joins them, and turning it back on makes Linux send the queued data at once, without waiting for an ACK.
+        SocketChannel socketChannel = transportLayer.socketChannel();
+        socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, false);
+        try {
+            return send.writeTo(transportLayer);
+        } finally {
+            socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, true);
+        }
     }
 
     /**

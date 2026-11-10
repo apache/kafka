@@ -17,20 +17,25 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class KafkaChannelTest {
 
@@ -38,6 +43,7 @@ public class KafkaChannelTest {
     public void testSending() throws IOException {
         Authenticator authenticator = Mockito.mock(Authenticator.class);
         TransportLayer transport = Mockito.mock(TransportLayer.class);
+        Mockito.when(transport.socketChannel()).thenReturn(Mockito.mock(SocketChannel.class));
         MemoryPool pool = Mockito.mock(MemoryPool.class);
         ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
 
@@ -64,6 +70,32 @@ public class KafkaChannelTest {
         assertEquals(64, channel.write());
         assertEquals(0, send.remaining());
         assertEquals(networkSend, channel.maybeCompleteSend());
+    }
+
+    @Test
+    public void testWriteTurnsTcpNoDelayOffDuringSendOnLinux() throws IOException {
+        assumeTrue(OperatingSystem.IS_LINUX);
+        Authenticator authenticator = Mockito.mock(Authenticator.class);
+        TransportLayer transport = Mockito.mock(TransportLayer.class);
+        SocketChannel socketChannel = Mockito.mock(SocketChannel.class);
+        Mockito.when(transport.socketChannel()).thenReturn(socketChannel);
+        MemoryPool pool = Mockito.mock(MemoryPool.class);
+        ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
+
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
+            1024, pool, metadataRegistry);
+        channel.setSend(new NetworkSend("0", ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)))));
+
+        Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenReturn(4L);
+        assertEquals(4L, channel.write());
+        InOrder inOrder = Mockito.inOrder(socketChannel, transport);
+        inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, false);
+        inOrder.verify(transport).write(Mockito.any(ByteBuffer[].class));
+        inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, true);
+
+        Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenThrow(new IOException("Connection reset"));
+        assertThrows(IOException.class, channel::write);
+        Mockito.verify(socketChannel, Mockito.times(2)).setOption(StandardSocketOptions.TCP_NODELAY, true);
     }
 
     @Test
