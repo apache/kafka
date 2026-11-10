@@ -1775,20 +1775,22 @@ class KafkaZkClient private[zk] (
                                          path: String,
                                          expectedData: Array[Byte]
                                        ): (Boolean, Int) = {
-    try {
-      val (writtenDataOpt, writtenStat) = zkClient.getDataAndStat(path)
-      val expected = MigrationZNode.decode(expectedData, writtenStat.getVersion, -1)
-      val succeeded = writtenDataOpt.exists { writtenData =>
-        val written = MigrationZNode.decode(writtenData, writtenStat.getVersion, -1)
-        expected.kraftControllerId() == written.kraftControllerId() &&
-          expected.kraftControllerEpoch() == written.kraftControllerEpoch() &&
-          expected.kraftMetadataOffset() == written.kraftMetadataOffset() &&
-          expected.kraftMetadataEpoch() == written.kraftMetadataEpoch()
-      }
-      if (succeeded) (true, writtenStat.getVersion) else (false, ZkVersion.UnknownVersion)
+    val (writtenDataOpt, writtenStat) = try {
+      zkClient.getDataAndStat(path)
     } catch {
-      case _: Exception => (false, ZkVersion.UnknownVersion)
+      case e: Exception => throw new MigrationConflictException(
+        "Unable to verify whether the update to the KRaft Migration ZNode was applied after a BADVERSION response.", e)
     }
+    val expected = MigrationZNode.decode(expectedData, writtenStat.getVersion, -1)
+    val succeeded = writtenDataOpt.exists { writtenData =>
+      val written = MigrationZNode.decode(writtenData, writtenStat.getVersion, -1)
+      expected.kraftControllerId() == written.kraftControllerId() &&
+        expected.kraftControllerEpoch() == written.kraftControllerEpoch() &&
+        expected.kraftMetadataOffset() == written.kraftMetadataOffset() &&
+        expected.kraftMetadataEpoch() == written.kraftMetadataEpoch()
+    }
+    val currentVersion = if (writtenDataOpt.isDefined) writtenStat.getVersion else ZkVersion.UnknownVersion
+    (succeeded, currentVersion)
   }
 
   def updateMigrationState(migrationState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
@@ -1802,7 +1804,7 @@ class KafkaZkClient private[zk] (
       migrationState.withMigrationZkVersion(newVersion)
     } else {
       throw new MigrationConflictException(s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = " +
-        s"$expectedVersion.")
+        s"$expectedVersion. Current zkVersion = $newVersion.")
     }
   }
 

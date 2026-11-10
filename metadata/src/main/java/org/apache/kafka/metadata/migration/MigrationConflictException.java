@@ -23,4 +23,8 @@ public class MigrationConflictException extends MigrationClientException {
     public MigrationConflictException(String message) {
         super(message);
     }
+
+    public MigrationConflictException(String message, Throwable t) {
+        super(message, t);
+    }
 }

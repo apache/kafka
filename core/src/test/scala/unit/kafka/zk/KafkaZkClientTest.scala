@@ -56,6 +56,8 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.Mockito.{doAnswer, spy}
+import org.mockito.invocation.InvocationOnMock
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
@@ -1540,6 +1542,33 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     // Our own cached state is stale, but this was not our own write.
     // The checker should see the content mismatch and correctly continue to fail.
+    assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+  }
+
+  @Test
+  def testUpdateMigrationStateFailsWhenReadBackFailsAfterBadVersion(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    // Move the znode forward so that the next write with the stale version fails with BADVERSION.
+    zkClient.updateMigrationState(migrationState)
+
+    // The checker's read-back then fails, so we cannot tell whether the write was ours.
+    val failingZkClient = spy(zkClient)
+    doAnswer((_: InvocationOnMock) => throw new NoAuthException()).when(failingZkClient).getDataAndStat(MigrationZNode.path)
+    val exception = assertThrows(classOf[MigrationConflictException], () => failingZkClient.updateMigrationState(migrationState))
+    assertEquals(classOf[NoAuthException], exception.getCause.getClass)
+  }
+
+  @Test
+  def testUpdateMigrationStateFailsWhenZNodeMissing(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    zkClient.deletePath(MigrationZNode.path)
+
     assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
   }
 
