@@ -2532,16 +2532,15 @@ public class GroupMetadataManager {
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
         if (topology != null) {
-            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
                 StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-                return streamsTopologyFromRequest;
+                return StreamsTopology.fromRecord(recordValue);
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
-            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+            } else if (!group.topology().get().matches(topology)) {
                 if (group.topology().get().topologyEpoch() == topology.epoch()) {
                     throw new StreamsInvalidTopologyEpochException(String.format(
                         "The topology sent by the member differs from the group's topology with the same epoch %d. " +
@@ -5902,7 +5901,8 @@ public class GroupMetadataManager {
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
      * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response. The result
+     *         is empty if the group does not exist or is not a share group.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
@@ -5912,7 +5912,13 @@ public class GroupMetadataManager {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
-        ShareGroup group = (ShareGroup) groups.get(groupId);
+        ShareGroup group;
+        try {
+            group = shareGroup(groupId);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
+            return new CoordinatorResult<>(List.of(), null);
+        }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);

@@ -21,7 +21,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coordinato
 import java.util.function.Supplier;
 
 /**
- * Used by the group and coordinator runtimes, the metrics suite holds partition state gauges and sensors.
+ * Used by the group and share coordinator runtimes, the metrics suite holds partition state gauges
+ * and sensors.
  */
 public interface CoordinatorRuntimeMetrics extends AutoCloseable {
 
@@ -47,7 +48,7 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void recordEventQueueTime(long durationMs);
 
     /**
-     * Update the event queue processing time.
+     * Update the event processing time.
      *
      * @param durationMs The event processing time.
      */
@@ -56,7 +57,7 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     /**
      * Record the event purgatory time.
      *
-     * @param durationMs    The time the event was completed.
+     * @param durationMs The time the event spent in the purgatory in milliseconds.
      */
     void recordEventPurgatoryTime(long durationMs);
 
