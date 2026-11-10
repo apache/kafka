@@ -3772,6 +3772,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestampRejectsRemoteRecordExceedingMaxDecompressedMessageBytes() throws IOException, RemoteStorageException {
+        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
         long ts = time.milliseconds();
         long startOffset = 120;
