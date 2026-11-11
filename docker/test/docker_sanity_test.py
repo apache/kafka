@@ -310,8 +310,10 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
             self.wordcount_with_rocksdb()
 
     def wordcount_with_rocksdb(self):
+        input_topic = "streams-plaintext-input"
+        output_topic = "streams-wordcount-output"
         bootstrap = ["--bootstrap-server", "localhost:9092"]
-        for topic in ("streams-plaintext-input", "streams-wordcount-output"):
+        for topic in (input_topic, output_topic):
             self.assertTrue(self.create_topic(topic, bootstrap))
 
         exec_command = [self.CONTAINER_RUNTIME, "exec", constants.BROKER_CONTAINER]
@@ -324,8 +326,8 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
                 "org.apache.kafka.streams.examples.wordcount.WordCountDemo /tmp/wordcount.properties "
                 "> /tmp/wordcount.log 2>&1",
             ], check=True, capture_output=True, text=True, timeout=60)
-            self.produce_message("streams-plaintext-input", bootstrap, "key", "kafka")
-            output = self.consume_message("streams-wordcount-output", bootstrap + [
+            self.produce_message(input_topic, bootstrap, "key", "kafka")
+            output = self.consume_message(output_topic, bootstrap + [
                 "--key-deserializer", "org.apache.kafka.common.serialization.StringDeserializer",
                 "--value-deserializer", "org.apache.kafka.common.serialization.LongDeserializer",
             ])
