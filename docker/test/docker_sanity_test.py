@@ -306,6 +306,7 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
         self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
+        # Run Streams inside the image to exercise its RocksDB native dependencies.
         if self.IMAGE_TYPE == "jvm":
             self.wordcount_with_rocksdb()
 
@@ -331,7 +332,6 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
                 "--key-deserializer", "org.apache.kafka.common.serialization.StringDeserializer",
                 "--value-deserializer", "org.apache.kafka.common.serialization.LongDeserializer",
             ])
-            # Producing a count requires initializing and updating the RocksDB store.
             self.assertEqual(output, "kafka:1")
         finally:
             try:
