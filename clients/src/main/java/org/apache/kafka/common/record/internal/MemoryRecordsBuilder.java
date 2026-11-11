@@ -840,20 +840,28 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Projected value of {@link #estimatedBytesWritten} after appending one more record with the
-     * given fields, using the record's worst-case (upper-bound) per-record size. Used by the
-     * incremental strategy to size mid-batch chunk extensions.
+     * Projected value of {@link #estimatedBytesWritten} after appending one more records with the
+     * given fields, using the same per-record size as {@link #hasRoomFor(long, byte[], byte[], Header[])}:
+     * the size the record will have as the next record of this batch. The two therefore agree on whether
+     * a record fits, and a record that {@hasRoomFor} accepts never extends past the write limit.
+     * Used by the incremental strategy to size mid-batch chunk extensions.
      */
-    public int estimatedBytesWrittenAfter(byte[] key, byte[] value, Header[] headers) {
-        ByteBuffer keyBuffer = wrapNullable(key);
-        ByteBuffer valueBuffer = wrapNullable(value);
-        final int recordSize;
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
-        } else {
-            recordSize = DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
-        }
+    public int estimatedBytesWrittenAfter(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        final int recordSize = nextRecordSizeInBytes(timestamp, wrapNullable(key), wrapNullable(value), headers);
         return estimatedBytesWritten(uncompressedRecordsSizeInBytes + recordSize);
+    }
+
+    /**
+     * The uncompressed size the given record would have if appended as the next record of this batch.
+     */
+    public int nextRecordSizeInBytes(long timestamp, ByteBuffer keyBuffer, ByteBuffer valueBuffer, Header[] headers) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
+        } else {
+            final int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
+            final long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
+            return DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, keyBuffer, valueBuffer, headers);
+        }
     }
 
     /**
