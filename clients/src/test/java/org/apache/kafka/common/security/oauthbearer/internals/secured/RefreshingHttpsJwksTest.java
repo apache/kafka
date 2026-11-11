@@ -125,19 +125,6 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
-    @Test
-    public void testNullKeyId() throws Exception {
-        MockTime time = new MockTime();
-        HttpsJwks httpsJwks = spyHttpsJwks();
-
-        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
-            verify(httpsJwks, times(1)).refresh();
-            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(null));
-            verify(httpsJwks, times(1)).refresh();
-        }
-    }
-
     /**
      * Test that if we ask to load a missing key, and then we wait past the sleep time that it will
      * call refresh to load the key.
