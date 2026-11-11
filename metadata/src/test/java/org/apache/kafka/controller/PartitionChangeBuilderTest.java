@@ -257,6 +257,12 @@ public class PartitionChangeBuilderTest {
         assertEquals(expectedUnclean, electionResult.unclean);
     }
 
+    @Test
+    public void testEffectiveMinIsrIsCappedAtReplicaCount() {
+        assertEquals(3, PartitionChangeBuilder.effectiveMinIsr(5, FOO));
+        assertEquals(2, PartitionChangeBuilder.effectiveMinIsr(2, FOO));
+    }
+
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testElectLeader(short version) {
