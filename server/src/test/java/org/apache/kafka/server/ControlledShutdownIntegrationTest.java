@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
@@ -63,8 +64,7 @@ public class ControlledShutdownIntegrationTest {
             clusterInstance.ensureConsistentMetadata();
 
             TopicPartitionInfo partition = describePartition(admin);
-            assertTrue(partition.leader() != null && partition.leader().id() != SHUTDOWN_BROKER_ID, partition.toString());
-            assertTrue(isrIds(partition).stream().noneMatch(id -> id == SHUTDOWN_BROKER_ID), partition.toString());
+            assertTrue(leaderMovedOff(partition), partition.toString());
         }
     }
 
@@ -79,14 +79,12 @@ public class ControlledShutdownIntegrationTest {
             clusterInstance.ensureConsistentMetadata();
 
             TopicPartitionInfo partition = describePartition(admin);
+            assertNotNull(partition.leader(), partition.toString());
             assertEquals(SHUTDOWN_BROKER_ID, partition.leader().id(), partition.toString());
             assertEquals(List.of(0, 1, 2), isrIds(partition), partition.toString());
 
-            TestUtils.waitForCondition(() -> {
-                TopicPartitionInfo info = describePartition(admin);
-                return info.leader() != null && info.leader().id() != SHUTDOWN_BROKER_ID &&
-                    isrIds(info).stream().noneMatch(id -> id == SHUTDOWN_BROKER_ID);
-            }, 60_000L, "Leadership was not moved after the broker session timed out");
+            TestUtils.waitForCondition(() -> leaderMovedOff(describePartition(admin)),
+                60_000L, "Leadership was not moved after the broker session timed out");
         }
     }
 
@@ -100,6 +98,11 @@ public class ControlledShutdownIntegrationTest {
 
     private static TopicPartitionInfo describePartition(Admin admin) throws ExecutionException, InterruptedException {
         return admin.describeTopics(List.of(TOPIC)).allTopicNames().get().get(TOPIC).partitions().get(0);
+    }
+
+    private static boolean leaderMovedOff(TopicPartitionInfo info) {
+        return info.leader() != null && info.leader().id() != SHUTDOWN_BROKER_ID &&
+            isrIds(info).stream().noneMatch(id -> id == SHUTDOWN_BROKER_ID);
     }
 
     private static List<Integer> isrIds(TopicPartitionInfo partition) {
