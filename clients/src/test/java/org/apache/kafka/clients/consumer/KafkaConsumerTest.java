@@ -3243,10 +3243,10 @@ public class KafkaConsumerTest {
     private KafkaConsumer<String, String> setUpConsumerForCurrentLag(GroupProtocol groupProtocol,
                                                                      MockClient client,
                                                                      ConsumerMetadata metadata,
-                                                                     ConsumerSubscriptionState subscriptionState) throws InterruptedException {
+                                                                     ConsumerSubscriptionState subscription) throws InterruptedException {
         initMetadata(client, Map.of(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscriptionState, metadata, assignor, false,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false,
             groupId, groupInstanceId, false);
 
         // throws for unassigned partition
