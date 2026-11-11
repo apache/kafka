@@ -589,6 +589,10 @@ public class MockClient implements KafkaClient {
         return active;
     }
 
+    public Uuid clientInstanceId() {
+        return clientInstanceId;
+    }
+
     @Override
     public void close() {
         active = false;

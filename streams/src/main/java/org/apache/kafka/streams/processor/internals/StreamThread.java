@@ -22,12 +22,12 @@ import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
@@ -342,6 +342,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private boolean processingPausedForUncommittedBytes = false;
     private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
@@ -352,7 +353,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Optional<String> groupInstanceID;
 
     private final ChangelogReader changelogReader;
-    private final ConsumerRebalanceListener rebalanceListener;
+    private final RebalanceListener rebalanceListener;
     private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -1195,7 +1196,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                 throw new IllegalArgumentException("Pattern subscription is not yet supported with the Streams rebalance " +
                     "protocol");
             }
-            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
+            mainConsumer.setRebalanceListener(rebalanceListener);
+            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern());
         } else {
             if (streamsRebalanceData.isPresent()) {
                 if (mainConsumer instanceof ConsumerWrapper) {
@@ -1210,7 +1212,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             } else {
-                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+                mainConsumer.setRebalanceListener(rebalanceListener);
+                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames());
             }
         }
     }
@@ -1295,8 +1298,17 @@ public class StreamThread extends Thread implements ProcessingThread {
 
                 checkStateUpdater();
 
-                log.debug("Processing tasks with {} iterations.", numIterations);
-                final int processed = taskManager.process(numIterations, time);
+                // maybeCommit() commits at the end of every iteration when the uncommitted bytes exceed the limit, so
+                // they only exceed it here when that commit was skipped (during a rebalance) or failed
+                final boolean processingPaused = maybePauseProcessingForUncommittedBytes();
+
+                final int processed;
+                if (processingPaused) {
+                    processed = 0;
+                } else {
+                    log.debug("Processing tasks with {} iterations.", numIterations);
+                    processed = taskManager.process(numIterations, time);
+                }
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -1318,7 +1330,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                           processed,
                           numIterations);
 
-                final int punctuated = taskManager.punctuate();
+                final int punctuated = processingPaused ? 0 : taskManager.punctuate();
                 totalPunctuatorsSinceLastSummary += punctuated;
                 final long punctuateLatency = advanceNowAndComputeLatency();
                 totalPunctuateLatency += punctuateLatency;
@@ -1415,6 +1427,9 @@ public class StreamThread extends Thread implements ProcessingThread {
             taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             if (!streamsGroupReady) {
+                // the group can become not ready while this thread keeps its tasks, and the task executors keep
+                // processing them, so the byte limit must still apply even though nothing commits
+                maybePauseProcessingForUncommittedBytes();
                 return;
             }
         }
@@ -1451,6 +1466,10 @@ public class StreamThread extends Thread implements ProcessingThread {
                         taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                 }
             }
+
+            // maybeCommit() commits when the uncommitted bytes exceed the limit, so they only exceed it here when that
+            // commit was skipped (during a rebalance) or failed, or when the task executors wrote more since the commit
+            maybePauseProcessingForUncommittedBytes();
         }
 
         now = time.milliseconds();
@@ -1900,10 +1919,32 @@ public class StreamThread extends Thread implements ProcessingThread {
         return committed;
     }
 
+    /**
+     * Records and punctuators both write to the state stores, so while the uncommitted bytes exceed the limit, they must
+     * wait for a commit to succeed, or the uncommitted bytes grow without bound.
+     *
+     * @return true if processing and punctuation must not run
+     */
+    private boolean maybePauseProcessingForUncommittedBytes() {
+        final boolean paused = shouldCommitDueToUncommittedBytes();
+        if (paused != processingPausedForUncommittedBytes) {
+            processingPausedForUncommittedBytes = paused;
+            taskManager.setProcessingThreadsPaused(paused);
+            if (paused) {
+                log.info("Pausing processing until a commit succeeds, because state stores contain more than {} " +
+                             "uncommitted bytes and the last commit was skipped or failed.", maxUncommittedBytesPerThread);
+            } else {
+                log.info("Resuming processing, because the uncommitted state store bytes were committed.");
+            }
+        }
+        return paused;
+    }
+
     private boolean shouldCommitDueToUncommittedBytes() {
         final long limit = maxUncommittedBytesPerThread;
         if (limit <= 0) return false;
-        return taskManager.totalUncommittedBytes() > limit;
+        // stores commit one at a time, and a commit can need extra memory up to the size of the store's uncommitted data
+        return taskManager.totalUncommittedBytes() + taskManager.maxStoreUncommittedBytes() > limit;
     }
 
     public void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
@@ -2212,7 +2253,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return numIterations;
     }
 
-    ConsumerRebalanceListener rebalanceListener() {
+    RebalanceListener rebalanceListener() {
         return rebalanceListener;
     }
 

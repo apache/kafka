@@ -118,6 +118,7 @@ public class GroupConfigManager implements AutoCloseable {
     /**
      * Remove all group configs.
      */
+    @Override
     public void close() {
         configMap.clear();
     }

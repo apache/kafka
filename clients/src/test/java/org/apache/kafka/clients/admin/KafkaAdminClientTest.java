@@ -1127,7 +1127,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
             
             try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true")) {
                 ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
@@ -1334,7 +1334,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             mockClient.setNodeApiVersions(NodeApiVersions.create());
 
             try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
-                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, Time.SYSTEM)) {
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), Time.SYSTEM)) {
                 DescribeClusterResult result = admin.describeCluster(new DescribeClusterOptions());
 
                 // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls

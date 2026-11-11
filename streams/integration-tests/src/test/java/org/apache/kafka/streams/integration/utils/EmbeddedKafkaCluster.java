@@ -24,10 +24,10 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -224,6 +224,27 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    /**
+     * The IDs of the nodes that run a controller. These nodes are also brokers, and the cluster runs a single
+     * controller, so a test that restarts a broker to fail over a partition leader should pick a broker that is not
+     * one of these.
+     */
+    public Set<Integer> controllerNodeIds() {
+        return cluster.controllers().keySet();
+    }
+
+    /**
+     * Shuts the broker down and starts it back up with the same identity, and waits for it to be ready again.
+     */
+    public void restartBroker(final int nodeId) {
+        cluster.restartBroker(nodeId, Map.of());
+        try {
+            cluster.waitForReadyBrokers();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public String bootstrapServers() {
         return cluster.bootstrapServers();
     }
@@ -401,13 +422,10 @@ public class EmbeddedKafkaCluster {
         return createConsumerAndSubscribeTo(consumerProps, null, topics);
     }
 
-    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final ConsumerRebalanceListener rebalanceListener, final String... topics) {
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final RebalanceListener rebalanceListener, final String... topics) {
         final KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
-        if (rebalanceListener != null) {
-            consumer.subscribe(Arrays.asList(topics), rebalanceListener);
-        } else {
-            consumer.subscribe(Arrays.asList(topics));
-        }
+        consumer.setRebalanceListener(rebalanceListener);
+        consumer.subscribe(Arrays.asList(topics));
         return consumer;
     }
 

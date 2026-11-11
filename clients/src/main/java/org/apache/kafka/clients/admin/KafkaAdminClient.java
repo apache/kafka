@@ -603,7 +603,8 @@ public class KafkaAdminClient extends AdminClient {
             // Otherwise, let NetworkClient.ensureBootstrapped() handle it during the first poll
             // after DNS resolution succeeds.
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -614,7 +615,6 @@ public class KafkaAdminClient extends AdminClient {
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
 
-            Uuid clientInstanceId = Uuid.randomUuid();
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,
                 clientId,
@@ -644,11 +644,12 @@ public class KafkaAdminClient extends AdminClient {
     static KafkaAdminClient createInternal(AdminClientConfig config,
                                            AdminMetadataManager metadataManager,
                                            KafkaClient client,
+                                           Uuid clientInstanceId,
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-        Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+        Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
         clientTelemetryReporter.ifPresent(reporters::add);
 
         try {

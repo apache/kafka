@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
@@ -115,18 +116,19 @@ public class ConsumerIntegrationTest {
 
         try (var consumer = clusterInstance.consumer(Map.of(
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name()))) {
-            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 private int count = 0;
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 }
 
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     count++;
                     if (count == 1) throw new IllegalArgumentException("temporary error");
                 }
             });
+            consumer.subscribe(List.of(topic));
 
             TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1,
                     5000,
@@ -163,16 +165,17 @@ public class ConsumerIntegrationTest {
 
         try (var consumer = clusterInstance.consumer(Map.of(
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name()))) {
-            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 }
 
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     throw new IllegalArgumentException("always failed");
                 }
             });
+            consumer.subscribe(List.of(topic));
 
             long startTimeMillis = System.currentTimeMillis();
             long currentTimeMillis = System.currentTimeMillis();
@@ -215,7 +218,9 @@ public class ConsumerIntegrationTest {
             }
 
             // make the leader epoch increment by shutdown the leader broker
-            clusterInstance.shutdownBroker(clusterInstance.getLeaderBrokerId(targetTopicPartition));
+            try (Admin admin = clusterInstance.admin()) {
+                clusterInstance.shutdownBroker(AdminClientTestUtils.currentLeader(admin, targetTopicPartition).orElseThrow());
+            }
 
             sendMsg(clusterInstance, topic, msgNum);
 

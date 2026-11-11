@@ -387,14 +387,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private volatile CoordinatorMetadataImage metadataImage = null;
 
     /**
+     * Constructor.
      *
-     * @param logContext                The log context.
-     * @param config                    The group coordinator config.
-     * @param runtime                   The runtime.
-     * @param groupCoordinatorMetrics   The group coordinator metrics.
-     * @param groupConfigManager        The group config manager.
-     * @param persister                 The persister.
-     * @param timer                     The timer.
+     * @param logContext                            The log context.
+     * @param config                                The group coordinator config.
+     * @param runtime                               The runtime.
+     * @param groupCoordinatorMetrics               The group coordinator metrics.
+     * @param groupConfigManager                    The group config manager.
+     * @param persister                             The persister.
+     * @param timer                                 The timer.
+     * @param partitionMetadataClient               The partition metadata client.
+     * @param streamsGroupTopologyDescriptionPlugin The streams group topology description plugin,
+     *                                              if one is configured.
+     * @param time                                  The time.
      */
     GroupCoordinatorService(
         LogContext logContext,
@@ -431,7 +436,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Throws CoordinatorNotAvailableException if the not active.
+     * Throws CoordinatorNotAvailableException if the coordinator is not active.
      */
     private void throwIfNotActive() {
         if (!isActive.get()) {
@@ -567,7 +572,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
      *
      * @param request The request to validate.
      * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
      */
     private static void throwIfStreamsGroupHeartbeatRequestIsInvalid(
         StreamsGroupHeartbeatRequestData request
@@ -585,9 +589,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             throwIfNotEmptyCollection(request.standbyTasks(), "StandbyTasks must be empty when (re-)joining.");
             throwIfNotEmptyCollection(request.warmupTasks(), "WarmupTasks must be empty when (re-)joining.");
             throwIfNull(request.topology(), "Topology must be non-null when (re-)joining.");
-            if (request.topology() != null) {
-                throwIfInvalidTopology(request.topology());
-            }
+            throwIfInvalidTopology(request.topology());
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
         } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
@@ -794,7 +796,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "share-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
-        ).thenCompose(result -> {
+        ).thenApply(result -> {
             if (result.getValue().isPresent()) {
                 // Adding to timer makes this call async with respect to the heartbeat.
                 timer.add(new TimerTask(0L) {
@@ -809,7 +811,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     }
                 });
             }
-            return CompletableFuture.completedFuture(result.getKey());
+            return result.getKey();
         }).exceptionally(exception -> handleOperationException(
             "share-group-heartbeat",
             request,
@@ -890,24 +892,24 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Errors error = Errors.forException(exp);
         data.setErrorCode(error.code())
             .setErrorMessage(exp.getMessage())
-            .setResponses(response.responses());
-        data.setResponses(
-            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
-                .map(topic -> {
-                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName())
-                        .setTopicId(topic.topicId());
-                    topic.partitions().forEach(partition -> {
-                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(error.code())
-                            .setErrorMessage(error.message());
-                        topicData.partitions().add(partitionData);
-                    });
-                    return topicData;
-                })
-                .iterator()));
-        // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
+            .setResponses(
+                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
+                    .map(topic -> {
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                            .setTopicName(topic.topicName())
+                            .setTopicId(topic.topicId());
+                        topic.partitions().forEach(partition -> {
+                            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(error.code())
+                                .setErrorMessage(error.message());
+                            topicData.partitions().add(partitionData);
+                        });
+                        return topicData;
+                    })
+                    .iterator()));
+        // don't uninitialize share group state here, as we regard this alter share group offsets
+        // request failed.
         return data;
     }
 
@@ -1842,7 +1844,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         String groupId = deleteRequest.groupTopicPartitionData().groupId();
         return persister.deleteState(deleteRequest)
-            .thenCompose(result -> CompletableFuture.completedFuture(Map.entry(groupId, result)))
+            .thenApply(result -> Map.entry(groupId, result))
             .exceptionally(exception -> {
                 // In case the deleteState call fails,
                 // we should construct the appropriate response here
@@ -1870,7 +1872,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupIdErrorMap(
         List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures
     ) {
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{})).thenCompose(v -> {
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{})).thenApply(v -> {
             Map<String, Errors> groupIds = new HashMap<>();
             for (CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> future : futures) {
                 Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
@@ -1887,7 +1889,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
             }
 
-            return CompletableFuture.completedFuture(groupIds);
+            return groupIds;
         });
     }
 
@@ -2198,10 +2200,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private boolean shouldComputeSharePartitionLag(PartitionStateSummaryData partitionData) {
-        // The share partition lag would be computed for a share partition ony if -
+        // The share partition lag would be computed for a share partition only if -
         // 1. The read summary result for the partition is successful.
-        // 3. The start offset is initialized.
-        // 4. The delivery complete count is initialized.
+        // 2. The start offset is initialized.
+        // 3. The delivery complete count is initialized.
         return partitionData.errorCode() == Errors.NONE.code() &&
             partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET &&
             partitionData.deliveryCompleteCount() != PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT;
@@ -2643,7 +2645,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         log.info("Starting up.");
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
-        isActive.set(true);
         // Arm the periodic topology-description cleanup cycle on the manager; no-op when no
         // plugin is configured. The manager owns the timer + single-flight harness and the
         // cycle body itself; runOneStreamsTopologyCleanupCycle is a thin delegate to it kept
@@ -2667,7 +2668,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         log.info("Shutting down.");
-        isActive.set(false);
         Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
@@ -2687,7 +2687,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
      * @param exception         The exception to handle.
-     * @return The OffsetFetchRequestGroup response.
+     * @return The OffsetFetchResponseGroup response.
      */
     private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
         String operationName,

@@ -18,8 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -47,14 +45,9 @@ public class MappingKeyValueIteratorAdapterTest {
     private static final Bytes KEY = Bytes.wrap("key".getBytes());
     private static final byte[] RAW_VALUE = "value".getBytes();
     private static final long TIMESTAMP = 42L;
-    private static final Windowed<Bytes> SESSION_KEY =
-        new Windowed<>(KEY, new SessionWindow(10L, 20L));
 
     @Mock
     private KeyValueIterator<Bytes, byte[]> inner;
-
-    @Mock
-    private KeyValueIterator<Windowed<Bytes>, byte[]> sessionInner;
 
     @Mock
     private KeyValueIterator<Long, byte[]> windowInner;
@@ -84,20 +77,6 @@ public class MappingKeyValueIteratorAdapterTest {
         assertTrue(adapter.hasNext());
         final KeyValue<Bytes, byte[]> result = adapter.next();
         assertEquals(KEY, result.key);
-        assertArrayEquals(convertToHeaderFormat(RAW_VALUE), result.value);
-    }
-
-    @Test
-    public void timestampedToHeadersShouldConvertValueForSessionKeys() {
-        when(sessionInner.hasNext()).thenReturn(true);
-        when(sessionInner.next()).thenReturn(KeyValue.pair(SESSION_KEY, RAW_VALUE));
-
-        final KeyValueIterator<Windowed<Bytes>, byte[]> adapter =
-            MappingKeyValueIteratorAdapter.timestampedToHeaders(sessionInner);
-
-        assertTrue(adapter.hasNext());
-        final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();
-        assertEquals(SESSION_KEY, result.key);
         assertArrayEquals(convertToHeaderFormat(RAW_VALUE), result.value);
     }
 

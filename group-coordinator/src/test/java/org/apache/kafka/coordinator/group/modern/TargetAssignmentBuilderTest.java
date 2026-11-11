@@ -50,10 +50,10 @@ public class TargetAssignmentBuilderTest {
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .buildCoordinatorMetadataImage();
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             Map.of(),
-            HOMOGENEOUS,
-            Map.of()
+            HOMOGENEOUS
         );
 
         GroupAssignment groupAssignment = new GroupAssignment(Map.of());
@@ -92,7 +92,8 @@ public class TargetAssignmentBuilderTest {
             .addTopic(barTopicId, "bar", 6)
             .buildCoordinatorMetadataImage();
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             Map.of(
                 "member-1", new MemberSubscriptionAndAssignmentImpl(
                     Optional.empty(),
@@ -113,25 +114,7 @@ public class TargetAssignmentBuilderTest {
                     Assignment.EMPTY
                 )
             ),
-            HETEROGENEOUS,
-            Map.of(
-                fooTopicId, Map.of(
-                    1, "member-1",
-                    2, "member-1",
-                    3, "member-2",
-                    4, "member-2",
-                    5, "member-3",
-                    6, "member-3"
-                ),
-                barTopicId, Map.of(
-                    1, "member-1",
-                    2, "member-1",
-                    3, "member-2",
-                    4, "member-2",
-                    5, "member-3",
-                    6, "member-3"
-                )
-            )
+            HETEROGENEOUS
         );
 
         GroupAssignment groupAssignment = new GroupAssignment(Map.of(

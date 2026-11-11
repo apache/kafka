@@ -681,10 +681,10 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.decrementIndent();
             buffer.printf("}%n");
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("if (%s > MessageUtil.MAX_ARRAY_LENGTH) {%n", lengthVar);
+            buffer.printf("if (%s > MessageUtil.maxArrayLength()) {%n", lengthVar);
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Tried to read a collection of size \" + %s + \", which " +
-                    "exceeds the maximum allowed size of \" + MessageUtil.MAX_ARRAY_LENGTH + \".\");%n", lengthVar);
+                    "exceeds the maximum allowed size of \" + MessageUtil.maxArrayLength() + \".\");%n", lengthVar);
             buffer.decrementIndent();
             buffer.printf("}%n");
             if (isStructArrayWithKeys) {

@@ -108,6 +108,8 @@ public class AssignmentRefinerBenchmark {
 
     private Map<String, MemberTaskOffsets> taskOffsets;
 
+    private Map<String, Integer> heartbeatVersions;
+
     private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
 
     @Setup(Level.Trial)
@@ -146,6 +148,8 @@ public class AssignmentRefinerBenchmark {
             lagPicture,
             ACCEPTABLE_RECOVERY_LAG
         );
+        heartbeatVersions = new HashMap<>();
+        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, 1));
     }
 
     @Benchmark
@@ -165,6 +169,7 @@ public class AssignmentRefinerBenchmark {
             members,
             targetAssignment,
             taskOffsets,
+            heartbeatVersions,
             subtopologyMap,
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

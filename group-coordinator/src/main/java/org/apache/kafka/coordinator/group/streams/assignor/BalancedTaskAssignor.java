@@ -52,14 +52,19 @@ import java.util.stream.Collectors;
  * A task assignor that computes a <em>balanced</em> assignment: tasks of the same subtopology are spread over as
  * many processes as possible, and the per-member task load is evened out across processes.
  * <p>
- * The assignment is the placement half of the "classic" protocol's {@code HighAvailabilityTaskAssignor}, translated
- * to the streams rebalance protocol:
+ * The assignment follows the placement half of the "classic" protocol's {@code HighAvailabilityTaskAssignor},
+ * translated to the streams rebalance protocol:
  * <ol>
- *     <li>Stateful active tasks are dealt round-robin over the processes, in sorted order of task and process ID,
- *     and then moved between processes as long as a move reduces the skew of the per-member task load.</li>
- *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, and evened out the
- *     same way.</li>
- *     <li>Stateless active tasks fill in the gaps, going to the process with the lowest active task load.</li>
+ *     <li>Stateful active tasks are dealt over the processes in sorted task order. Each task goes to the process
+ *     with the smallest {@code (2n + 1) / c}, where {@code n} is the number of active tasks the process holds so
+ *     far and {@code c} its number of members, ties going to the smaller process ID (the Sainte-Laguë method).
+ *     With equal member counts this is a round-robin over the processes in ID order. The per-member loads of any
+ *     two processes differ by at most one, and moving a single task from one process to another would not bring
+ *     their loads closer.</li>
+ *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, and then moved
+ *     between processes as long as a move reduces the skew of the per-member task load.</li>
+ *     <li>Stateless active tasks continue the deal of step 1 where the stateful tasks stopped, so that all active
+ *     tasks together are dealt in proportion to the member counts.</li>
  *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
  *     process's tasks over its stream threads: stateful active tasks, then standby tasks, then stateless active
  *     tasks. Each round levels the members' total task counts. A stateful task stays on the member that currently
@@ -83,8 +88,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
     private static final Comparator<ProcessTasks> BY_ASSIGNED_LOAD =
         Comparator.comparingDouble(ProcessTasks::assignedTaskLoad).thenComparing(ProcessTasks::processId);
-    private static final Comparator<ProcessTasks> BY_ACTIVE_LOAD =
-        Comparator.comparingDouble(ProcessTasks::activeTaskLoad).thenComparing(ProcessTasks::processId);
 
     @Override
     public String name() {
@@ -117,14 +120,19 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return new GroupAssignment(Map.of());
         }
 
-        assignActiveStatefulTasks(processes.values(), statefulTasks);
+        // The deal refers to the processes by their index in sorted order of their ID.
+        final ProcessTasks[] processesById = processes.values().toArray(new ProcessTasks[0]);
+        final int[] period = dealPeriod(processesById);
+        dealTasks(processesById, period, 0, statefulTasks, process -> process.statefulActiveTasks);
 
         final int numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
         if (numStandbyReplicas > 0) {
             assignStandbyReplicaTasks(processes.values(), statefulTasks, numStandbyReplicas);
         }
 
-        assignStatelessActiveTasks(processes.values(), statelessTasks);
+        // The stateless tasks come after the standbys, so that the load by which the standbys are placed counts
+        // stateful tasks only. Where they go does not depend on the standbys.
+        dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
 
         return buildGroupAssignment(processes.values());
     }
@@ -144,21 +152,88 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * Deals the stateful tasks round-robin over the processes and then evens out the load. Iterating the tasks in
-     * subtopology order spreads the tasks of each subtopology over the processes, which is what makes the assignment
-     * balanced rather than merely even.
+     * Computes one period of the deal of the active tasks: item {@code i} of the deal goes to the process at index
+     * {@code period[i % period.length]}, for every {@code i >= 0}.
+     * <p>
+     * Each item goes to the process with the smallest {@code (2n + 1) / c}, where {@code n} is the number of items
+     * the process already holds and {@code c} its member count, ties going to the smaller index. Dividing every
+     * member count by their greatest common divisor {@code g} changes none of these comparisons. The deal then
+     * repeats after every {@code C / g} items, {@code C} the total member count, and each process receives exactly
+     * {@code c / g} of the items of a period. With equal member counts the period lists the processes once, in
+     * order, which is the round-robin.
+     * <p>
+     * With {@code P} the number of processes, {@code c_p} the member count of process {@code p} and
+     * {@code c_max = max_p c_p}, computing {@code g} takes {@code O(P + log(c_max))} with Euclid's algorithm folded
+     * over the processes, and building the period takes {@code O((C / g) log P)}: one poll and at most one offer on
+     * a heap of {@code P} processes per item.
+     *
+     * @param processes The processes in sorted order of their ID; not empty.
+     * @return The index of the process that receives each item of one period.
      */
-    private static void assignActiveStatefulTasks(final Collection<ProcessTasks> processes,
-                                                  final SortedSet<TaskId> statefulTasks) {
-        Iterator<ProcessTasks> processIterator = null;
-        for (final TaskId task : statefulTasks) {
-            if (processIterator == null || !processIterator.hasNext()) {
-                processIterator = processes.iterator();
-            }
-            processIterator.next().statefulActiveTasks.add(task);
+    private static int[] dealPeriod(final ProcessTasks[] processes) {
+        int divisor = 0;
+
+        for (final ProcessTasks process : processes) {
+            divisor = greatestCommonDivisor(divisor, process.capacity());
+        }
+        final int[] weights = new int[processes.length];
+        int periodLength = 0;
+        for (int i = 0; i < processes.length; i++) {
+            weights[i] = processes[i].capacity() / divisor;
+            periodLength += weights[i];
         }
 
-        balanceTasksOverProcesses(processes, process -> process.statefulActiveTasks);
+        final int[] dealt = new int[processes.length];
+        // Orders the processes by the cost (2n + 1) / w of their next item, compared exactly by cross-multiplying,
+        // ties to the smaller index. Only a polled process changes its count, and it is offered again afterwards, so
+        // the order stays valid.
+        final PriorityQueue<Integer> processesByNextCost = new PriorityQueue<>(processes.length, (a, b) -> {
+            final int comparison = Long.compare((2L * dealt[a] + 1) * weights[b], (2L * dealt[b] + 1) * weights[a]);
+            return comparison != 0 ? comparison : Integer.compare(a, b);
+        });
+        for (int i = 0; i < processes.length; i++) {
+            processesByNextCost.add(i);
+        }
+
+        final int[] period = new int[periodLength];
+        for (int item = 0; item < periodLength; item++) {
+            final int process = processesByNextCost.poll();
+            period[item] = process;
+            // A process takes no more than its weight in one period, so it is not offered again once it has.
+            if (++dealt[process] < weights[process]) {
+                processesByNextCost.add(process);
+            }
+        }
+        return period;
+    }
+
+    private static int greatestCommonDivisor(final int a, final int b) {
+        int x = a;
+        int y = b;
+        while (y != 0) {
+            final int remainder = x % y;
+            x = y;
+            y = remainder;
+        }
+        return x;
+    }
+
+    /**
+     * Hands the tasks, in their sorted order, to the processes that receive items {@code firstItem},
+     * {@code firstItem + 1}, ... of the deal.
+     */
+    private static void dealTasks(final ProcessTasks[] processes,
+                                  final int[] period,
+                                  final int firstItem,
+                                  final SortedSet<TaskId> tasks,
+                                  final Function<ProcessTasks, SortedSet<TaskId>> tasksToDeal) {
+        int position = firstItem % period.length;
+        for (final TaskId task : tasks) {
+            tasksToDeal.apply(processes[period[position]]).add(task);
+            if (++position == period.length) {
+                position = 0;
+            }
+        }
     }
 
     private static void assignStandbyReplicaTasks(final Collection<ProcessTasks> processes,
@@ -221,22 +296,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
         }
         processesByLoad.addAll(skipped);
         return found;
-    }
-
-    /**
-     * Stateless tasks carry no state to restore, so they are simply placed on the process with the lowest active task
-     * load, which fills in any imbalance the stateful placement left behind.
-     */
-    private static void assignStatelessActiveTasks(final Collection<ProcessTasks> processes,
-                                                   final SortedSet<TaskId> statelessTasks) {
-        final PriorityQueue<ProcessTasks> processesByActiveLoad = new PriorityQueue<>(BY_ACTIVE_LOAD);
-        processesByActiveLoad.addAll(processes);
-
-        for (final TaskId task : statelessTasks) {
-            final ProcessTasks process = processesByActiveLoad.poll();
-            process.statelessActiveTasks.add(task);
-            processesByActiveLoad.add(process);
-        }
     }
 
     /**
@@ -367,10 +426,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         private double assignedTaskLoad() {
             return ((double) assignedTaskCount()) / capacity();
-        }
-
-        private double activeTaskLoad() {
-            return ((double) activeTaskCount()) / capacity();
         }
 
         private boolean hasTask(final TaskId task) {

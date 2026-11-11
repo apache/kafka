@@ -35,6 +35,8 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKeyJsonConverter;
@@ -99,6 +101,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@ClusterTestDefaults(types = {Type.KRAFT})
 public class ConsoleConsumerTest {
 
     private final String topic = "test-topic";

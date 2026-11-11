@@ -135,6 +135,17 @@ public interface TaskManager {
     void signalTaskExecutors();
 
     /**
+     * Pauses or resumes processing and punctuation of all tasks. While paused, no task is assigned to an executor, and
+     * executors hand back their current task.
+     */
+    void setProcessingPaused(boolean paused);
+
+    /**
+     * @return true if processing and punctuation of all tasks is paused
+     */
+    boolean processingPaused();
+
+    /**
      * Blocks until unassigned processable tasks may be available.
      */
     void awaitProcessableTasks(Supplier<Boolean> isShuttingDown) throws InterruptedException;

@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -175,7 +176,8 @@ public class ScramMessages {
             return iterations;
         }
         String toMessage() {
-            return String.format("r=%s,s=%s,i=%d", nonce, Base64.getEncoder().encodeToString(salt), iterations);
+            // Locale.ROOT: the iteration count must use ASCII digits regardless of the JVM's default locale
+            return String.format(Locale.ROOT, "r=%s,s=%s,i=%d", nonce, Base64.getEncoder().encodeToString(salt), iterations);
         }
     }
     /**

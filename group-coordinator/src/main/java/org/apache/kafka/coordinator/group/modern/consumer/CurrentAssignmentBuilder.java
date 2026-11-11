@@ -248,7 +248,7 @@ public class CurrentAssignmentBuilder {
                 // best option is to fence the member to force it to rejoin the group
                 // without any partitions and to reconcile it again from scratch.
                 if (ownedTopicPartitions == null || !ownedTopicPartitions.isEmpty()) {
-                    throw new FencedMemberEpochException("The consumer group member is in a unknown state. "
+                    throw new FencedMemberEpochException("The consumer group member is in an unknown state. "
                         + "The member must abandon all its partitions and rejoin.");
                 }
 

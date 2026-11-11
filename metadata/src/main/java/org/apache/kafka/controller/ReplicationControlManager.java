@@ -149,6 +149,9 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
+    // The file name limit on most filesystems.
+    private static final int MAX_LOG_DIR_NAME_LENGTH = 255;
+
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
@@ -823,6 +826,7 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
+        validateLogDirNameLength(topic.name(), numPartitions);
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
@@ -1223,6 +1227,24 @@ public class ReplicationControlManager {
             Arrays.toString(oldRegistration.replicas), Arrays.toString(newRegistration.replicas),
             oldRegistration.partitionEpoch, newRegistration.partitionEpoch,
             oldRegistration.leaderEpoch, newRegistration.leaderEpoch);
+    }
+
+    /**
+     * Validates that the log directory name of the last partition, "topic-partitionId", fits in the
+     * 255 character file name limit. The brokers can never create a longer directory.
+     *
+     * @param topicName the topic name.
+     * @param numPartitions the total number of partitions of the topic.
+     * @throws InvalidPartitionsException if the log directory name would be too long.
+     */
+    static void validateLogDirNameLength(String topicName, int numPartitions) {
+        int lastPartitionId = numPartitions - 1;
+        int logDirNameLength = topicName.length() + 1 + String.valueOf(lastPartitionId).length();
+        if (logDirNameLength > MAX_LOG_DIR_NAME_LENGTH) {
+            throw new InvalidPartitionsException("The log directory name for partition " + lastPartitionId +
+                " would be " + logDirNameLength + " characters, which is longer than the max allowed length " +
+                MAX_LOG_DIR_NAME_LENGTH + ".");
+        }
     }
 
     /**
@@ -1973,6 +1995,7 @@ public class ReplicationControlManager {
                 "has " + topicInfo.parts.size() + " partition(s); " + topic.count() +
                 " would not be an increase.");
         }
+        validateLogDirNameLength(topic.name(), topic.count());
         int additional = topic.count() - topicInfo.parts.size();
         if (topic.assignments() != null) {
             if (topic.assignments().size() != additional) {

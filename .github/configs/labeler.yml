@@ -142,3 +142,10 @@ tiered-storage:
     - any-glob-to-any-file:
       - '*/src/*/java/org/apache/kafka/server/log/remote/**'
       - '*/src/*/java/kafka/log/remote/**'
+
+cluster-mirroring:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'mirror-coordinator/**'
+      - 'server/src/*/java/org/apache/kafka/server/mirror/**'
+      - 'server-common/src/*/java/org/apache/kafka/server/mirror/**'

@@ -566,6 +566,11 @@ public class SslTransportLayer implements TransportLayer {
         if (appReadBuffer.position() > 0) {
             read = readFromAppBuffer(dst);
         }
+        // An earlier read() unwrapped the peer's close_notify and all data before it has now been returned.
+        // Report end-of-stream rather than reading from the socket, which may never deliver a TCP FIN.
+        // A read into a full buffer, such as the empty payload of a zero-length frame, still returns 0.
+        if (read == 0 && dst.hasRemaining() && appReadBuffer.position() == 0 && sslEngine.isInboundDone())
+            throw new EOFException("Peer sent close_notify");
 
         boolean readFromNetwork = false;
         boolean isClosed = false;
@@ -650,7 +655,7 @@ public class SslTransportLayer implements TransportLayer {
         }
         updateBytesBuffered(readFromNetwork || read > 0);
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
-        // on a subsequent poll.
+        // on a subsequent poll, see hasBytesBuffered().
         return read;
     }
 
@@ -685,7 +690,15 @@ public class SslTransportLayer implements TransportLayer {
         int i = offset;
         while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
-                int read = read(dsts[i]);
+                int read;
+                try {
+                    read = read(dsts[i]);
+                } catch (EOFException e) {
+                    // Return the bytes already read; the next read reports the end-of-stream again.
+                    if (totalRead > 0)
+                        return totalRead;
+                    throw e;
+                }
                 if (read > 0)
                     totalRead += read;
                 else
@@ -985,7 +998,9 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public boolean hasBytesBuffered() {
-        return hasBytesBuffered;
+        // A peer may send close_notify without a TCP FIN, so the socket may never become readable again. Once the
+        // engine has received it, keep the channel readable so that the next read() reports the end-of-stream.
+        return hasBytesBuffered || (ready() && sslEngine.isInboundDone());
     }
 
     // Update `hasBytesBuffered` status. If any bytes were read from the network or
@@ -999,6 +1014,15 @@ public class SslTransportLayer implements TransportLayer {
             hasBytesBuffered = false;
     }
 
+    /**
+     * Transfers bytes from `fileChannel` by reading them into a buffer and writing them to this channel, since
+     * they have to be encrypted. If it throws any exception, the bytes it already wrote to this channel are not
+     * reported, so this channel must not be used after a failed transfer.
+     *
+     * @throws FileReadException If the file cannot be read, other than because it was closed
+     * @throws java.nio.channels.ClosedChannelException If the file or this channel was closed
+     * @throws IOException If this channel cannot be written to
+     */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         if (state == State.CLOSING)
@@ -1009,7 +1033,12 @@ public class SslTransportLayer implements TransportLayer {
         if (!flush(netWriteBuffer))
             return 0;
 
-        long channelSize = fileChannel.size();
+        long channelSize;
+        try {
+            channelSize = fileChannel.size();
+        } catch (IOException e) {
+            throw FileReadException.ofReadFailure(position, e);
+        }
         if (position > channelSize)
             return 0;
         int totalBytesToWrite = (int) Math.min(Math.min(count, channelSize - position), Integer.MAX_VALUE);
@@ -1031,33 +1060,43 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalBytesWritten = 0;
         long pos = position;
-        try {
-            while (totalBytesWritten < totalBytesToWrite) {
-                if (!fileChannelBuffer.hasRemaining()) {
-                    fileChannelBuffer.clear();
-                    int bytesRemaining = totalBytesToWrite - totalBytesWritten;
-                    if (bytesRemaining < fileChannelBuffer.limit())
-                        fileChannelBuffer.limit(bytesRemaining);
-                    int bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                    if (bytesRead <= 0)
-                        break;
+        while (totalBytesWritten < totalBytesToWrite) {
+            if (!fileChannelBuffer.hasRemaining()) {
+                fileChannelBuffer.clear();
+                int bytesRemaining = totalBytesToWrite - totalBytesWritten;
+                if (bytesRemaining < fileChannelBuffer.limit())
+                    fileChannelBuffer.limit(bytesRemaining);
+                int bytesRead;
+                try {
+                    bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                } catch (IOException e) {
+                    throw FileReadException.ofReadFailure(pos, e);
+                } finally {
+                    // Holds exactly what was read, nothing if the read failed or reached the end of the file:
+                    // otherwise the next call would send the previous read as the contents of this position.
                     fileChannelBuffer.flip();
                 }
-                int networkBytesWritten = write(fileChannelBuffer);
-                totalBytesWritten += networkBytesWritten;
-                // In the case of a partial write we only return the written bytes to the caller. As a result, the
-                // `position` passed in the next `transferFrom` call won't include the bytes remaining in
-                // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
-                // we invoke `fileChannel.read`.
-                if (fileChannelBuffer.hasRemaining())
+                if (bytesRead <= 0)
                     break;
-                pos += networkBytesWritten;
             }
-            return totalBytesWritten;
-        } catch (IOException e) {
-            if (totalBytesWritten > 0)
-                return totalBytesWritten;
-            throw e;
+            int networkBytesWritten = write(fileChannelBuffer);
+            totalBytesWritten += networkBytesWritten;
+            // In the case of a partial write we only return the written bytes to the caller. As a result, the
+            // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+            // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+            // we invoke `fileChannel.read`.
+            if (fileChannelBuffer.hasRemaining())
+                break;
+            pos += networkBytesWritten;
         }
+        return totalBytesWritten;
+    }
+
+    /**
+     * @return true: {@link #transferFrom} reads the file and writes this channel separately, so it knows which failed
+     */
+    @Override
+    public boolean distinguishesFileReadFailures() {
+        return true;
     }
 }

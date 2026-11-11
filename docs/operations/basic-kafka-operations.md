@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-This section will review the most common operations you will perform on your Kafka cluster. All of the tools reviewed in this section are available under the `bin/` directory of the Kafka distribution and each tool will print details on all possible commandline options if it is run with no arguments. 
+This section will review the most common operations you will perform on your Kafka cluster. All of the tools reviewed in this section are available under the `bin/` directory of the Kafka distribution and each tool will print details on all possible command-line options if it is run with no arguments. 
 
 ## Adding and removing topics
 

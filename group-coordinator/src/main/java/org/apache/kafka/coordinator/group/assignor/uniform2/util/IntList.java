@@ -33,11 +33,16 @@ import java.util.Objects;
  * <p>The methods that change the list check their arguments.
  */
 public final class IntList {
+    /**
+     * The backing array of the lists created with a capacity of 0, until their first add.
+     */
+    private static final int[] EMPTY = new int[0];
+
     private int[] elements;
     private int size;
 
     /**
-     * Creates an empty list.
+     * Creates an empty list. With a capacity of 0, it allocates no array until the first add.
      *
      * @param capacity The initial capacity.
      * @throws IllegalArgumentException If the capacity is negative.
@@ -46,7 +51,7 @@ public final class IntList {
         if (capacity < 0) {
             throw new IllegalArgumentException("Negative capacity " + capacity);
         }
-        this.elements = new int[capacity];
+        this.elements = capacity == 0 ? EMPTY : new int[capacity];
     }
 
     /**

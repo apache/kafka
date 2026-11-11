@@ -235,6 +235,29 @@ public class ProtocolSerializationTest {
     }
 
     @Test
+    public void testReadArrayLengthHonorsConfiguredMax() {
+        try {
+            MessageUtil.setMaxArrayLength(10);
+            for (Type type : new Type[] {new ArrayOf(Type.INT8), new CompactArrayOf(Type.INT8)}) {
+                ByteBuffer accepted = ByteBuffer.allocate(16);
+                type.write(accepted, new Object[] {(byte) 0, (byte) 1, (byte) 2, (byte) 3, (byte) 4,
+                    (byte) 5, (byte) 6, (byte) 7, (byte) 8, (byte) 9});
+                accepted.flip();
+                assertEquals(10, ((Object[]) type.read(accepted)).length);
+
+                ByteBuffer rejected = ByteBuffer.allocate(16);
+                type.write(rejected, new Object[] {(byte) 0, (byte) 1, (byte) 2, (byte) 3, (byte) 4,
+                    (byte) 5, (byte) 6, (byte) 7, (byte) 8, (byte) 9, (byte) 10});
+                rejected.flip();
+                SchemaException e = assertThrows(SchemaException.class, () -> type.read(rejected));
+                assertEquals("Error reading array of size 11, which exceeds the maximum allowed size of 10", e.getMessage());
+            }
+        } finally {
+            MessageUtil.setMaxArrayLength(MessageUtil.MAX_ARRAY_LENGTH);
+        }
+    }
+
+    @Test
     public void testReadCompactArrayLengthAboveMaxIsRejected() {
         Type type = new CompactArrayOf(Type.INT8);
         int count = MessageUtil.MAX_ARRAY_LENGTH + 1;

@@ -127,7 +127,7 @@ public class ConsumerBounceTest {
     }
 
     @BeforeEach
-    void setUp() throws InterruptedException {
+    void setUp() {
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 
@@ -272,7 +272,7 @@ public class ConsumerBounceTest {
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
         // Schedule topic creation after 2 seconds
-        executor.schedule(() -> assertDoesNotThrow(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica)),
+        executor.schedule(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica),
                 2, TimeUnit.SECONDS);
 
         // Start first poller
@@ -725,17 +725,18 @@ public class ConsumerBounceTest {
 
         Semaphore assignSemaphore = new Semaphore(0);
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, groupId))) {
-            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     assignSemaphore.release();
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // Do nothing
                 }
             });
+            consumer.subscribe(List.of(topic));
 
             TestUtils.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100));

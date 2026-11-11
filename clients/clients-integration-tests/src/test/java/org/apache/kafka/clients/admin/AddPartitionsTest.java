@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AddPartitionsTest {
 
     @ClusterTest
-    public void testWrongReplicaCount(ClusterInstance cluster) throws Exception {
+    public void testWrongReplicaCount(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -87,7 +86,7 @@ public class AddPartitionsTest {
     }
 
     @ClusterTest
-    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) throws Exception {
+    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -107,9 +106,6 @@ public class AddPartitionsTest {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
             admin.createPartitions(Map.of("topic1", NewPartitions.increaseTo(3))).all().get();
-
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 2, 30000);
 
             cluster.waitTopicCreation("topic1", 3);
 
@@ -153,9 +149,6 @@ public class AddPartitionsTest {
 
             admin.createPartitions(Map.of("topic2", NewPartitions.increaseTo(3,
                 List.of(List.of(0, 1), List.of(2, 3))))).all().get();
-
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 2, 30000);
 
             cluster.waitTopicCreation("topic2", 3);
 

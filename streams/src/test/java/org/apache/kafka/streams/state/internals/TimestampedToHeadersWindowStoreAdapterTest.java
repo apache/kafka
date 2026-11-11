@@ -67,7 +67,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     private static final long RETENTION_PERIOD = 60_000L;
     private static final long SEGMENT_INTERVAL = 30_000L;
     private static final Bytes KEY = new Bytes("key".getBytes());
-    private static final byte[] TIMESTAMPED_VALUE = "value".getBytes();
+    private static final byte[] TIMESTAMPED_VALUE = {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
 
     private TimestampedToHeadersWindowStoreAdapter adapter;
     private RocksDBTimestampedWindowStore underlyingStore;

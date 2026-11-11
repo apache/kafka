@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConvertingFutureCallbackTest {
 
@@ -71,12 +70,8 @@ public class ConvertingFutureCallbackTest {
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         testCallback.onCompletion(expectedError, null);
         assertEquals(0, testCallback.numberOfConversions());
-        try {
-            testCallback.get();
-            fail("Expected ExecutionException");
-        } catch (ExecutionException e) {
-            assertEquals(expectedError, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, testCallback::get, "Expected ExecutionException");
+        assertEquals(expectedError, e.getCause());
     }
 
     @Test
@@ -88,12 +83,8 @@ public class ConvertingFutureCallbackTest {
         testCallback.cancel(true);
         testCallback.onCompletion(null, "420");
         assertEquals(0, testCallback.numberOfConversions());
-        try {
-            testCallback.get();
-            fail("Expected ExecutionException");
-        } catch (ExecutionException e) {
-            assertEquals(expectedError, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, testCallback::get, "Expected ExecutionException");
+        assertEquals(expectedError, e.getCause());
     }
   
     @Test
@@ -139,12 +130,8 @@ public class ConvertingFutureCallbackTest {
             }
         });
         assertFalse(testCallback.isDone());
-        try {
-            testCallback.get();
-            fail("Expected ExecutionException");
-        } catch (ExecutionException e) {
-            assertEquals(expectedError, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, testCallback::get, "Expected ExecutionException");
+        assertEquals(expectedError, e.getCause());
         assertEquals(0, testCallback.numberOfConversions());
         assertTrue(testCallback.isDone());
         if (testThreadException.get() != null) {
