@@ -13997,8 +13997,6 @@ public class GroupMetadataManagerTest {
         String memberId3 = "member-id-3";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
@@ -14009,7 +14007,6 @@ public class GroupMetadataManagerTest {
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
-            .addTopic(barTopicId, barTopicName, 1)
             .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -14018,11 +14015,9 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
-        // The members support the protocols with different subscriptions, so that the converted
-        // subscription shows which protocol is parsed.
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = newClassicProtocols(
             newClassicProtocol("range", List.of(fooTopicName)),
-            newClassicProtocol("cooperative-sticky", List.of(barTopicName))
+            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
         );
 
         // A classic group that has members but has not completed a generation has no selected
@@ -14043,8 +14038,6 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(List.of())
         );
 
-        // The members are converted with the protocol that the next generation selects, which is
-        // "range".
         ConsumerGroupMember expectedMember1 = newConvertedMember(memberId1, 0, protocols, List.of(fooTopicName), Map.of());
         ConsumerGroupMember expectedMember2 = newConvertedMember(memberId2, 0, protocols, List.of(fooTopicName), Map.of());
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
@@ -14118,8 +14111,6 @@ public class GroupMetadataManagerTest {
         String memberId3 = "member-id-3";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
 
         Map<Uuid, Set<Integer>> assignment1 = mkAssignment(mkTopicAssignment(fooTopicId, 0));
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -14131,7 +14122,6 @@ public class GroupMetadataManagerTest {
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
-            .addTopic(barTopicId, barTopicName, 1)
             .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -14142,10 +14132,10 @@ public class GroupMetadataManagerTest {
 
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = newClassicProtocols(
             newClassicProtocol("range", List.of(fooTopicName)),
-            newClassicProtocol("cooperative-sticky", List.of(barTopicName))
+            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
         );
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = newClassicProtocols(
-            newClassicProtocol("cooperative-sticky", List.of(barTopicName))
+            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
         );
 
         // The group is stable on "range" at generation 1, then a member that only supports
@@ -14172,25 +14162,24 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId3)
                 .setRebalanceTimeoutMs(5000)
                 .setServerAssignor("range")
-                .setSubscribedTopicNames(List.of(barTopicName))
+                .setSubscribedTopicNames(List.of(fooTopicName))
                 .setTopicPartitions(List.of())
         );
 
-        // The members are converted with "cooperative-sticky", which every member supports. The
-        // assignment of the first member is kept.
-        ConsumerGroupMember expectedMember1 = newConvertedMember(memberId1, 1, protocols1, List.of(barTopicName), assignment1);
-        ConsumerGroupMember expectedMember2 = newConvertedMember(memberId2, 1, protocols2, List.of(barTopicName), Map.of());
+        // The assignment of the first member is kept.
+        ConsumerGroupMember expectedMember1 = newConvertedMember(memberId1, 1, protocols1, List.of(fooTopicName), assignment1);
+        ConsumerGroupMember expectedMember2 = newConvertedMember(memberId2, 1, protocols2, List.of(fooTopicName), Map.of());
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setServerAssignorName("range")
-            .setSubscribedTopicNames(List.of(barTopicName))
+            .setSubscribedTopicNames(List.of(fooTopicName))
             .setRebalanceTimeoutMs(5000)
             .setAssignedPartitions(Map.of())
             .build();
-        long groupHash = computeGroupHash(Map.of(barTopicName, computeTopicHash(barTopicName, metadataImage)));
+        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
 
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
@@ -14216,89 +14205,6 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000)
-                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
-            result.response()
-        );
-    }
-
-    @Test
-    public void testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroupWithoutMembers() {
-        String groupId = "group-id";
-        String memberId1 = "member-id-1";
-        String memberId2 = "member-id-2";
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
-            memberId2, new MemberAssignmentImpl(Map.of())
-        )));
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 1)
-            .buildCoordinatorMetadataImage();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
-            .build();
-
-        // The last member left while a member that got MEMBER_ID_REQUIRED has not rejoined yet. The
-        // group is in PreparingRebalance rather than Empty, and it has no members to convert.
-        ClassicGroup group = context.createClassicGroup(groupId);
-        group.add(newClassicMember(
-            memberId1,
-            newClassicProtocols(newClassicProtocol("range", List.of(fooTopicName))),
-            new byte[0]
-        ));
-        group.remove(memberId1);
-        group.addPendingMember("pending-member-id");
-        group.transitionTo(PREPARING_REBALANCE);
-        assertEquals(0, group.numMembers());
-        assertEquals(Optional.empty(), group.protocolName());
-
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setRebalanceTimeoutMs(5000)
-                .setServerAssignor("range")
-                .setSubscribedTopicNames(List.of(fooTopicName))
-                .setTopicPartitions(List.of())
-        );
-
-        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setClientId(DEFAULT_CLIENT_ID)
-            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-            .setServerAssignorName("range")
-            .setSubscribedTopicNames(List.of(fooTopicName))
-            .setRebalanceTimeoutMs(5000)
-            .setAssignedPartitions(Map.of())
-            .build();
-        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
-
-        List<CoordinatorRecord> expectedRecords = List.of(
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, 0),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
-
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupHash),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember)
-        );
-
-        assertRecordsEquals(expectedRecords, result.records());
-        assertEquals(
-            new ConsumerGroupHeartbeatResponseData()
-                .setMemberId(memberId2)
-                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()

@@ -720,13 +720,12 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    // Create the topics.
+    // Create the topic.
     createTopic(topic = "foo", numPartitions = 3)
-    createTopic(topic = "bar", numPartitions = 3)
 
-    // Classic member 1 joins the classic group. The protocols have different subscriptions.
+    // Classic member 1 joins the classic group.
     val groupId = "grp"
-    val protocols = List("range" -> List("foo"), "cooperative-sticky" -> List("bar"))
+    val protocols = List("range", "cooperative-sticky")
     val memberId1 = sendJoinRequestWithProtocols(groupId, "", protocols).memberId
     val joinFuture1 = CompletableFuture.supplyAsync(() => sendJoinRequestWithProtocols(groupId, memberId1, protocols))
 
@@ -748,8 +747,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The pending join request of the classic member is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, joinFuture1.get(30, TimeUnit.SECONDS).errorCode)
 
-    // The group has become a consumer group. The classic member is converted with the
-    // protocol that the next generation would select, which is "range".
+    // The group has become a consumer group.
     assertEquals(
       List(
         new ListGroupsResponseData.ListedGroup()
@@ -779,14 +777,12 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    // Create the topics.
+    // Create the topic.
     createTopic(topic = "foo", numPartitions = 3)
-    createTopic(topic = "bar", numPartitions = 3)
 
-    // Classic member 1 joins the classic group, which becomes stable on "range". The protocols
-    // have different subscriptions.
+    // Classic member 1 joins the classic group, which becomes stable on "range".
     val groupId = "grp"
-    val protocols1 = List("range" -> List("foo"), "cooperative-sticky" -> List("bar"))
+    val protocols1 = List("range", "cooperative-sticky")
     val memberId1 = sendJoinRequestWithProtocols(groupId, "", protocols1).memberId
     val joinResponse1 = sendJoinRequestWithProtocols(groupId, memberId1, protocols1)
     assertEquals(Errors.NONE.code, joinResponse1.errorCode)
@@ -805,7 +801,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Classic member 2, which only supports "cooperative-sticky", joins the group. The group
     // is in PreparingRebalance, and it still has "range" as its selected protocol.
-    val protocols2 = List("cooperative-sticky" -> List("bar"))
+    val protocols2 = List("cooperative-sticky")
     val memberId2 = sendJoinRequestWithProtocols(groupId, "", protocols2).memberId
     val joinFuture2 = CompletableFuture.supplyAsync(() => sendJoinRequestWithProtocols(groupId, memberId2, protocols2))
     waitForClassicGroupState(groupId, ClassicGroupState.PREPARING_REBALANCE)
@@ -815,7 +811,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       groupId = groupId,
       memberId = Uuid.randomUuid.toString,
       rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("bar"),
+      subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
@@ -824,8 +820,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The pending join request of classic member 2 is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, joinFuture2.get(30, TimeUnit.SECONDS).errorCode)
 
-    // The group has become a consumer group. The classic members are converted with
-    // "cooperative-sticky", which every member supports.
+    // The group has become a consumer group.
     assertEquals(
       List(
         new ListGroupsResponseData.ListedGroup()
@@ -840,16 +835,20 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       )
     )
     assertEquals(
-      Map(memberId1 -> List("bar"), memberId2 -> List("bar"), response.memberId -> List("bar")),
+      Map(memberId1 -> List("foo"), memberId2 -> List("foo"), response.memberId -> List("foo")),
       subscribedTopicNames(groupId)
     )
   }
 
+  // Every protocol carries the same subscription to foo, as the Java consumer sends.
   private def sendJoinRequestWithProtocols(
     groupId: String,
     memberId: String,
-    protocols: List[(String, List[String])]
+    protocolNames: List[String]
   ): JoinGroupResponseData = {
+    val metadata = ConsumerProtocol.serializeSubscription(
+      new ConsumerPartitionAssignor.Subscription(List("foo").asJava)
+    ).array
     val joinGroupRequestData = new JoinGroupRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
@@ -857,12 +856,10 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       .setSessionTimeoutMs(600000)
       .setProtocolType("consumer")
       .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        protocols.map { case (name, topics) =>
+        protocolNames.map { name =>
           new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName(name)
-            .setMetadata(ConsumerProtocol.serializeSubscription(
-              new ConsumerPartitionAssignor.Subscription(topics.asJava)
-            ).array)
+            .setMetadata(metadata)
         }.asJava.iterator
       ))
 

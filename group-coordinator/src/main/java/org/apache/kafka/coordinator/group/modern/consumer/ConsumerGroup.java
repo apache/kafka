@@ -1226,67 +1226,55 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
-        // A classic group reaches the online conversion without members when its last member left
-        // while a member that got MEMBER_ID_REQUIRED had not rejoined yet. It is then still in
-        // PreparingRebalance rather than Empty, and it has no member metadata to parse.
-        if (classicGroup.numMembers() > 0) {
-            // The members are parsed with the selected protocol if they all support it. Otherwise,
-            // when no protocol is selected yet or a member that does not support it has joined,
-            // they are parsed with the protocol that the next generation would select.
-            String protocol = classicGroup.protocolName()
-                .filter(name -> classicGroup.supportedProtocols().getOrDefault(name, 0) == classicGroup.numMembers())
-                .orElseGet(classicGroup::selectProtocol);
-
-            classicGroup.allMembers().forEach(classicGroupMember -> {
-                // The assigned partition can be empty if the member just joined and has never
-                // synced. We should accept the empty assignment.
-                Map<Uuid, Set<Integer>> assignedPartitions;
-                if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
-                    assignedPartitions = Map.of();
-                } else {
-                    ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
-                        ByteBuffer.wrap(classicGroupMember.assignment())
-                    );
-                    if (assignment.userData() != null && assignment.userData().hasRemaining()) {
-                        throw new UnsupportedVersionException("userData from a custom assignor would be lost");
-                    }
-                    assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
-                }
-
-                // Every member is guaranteed to have metadata set when it joins,
-                // so we don't check for empty subscription here.
-                ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
-                    ByteBuffer.wrap(classicGroupMember.metadata(protocol))
+        classicGroup.allMembers().forEach(classicGroupMember -> {
+            // The assigned partition can be empty if the member just joined and has never synced.
+            // We should accept the empty assignment.
+            Map<Uuid, Set<Integer>> assignedPartitions;
+            if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
+                assignedPartitions = Map.of();
+            } else {
+                ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                    ByteBuffer.wrap(classicGroupMember.assignment())
                 );
+                if (assignment.userData() != null && assignment.userData().hasRemaining()) {
+                    throw new UnsupportedVersionException("userData from a custom assignor would be lost");
+                }
+                assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
+            }
 
-                // The target assignment and the assigned partitions of each member are set based on
-                // the last assignment of the classic group. All the members are put in the Stable
-                // state. If the classic group was in Preparing Rebalance or Completing Rebalance
-                // states, the classic members are asked to rejoin the group to re-trigger a
-                // rebalance or collect their assignments.
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
-                    .setMemberEpoch(classicGroup.generationId())
-                    .setState(MemberState.STABLE)
-                    .setPreviousMemberEpoch(classicGroup.generationId())
-                    .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
-                    .setRackId(toOptional(subscription.rackId()).orElse(null))
-                    .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
-                    .setClientId(classicGroupMember.clientId())
-                    .setClientHost(classicGroupMember.clientHost())
-                    .setSubscribedTopicNames(subscription.topics())
-                    .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
-                    .setClassicMemberMetadata(
-                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                            .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
-                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
-                                classicGroupMember.supportedProtocols()
-                            ))
-                    )
-                    .build();
-                consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(assignedPartitions));
-                consumerGroup.updateMember(newMember);
-            });
-        }
+            // Every member is guaranteed to have metadata set when it joins, so we don't check for
+            // empty subscription here. All the protocols of a member have the same subscription,
+            // so the first one is used.
+            ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
+                ByteBuffer.wrap(classicGroupMember.supportedProtocols().iterator().next().metadata())
+            );
+
+            // The target assignment and the assigned partitions of each member are set based on the last
+            // assignment of the classic group. All the members are put in the Stable state. If the classic
+            // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
+            // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
+            ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
+                .setMemberEpoch(classicGroup.generationId())
+                .setState(MemberState.STABLE)
+                .setPreviousMemberEpoch(classicGroup.generationId())
+                .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
+                .setRackId(toOptional(subscription.rackId()).orElse(null))
+                .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
+                .setClientId(classicGroupMember.clientId())
+                .setClientHost(classicGroupMember.clientHost())
+                .setSubscribedTopicNames(subscription.topics())
+                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            classicGroupMember.supportedProtocols()
+                        ))
+                )
+                .build();
+            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(assignedPartitions));
+            consumerGroup.updateMember(newMember);
+        });
 
         consumerGroup.setMetadataHash(ModernGroup.computeMetadataHash(
             consumerGroup.subscribedTopicNames(),
