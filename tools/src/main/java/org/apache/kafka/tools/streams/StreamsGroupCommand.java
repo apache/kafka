@@ -442,15 +442,18 @@ public class StreamsGroupCommand {
                     String fmt = "%" + -groupLen + "s %" + -maxTopicLen + "s %" + -maxPartitionLen + "s %s\n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
-                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue().lag);
+                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
+                            offset.getValue().lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     }
                 } else {
                     String fmt = "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %-15s%n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
-                            offset.getValue().currentOffset.map(Object::toString).orElse("-"), offset.getValue().leaderEpoch.map(Object::toString).orElse("-"),
-                            offset.getValue().logEndOffset, offset.getValue().lag);
+                            offset.getValue().currentOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            offset.getValue().lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     }
                 }
             }
@@ -470,18 +473,21 @@ public class StreamsGroupCommand {
                 earliest.put(tp, OffsetSpec.earliest());
                 latest.put(tp, OffsetSpec.latest());
             }
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = offsetsOfExistingTopics(adminClient.listOffsets(
                 earliest,
                 withTimeoutMs(new ListOffsetsOptions())
-            ).all().get();
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(
+            ), allTp);
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = offsetsOfExistingTopics(adminClient.listOffsets(
                 latest,
                 withTimeoutMs(new ListOffsetsOptions())
-            ).all().get();
+            ), allTp);
             Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
             Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
+                if (!latestResult.containsKey(tp.getKey())) {
+                    continue;
+                }
                 final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
                 final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
                 final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
@@ -489,10 +495,42 @@ public class StreamsGroupCommand {
                     new OffsetsInfo(
                         currentOffset,
                         leaderEpoch,
-                        latestResult.get(tp.getKey()).offset(),
-                        lag));
+                        Optional.of(latestResult.get(tp.getKey()).offset()),
+                        Optional.of(lag)));
+            }
+            // Partitions of a deleted topic have no log-end offset or lag, but still show their committed offset.
+            for (TopicPartition tp : allTp) {
+                if (!output.containsKey(tp)) {
+                    final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp));
+                    output.put(tp, new OffsetsInfo(committed.map(OffsetAndMetadata::offset), committed.flatMap(OffsetAndMetadata::leaderEpoch), Optional.empty(), Optional.empty()));
+                }
             }
             return output;
+        }
+
+        /**
+         * Like {@code result.all().get()}, but leaves out partitions whose topic no longer exists instead of failing.
+         *
+         * <p>A member that stopped without leaving the group (e.g. it crashed) keeps its assignment until its
+         * session times out, so the assignment can still reference a topic that has since been deleted. The admin
+         * client fails only that topic's partitions with {@link UnknownTopicOrPartitionException}, so one deleted
+         * topic must not fail the describe of the whole group (and of the remaining groups with {@code --all-groups}).
+         */
+        private static Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsetsOfExistingTopics(
+            ListOffsetsResult result,
+            Set<TopicPartition> partitions
+        ) throws ExecutionException, InterruptedException {
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = new HashMap<>();
+            for (TopicPartition tp : partitions) {
+                try {
+                    offsets.put(tp, result.partitionResult(tp).get());
+                } catch (ExecutionException e) {
+                    if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                        throw e;
+                    }
+                }
+            }
+            return offsets;
         }
 
         Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
@@ -1115,6 +1153,6 @@ public class StreamsGroupCommand {
         }
     }
 
-    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
+    public record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Optional<Long> logEndOffset, Optional<Long> lag) {
     }
 }
