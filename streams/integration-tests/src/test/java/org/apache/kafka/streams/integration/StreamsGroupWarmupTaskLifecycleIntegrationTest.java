@@ -111,9 +111,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>All stores are in memory, so a task that is closed rather than recycled has to restore its changelog from
  * scratch, which the restore listeners record. Where a test has to hold a warm-up task behind, a {@link RestoreGate}
  * withholds the records of the instance's restore consumer. A gate that is closed from the start would leave the
- * warm-up task's end offset unknown, since a standby task learns it only from its first restored batch, and an unknown
- * lag is never within {@code acceptable.recovery.lag}, whatever the threshold. So a gate first lets a small budget of
- * records through, which gives the warm-up task a known lag.
+ * warm-up task's end offset unknown: a standby task learns it from a restored batch, or once its restore consumer has
+ * reached the end of the changelog, and a closed gate prevents both. An unknown lag is never within
+ * {@code acceptable.recovery.lag}, whatever the threshold. So a gate first lets a small budget of records through, which
+ * gives the warm-up task a known lag.
  */
 @Timeout(600)
 @Tag("integration")
