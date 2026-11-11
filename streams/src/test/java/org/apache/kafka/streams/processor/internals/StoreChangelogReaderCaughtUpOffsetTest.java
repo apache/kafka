@@ -284,6 +284,75 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
     }
 
     @Test
+    public void shouldNotReportEndOffsetOfStandbyRegisteredWhileActiveRestores() throws IOException {
+        final TaskId activeTaskId = new TaskId(0, 0);
+        final TaskId standbyTaskId = new TaskId(0, 1);
+        final TopicPartition standbyTp = new TopicPartition(topicName, standbyTaskId.partition());
+        final File activeStateDir = TestUtils.tempDirectory();
+        final File standbyStateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager activeStateManager = newRealStateManager(ACTIVE, activeStateDir, false, activeTaskId);
+        final ProcessorStateManager standbyStateManager = newRealStateManager(STANDBY, standbyStateDir, false, standbyTaskId);
+        final MockKeyValueStore activeStore = new MockKeyValueStore(storeName, true);
+        final MockKeyValueStore standbyStore = new MockKeyValueStore(storeName, true);
+        try {
+            activeStateManager.registerStore(activeStore, activeStore.stateRestoreCallback, null);
+            activeStateManager.initializeStoreOffsets(true);
+            standbyStateManager.registerStore(standbyStore, standbyStore.stateRestoreCallback, null);
+            standbyStateManager.initializeStoreOffsets(true);
+
+            consumer.updateBeginningOffsets(mkMap(mkEntry(tp, 0L), mkEntry(standbyTp, 0L)));
+            consumer.updateEndOffsets(mkMap(mkEntry(tp, 1L), mkEntry(standbyTp, 0L)));
+            adminClient.updateEndOffsets(Collections.singletonMap(tp, 1L));
+
+            final StoreChangelogReader reader = new StoreChangelogReader(
+                time,
+                config,
+                logContext,
+                adminClient,
+                consumer,
+                callback,
+                standbyListener
+            );
+            final Map<TaskId, Task> tasks = mkMap(
+                mkEntry(activeTaskId, mock(Task.class)),
+                mkEntry(standbyTaskId, mock(Task.class))
+            );
+            reader.register(tp, activeStateManager);
+            reader.register(standbyTp, standbyStateManager);
+            reader.enforceRestoreActive();
+
+            // the standby changelog is empty and the active task's single record is not fetched yet
+            reader.restore(tasks);
+            assertEquals(StoreChangelogReader.ChangelogState.RESTORING, reader.changelogMetadata(tp).state());
+
+            // the active owner of the standby task writes to its changelog, which is paused while the active restores
+            final byte[] keyBytes = new byte[] {0x0, 0x0, 0x0, 0x1};
+            for (long offset = 0L; offset < 3L; offset++) {
+                consumer.addRecord(new ConsumerRecord<>(topicName, standbyTp.partition(), offset, keyBytes, "value".getBytes()));
+            }
+            consumer.updateEndOffsets(Collections.singletonMap(standbyTp, 3L));
+            reader.restore(tasks);
+
+            assertNull(reader.logicalChangelogEndOffsets().get(standbyTp));
+
+            consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 0L, keyBytes, "value".getBytes()));
+            reader.restore(tasks);
+            assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, reader.changelogMetadata(tp).state());
+
+            reader.transitToUpdateStandby();
+            reader.restore(tasks);
+
+            assertEquals(3L, reader.logicalChangelogEndOffsets().get(standbyTp));
+            assertEquals(Collections.singletonMap(standbyTp, 3L), standbyStateManager.changelogOffsets());
+        } finally {
+            activeStateManager.close();
+            standbyStateManager.close();
+            Utils.delete(activeStateDir);
+            Utils.delete(standbyStateDir);
+        }
+    }
+
+    @Test
     public void shouldNotAdvertiseBufferedSourceChangelogRecordsBeyondCommittedLimit() throws IOException {
         final File stateDir = TestUtils.tempDirectory();
         final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, true);
@@ -623,6 +692,15 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
     private ProcessorStateManager newRealStateManager(final Task.TaskType type,
                                                       final File stateDir,
                                                       final boolean sourceChangelog) {
+        return newRealStateManager(type, stateDir, sourceChangelog, new TaskId(0, 0));
+    }
+
+    private ProcessorStateManager newRealStateManager(
+        final Task.TaskType type,
+        final File stateDir,
+        final boolean sourceChangelog,
+        final TaskId taskId
+    ) {
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(new Properties() {
                 {
@@ -636,7 +714,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             false
         );
         return new ProcessorStateManager(
-            new TaskId(0, 0),
+            taskId,
             type,
             false,
             false,
@@ -644,7 +722,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             stateDirectory,
             time,
             mkMap(mkEntry(storeName, topicName)),
-            sourceChangelog ? Set.of(tp) : Collections.emptySet()
+            sourceChangelog ? Set.of(new TopicPartition(topicName, taskId.partition())) : Collections.emptySet()
         );
     }
 

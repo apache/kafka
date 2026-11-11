@@ -388,7 +388,10 @@ public class StoreChangelogReaderTest {
         setupStore();
         @SuppressWarnings("unchecked")
         final Map<TaskId, Task> mockTasks = mock(Map.class);
-        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        // the reader starts out restoring actives, so it never restores the standby changelog
+        if (type == ACTIVE) {
+            when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        }
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
 

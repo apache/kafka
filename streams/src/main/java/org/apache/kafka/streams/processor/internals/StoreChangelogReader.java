@@ -516,23 +516,21 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
         if (!restoringChangelogs.isEmpty()) {
-            final ConsumerRecords<byte[], byte[]> polledRecords = pollRecordsFromRestoreConsumer(tasks, restoringChangelogs);
+            final Set<TopicPartition> fetchableChangelogs = fetchableChangelogs(tasks, restoringChangelogs);
+            final ConsumerRecords<byte[], byte[]> polledRecords =
+                pollRecordsFromRestoreConsumer(restoringChangelogs, fetchableChangelogs);
 
             for (final TopicPartition partition : polledRecords.partitions()) {
                 bufferChangelogRecords(restoringChangelogByPartition(partition), polledRecords.records(partition));
             }
 
-            for (final TopicPartition partition : restoringChangelogs) {
+            for (final TopicPartition partition : fetchableChangelogs) {
                 // even if some partition do not have any accumulated data, we still trigger
                 // restoring since some changelog may not need to restore any at all, and the
                 // restore to end check needs to be executed still.
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
-                final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                final Task task = tasks.get(taskId);
-                if (task == null) {
-                    continue;
-                }
+                final Task task = tasks.get(changelogs.get(partition).stateManager.taskId());
 
                 try {
                     final ChangelogMetadata changelogMetadata = changelogs.get(partition);
@@ -553,12 +551,14 @@ public class StoreChangelogReader implements ChangelogReader {
         return totalRestored;
     }
 
-    private ConsumerRecords<byte[], byte[]> pollRecordsFromRestoreConsumer(final Map<TaskId, Task> tasks,
-                                                                           final Set<TopicPartition> restoringChangelogs) {
+    private ConsumerRecords<byte[], byte[]> pollRecordsFromRestoreConsumer(
+        final Set<TopicPartition> restoringChangelogs,
+        final Set<TopicPartition> fetchableChangelogs
+    ) {
         final ConsumerRecords<byte[], byte[]> polledRecords;
 
         try {
-            pauseResumePartitions(tasks, restoringChangelogs);
+            pauseResumePartitions(restoringChangelogs, fetchableChangelogs);
 
             polledRecords = restoreConsumer.poll(pollTime);
 
@@ -583,50 +583,33 @@ public class StoreChangelogReader implements ChangelogReader {
         return polledRecords;
     }
 
-    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
-                                       final Set<TopicPartition> restoringChangelogs) {
-        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
-            updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
-        } else {
-            updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
-            // Paused active tasks keep their changelogs registered and restoring, so pause them explicitly while
-            // updating standbys.
-            final Set<TopicPartition> activeRestoringChangelogs = activeRestoringChangelogs();
-            if (!activeRestoringChangelogs.isEmpty()) {
-                restoreConsumer.pause(activeRestoringChangelogs);
-            }
-        }
-    }
-
-    private void updatePartitionsByType(final Map<TaskId, Task> tasks,
-                                        final Set<TopicPartition> restoringChangelogs,
-                                        final TaskType taskType) {
-        final Collection<TopicPartition> toResume =
-            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).collect(Collectors.toList());
-        final Collection<TopicPartition> toPause =
-            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).collect(Collectors.toList());
-        restoreConsumer.resume(toResume);
+    private void pauseResumePartitions(
+        final Set<TopicPartition> restoringChangelogs,
+        final Set<TopicPartition> fetchableChangelogs
+    ) {
+        final Set<TopicPartition> toPause = new HashSet<>(restoringChangelogs);
+        toPause.removeAll(fetchableChangelogs);
+        restoreConsumer.resume(fetchableChangelogs);
         restoreConsumer.pause(toPause);
     }
 
-    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
-        final TaskId taskId = manager.taskId();
-        final Task task = tasks.get(taskId);
-        if (manager.taskType() == taskType) {
-            return task != null;
-        }
-        return false;
-    }
-
-    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
-        final TaskId taskId = manager.taskId();
-        final Task task = tasks.get(taskId);
-        if (manager.taskType() == taskType) {
-            return task == null;
-        }
-        return false;
+    /**
+     * The restoring changelogs the restore consumer fetches from in this state: those of active tasks while
+     * {@link ChangelogReaderState#ACTIVE_RESTORING}, those of standby tasks while
+     * {@link ChangelogReaderState#STANDBY_UPDATING}, and in both cases only for tasks in {@code tasks}, which
+     * excludes paused tasks.
+     */
+    private Set<TopicPartition> fetchableChangelogs(
+        final Map<TaskId, Task> tasks,
+        final Set<TopicPartition> restoringChangelogs
+    ) {
+        final TaskType fetchedTaskType = state == ChangelogReaderState.ACTIVE_RESTORING ? TaskType.ACTIVE : TaskType.STANDBY;
+        return restoringChangelogs.stream()
+            .filter(partition -> {
+                final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+                return manager.taskType() == fetchedTaskType && tasks.containsKey(manager.taskId());
+            })
+            .collect(Collectors.toSet());
     }
 
     private void maybeLogRestorationProgress() {
@@ -809,8 +792,8 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!changelogMetadata.bufferedRecords().isEmpty()) {
             return;
         }
-        // position() uses a zero timeout: this runs on every restore loop for every standby changelog
-        // (including paused ones while actives restore), so it must never block on an unresolved position
+        // position() uses a zero timeout: this runs on every restore loop for every standby changelog being
+        // updated, so it must never block on an unresolved position
         try {
             final Long restoreEndOffset = changelogMetadata.restoreEndOffset;
             if (restoreEndOffset == null) {
