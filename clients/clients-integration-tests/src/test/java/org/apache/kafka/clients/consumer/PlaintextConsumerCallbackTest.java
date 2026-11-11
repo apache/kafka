@@ -666,6 +666,60 @@ public class PlaintextConsumerCallbackTest {
         assertTrue(partitionsRevoked.get());
     }
 
+    @ClusterTest
+    public void testClassicConsumerCloseAfterUnsubscribeDoesNotInvokeCallbacks() throws InterruptedException {
+        testCloseAfterUnsubscribeDoesNotInvokeCallbacks(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerCloseAfterUnsubscribeDoesNotInvokeCallbacks() throws InterruptedException {
+        testCloseAfterUnsubscribeDoesNotInvokeCallbacks(CONSUMER);
+    }
+
+    /**
+     * unsubscribe() releases the assignment (onPartitionsRevoked), so a following close() owns no partitions and
+     * must not invoke any rebalance callback.
+     */
+    private void testCloseAfterUnsubscribeDoesNotInvokeCallbacks(GroupProtocol groupProtocol) throws InterruptedException {
+        var topicName = "close-after-unsubscribe";
+        cluster.createTopic(topicName, 2, (short) 1);
+        var bothPartitions = Set.of(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1));
+
+        var revokedCount = new AtomicInteger();
+        var lostCount = new AtomicInteger();
+        var listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revokedCount.incrementAndGet();
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                lostCount.incrementAndGet();
+            }
+        };
+
+        try (Consumer<byte[], byte[]> consumer = createConsumer(groupProtocol)) {
+            consumer.subscribe(List.of(topicName), listener);
+            ClientsTestUtils.awaitAssignment(consumer, bothPartitions);
+            assertEquals(0, revokedCount.get());
+            assertEquals(0, lostCount.get());
+
+            consumer.unsubscribe();
+            assertEquals(Set.of(), consumer.assignment());
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke onPartitionsRevoked once");
+            assertEquals(0, lostCount.get(), "unsubscribe() should not invoke onPartitionsLost");
+
+            consumer.close();
+            assertEquals(1, revokedCount.get(), "close() after unsubscribe() should not invoke onPartitionsRevoked");
+            assertEquals(0, lostCount.get(), "close() after unsubscribe() should not invoke onPartitionsLost");
+        }
+    }
+
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol) {
         return cluster.consumer(Map.of(
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
