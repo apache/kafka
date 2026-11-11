@@ -326,8 +326,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 }
                 final ProcessTasks process = pick.leastLoaded();
                 process.standbyTasks.add(task);
+                final int totalTasksPerMember = quota.totalTasksPerMember;
+                quota.maybeUpdateTotalTasksPerMember(TaskQuota.memberTaskCount(process.assignedTaskCount(), process.capacity()));
                 picker.markUsed(process);
-                if (quota.taskAdded(process)) {
+                if (quota.totalTasksPerMember < totalTasksPerMember) {
                     // A lower quota can take the room of any process.
                     picker.updatedAll();
                 } else {
@@ -477,20 +479,12 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return process.assignedTaskCount() < (long) process.capacity() * totalTasksPerMember;
         }
 
-        /** Counts the task just added to the process; returns whether the quota dropped. */
-        private boolean taskAdded(final ProcessTasks process) {
-            return maybeUpdateTotalTasksPerMember(memberTaskCount(process.assignedTaskCount(), process.capacity()));
-        }
-
-        private boolean maybeUpdateTotalTasksPerMember(final int taskNo) {
-            if (taskNo != totalTasksPerMember) {
-                return false;
+        private void maybeUpdateTotalTasksPerMember(final int taskNo) {
+            if (taskNo == totalTasksPerMember) {
+                totalMembersWithTaskCapacity--;
+                totalTasks -= taskNo;
+                totalTasksPerMember = computeTasksPerMember(totalTasks, totalMembersWithTaskCapacity);
             }
-            totalMembersWithTaskCapacity--;
-            totalTasks -= taskNo;
-            final int previousTotalTasksPerMember = totalTasksPerMember;
-            totalTasksPerMember = computeTasksPerMember(totalTasks, totalMembersWithTaskCapacity);
-            return totalTasksPerMember < previousTotalTasksPerMember;
         }
 
         private static int computeTasksPerMember(final long numberOfTasks, final int numberOfMembers) {
