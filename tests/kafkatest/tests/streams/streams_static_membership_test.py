@@ -23,6 +23,7 @@ from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.version import KafkaVersion, LATEST_4_2
 from kafkatest.services.streams import StaticMemberTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs, extract_generation_id
@@ -359,6 +360,54 @@ class StreamsStaticMembershipTest(Test):
             stop_processors(active_processors, self.stopped_message)
 
         self.producer.stop()
+        self.kafka.stop(timeout_sec=120)
+
+    @cluster(num_nodes=8)
+    @matrix(
+        broker_version=[str(LATEST_4_2)],
+        metadata_quorum=[quorum.isolated_kraft]
+    )
+    def test_new_streams_client_static_membership_against_old_broker(
+            self, broker_version, metadata_quorum):
+        """
+        KAFKA-20971: a newer Kafka Streams client (dev/4.4+) using static membership on the
+        `streams` group protocol should fail with a clear unsupported-version error against
+        an older (4.2) broker that doesn't support static membership with the `streams`
+        group protocol.
+        """
+        self.kafka.set_version(KafkaVersion(broker_version))
+        if self.kafka.isolated_controller_quorum:
+            self.kafka.isolated_controller_quorum.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        processor = StaticMemberTestService(
+            self.test_context,
+            self.kafka,
+            "consumer-A",
+            self.num_threads,
+            self.streams_group_protocol
+        )
+
+        self.set_topics(processor)
+
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            processor.start_node(processor.node)
+
+            monitor.wait_until(
+                "Static membership is not yet supported",
+                timeout_sec=60,
+                err_msg="Streams client did not report the expected static-membership-unsupported "
+                        "error against a %s broker" % broker_version
+            )
+
+            monitor.wait_until(
+                "terminal ERROR state",
+                timeout_sec=60,
+                err_msg="Streams client did not shut down to ERROR state after rejecting "
+                        "static membership against a %s broker" % broker_version
+            )
+        processor.wait(timeout_sec=60)
+        processor.stop_node(processor.node, clean_shutdown=False)
         self.kafka.stop(timeout_sec=120)
 
     def create_processors(self, num_threads, group_protocol="classic", persistent_process_id_store_enabled=False):

@@ -17,22 +17,21 @@
 
 package org.apache.kafka.shell;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.server.util.FileLock;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -45,13 +44,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class MetadataShellIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(MetadataShellIntegrationTest.class);
 
+    @TempDir
+    private Path tempDir;
+
     static class IntegrationEnv implements AutoCloseable {
-        File tempDir;
+        final File tempDir;
         MetadataShell shell;
         final MockFaultHandler faultHandler;
 
-        IntegrationEnv() throws IOException {
-            this.tempDir = Files.createTempDirectory("MetadataShellIntegrationTest").toFile();
+        IntegrationEnv(File tempDir) {
+            this.tempDir = tempDir;
             this.shell = null;
             this.faultHandler = new MockFaultHandler("testFailToGetLockOnSnapshotFile");
         }
@@ -67,15 +69,6 @@ public class MetadataShellIntegrationTest {
                     shell = null;
                 }
             }
-            if (tempDir != null) {
-                try {
-                    Utils.delete(tempDir);
-                } catch (Throwable e) {
-                    LOG.error("Error deleting tempDir", e);
-                } finally {
-                    tempDir = null;
-                }
-            }
             faultHandler.maybeRethrowFirstException();
         }
     }
@@ -83,7 +76,7 @@ public class MetadataShellIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testLock(boolean canLock) throws Exception {
-        try (IntegrationEnv env = new IntegrationEnv()) {
+        try (IntegrationEnv env = new IntegrationEnv(tempDir.toFile())) {
             env.shell = new MetadataShell(
                 new File(new File(env.tempDir, "__cluster_metadata-0"), "00000000000122906351-0000000226.checkpoint").getAbsolutePath(),
                     env.faultHandler);

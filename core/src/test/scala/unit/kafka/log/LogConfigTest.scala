@@ -61,6 +61,7 @@ class LogConfigTest {
   def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.forEach(name => name match {
       case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(name, "not a boolean")
+      case TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(name, "not a boolean")
       case TopicConfig.RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number")
       case TopicConfig.RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number")
       case TopicConfig.CLEANUP_POLICY_CONFIG => assertPropertyInvalid(name, "true", "foobar")
@@ -220,6 +221,20 @@ class LogConfigTest {
       props.setProperty(name, value.toString)
       assertThrows(classOf[Exception], () => new LogConfig(props), () => s"Property $name should not allow $value")
     })
+  }
+
+  @Test
+  def testMirrorUncleanLeaderElectionEnableDefault(): Unit = {
+    val logConfig = new LogConfig(new Properties())
+    assertFalse(logConfig.mirrorUncleanLeaderElectionEnable)
+  }
+
+  @Test
+  def testMirrorUncleanLeaderElectionEnableExplicit(): Unit = {
+    val props = new Properties()
+    props.put(TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+    val logConfig = new LogConfig(props)
+    assertTrue(logConfig.mirrorUncleanLeaderElectionEnable)
   }
 
   @Test

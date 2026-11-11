@@ -109,6 +109,7 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow class="org.apache.kafka.common.requests.ApiVersionsResponse" />
+      <allow class="org.apache.logging.log4j.Level" />
     </subpackage>
 
     <subpackage name="resource">
@@ -308,6 +309,7 @@
     <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
     <allow pkg="org.apache.kafka.server.log.remote.storage" />
     <allow pkg="org.apache.kafka.server.metrics" />
+    <allow pkg="org.apache.kafka.server.mirror" />
     <allow pkg="org.apache.kafka.server.quota" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.apache.kafka.clients" />
@@ -329,6 +331,7 @@
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+    <allow pkg="org.apache.kafka.coordinator.mirror" />
     <allow pkg="org.apache.kafka.coordinator.share" />
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.server.storage.log" />
@@ -457,6 +460,7 @@
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
     <allow pkg="org.rocksdb" />
+    <allow class="org.apache.logging.log4j.Level" />
   </subpackage>
 
   <subpackage name="raft">

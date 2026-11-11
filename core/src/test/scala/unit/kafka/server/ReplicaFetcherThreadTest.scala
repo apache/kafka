@@ -186,11 +186,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldNotFetchLeaderEpochOnFirstFetchWithTruncateOnFetch(): Unit = {
-    verifyFetchLeaderEpochOnFirstFetch(MetadataVersion.latestTesting, epochFetchCount = 0)
-  }
-
-  private def verifyFetchLeaderEpochOnFirstFetch(metadataVersion: MetadataVersion, epochFetchCount: Int): Unit = {
+  def shouldNotFetchLeaderEpochOnFirstFetch(): Unit = {
     val props = TestUtils.createBrokerConfig(1)
     val config = KafkaConfig.fromProps(props)
 
@@ -230,23 +226,23 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       UNBOUNDED_QUOTA,
       mockNetwork,
-      metadataVersion
+      MetadataVersion.latestTesting
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))
 
     //Loop 1
     thread.doWork()
-    assertEquals(epochFetchCount, mockNetwork.epochFetchCount)
+    assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
 
     //Loop 2 we should not fetch epochs
     thread.doWork()
-    assertEquals(epochFetchCount, mockNetwork.epochFetchCount)
+    assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
 
     //Loop 3 we should not fetch epochs
     thread.doWork()
-    assertEquals(epochFetchCount, mockNetwork.epochFetchCount)
+    assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(3, mockNetwork.fetchCount)
   }
 

@@ -246,7 +246,7 @@ public abstract class AbstractIndex implements Closeable {
         inLock(() -> {
             if (mmap != null) {
                 mmap.force();
-                Utils.flushFileIfExists(file.toPath());
+                Utils.flushPathIfExists(file.toPath());
             }
         });
     }

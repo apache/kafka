@@ -815,7 +815,7 @@ public class Sender implements Runnable {
                     // will be present in the response. To avoid confusion for the remaining records, we
                     // return a generic exception.
                     return new KafkaException("Failed to append record because it was part of a batch " +
-                        "which had one more more invalid records");
+                        "which had one or more invalid records");
                 }
             };
 

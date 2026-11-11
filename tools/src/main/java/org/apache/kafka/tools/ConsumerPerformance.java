@@ -64,43 +64,31 @@ public class ConsumerPerformance {
         try {
             LOG.info("Starting consumer...");
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
-            AtomicLong totalRecordsRead = new AtomicLong(0);
-            AtomicLong totalBytesRead = new AtomicLong(0);
-            AtomicLong joinTimeMs = new AtomicLong(0);
-            AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
 
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
             try (Consumer<byte[], byte[]> consumer = consumerCreator.apply(options.props())) {
-                long bytesRead = 0L;
-                long recordsRead = 0L;
-                long lastBytesRead = 0L;
-                long lastRecordsRead = 0L;
-                long currentTimeMs = System.currentTimeMillis();
-                long joinStartMs = currentTimeMs;
-                long startMs = currentTimeMs;
-                consume(consumer, options, totalRecordsRead, totalBytesRead, joinTimeMs,
-                    bytesRead, recordsRead, lastBytesRead, lastRecordsRead,
-                    joinStartMs, joinTimeMsInSingleRound);
+                long startMs = System.currentTimeMillis();
+                ConsumeStats consumed = consume(consumer, options, startMs);
                 long endMs = System.currentTimeMillis();
 
                 // print final stats
                 double elapsedSec = (endMs - startMs) / 1_000.0;
-                long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
+                long fetchTimeInMs = (endMs - startMs) - consumed.joinTimeMs();
                 if (!options.showDetailedStats()) {
-                    double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
+                    double totalMbRead = (consumed.bytesRead() * 1.0) / (1024 * 1024);
                     System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
                         options.dateFormat().format(startMs),
                         options.dateFormat().format(endMs),
                         totalMbRead,
                         totalMbRead / elapsedSec,
-                        totalRecordsRead.get(),
-                        totalRecordsRead.get() / elapsedSec,
-                        joinTimeMs.get(),
+                        consumed.recordsRead(),
+                        consumed.recordsRead() / elapsedSec,
+                        consumed.joinTimeMs(),
                         fetchTimeInMs,
                         totalMbRead / (fetchTimeInMs / 1000.0),
-                        totalRecordsRead.get() / (fetchTimeInMs / 1000.0)
+                        consumed.recordsRead() / (fetchTimeInMs / 1000.0)
                     );
                 }
 
@@ -123,24 +111,22 @@ public class ConsumerPerformance {
             System.out.printf("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec%s%n", newFieldsInHeader);
     }
 
-    private static void consume(Consumer<byte[], byte[]> consumer,
-                                ConsumerPerfOptions options,
-                                AtomicLong totalRecordsRead,
-                                AtomicLong totalBytesRead,
-                                AtomicLong joinTimeMs,
-                                long bytesRead,
-                                long recordsRead,
-                                long lastBytesRead,
-                                long lastRecordsRead,
-                                long joinStartMs,
-                                AtomicLong joinTimeMsInSingleRound) {
+    private static ConsumeStats consume(Consumer<byte[], byte[]> consumer,
+                                        ConsumerPerfOptions options,
+                                        long startMs) {
+        long bytesRead = 0L;
+        long recordsRead = 0L;
+        long lastBytesRead = 0L;
+        long lastRecordsRead = 0L;
+        AtomicLong joinTimeMs = new AtomicLong(0);
+        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
 
-        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound);
+        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, startMs, joinTimeMsInSingleRound);
         consumer.setRebalanceListener(listener);
         if (options.topic().isPresent()) {
             consumer.subscribe(options.topic().get());
@@ -179,9 +165,10 @@ public class ConsumerPerformance {
         if (recordsRead < numRecords)
             System.out.printf("WARNING: Exiting before consuming the expected number of records: timeout (%d ms) exceeded. " +
                 "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
-        totalRecordsRead.set(recordsRead);
-        totalBytesRead.set(bytesRead);
+        return new ConsumeStats(recordsRead, bytesRead, joinTimeMs.get());
     }
+
+    private record ConsumeStats(long recordsRead, long bytesRead, long joinTimeMs) { }
 
     protected static void printConsumerProgress(int id,
                                                 long bytesRead,

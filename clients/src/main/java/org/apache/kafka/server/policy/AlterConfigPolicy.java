@@ -38,7 +38,7 @@ import java.util.Objects;
 public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
     /**
-     * Class containing the create request parameters.
+     * Class containing the alter configs request parameters.
      */
     class RequestMetadata {
 
@@ -56,8 +56,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
         }
 
         /**
-         * Return the configs in the request. For incremental alter configs requests, entries explicitly deleted by
-         * the request are mapped to {@code null}, even if the resource has no existing value for the configuration.
+         * Return the configs in the request.
          */
         public Map<String, String> configs() {
             return configs;
@@ -94,8 +93,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
      * Clients will receive the POLICY_VIOLATION error code along with the exception's message. Note that validation
      * failure only affects the relevant resource, other resources in the request will still be processed.
      *
-     * @param requestMetadata the alter configs request parameters for the provided resource (topic is the only resource
-     *                        type whose configs can be updated currently).
+     * @param requestMetadata the alter configs request parameters for the provided resource.
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
     void validate(RequestMetadata requestMetadata) throws PolicyViolationException;

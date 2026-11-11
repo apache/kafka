@@ -1600,6 +1600,126 @@ public class StickyTaskAssignorTest {
         assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "member2"));
     }
 
+    @Test
+    public void shouldBalanceStatefulAndStatelessActiveTasksIndependently() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1")),
+            mkEntry("member2", createMemberMetadata("process2")),
+            mkEntry("member3", createMemberMetadata("process3")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 4), mkEntry("stateless", 4)), Set.of("stateful"))
+        );
+
+        // Each flavor spreads 2/1/1 on its own, so no member ends up with two stateful and no stateless tasks.
+        assertEquals(List.of(1, 1, 2), sortedActiveTaskCounts(result, "stateful", "member1", "member2", "member3"));
+        assertEquals(List.of(1, 1, 2), sortedActiveTaskCounts(result, "stateless", "member1", "member2", "member3"));
+        assertEquals(mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3)), mkEntry("stateless", Sets.newSet(0, 1, 2, 3))),
+            mergeAllActiveTasks(result, "member1", "member2", "member3"));
+    }
+
+    @Test
+    public void shouldKeepEachFlavorStickyOnlyWithinItsOwnQuotaWhenScalingUp() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1", mkMap(mkEntry("stateless", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
+            mkEntry("member2", createMemberMetadata("process2", mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
+            mkEntry("member3", createMemberMetadata("process3")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 4), mkEntry("stateless", 4)), Set.of("stateful"))
+        );
+
+        // member2 keeps stateful tasks up to the stateful quota of 2; the other two go to the two other members
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member2").get("stateful"));
+        assertEquals(1, activeTaskCount(result, "member1", "stateful"));
+        assertEquals(1, activeTaskCount(result, "member3", "stateful"));
+        // member1 keeps stateless tasks up to the active quota of 3, which its new stateful task counts towards;
+        // the remaining two fill up the members with the fewest active, then the fewest stateless, tasks
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member1").get("stateless"));
+        assertEquals(Sets.newSet(3), getAllActiveTasks(result, "member2").get("stateless"));
+        assertEquals(Sets.newSet(2), getAllActiveTasks(result, "member3").get("stateless"));
+    }
+
+    @Test
+    public void shouldNotLetStatefulAndStatelessQuotasAddUpBeyondTheActiveQuota() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1",
+                mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2)), mkEntry("stateless", Sets.newSet(0, 1, 2))), Map.of(), Map.of())),
+            mkEntry("member2", createMemberMetadata("process2")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 3), mkEntry("stateless", 3)), Set.of("stateful"))
+        );
+
+        // The stateful quota is 2 and the active quota 3: member1 keeps two stateful tasks but only one stateless
+        // task, instead of two of each, so the active tasks still split 3/3.
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member1").get("stateful"));
+        assertEquals(Sets.newSet(0), getAllActiveTasks(result, "member1").get("stateless"));
+        assertEquals(Sets.newSet(2), getAllActiveTasks(result, "member2").get("stateful"));
+        assertEquals(Sets.newSet(1, 2), getAllActiveTasks(result, "member2").get("stateless"));
+    }
+
+    @Test
+    public void shouldBalanceBothFlavorsAcrossMembersOfProcessesWithDifferentCapacity() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1_1", createMemberMetadata("process1")),
+            mkEntry("member1_2", createMemberMetadata("process1")),
+            mkEntry("member2", createMemberMetadata("process2")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 3), mkEntry("stateless", 3)), Set.of("stateful"))
+        );
+
+        for (final String memberId : members.keySet()) {
+            assertEquals(1, activeTaskCount(result, memberId, "stateful"));
+            assertEquals(1, activeTaskCount(result, memberId, "stateless"));
+        }
+    }
+
+    @Test
+    public void shouldReturnItsOwnOutputWhenReassigningWithUnchangedMembers() {
+        final TopologyDescriber topology =
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 7), mkEntry("stateless", 5)), Set.of("stateful"));
+        for (final int numStandbyReplicas : List.of(0, 1)) {
+            final AssignmentConfigsImpl configs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas);
+            final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+                mkEntry("member1", createMemberMetadata("process1")),
+                mkEntry("member2", createMemberMetadata("process2")),
+                mkEntry("member3", createMemberMetadata("process3")));
+
+            final GroupAssignment first = assignor.assign(new GroupSpecImpl(members, configs), topology);
+            final GroupAssignment second = assignor.assign(
+                new GroupSpecImpl(membersFromAssignment(members, first), configs),
+                topology
+            );
+
+            assertEquals(first, second);
+        }
+    }
+
+    private int activeTaskCount(GroupAssignment result, String memberId, String subtopologyId) {
+        return getAllActiveTasks(result, memberId).getOrDefault(subtopologyId, Set.of()).size();
+    }
+
+    private List<Integer> sortedActiveTaskCounts(GroupAssignment result, String subtopologyId, String... memberIds) {
+        return Arrays.stream(memberIds).map(memberId -> activeTaskCount(result, memberId, subtopologyId)).sorted().toList();
+    }
+
+    private Map<String, MemberMetadataAndStateImpl> membersFromAssignment(
+        Map<String, MemberMetadataAndStateImpl> members,
+        GroupAssignment result
+    ) {
+        final Map<String, MemberMetadataAndStateImpl> next = new LinkedHashMap<>();
+        for (Map.Entry<String, MemberMetadataAndStateImpl> entry : members.entrySet()) {
+            final MemberAssignment assignment = result.members().get(entry.getKey());
+            next.put(entry.getKey(), createMemberMetadata(entry.getValue().processId(), assignment.activeTasks(), assignment.standbyTasks(), Map.of()));
+        }
+        return next;
+    }
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
@@ -1798,6 +1918,24 @@ public class StickyTaskAssignorTest {
         @Override
         public boolean isStateful(String subtopologyId) {
             return isStateful;
+        }
+    }
+
+    record MixedTopologyDescriberImpl(Map<String, Integer> numTasksBySubtopology, Set<String> statefulSubtopologies) implements TopologyDescriber {
+
+        @Override
+        public List<String> subtopologies() {
+            return new ArrayList<>(numTasksBySubtopology.keySet());
+        }
+
+        @Override
+        public int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException {
+            return numTasksBySubtopology.get(subtopologyId);
+        }
+
+        @Override
+        public boolean isStateful(String subtopologyId) {
+            return statefulSubtopologies.contains(subtopologyId);
         }
     }
 

@@ -34,7 +34,7 @@ public interface CoordinatorPlayback<U> {
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        A record.
-     * @throws RuntimeException if the record can not be applied.
+     * @throws RuntimeException if the record cannot be applied.
      */
     void replay(
         long offset,
@@ -49,7 +49,7 @@ public interface CoordinatorPlayback<U> {
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param result        The result of the transaction.
-     * @throws RuntimeException if the transaction can not be completed.
+     * @throws RuntimeException if the transaction cannot be completed.
      */
     void replayEndTransactionMarker(
         long producerId,
@@ -58,9 +58,12 @@ public interface CoordinatorPlayback<U> {
     ) throws RuntimeException;
 
     /**
-     * Invoke operations when a batch has been successfully loaded.
+     * Called when records have been written to the log up to the given offset. The loader calls
+     * it after replaying a batch that reaches the high watermark, or that ends a commit interval
+     * after the last committed offset. The runtime calls it after it has appended a batch of
+     * records or an end transaction marker to the log.
      *
-     * @param offset the offset of the last record in the batch plus one.
+     * @param offset The offset of the last written record plus one.
      */
     void updateLastWrittenOffset(long offset);
 

@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -47,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AddPartitionsTest {
 
     @ClusterTest
-    public void testWrongReplicaCount(ClusterInstance cluster) throws Exception {
+    public void testWrongReplicaCount(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -87,7 +86,7 @@ public class AddPartitionsTest {
     }
 
     @ClusterTest
-    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) throws Exception {
+    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -108,9 +107,6 @@ public class AddPartitionsTest {
 
             admin.createPartitions(Map.of("topic1", NewPartitions.increaseTo(3))).all().get();
 
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 2, 30000);
-
             cluster.waitTopicCreation("topic1", 3);
 
             Map<String, TopicDescription> descriptions = admin.describeTopics(List.of("topic1")).allTopicNames().get();
@@ -130,14 +126,10 @@ public class AddPartitionsTest {
         @ClusterTest(brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
     })
     public void testCreatePartitionsAcrossMetadataVersions(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                new NewTopic("foo", 1, (short) 3),
-                new NewTopic("bar", 2, (short) 3)
-            )).values();
-            createResults.get("foo").get();
-            createResults.get("bar").get();
+        cluster.createTopic("foo", 1, (short) 3);
+        cluster.createTopic("bar", 2, (short) 3);
 
+        try (Admin admin = cluster.admin()) {
             Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
                 "foo", NewPartitions.increaseTo(3),
                 "bar", NewPartitions.increaseTo(2)
@@ -157,9 +149,6 @@ public class AddPartitionsTest {
 
             admin.createPartitions(Map.of("topic2", NewPartitions.increaseTo(3,
                 List.of(List.of(0, 1), List.of(2, 3))))).all().get();
-
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 2, 30000);
 
             cluster.waitTopicCreation("topic2", 3);
 
@@ -246,11 +235,8 @@ public class AddPartitionsTest {
         try (Admin admin = cluster.admin()) {
             String topic1 = "create-partitions-topic-1";
             String topic2 = "create-partitions-topic-2";
-            admin.createTopics(List.of(
-                    new NewTopic(topic1, 1, (short) 1),
-                    new NewTopic(topic2, 1, (short) 2))).all().get();
-            cluster.waitTopicCreation(topic1, 1);
-            cluster.waitTopicCreation(topic2, 1);
+            cluster.createTopic(topic1, 1, (short) 1);
+            cluster.createTopic(topic2, 1, (short) 2);
             assertEquals(1, numPartitions(admin, topic1));
             assertEquals(1, numPartitions(admin, topic2));
 

@@ -89,14 +89,25 @@ public class ApiMessageTypeTest {
         assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
 
-        // SaslHandshake and OffsetDelete are non-flexible: header v1 request / v0 response at every version.
+        // SaslHandshake is non-flexible: header v1 request / v0 response at every version.
         assertEquals((short) 1, ApiMessageType.SASL_HANDSHAKE.requestHeaderVersion((short) 0));
         assertEquals((short) 0, ApiMessageType.SASL_HANDSHAKE.responseHeaderVersion((short) 0));
         assertEquals((short) 1, ApiMessageType.SASL_HANDSHAKE.requestHeaderVersion((short) 1));
         assertEquals((short) 0, ApiMessageType.SASL_HANDSHAKE.responseHeaderVersion((short) 1));
 
+        // OffsetDelete v0 is non-flexible; v1 is flexible: header v3 request / v1 response (KIP-1313).
         assertEquals((short) 1, ApiMessageType.OFFSET_DELETE.requestHeaderVersion((short) 0));
         assertEquals((short) 0, ApiMessageType.OFFSET_DELETE.responseHeaderVersion((short) 0));
+        assertEquals((short) 3, ApiMessageType.OFFSET_DELETE.requestHeaderVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.OFFSET_DELETE.responseHeaderVersion((short) 1));
+
+        // The telemetry RPCs move the client instance ID from the body into the v3 request header in v1 (KIP-1313).
+        assertEquals((short) 2, ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS.requestHeaderVersion((short) 0));
+        assertEquals((short) 3, ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS.requestHeaderVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS.responseHeaderVersion((short) 1));
+        assertEquals((short) 2, ApiMessageType.PUSH_TELEMETRY.requestHeaderVersion((short) 0));
+        assertEquals((short) 3, ApiMessageType.PUSH_TELEMETRY.requestHeaderVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.PUSH_TELEMETRY.responseHeaderVersion((short) 1));
 
         // ApiVersions request follows the flexible rule, but the response always uses a v0 header (KIP-511).
         assertEquals((short) 1, ApiMessageType.API_VERSIONS.requestHeaderVersion((short) 0));

@@ -159,6 +159,35 @@ public class TopologyDescriptionPluginIntegrationTest {
     }
 
     @Test
+    public void shouldNotPushTopologyDescriptionWhenDisabledByClient() throws Exception {
+        final String appId = "topology-description-push-disabled-app";
+        final String inputTopic = "topology-description-push-disabled-input";
+        cluster.createTopic(inputTopic, 1, 1);
+
+        final Properties config = streamsConfig(appId);
+        config.put(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG, "false");
+
+        try (final Admin admin = createAdmin();
+             final KafkaStreams streams = new KafkaStreams(topology(inputTopic), config)) {
+            startApplicationAndWaitUntilRunning(streams);
+
+            // The broker has no stored description for this group, so it sets
+            // TopologyDescriptionRequired=true on the member's first heartbeat after joining,
+            // exactly as it does in shouldPushTopologyDescriptionToPluginAfterJoin; the broker
+            // cannot tell that this client has the push disabled. It then arms a 30s back-off
+            // before soliciting again, so this window only observes that single initial
+            // solicitation, which is enough: waiting past it gives a suppressed client time to
+            // push anyway if the client-side opt-out were broken.
+            Thread.sleep(2000);
+
+            assertEquals(0, TrackingTopologyDescriptionPlugin.setTopologyCalls(appId),
+                "Expected no setTopology call for group " + appId + " since the client disabled the push");
+            assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_STORED,
+                describeGroup(admin, appId, true).topologyDescriptionStatus());
+        }
+    }
+
+    @Test
     public void shouldStopSolicitingPushAfterPermanentPluginFailure() throws Exception {
         final String appId = "topology-description-failure-app";
         final String inputTopic = "topology-description-failure-input";

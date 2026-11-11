@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -393,7 +394,7 @@ public class SlidingWindowedKStreamIntegrationTest {
 
         assertEquals(expectResult, windowedMessages);
 
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams.cleanUp(); // Purge store to force restoration
 
         produceMessages(

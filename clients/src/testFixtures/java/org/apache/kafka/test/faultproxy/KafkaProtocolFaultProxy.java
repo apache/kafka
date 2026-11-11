@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -393,7 +394,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             final AbstractResponse response = AbstractResponse.parseResponse(ByteBuffer.wrap(frame), reqHeader);
 
             if (routing) {
-                applyRouting(response);
+                applyRouting(response, version);
             }
             if (fired != null && fired.action() == FaultRule.Action.INJECT_ERROR) {
                 ERROR_SETTERS.get(apiKey).accept(response, fired.error());
@@ -412,13 +413,18 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         }
     }
 
-    private void applyRouting(final AbstractResponse response) {
+    private void applyRouting(final AbstractResponse response, final short version) {
         if (response instanceof MetadataResponse) {
             ((MetadataResponse) response).data().brokers().forEach(b -> b.setHost(proxyHost).setPort(proxyPort));
         } else if (response instanceof FindCoordinatorResponse) {
             final FindCoordinatorResponse fc = (FindCoordinatorResponse) response;
-            fc.data().setHost(proxyHost).setPort(proxyPort);
-            fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            // v0-3 carry a single top-level host/port and v4+ only the (possibly empty) coordinators list;
+            // setting the top-level fields at v4+ makes re-serialization fail and the frame go out unrewritten
+            if (version < FindCoordinatorRequest.MIN_BATCHED_VERSION) {
+                fc.data().setHost(proxyHost).setPort(proxyPort);
+            } else {
+                fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            }
         }
     }
 

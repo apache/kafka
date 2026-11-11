@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -417,6 +418,76 @@ public class PluginsTest {
     }
 
     @Test
+    public void newConverterShouldCloseConverterWhenConfigureFails() {
+        try {
+            props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, FailingToConfigureConverter.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newConverter(
+                config,
+                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER
+            ));
+
+            assertTrue(FailingToConfigureConverter.closed);
+        } finally {
+            FailingToConfigureConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newInternalConverterShouldCloseConverterWhenConfigureFails() {
+        try {
+            assertThrows(RuntimeException.class, () -> plugins.newInternalConverter(
+                true,
+                FailingToConfigureConverter.class.getName(),
+                Map.of()
+            ));
+
+            assertTrue(FailingToConfigureConverter.closed);
+        } finally {
+            FailingToConfigureConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newHeaderConverterShouldCloseHeaderConverterWhenConfigureFails() {
+        try {
+            props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, FailingToConfigureHeaderConverter.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newHeaderConverter(
+                config,
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER
+            ));
+
+            assertTrue(FailingToConfigureHeaderConverter.closed);
+        } finally {
+            FailingToConfigureHeaderConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newConfigProviderShouldCloseConfigProviderWhenConfigureFails() {
+        try {
+            String providerPrefix = "some.provider";
+            props.put(providerPrefix + ".class", FailingToConfigureConfigProvider.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newConfigProvider(
+                config,
+                providerPrefix,
+                ClassLoaderUsage.PLUGINS
+            ));
+
+            assertTrue(FailingToConfigureConfigProvider.closed);
+        } finally {
+            FailingToConfigureConfigProvider.closed = false;
+        }
+    }
+
+    @Test
     public void newConnectorShouldInstantiateWithPluginClassLoader() {
         Connector plugin = plugins.newConnector(TestPlugin.SAMPLING_CONNECTOR.className());
 
@@ -775,6 +846,83 @@ public class PluginsTest {
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
             super.configure(configs);
+        }
+    }
+
+    public static class FailingToConfigureConverter implements Converter {
+        static volatile boolean closed;
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    public static class FailingToConfigureHeaderConverter implements HeaderConverter {
+        static volatile boolean closed;
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    public static class FailingToConfigureConfigProvider implements ConfigProvider {
+        static volatile boolean closed;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            return null;
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
         }
     }
 }

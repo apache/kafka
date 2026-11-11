@@ -288,6 +288,16 @@ public class ConsumerGroupMemberTest {
         assertEquals(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 0), member.partitionsPendingRevocation());
     }
 
+    @Test
+    public void testSetSubscribedTopicNamesWithNull() {
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(null)
+            .build();
+
+        assertEquals(Set.of("foo", "bar"), member.subscribedTopicNames());
+    }
+
     @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
     @ValueSource(booleans = {true, false})
     public void testAsConsumerGroupDescribeMember(boolean withClassicMemberMetadata) {
