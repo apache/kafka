@@ -19,7 +19,6 @@ import os
 import subprocess
 import time
 import unittest
-import uuid
 
 import pytest
 import test.constants as constants
@@ -27,6 +26,7 @@ from common import detect_compose_command
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
+    IMAGE_TYPE="jvm"
     FIXTURES_DIR="."
     CONTAINER_RUNTIME="docker"
     COMPOSE_COMMAND=None
@@ -315,57 +315,37 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-class DockerStreamsTest(unittest.TestCase):
-    IMAGE="apache/kafka"
-    IMAGE_TYPE="jvm"
-    CONTAINER_RUNTIME="docker"
-
-    def run_command(self, command, input_text=None):
-        result = subprocess.run(command, input=input_text, capture_output=True, text=True, timeout=60)
-        self.assertEqual(result.returncode, 0,
-                         f"Command failed: {' '.join(command)}\n{result.stdout}{result.stderr}")
-        return result.stdout
-
-    def test_wordcount_with_rocksdb(self):
+class DockerStreamsTest(DockerSanityTest):
+    def setUp(self) -> None:
         if self.IMAGE_TYPE != "jvm":
             self.skipTest("The native image does not include a JVM or Streams applications")
 
-        container = f"kafka-streams-test-{uuid.uuid4().hex}"
-        self.addCleanup(
-            subprocess.run,
-            [self.CONTAINER_RUNTIME, "rm", "--force", "--volumes", container],
-            capture_output=True,
-            timeout=30,
-        )
+        compose_file = f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}"
+        self.addCleanup(self.destroy_compose, compose_file)
+        self.start_compose(compose_file)
 
-        self.run_command([self.CONTAINER_RUNTIME, "run", "--detach", "--name", container, self.IMAGE])
-        exec_command = [self.CONTAINER_RUNTIME, "exec", container]
+    def test_wordcount_with_rocksdb(self):
         bootstrap = ["--bootstrap-server", "localhost:9092"]
         for topic in ("streams-plaintext-input", "streams-wordcount-output"):
-            self.run_command(exec_command + ["/opt/kafka/bin/kafka-topics.sh"] + bootstrap + [
-                "--create", "--topic", topic, "--partitions", "1", "--replication-factor", "1",
-            ])
+            self.assertTrue(self.create_topic(topic, bootstrap))
 
-        self.run_command([
-            self.CONTAINER_RUNTIME, "exec", "--detach", container, "sh", "-c",
-            "exec /opt/kafka/bin/kafka-run-class.sh "
-            "org.apache.kafka.streams.examples.wordcount.WordCountDemo "
-            "> /tmp/wordcount.log 2>&1",
-        ])
+        exec_command = [self.CONTAINER_RUNTIME, "exec", constants.BROKER_CONTAINER]
         try:
-            self.run_command([
-                self.CONTAINER_RUNTIME, "exec", "--interactive", container,
-                "/opt/kafka/bin/kafka-console-producer.sh",
-            ] + bootstrap + ["--topic", "streams-plaintext-input"], input_text="kafka\n")
-            output = self.run_command(exec_command + ["/opt/kafka/bin/kafka-console-consumer.sh"] + bootstrap + [
-                "--topic", "streams-wordcount-output", "--from-beginning", "--max-messages", "1",
-                "--timeout-ms", str(constants.CLIENT_TIMEOUT),
+            # Use the internal listener so Streams can reach every broker from inside the container.
+            subprocess.run([
+                self.CONTAINER_RUNTIME, "exec", "--detach", constants.BROKER_CONTAINER, "sh", "-c",
+                "printf '%s\\n' 'bootstrap.servers=broker1:29092' > /tmp/wordcount.properties && "
+                "exec /opt/kafka/bin/kafka-run-class.sh "
+                "org.apache.kafka.streams.examples.wordcount.WordCountDemo /tmp/wordcount.properties "
+                "> /tmp/wordcount.log 2>&1",
+            ], check=True, capture_output=True, text=True, timeout=60)
+            self.produce_message("streams-plaintext-input", bootstrap, "key", "kafka")
+            output = self.consume_message("streams-wordcount-output", bootstrap + [
                 "--key-deserializer", "org.apache.kafka.common.serialization.StringDeserializer",
                 "--value-deserializer", "org.apache.kafka.common.serialization.LongDeserializer",
-                "--formatter-property", "print.key=true",
             ])
             # Producing a count requires initializing and updating the RocksDB store.
-            self.assertEqual(output.strip(), "kafka\t1")
+            self.assertEqual(output, "kafka:1")
         finally:
             try:
                 logs = subprocess.run(exec_command + ["cat", "/tmp/wordcount.log"],
@@ -376,12 +356,10 @@ class DockerStreamsTest(unittest.TestCase):
 
 def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
+    DockerSanityTest.IMAGE_TYPE = mode
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
     DockerSanityTest.COMPOSE_COMMAND = compose_command or detect_compose_command(container_runtime)
-    DockerStreamsTest.IMAGE = image
-    DockerStreamsTest.IMAGE_TYPE = mode
-    DockerStreamsTest.CONTAINER_RUNTIME = container_runtime
 
     cur_directory = os.path.dirname(os.path.realpath(__file__))
     report_path = f"{cur_directory}/report_{mode}.html"
