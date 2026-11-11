@@ -432,9 +432,10 @@ public class LogConfig extends AbstractConfig {
 
     public String overriddenConfigsAsLoggableString() {
         Map<String, Object> overriddenTopicProps = new HashMap<>();
-        originals().forEach((k, v) -> {
-            if (overriddenConfigs.contains(k))
-                overriddenTopicProps.put(k, v);
+        Map<String, Object> originals = originals();
+        overriddenConfigs.forEach(k -> {
+            if (originals.containsKey(k))
+                overriddenTopicProps.put(k, originals.get(k));
         });
         return ConfigUtils.configMapToRedactedString(overriddenTopicProps, CONFIG);
     }
