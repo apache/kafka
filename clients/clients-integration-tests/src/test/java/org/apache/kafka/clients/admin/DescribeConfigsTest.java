@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -43,6 +45,8 @@ public class DescribeConfigsTest {
 
     private static final String PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG =
         "listener.name.external." + SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG;
+    private static final String PREFIXED_PRINCIPAL_BUILDER_CLASS_CONFIG =
+        "listener.name.external." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG;
 
     @ClusterTest
     public void testDescribeConfigsNonexistent(ClusterInstance cluster) throws Exception {
@@ -119,6 +123,24 @@ public class DescribeConfigsTest {
             assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
             assertEquals("TLSv1.3,TLSv1.2", entry.value());
             assertEquals(ConfigEntry.ConfigType.LIST, entry.type());
+        }
+    }
+
+    // Listener-prefixed configs are not defined in the ConfigDef, so they are described from the raw strings in
+    // originals(). The type still resolves to CLASS through the base config, so the raw string must not be cast to a Class.
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = PREFIXED_PRINCIPAL_BUILDER_CLASS_CONFIG,
+            value = "org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder")
+    })
+    public void testDescribeConfigsPrefixedListenerClassConfig(ClusterInstance cluster) throws Exception {
+        ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER,
+            String.valueOf(cluster.brokerIds().iterator().next()));
+        try (Admin admin = cluster.admin()) {
+            ConfigEntry entry = describeConfig(admin, brokerResource, PREFIXED_PRINCIPAL_BUILDER_CLASS_CONFIG);
+            assertNotNull(entry);
+            assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
+            assertEquals(DefaultKafkaPrincipalBuilder.class.getName(), entry.value());
+            assertEquals(ConfigEntry.ConfigType.CLASS, entry.type());
         }
     }
 
