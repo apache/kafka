@@ -19,8 +19,7 @@ package org.apache.kafka.server.common;
 import java.util.Map;
 
 public enum MirrorVersion implements FeatureVersion {
-
-    // Version 0 keeps cluster mirroring disabled (KIP-1279).
+    // Version 0 keeps Cluster Mirroring disabled
     MV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables cluster mirroring (KIP-1279).
