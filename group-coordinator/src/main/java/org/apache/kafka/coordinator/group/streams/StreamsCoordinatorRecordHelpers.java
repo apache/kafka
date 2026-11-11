@@ -357,7 +357,7 @@ public class StreamsCoordinatorRecordHelpers {
     /**
      * Creates a StreamsTopology record.
      *
-     * @param groupId  The consumer group id.
+     * @param groupId  The streams group id.
      * @param topology The new topology.
      * @return The record.
      */
@@ -372,7 +372,7 @@ public class StreamsCoordinatorRecordHelpers {
     /**
      * Creates a StreamsTopology record.
      *
-     * @param groupId The consumer group id.
+     * @param groupId The streams group id.
      * @param value   The encoded topology record value.
      * @return The record.
      */

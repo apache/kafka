@@ -34,7 +34,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorBrokerConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -99,7 +99,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
         AddPartitionsToTxnConfig.CONFIG_DEF,
-        ClusterMirrorConfigs.brokerConfigDef()
+        ClusterMirrorBrokerConfig.CONFIG_DEF
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
@@ -1006,6 +1006,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public int maxIncrementalFetchSessionCacheSlots() {
         return getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG);
+    }
+
+    public int messageMaxArrayLength() {
+        return getInt(ServerConfigs.MESSAGE_MAX_ARRAY_LENGTH_CONFIG);
     }
 
     public int fetchMaxBytes() {

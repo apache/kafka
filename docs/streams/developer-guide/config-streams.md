@@ -273,7 +273,7 @@ Increasing the replication factor to 3 ensures that the internal Kafka Streams t
 > The number of acknowledgments that the leader must have received before considering a request complete. This controls the durability of records that are sent. The possible values are:
 > 
 >   * `acks="0"` The producer does not wait for acknowledgment from the server and the record is immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the producer won't generally know of any failures. The offset returned for each record will always be set to `-1`.
->   * `acks="1"` The leader writes the record to its local log and responds without waiting for full acknowledgement from all followers. If the leader immediately fails after acknowledging the record, but before the followers have replicated it, then the record will be lost.
+>   * `acks="1"` The leader writes the record to its local log and responds without waiting for full acknowledgement from all followers. If the leader immediately fails after acknowledging the record, but before the followers have replicated it, then the record will be lost. The record may also be lost when leadership moves (e.g., reassignment, preferred-leader election, or controlled shutdown) if it was acknowledged but not yet replicated to the new leader.
 >   * `acks="all"` (default since 3.0 release) The leader waits for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost if there is at least one in-sync replica alive. This is the strongest available guarantee.
 > 
 

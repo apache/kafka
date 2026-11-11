@@ -1985,8 +1985,10 @@ project(':mirror-coordinator') {
   }
 
   dependencies {
+    implementation libs.re2j
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':coordinator-common')
 
     testImplementation project(':server-common')
@@ -2457,6 +2459,7 @@ project(':server-common') {
     implementation libs.joptSimple
     implementation libs.jacksonDatabind
     implementation libs.pcollections
+    implementation libs.re2j
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
@@ -2782,6 +2785,7 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':mirror-coordinator')
     implementation project(':share-coordinator')
     implementation project(':raft')
     implementation libs.argparse4j
@@ -3093,6 +3097,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-41:test',
             ':streams:upgrade-system-tests-42:test',
             ':streams:upgrade-system-tests-43:test',
+            ':streams:upgrade-system-tests-44:test',
             ':streams:examples:test'
     ]
   }
@@ -3654,6 +3659,22 @@ project(':streams:upgrade-system-tests-43') {
 
   dependencies {
     testImplementation libs.kafkaStreams_43
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-44') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-44"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_44
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
