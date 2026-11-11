@@ -2563,16 +2563,15 @@ public class GroupMetadataManager {
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
         if (topology != null) {
-            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
                 StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-                return streamsTopologyFromRequest;
+                return StreamsTopology.fromRecord(recordValue);
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
-            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+            } else if (!group.topology().get().matches(topology)) {
                 if (group.topology().get().topologyEpoch() == topology.epoch()) {
                     throw new StreamsInvalidTopologyEpochException(String.format(
                         "The topology sent by the member differs from the group's topology with the same epoch %d. " +
@@ -6087,7 +6086,8 @@ public class GroupMetadataManager {
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
      * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response. The result
+     *         is empty if the group does not exist or is not a share group.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
@@ -6097,7 +6097,13 @@ public class GroupMetadataManager {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
-        ShareGroup group = (ShareGroup) groups.get(groupId);
+        ShareGroup group;
+        try {
+            group = shareGroup(groupId);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
+            return new CoordinatorResult<>(List.of(), null);
+        }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
@@ -8959,10 +8965,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a classic group HeartbeatRequest to a consumer group. A response with
-     * REBALANCE_IN_PROGRESS is returned if 1) the member epoch is smaller than the
-     * group epoch, 2) the member is in UNREVOKED_PARTITIONS, or 3) the member is in
-     * UNRELEASED_PARTITIONS and all its partitions pending assignment are free.
+     * Handle a classic group HeartbeatRequest to a consumer group. The target
+     * assignment is updated first if the target assignment lags behind the group
+     * epoch. A response with REBALANCE_IN_PROGRESS is returned if 1) the member
+     * epoch is smaller than the target assignment epoch, 2) the member is in
+     * UNREVOKED_PARTITIONS, or 3) the member is in UNRELEASED_PARTITIONS and all
+     * its partitions pending assignment are free.
      *
      * @param group          The ConsumerGroup.
      * @param context        The request context.
@@ -8986,14 +8994,31 @@ public class GroupMetadataManager {
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
 
+        int groupEpoch = group.groupEpoch();
+        SubscriptionType subscriptionType = group.subscriptionType();
+
+        if (group.hasMetadataExpired(time.milliseconds())) {
+            // The subscription metadata is updated when the refresh deadline has been reached.
+            UpdateSubscriptionMetadataResult result = updateSubscriptionMetadata(
+                group,
+                false,
+                member,
+                member,
+                records
+            );
+
+            groupEpoch = result.groupEpoch;
+            subscriptionType = result.subscriptionType;
+        }
+
         // Update the target assignment if the group epoch is larger than the target assignment epoch.
         // The delta between the existing and the new target assignment is persisted to the partition.
         UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
             group,
-            group.groupEpoch(),
+            groupEpoch,
             member,
             member,
-            group.subscriptionType(),
+            subscriptionType,
             records
         );
 

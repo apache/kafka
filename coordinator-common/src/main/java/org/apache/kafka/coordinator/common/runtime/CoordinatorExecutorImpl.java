@@ -94,7 +94,7 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
                     log.debug("The write event for the task {} failed due to {}. Ignoring it because " +
                         "the coordinator is not active.", key, exception.getMessage());
                 } else {
-                    log.error("The write event for the task {} failed due to {}. Ignoring it. ",
+                    log.error("The write event for the task {} failed due to {}. Ignoring it.",
                         key, exception.getMessage(), exception);
                 }
 
