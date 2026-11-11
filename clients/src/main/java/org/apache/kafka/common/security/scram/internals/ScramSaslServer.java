@@ -126,7 +126,7 @@ public class ScramSaslServer implements SaslServer {
                             this.tokenExpiryTimestamp = null;
                         }
                         this.scramCredential = credentialCallback.scramCredential();
-                        if (scramCredential == null) {
+                        if (scramCredential == null || authorizationId == null) {
                             this.scramCredential = unknownUserCredential(username);
                             this.unknownUser = true;
                         }
@@ -155,6 +155,8 @@ public class ScramSaslServer implements SaslServer {
                             throw new SaslException("Invalid client nonce in the final client message.");
                         }
                         verifyClientProof(clientFinalMessage);
+                        if (unknownUser)
+                            throw new SaslException("Authentication failed: Invalid user credentials");
                         byte[] serverKey = scramCredential.serverKey();
                         byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
                         ServerFinalMessage serverFinalMessage = new ServerFinalMessage(null, serverSignature);
@@ -229,11 +231,11 @@ public class ScramSaslServer implements SaslServer {
 
     // Visible for testing
     void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
-        if (unknownUser)
-            throw new SaslException("Authentication failed: Invalid user credentials");
         try {
             byte[] expectedStoredKey = scramCredential.storedKey();
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
+            if (clientFinalMessage.proof().length != clientSignature.length)
+                throw new SaslException("Invalid client credentials");
             byte[] computedStoredKey = formatter.storedKey(clientSignature, clientFinalMessage.proof());
             if (!MessageDigest.isEqual(computedStoredKey, expectedStoredKey))
                 throw new SaslException("Invalid client credentials");
@@ -245,7 +247,9 @@ public class ScramSaslServer implements SaslServer {
     private ScramCredential unknownUserCredential(String username) throws InvalidKeyException {
         byte[] hmac = formatter.hmac(UNKNOWN_USER_SALT_KEY, ScramFormatter.toBytes(username));
         String salt = new BigInteger(1, hmac).shiftRight(hmac.length * 8 - 130).toString(Character.MAX_RADIX);
-        return new ScramCredential(ScramFormatter.toBytes(salt), new byte[0], new byte[0], mechanism.minIterations());
+        byte[] storedKey = formatter.hash(formatter.hmac(hmac, ScramFormatter.toBytes("stored-key")));
+        byte[] serverKey = formatter.hmac(hmac, ScramFormatter.toBytes("server-key"));
+        return new ScramCredential(ScramFormatter.toBytes(salt), storedKey, serverKey, mechanism.minIterations());
     }
 
     private void clearCredentials() {
