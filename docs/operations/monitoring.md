@@ -691,6 +691,45 @@ kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=
 
 size depends on fetch.wait.max.ms in the consumer
 </td> </tr>  
+<tr>
+<td>
+
+Delayed Produce Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedProduceMetrics,name=ExpiresPerSec,topic=([-.\w]+),partition=([0-9]+)
+</td>
+<td>
+
+Produce timeouts per second, counted once per partition still waiting for replica acknowledgments. Omit `topic` and `partition` for the broker-wide rate.
+</td> </tr>
+<tr>
+<td>
+
+Delayed Fetch Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedFetchMetrics,name=ExpiresPerSec,fetcherType={consumer|follower}
+</td>
+<td>
+
+Expired Fetch requests per second, by fetcher type (consumer or follower).
+</td> </tr>
+<tr>
+<td>
+
+Delayed Delete Records Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedDeleteRecordsMetrics,name=ExpiresPerSec
+</td>
+<td>
+
+DeleteRecords timeouts per second, counted once per partition whose low watermark is below the requested delete offset.
+</td> </tr>
 <tr>  
 <td>
 
@@ -2025,11 +2064,11 @@ Delayed Remote Fetch Expires Per Sec
 </td>  
 <td>
 
-The number of expired remote fetches per second. Omitting 'topic=(...)' will yield the all-topic rate
+The number of expired remote fetches per second across all topics on the broker.
 </td>  
 <td>
 
-kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec,topic=([-.\w]+)
+kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec
 </td> </tr>  
 <tr>  
 <td>
