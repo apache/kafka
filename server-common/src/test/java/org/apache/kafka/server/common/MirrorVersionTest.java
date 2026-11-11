@@ -49,7 +49,7 @@ class MirrorVersionTest {
     @ParameterizedTest
     @ValueSource(shorts = {-1, 2, Short.MAX_VALUE})
     void testUnknownFeatureLevel(short level) {
-        assertThrows(RuntimeException.class, () -> MirrorVersion.fromFeatureLevel(level));
+        assertThrows(IllegalArgumentException.class, () -> MirrorVersion.fromFeatureLevel(level));
         assertThrows(IllegalArgumentException.class, () -> Feature.MIRROR_VERSION.fromFeatureLevel(level, true));
     }
 
@@ -103,8 +103,9 @@ class MirrorVersionTest {
     }
 
     @Test
-    void testSupportsMirroring() {
-        assertFalse(MirrorVersion.MV_0.supportsMirroring());
-        assertTrue(MirrorVersion.MV_1.supportsMirroring());
+    void testIsEnabled() {
+        assertFalse(MirrorVersion.isEnabled(Map.of()));
+        assertFalse(MirrorVersion.isEnabled(Map.of(MirrorVersion.FEATURE_NAME, MirrorVersion.MV_0.featureLevel())));
+        assertTrue(MirrorVersion.isEnabled(Map.of(MirrorVersion.FEATURE_NAME, MirrorVersion.MV_1.featureLevel())));
     }
 }

@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.MirrorVersion;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.common.StreamsVersion;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -228,11 +229,11 @@ public class ApiVersionsRequestTest {
                                      boolean enableUnstableLastVersion,
                                      short apiVersion) {
         if (apiVersion >= 3) {
-            assertEquals(6, apiVersionsResponse.data().finalizedFeatures().size());
+            assertEquals(7, apiVersionsResponse.data().finalizedFeatures().size());
             assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel());
             assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel());
 
-            assertEquals(7, apiVersionsResponse.data().supportedFeatures().size());
+            assertEquals(8, apiVersionsResponse.data().supportedFeatures().size());
             assertEquals(MetadataVersion.MINIMUM_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion());
             if (apiVersion < 4) {
                 assertEquals(1, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion());
@@ -255,6 +256,11 @@ public class ApiVersionsRequestTest {
 
             assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).minVersion());
             assertEquals(StreamsVersion.SV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).maxVersion());
+
+            assertEquals(MirrorVersion.MV_0.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MirrorVersion.FEATURE_NAME).minVersion());
+            assertEquals(MirrorVersion.MV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MirrorVersion.FEATURE_NAME).maxVersion());
+            assertEquals(MirrorVersion.MV_1.featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MirrorVersion.FEATURE_NAME).minVersionLevel());
+            assertEquals(MirrorVersion.MV_1.featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MirrorVersion.FEATURE_NAME).maxVersionLevel());
         }
         ApiVersionsResponseData.ApiVersionCollection expectedApis;
         if (cluster.controllerListenerName().equals(listenerName)) {
