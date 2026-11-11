@@ -30,7 +30,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1604,24 +1603,18 @@ public class RecordAccumulatorTest {
             accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, spent, false, topic);
             accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, open, false, topic);
 
-            // So may a retry, while there is time left.
+            // So may a retry after a pass that was not denied memory, whether or not there is time left:
+            // it waited for nothing, so it is not charged against the deadline.
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, spent, false, topic);
             accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, false, topic);
 
-            // A retry that finds the deadline gone gives up, reporting the cause the pass before it hit.
-            TimeoutException timeout = assertThrows(TimeoutException.class,
-                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, false, topic));
-            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, timeout.getClass(),
-                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
-            assertTrue(timeout.getMessage().contains("kept retrying"),
-                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
-                            + "raises when a retry finds the deadline gone, but was: " + timeout.getMessage());
+            // And a retry after a pass that was denied memory, while there is time left.
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, true, topic);
 
             KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
-            assertEquals(0.0, (double) exhausted.metricValue(), "a timeout is not a buffer-exhausted drop");
+            assertEquals(0.0, (double) exhausted.metricValue(), "an allowed pass is not a buffer-exhausted drop");
 
-            // A pass the pool refused is the only one reported as exhaustion, and it is the incremental
-            // strategy's extension acquire that reaches this; pinned here because the policy decides it.
+            // A retry after a pass the pool refused, with the deadline gone, is the only one that gives up.
             BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
                     () -> accum.throwIfNoMoreRetriesAllowed(false, spent, true, topic));
             assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"),
