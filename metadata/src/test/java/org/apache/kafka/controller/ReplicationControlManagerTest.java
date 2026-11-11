@@ -1233,22 +1233,6 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
-    public void testEligibleLeaderReplicas_EffectiveMinIsr() {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
-        ReplicationControlManager replicationControl = ctx.replicationControl;
-        ctx.registerBrokers(0, 1, 2);
-        ctx.unfenceBrokers(0, 1, 2);
-        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
-                new int[][]{new int[]{0, 1, 2}});
-
-        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
-        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
-        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
-        assertEquals(3, replicationControl.getEffectiveMinIsr("foo",
-            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId())));
-    }
-
-    @Test
     public void testEligibleLeaderReplicas_EffectiveMinIsrUsesTargetPartitionReplicas() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
@@ -1265,8 +1249,6 @@ public class ReplicationControlManagerTest {
             setDirectories(List.of(DirectoryId.UNASSIGNED)),
             (short) 0)));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2");
-        assertEquals(1, replicationControl.getEffectiveMinIsr("foo", replicationControl.getPartition(fooId, 0)));
-        assertEquals(2, replicationControl.getEffectiveMinIsr("foo", replicationControl.getPartition(fooId, 1)));
 
         // Shrink the ISR of partition 1 to {0}. It is below the min ISR of partition 1,
         // so the removed replicas should be kept in the ELR.

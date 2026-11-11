@@ -109,7 +109,7 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR,
+        int minInSyncReplicas,
         boolean eligibleLeaderReplicasEnabled
     ) {
         this.partition = partition;
@@ -118,7 +118,7 @@ public class PartitionChangeBuilder {
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
-        this.minISR = minISR;
+        this.minISR = effectiveMinIsr(minInSyncReplicas, partition);
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -205,6 +205,12 @@ public class PartitionChangeBuilder {
 
     public List<Integer> targetIsr() {
         return targetIsr;
+    }
+
+    // Visible to test.
+    static int effectiveMinIsr(int minInSyncReplicas, PartitionRegistration partition) {
+        // Must match Partition#effectiveMinIsr on the broker.
+        return Math.min(minInSyncReplicas, partition.replicas.length);
     }
 
     // VisibleForTesting

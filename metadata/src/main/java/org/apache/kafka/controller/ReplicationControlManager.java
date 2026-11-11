@@ -1149,7 +1149,7 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersionOrThrow(),
-                    getEffectiveMinIsr(topic.name, partition),
+                    getTopicMinIsr(topic.name),
                     featureControl.isElrFeatureEnabled()
                 );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
@@ -1699,7 +1699,7 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersionOrThrow(),
-            getEffectiveMinIsr(topic, partition),
+            getTopicMinIsr(topic),
             featureControl.isElrFeatureEnabled()
         )
             .setElection(election)
@@ -1866,7 +1866,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersionOrThrow(),
-                getEffectiveMinIsr(topic.name, partition),
+                getTopicMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
@@ -2149,7 +2149,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersionOrThrow(),
-                getEffectiveMinIsr(topic.name, partition),
+                getTopicMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
             );
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
@@ -2269,7 +2269,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getEffectiveMinIsr(topicName, part),
+            getTopicMinIsr(topicName),
             featureControl.isElrFeatureEnabled()
         );
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
@@ -2335,7 +2335,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getEffectiveMinIsr(topics.get(tp.topicId()).name, part),
+            getTopicMinIsr(topics.get(tp.topicId()).name),
             featureControl.isElrFeatureEnabled()
         );
         if (!reassignment.replicas().equals(currentReplicas)) {
@@ -2418,7 +2418,7 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersionOrThrow(),
-                                    getEffectiveMinIsr(topicName, partitionRegistration),
+                                    getTopicMinIsr(topicName),
                                     featureControl.isElrFeatureEnabled()
                             )
                                     .setDirectory(brokerId, dirId)
@@ -2479,13 +2479,8 @@ public class ReplicationControlManager {
             setReplicas(Replicas.toList(partition.replicas)));
     }
 
-    // Visible to test.
-    int getEffectiveMinIsr(String topicName, PartitionRegistration partition) {
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
-        int currentMinIsr = Integer.parseInt(minIsrConfig);
-        // Must match Partition#effectiveMinIsr on the broker. Partitions of the same topic can
-        // have different replication factors, so use this partition's replica count.
-        return Math.min(currentMinIsr, partition.replicas.length);
+    private int getTopicMinIsr(String topicName) {
+        return Integer.parseInt(configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value());
     }
 
     /**
