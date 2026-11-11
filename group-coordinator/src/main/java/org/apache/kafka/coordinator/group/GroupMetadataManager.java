@@ -2293,7 +2293,7 @@ public class GroupMetadataManager {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
             refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology);
-            if (!refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY).sameTasks(updatedMember.assignedTasks())) {
+            if (differsFromAssignedTasks(refinedGroupAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
             }
         }
@@ -2347,9 +2347,9 @@ public class GroupMetadataManager {
         // 4b. If we did not already refine above -- ie, we computed a new target assignment, or the group is not
         // yet reconciled (a rebalance is still in progress) -- refine the target assignment into an intermediate
         // assignment (with warm-up tasks) the member should be reconciled towards. Otherwise, the assignment we
-        // refined above is the intermediate assignment of this epoch, whether we bumped the epoch for it or not: it
-        // was derived from a settled group, so it also holds for the target assignment of the bumped epoch, which a
-        // refinement step leaves unchanged.
+        // refined above is the intermediate assignment of this epoch: if we bumped the epoch for it, it was derived
+        // from a settled group, so it also holds for the target assignment of the bumped epoch, which a refinement
+        // step leaves unchanged; if we did not, it matches every member's assigned tasks.
         if (refinedGroupAssignment == null) {
             refinedGroupAssignment = refinedAssignmentForEpoch(
                 group,
@@ -4732,6 +4732,26 @@ public class GroupMetadataManager {
             return targetAssignment;
         }
         return refinedAssignment;
+    }
+
+    /**
+     * Whether the intermediate assignment differs from the assigned tasks of any member of the group.
+     *
+     * @param refinedAssignment The intermediate assignment keyed by member ID.
+     * @param group             The streams group.
+     *
+     * @return True if a member's intermediate assignment differs from its assigned tasks.
+     */
+    private static boolean differsFromAssignedTasks(
+        final Map<String, TasksTuple> refinedAssignment,
+        final StreamsGroup group
+    ) {
+        for (final StreamsGroupMember member : group.members().values()) {
+            if (!refinedAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY).sameTasks(member.assignedTasks())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
