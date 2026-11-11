@@ -416,6 +416,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupHeartbeatToConsumerGroupDuringAssignmentDelay
 - testClassicGroupHeartbeatToConsumerGroupMaintainsSession
 - testClassicGroupHeartbeatToConsumerGroupRebalanceInProgress
+- testClassicGroupHeartbeatToConsumerGroupRefreshesMetadata
+- testClassicGroupHeartbeatToConsumerGroupUpdatesTargetAssignment
 - testClassicGroupHeartbeatToConsumerWithFencedInstanceId
 - testClassicGroupHeartbeatToConsumerWithIllegalGenerationId
 - testClassicGroupHeartbeatToConsumerWithMemberNotUsingClassicProtocol
@@ -1465,6 +1467,7 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testGetOrCreateMember
 - testGetStaticMemberByInstanceId
 - testGroupState
+- testGroupStateRevertToSnapshot
 - testGroupTypeFromString
 - testIsInStatesCaseInsensitive
 - testIsSubscribedToTopic
@@ -1474,12 +1477,15 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testOffsetExpirationCondition
 - testPreferredServerAssignor
 - testRemoveMember
+- testRemoveMemberGroupState
 - testRemovePartitionEpochs
 - testRemoveStaticMember
+- testSetTargetAssignmentMetadataGroupState
 - testSubscribedRegularExpressionCount
 - testSubscriptionType
 - testUpdateAndRemoveRegularExpression
 - testUpdateMember
+- testUpdateMemberGroupState
 - testUpdateSubscribedTopicNamesAndSubscriptionType
 - testUpdatingMemberUpdatesPartitionEpoch
 - testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsNotReleased
@@ -1839,6 +1845,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testGetOrCreateUninitializedMember
 - testGetStaticMemberByInstanceId
 - testGroupState
+- testGroupStateRevertToSnapshot
 - testIsInStatesCaseInsensitiveAndUnderscored
 - testIsSubscribedToTopic
 - testMetadataRefreshDeadline
@@ -1850,10 +1857,12 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testRemoveMember
 - testRemoveMemberClearsTaskOffsets
 - testRemoveMemberForgetsItsHeartbeatVersion
+- testRemoveMemberGroupState
 - testRemoveMemberRemovesCacheEntry
 - testRemoveStaticMember
 - testRemoveTaskProcessIds
 - testSetConfiguredTopologyClearsCache
+- testSetTargetAssignmentMetadataGroupState
 - testShouldExpireFalseWhenPluginConfiguredAndEpochStored
 - testShouldExpireFalseWhenStoredEpochUncertain
 - testShouldExpireTrueWhenNoPluginConfigured
@@ -1863,6 +1872,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testUpdateAndRetrieveHeartbeatVersions
 - testUpdateAndRetrieveTaskOffsets
 - testUpdateMember
+- testUpdateMemberGroupState
 - testUpdateMemberInvalidatesCache
 - testUpdatingMemberUpdatesProcessId
 - testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsNotReleased
@@ -2116,6 +2126,7 @@ org.apache.kafka.coordinator.group.streams.topics.CopartitionedTopicsEnforcerTes
 - shouldDeductNumberOfPartitionsFromRepartitionTopicWithEnforcedNumberOfPartitions
 - shouldEnforceCopartitioningOnRepartitionTopics
 - shouldIgnoreFixedRepartitionTopicsOutsideTheCopartitionGroup
+- shouldOnlyReportFixedTopicsOfTheGroupWhenTheirPartitionCountsDiffer
 - shouldReturnThePartitionCountsUnchangedWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch
 - shouldReturnThePartitionCountsUnchangedWhenTopicInfosWithEnforcedNumOfPartitionsAreValid
 - shouldSetNumPartitionsToMaximumPartitionsWhenAllTopicsAreRepartitionTopics
@@ -2131,6 +2142,8 @@ org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManagerTes
 - testEndpointToPartitionsWithStandbyTaskAssignments
 org.apache.kafka.coordinator.group.streams.topics.InternalTopicManagerTest:
 - testConfigureTopics
+- testConfigureTopicsCreatesMissingCopartitionedRepartitionTopicWithPartitionCountOfExistingSibling
+- testConfigureTopicsIgnoresUnrelatedFixedRepartitionTopicsForCopartitionGroup
 - testConfigureTopicsSetsConfigurationExceptionWhenSourceTopicIsMissing
 org.apache.kafka.coordinator.group.streams.topics.RepartitionTopicsTest:
 - shouldNotSetupRepartitionTopicsWhenTopologyDoesNotContainAnyRepartitionTopics

@@ -170,7 +170,9 @@ org.apache.kafka.streams.integration.InMemoryStoreMetricsIntegrationTest:
 org.apache.kafka.streams.integration.InternalTopicIntegrationTest:
 - shouldCompactAndDeleteTopicsForWindowStoreChangelogs
 - shouldCompactTopicsForKeyValueStoreChangelogs
+- shouldGetToRunningWithUnrelatedFixedRepartitionTopicsOfDifferentPartitionCounts
 - shouldGetToRunningWithWindowedTableInFKJ
+- shouldUseMaxSourcePartitionsForCopartitionGroupWithUnrelatedFixedRepartitionTopic
 org.apache.kafka.streams.integration.JoinGracePeriodDurabilityIntegrationTest:
 - shouldRecoverBufferAfterShutdown
 org.apache.kafka.streams.integration.JoinStoreIntegrationTest:

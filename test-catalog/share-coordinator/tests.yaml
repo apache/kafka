@@ -117,6 +117,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testWriteStateFencedStateEpochError
 - testWriteStateInvalidLeaderEpochRequestData
 - testWriteStateInvalidPartitionRequestData
+- testWriteStateInvalidStateBatchRequestData
 - testWriteStateInvalidStateEpochRequestData
 - testWriteStateSuccess
 org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsTest:

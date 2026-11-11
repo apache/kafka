@@ -5177,6 +5177,7 @@ org.apache.kafka.common.security.authenticator.SaslAuthenticatorTest:
 - testScramUsernameWithSpecialCharacters
 - testServerAuthenticateCallbackHandler
 - testServerDynamicJaasConfiguration
+- testServerIterationsAboveMaximumSaslScram
 - testServerLoginCallbackOverride
 - testServerLoginOverride
 - testServerSidePendingSendDuringReauthentication
