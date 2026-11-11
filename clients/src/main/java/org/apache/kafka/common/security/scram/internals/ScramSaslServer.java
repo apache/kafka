@@ -32,9 +32,11 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +59,7 @@ public class ScramSaslServer implements SaslServer {
 
     private static final Logger log = LoggerFactory.getLogger(ScramSaslServer.class);
     private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(ScramLoginModule.TOKEN_AUTH_CONFIG);
+    private static final byte[] UNKNOWN_USER_SALT_KEY = ScramFormatter.secureRandomBytes(new SecureRandom());
 
     enum State {
         RECEIVE_CLIENT_FIRST_MESSAGE,
@@ -73,6 +76,7 @@ public class ScramSaslServer implements SaslServer {
     private ServerFirstMessage serverFirstMessage;
     private ScramExtensions scramExtensions;
     private ScramCredential scramCredential;
+    private boolean unknownUser;
     private String authorizationId;
     private Long tokenExpiryTimestamp;
 
@@ -113,8 +117,6 @@ public class ScramSaslServer implements SaslServer {
                             DelegationTokenCredentialCallback tokenCallback = new DelegationTokenCredentialCallback();
                             credentialCallback = tokenCallback;
                             callbackHandler.handle(new Callback[]{nameCallback, tokenCallback});
-                            if (tokenCallback.tokenOwner() == null)
-                                throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
                             this.authorizationId = tokenCallback.tokenOwner();
                             this.tokenExpiryTimestamp = tokenCallback.tokenExpiryTimestamp();
                         } else {
@@ -124,8 +126,10 @@ public class ScramSaslServer implements SaslServer {
                             this.tokenExpiryTimestamp = null;
                         }
                         this.scramCredential = credentialCallback.scramCredential();
-                        if (scramCredential == null)
-                            throw new SaslException("Authentication failed: Invalid user credentials");
+                        if (scramCredential == null) {
+                            this.scramCredential = unknownUserCredential(username);
+                            this.unknownUser = true;
+                        }
                         String authorizationIdFromClient = clientFirstMessage.authorizationId();
                         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
                             throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
@@ -225,6 +229,8 @@ public class ScramSaslServer implements SaslServer {
 
     // Visible for testing
     void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
+        if (unknownUser)
+            throw new SaslException("Authentication failed: Invalid user credentials");
         try {
             byte[] expectedStoredKey = scramCredential.storedKey();
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
@@ -234,6 +240,12 @@ public class ScramSaslServer implements SaslServer {
         } catch (InvalidKeyException e) {
             throw new SaslException("Sasl client verification failed", e);
         }
+    }
+
+    private ScramCredential unknownUserCredential(String username) throws InvalidKeyException {
+        byte[] hmac = formatter.hmac(UNKNOWN_USER_SALT_KEY, ScramFormatter.toBytes(username));
+        String salt = new BigInteger(1, hmac).shiftRight(hmac.length * 8 - 130).toString(Character.MAX_RADIX);
+        return new ScramCredential(ScramFormatter.toBytes(salt), new byte[0], new byte[0], mechanism.minIterations());
     }
 
     private void clearCredentials() {

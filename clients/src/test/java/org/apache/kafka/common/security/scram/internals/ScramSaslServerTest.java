@@ -32,9 +32,11 @@ import org.mockito.Mockito;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 
 import javax.security.sasl.SaslException;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,6 +48,7 @@ public class ScramSaslServerTest {
     private static final String USER_B = "userB";
 
     private ScramFormatter formatter;
+    private ScramServerCallbackHandler callbackHandler;
     private ScramSaslServer saslServer;
 
     @BeforeEach
@@ -55,7 +58,8 @@ public class ScramSaslServerTest {
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
-        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        callbackHandler.configure(new HashMap<>(), mechanism.mechanismName(), List.of());
         saslServer = new ScramSaslServer(mechanism, new HashMap<>(), callbackHandler);
     }
 
@@ -74,6 +78,23 @@ public class ScramSaslServerTest {
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
+    }
+
+    @Test
+    public void unknownUserFailsOnClientFinalMessage() throws Exception {
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(saslServer.evaluateResponse(clientFirstMessage("unknownUser", null)));
+        assertEquals(4096, serverFirstMessage.iterations());
+
+        ScramSaslServer otherSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
+        ServerFirstMessage otherServerFirstMessage = new ServerFirstMessage(otherSaslServer.evaluateResponse(clientFirstMessage("unknownUser", null)));
+        assertArrayEquals(serverFirstMessage.salt(), otherServerFirstMessage.salt());
+
+        ScramSaslServer tokenSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
+        String tokenClientFirstMessage = "n,,n=unknownTokenId,r=" + formatter.secureRandomString() + ",tokenauth=true";
+        assertEquals(4096, new ServerFirstMessage(tokenSaslServer.evaluateResponse(tokenClientFirstMessage.getBytes(StandardCharsets.UTF_8))).iterations());
+
+        SaslException e = assertThrows(SaslException.class, () -> saslServer.evaluateResponse(clientFinalMessage(serverFirstMessage.nonce())));
+        assertEquals("Authentication failed: Invalid user credentials", e.getMessage());
     }
 
     /**
