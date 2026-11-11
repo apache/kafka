@@ -43,7 +43,6 @@ public class KafkaChannelTest {
     public void testSending() throws IOException {
         Authenticator authenticator = Mockito.mock(Authenticator.class);
         TransportLayer transport = Mockito.mock(TransportLayer.class);
-        Mockito.when(transport.socketChannel()).thenReturn(Mockito.mock(SocketChannel.class));
         MemoryPool pool = Mockito.mock(MemoryPool.class);
         ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
 
@@ -84,18 +83,45 @@ public class KafkaChannelTest {
 
         KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
             1024, pool, metadataRegistry);
-        channel.setSend(new NetworkSend("0", ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)))));
+        Send send = Mockito.mock(Send.class);
+        channel.setSend(new NetworkSend("0", send));
 
-        Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenReturn(4L);
+        Mockito.when(send.writeTo(transport)).thenReturn(4L);
         assertEquals(4L, channel.write());
-        InOrder inOrder = Mockito.inOrder(socketChannel, transport);
+        InOrder inOrder = Mockito.inOrder(socketChannel, send);
         inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, false);
-        inOrder.verify(transport).write(Mockito.any(ByteBuffer[].class));
+        inOrder.verify(send).writeTo(transport);
         inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, true);
 
-        Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenThrow(new IOException("Connection reset"));
+        Mockito.when(send.writeTo(transport)).thenThrow(new IOException("Connection reset"));
         assertThrows(IOException.class, channel::write);
         Mockito.verify(socketChannel, Mockito.times(2)).setOption(StandardSocketOptions.TCP_NODELAY, true);
+    }
+
+    @Test
+    public void testWriteKeepsTcpNoDelayForByteBufferSendWithoutSsl() throws IOException {
+        assumeTrue(OperatingSystem.IS_LINUX);
+        Authenticator authenticator = Mockito.mock(Authenticator.class);
+        TransportLayer plaintext = Mockito.mock(TransportLayer.class);
+        SslTransportLayer ssl = Mockito.mock(SslTransportLayer.class);
+        SocketChannel socketChannel = Mockito.mock(SocketChannel.class);
+        Mockito.when(plaintext.socketChannel()).thenReturn(socketChannel);
+        Mockito.when(ssl.socketChannel()).thenReturn(socketChannel);
+        MemoryPool pool = Mockito.mock(MemoryPool.class);
+        ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
+
+        KafkaChannel plaintextChannel = new KafkaChannel("0", plaintext, () -> authenticator,
+            1024, pool, metadataRegistry);
+        plaintextChannel.setSend(new NetworkSend("0", ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)))));
+        plaintextChannel.write();
+        Mockito.verify(socketChannel, Mockito.never()).setOption(Mockito.any(), Mockito.any());
+
+        KafkaChannel sslChannel = new KafkaChannel("1", ssl, () -> authenticator,
+            1024, pool, metadataRegistry);
+        sslChannel.setSend(new NetworkSend("1", ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)))));
+        sslChannel.write();
+        Mockito.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, false);
+        Mockito.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, true);
     }
 
     @Test

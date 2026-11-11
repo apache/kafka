@@ -439,12 +439,13 @@ public class KafkaChannel implements AutoCloseable {
             return 0;
 
         midWrite = true;
-        if (!OperatingSystem.IS_LINUX)
+        // A ByteBufferSend is written with one call, but SSL writes each of its buffers as its own TLS record
+        boolean singleWrite = send.send() instanceof ByteBufferSend && !(transportLayer instanceof SslTransportLayer);
+        if (!OperatingSystem.IS_LINUX || singleWrite)
             return send.writeTo(transportLayer);
 
-        // A send often has many small parts, e.g. a header and the records of each partition, and with
-        // TCP_NODELAY every part leaves as its own segment. With TCP_NODELAY off during the write the kernel
-        // joins them, and turning it back on makes Linux send the queued data at once, without waiting for an ACK.
+        // With TCP_NODELAY off the kernel joins the small parts of a send into full segments, and on Linux
+        // turning it back on sends the queued data at once instead of waiting for an ACK (see tcp(7)).
         SocketChannel socketChannel = transportLayer.socketChannel();
         socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, false);
         try {
