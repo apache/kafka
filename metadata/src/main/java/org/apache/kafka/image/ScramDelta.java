@@ -30,7 +30,7 @@ import java.util.Optional;
 
 
 /**
- * Represents changes to a topic in the metadata image.
+ * Represents changes to SCRAM credentials in the metadata image.
  */
 public final class ScramDelta {
     private final ScramImage image;
@@ -92,10 +92,10 @@ public final class ScramDelta {
                     userMap.put(userNameEntry.getKey(), userNameEntry.getValue().get());
                 } else {
                     userMap.remove(userNameEntry.getKey());
-                    if (userMap.isEmpty()) {
-                        newMechanisms.remove(mechanismChangeEntry.getKey());
-                    }
                 }
+            }
+            if (userMap.isEmpty()) {
+                newMechanisms.remove(mechanismChangeEntry.getKey());
             }
         }
         return new ScramImage(newMechanisms);

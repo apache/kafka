@@ -17,17 +17,13 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverBuilder;
@@ -38,23 +34,18 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
-import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Disabled;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -94,45 +85,6 @@ public class KTableSourceTest {
             supplier.theCapturedProcessor().processed());
     }
 
-    @Disabled // we have disabled KIP-557 until KAFKA-12508 can be properly addressed
-    @Test
-    public void testKTableSourceEmitOnChange() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String topic1 = "topic1";
-
-        builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"))
-               .toStream()
-               .to("output");
-
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
-            final TestInputTopic<String, Integer> inputTopic =
-                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
-            final TestOutputTopic<String, Integer> outputTopic =
-                driver.createOutputTopic("output", new StringDeserializer(), new IntegerDeserializer());
-
-            inputTopic.pipeInput("A", 1, 10L);
-            inputTopic.pipeInput("B", 2, 11L);
-            inputTopic.pipeInput("A", 1, 12L);
-            inputTopic.pipeInput("B", 3, 13L);
-            // this record should be kept since this is out of order, so the timestamp
-            // should be updated in this scenario
-            inputTopic.pipeInput("A", 1, 9L);
-
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "idempotent-update-skip-total", "stream-processor-node-metrics").metricValue()
-            );
-
-            assertEquals(
-                asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
-                           new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
-                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)),
-                           new TestRecord<>("A", 1, Instant.ofEpochMilli(9L))),
-                outputTopic.readRecordsToList()
-            );
-        }
-    }
-
     @Test
     public void kTableShouldLogAndMeterOnSkippedRecords() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -152,13 +104,8 @@ public class KTableSourceTest {
                 );
             inputTopic.pipeInput(null, "value");
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
-            );
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }
 
@@ -182,13 +129,8 @@ public class KTableSourceTest {
             inputTopic.pipeInput("key", "value", 10L);
             inputTopic.pipeInput("key", "value", 5L);
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
-            );
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1]."));
         }
     }
 

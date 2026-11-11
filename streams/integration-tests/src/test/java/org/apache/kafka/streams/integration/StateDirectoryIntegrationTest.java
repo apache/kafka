@@ -137,7 +137,7 @@ public class StateDirectoryIntegrationTest {
             // Validate application state directory is created.
             streams.start();
             try {
-                runningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                runningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (final InterruptedException e) {
                 throw new RuntimeException("Streams didn't start in time.", e);
             }
@@ -148,7 +148,7 @@ public class StateDirectoryIntegrationTest {
             // Validate StateStore directory is deleted.
             streams.close();
             try {
-                notRunningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                notRunningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (final InterruptedException e) {
                 throw new RuntimeException("Streams didn't cleaned up in time.", e);
             }
@@ -243,7 +243,7 @@ public class StateDirectoryIntegrationTest {
             // Validate application state directory is created.
             streams.start();
             try {
-                runningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                runningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (final InterruptedException e) {
                 throw new RuntimeException("Streams didn't start in time.", e);
             }
@@ -261,7 +261,7 @@ public class StateDirectoryIntegrationTest {
             // Validate StateStore directory is deleted.
             streams.close();
             try {
-                notRunningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                notRunningLatch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (final InterruptedException e) {
                 throw new RuntimeException("Streams didn't cleaned up in time.", e);
             }

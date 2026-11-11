@@ -18,8 +18,9 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -72,10 +73,8 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -183,8 +182,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
 
@@ -223,7 +222,7 @@ public class RegexSourceIntegrationTest {
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();
-            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            assertTrue(topology.describe().subtopologies().size() > 1);
             streams = new KafkaStreams(topology, streamsConfiguration);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -276,14 +275,14 @@ public class RegexSourceIntegrationTest {
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();
-            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            assertTrue(topology.describe().subtopologies().size() > 1);
             streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -341,8 +340,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -426,7 +425,7 @@ public class RegexSourceIntegrationTest {
 
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
+        assertEquals(expectedReceivedValues, actualValues);
     }
 
     @Test
@@ -454,8 +453,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(leaderAssignment, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheRebalanceListener(leaderAssignment, listener));
                         }
                     };
 
@@ -466,8 +465,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(followerAssignment, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheRebalanceListener(followerAssignment, listener));
                         }
                     };
 
@@ -529,33 +528,33 @@ public class RegexSourceIntegrationTest {
             // this is fine
         }
 
-        assertThat(expectError.get(), is(true));
+        assertTrue(expectError.get());
     }
 
-    private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {
+    private static class TheRebalanceListener implements RebalanceListener {
         private final List<String> assignedTopics;
-        private final ConsumerRebalanceListener listener;
+        private final RebalanceListener listener;
 
-        TheConsumerRebalanceListener(final List<String> assignedTopics, final ConsumerRebalanceListener listener) {
+        TheRebalanceListener(final List<String> assignedTopics, final RebalanceListener listener) {
             this.assignedTopics = assignedTopics;
             this.listener = listener;
         }
 
         @Override
-        public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
             for (final TopicPartition partition : partitions) {
                 assignedTopics.remove(partition.topic());
             }
-            listener.onPartitionsRevoked(partitions);
+            listener.onPartitionsRevoked(partitions, consumer);
         }
 
         @Override
-        public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
             for (final TopicPartition partition : partitions) {
                 assignedTopics.add(partition.topic());
             }
             Collections.sort(assignedTopics);
-            listener.onPartitionsAssigned(partitions);
+            listener.onPartitionsAssigned(partitions, consumer);
         }
     }
 

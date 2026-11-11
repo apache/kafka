@@ -34,8 +34,8 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -93,11 +93,11 @@ public class ChangelogTopicsTest {
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_0).isEmpty());
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_1).isEmpty());
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_2).isEmpty());
+        assertTrue(changelogTopics.preExistingSourceTopicBasedPartitions().isEmpty());
+        assertTrue(changelogTopics.preExistingNonSourceTopicBasedPartitions().isEmpty());
     }
 
     @Test
@@ -112,12 +112,12 @@ public class ChangelogTopicsTest {
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
-        assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
-        assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertEquals(3, CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE));
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_0).isEmpty());
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_1).isEmpty());
+        assertTrue(changelogTopics.preExistingPartitionsFor(TASK_0_2).isEmpty());
+        assertTrue(changelogTopics.preExistingSourceTopicBasedPartitions().isEmpty());
+        assertTrue(changelogTopics.preExistingNonSourceTopicBasedPartitions().isEmpty());
     }
 
     @Test
@@ -132,18 +132,15 @@ public class ChangelogTopicsTest {
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
-        assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));
+        assertEquals(3, CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE));
         final TopicPartition changelogPartition0 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 0);
         final TopicPartition changelogPartition1 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 1);
         final TopicPartition changelogPartition2 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(changelogPartition2)));
-        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
-        assertThat(
-            changelogTopics.preExistingNonSourceTopicBasedPartitions(),
-            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
-        );
+        assertEquals(Set.of(changelogPartition0), changelogTopics.preExistingPartitionsFor(TASK_0_0));
+        assertEquals(Set.of(changelogPartition1), changelogTopics.preExistingPartitionsFor(TASK_0_1));
+        assertEquals(Set.of(changelogPartition2), changelogTopics.preExistingPartitionsFor(TASK_0_2));
+        assertTrue(changelogTopics.preExistingSourceTopicBasedPartitions().isEmpty());
+        assertEquals(Set.of(changelogPartition0, changelogPartition1, changelogPartition2), changelogTopics.preExistingNonSourceTopicBasedPartitions());
     }
 
     @Test
@@ -160,14 +157,11 @@ public class ChangelogTopicsTest {
         final TopicPartition changelogPartition0 = new TopicPartition(SOURCE_TOPIC_NAME, 0);
         final TopicPartition changelogPartition1 = new TopicPartition(SOURCE_TOPIC_NAME, 1);
         final TopicPartition changelogPartition2 = new TopicPartition(SOURCE_TOPIC_NAME, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(changelogPartition2)));
-        assertThat(
-            changelogTopics.preExistingSourceTopicBasedPartitions(),
-            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
-        );
-        assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertEquals(Set.of(changelogPartition0), changelogTopics.preExistingPartitionsFor(TASK_0_0));
+        assertEquals(Set.of(changelogPartition1), changelogTopics.preExistingPartitionsFor(TASK_0_1));
+        assertEquals(Set.of(changelogPartition2), changelogTopics.preExistingPartitionsFor(TASK_0_2));
+        assertEquals(Set.of(changelogPartition0, changelogPartition1, changelogPartition2), changelogTopics.preExistingSourceTopicBasedPartitions());
+        assertTrue(changelogTopics.preExistingNonSourceTopicBasedPartitions().isEmpty());
     }
 
     @Test
@@ -182,23 +176,17 @@ public class ChangelogTopicsTest {
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
-        assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));
+        assertEquals(3, CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE));
         final TopicPartition changelogPartition0 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 0);
         final TopicPartition changelogPartition1 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 1);
         final TopicPartition changelogPartition2 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 2);
         final TopicPartition sourcePartition0 = new TopicPartition(SOURCE_TOPIC_NAME, 0);
         final TopicPartition sourcePartition1 = new TopicPartition(SOURCE_TOPIC_NAME, 1);
         final TopicPartition sourcePartition2 = new TopicPartition(SOURCE_TOPIC_NAME, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(sourcePartition0, changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(sourcePartition1, changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(sourcePartition2, changelogPartition2)));
-        assertThat(
-            changelogTopics.preExistingSourceTopicBasedPartitions(),
-            is(Set.of(sourcePartition0, sourcePartition1, sourcePartition2))
-        );
-        assertThat(
-            changelogTopics.preExistingNonSourceTopicBasedPartitions(),
-            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
-        );
+        assertEquals(Set.of(sourcePartition0, changelogPartition0), changelogTopics.preExistingPartitionsFor(TASK_0_0));
+        assertEquals(Set.of(sourcePartition1, changelogPartition1), changelogTopics.preExistingPartitionsFor(TASK_0_1));
+        assertEquals(Set.of(sourcePartition2, changelogPartition2), changelogTopics.preExistingPartitionsFor(TASK_0_2));
+        assertEquals(Set.of(sourcePartition0, sourcePartition1, sourcePartition2), changelogTopics.preExistingSourceTopicBasedPartitions());
+        assertEquals(Set.of(changelogPartition0, changelogPartition1, changelogPartition2), changelogTopics.preExistingNonSourceTopicBasedPartitions());
     }
 }

@@ -66,12 +66,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.core.MediaType;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -328,6 +330,80 @@ public class ConnectRestServerTest {
     }
 
     @Test
+    public void testRestExtensionsRegisteredWithAdminListener() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://localhost:0");
+        configMap.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG, HeaderConnectRestExtension.class.getName());
+
+        HeaderConnectRestExtension extension = new HeaderConnectRestExtension();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(List.of(extension)).when(plugins).newPlugins(any(), any(), eq(ConnectRestExtension.class));
+        doReturn(List.of()).when(herder).connectors();
+
+        server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertNotEquals(server.advertisedUrl(), server.adminUrl());
+        assertEquals(2, extension.registrations);
+
+        HttpResponse regularResponse = executeRequest(server.advertisedUrl(), new HttpGet("/connectors"));
+        assertEquals(200, regularResponse.getStatusLine().getStatusCode());
+        assertNotNull(regularResponse.getFirstHeader(extension.name));
+
+        HttpResponse adminResponse = executeRequest(server.adminUrl(), new HttpGet("/admin/loggers"));
+        assertEquals(200, adminResponse.getStatusLine().getStatusCode());
+        assertNotNull(adminResponse.getFirstHeader(extension.name));
+    }
+
+    @Test
+    public void testRestExtensionsWithoutAdminListener() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG, HeaderConnectRestExtension.class.getName());
+
+        HeaderConnectRestExtension extension = new HeaderConnectRestExtension();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(List.of(extension)).when(plugins).newPlugins(any(), any(), eq(ConnectRestExtension.class));
+        doReturn(List.of()).when(herder).connectors();
+
+        server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertEquals(1, extension.registrations);
+
+        HttpResponse response = executeRequest(server.advertisedUrl(), new HttpGet("/connectors"));
+        assertEquals(200, response.getStatusLine().getStatusCode());
+        assertNotNull(response.getFirstHeader(extension.name));
+    }
+
+    @Test
+    public void testRestExtensionsWithDisabledAdminListener() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "");
+        configMap.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG, HeaderConnectRestExtension.class.getName());
+
+        HeaderConnectRestExtension extension = new HeaderConnectRestExtension();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(List.of(extension)).when(plugins).newPlugins(any(), any(), eq(ConnectRestExtension.class));
+        doReturn(List.of()).when(herder).connectors();
+
+        server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertEquals(1, extension.registrations);
+
+        // Extensions should still work on the regular listener
+        HttpResponse response = executeRequest(server.advertisedUrl(), new HttpGet("/connectors"));
+        assertEquals(200, response.getStatusLine().getStatusCode());
+        assertNotNull(response.getFirstHeader(extension.name));
+    }
+
+    @Test
     public void testDisableAdminEndpoint() throws IOException {
         Map<String, String> configMap = new HashMap<>(baseServerProps());
         configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "");
@@ -387,6 +463,20 @@ public class ConnectRestServerTest {
         String headerConfig = "";
         Map<String, String> expectedHeaders = new HashMap<>();
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
+    }
+
+    static final class HeaderConnectRestExtension extends PluginsTest.TestConnectRestExtension {
+        String name = "X-Header";
+        int registrations = 0;
+
+        @Override
+        public void register(ConnectRestExtensionContext restPluginContext) {
+            registrations++;
+            restPluginContext.configurable().register(
+                (ContainerResponseFilter) (req, resp) ->
+                    resp.getHeaders().add(name, "true")
+            );
+        }
     }
 
     static final class MonitorableConnectRestExtension extends PluginsTest.TestConnectRestExtension implements Monitorable {

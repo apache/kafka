@@ -321,7 +321,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
+                keySerializer, valueSerializer);
     }
 
     /**
@@ -350,6 +350,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
+    KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        this(config, keySerializer, valueSerializer, null, null, Uuid.randomUuid(), null, new ApiVersions(), Time.SYSTEM);
+    }
+
     // visible for testing
     @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
@@ -357,6 +361,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   Serializer<V> valueSerializer,
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
+                  Uuid clientInstanceId,
                   ProducerInterceptors<K, V> interceptors,
                   ApiVersions apiVersions,
                   Time time) {
@@ -382,7 +387,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
@@ -512,7 +517,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             this.errors = this.metrics.sensor("errors");
-            this.sender = newSender(logContext, kafkaClient, this.metadata);
+            this.sender = newSender(logContext, kafkaClient, this.metadata, clientInstanceId);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new Sender.SenderThread(ioThreadName, this.sender, true);
             this.ioThread.start();
@@ -568,13 +573,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, Uuid clientInstanceId) {
         int maxInflightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
                 producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 this.metrics,
                 "producer",
                 logContext,
@@ -1523,8 +1529,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the producer
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the producer
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link ProducerConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -1540,7 +1546,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
      *                               is set to `{@code false}`.
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      */
     @Override
     public Uuid clientInstanceId(Duration timeout) {

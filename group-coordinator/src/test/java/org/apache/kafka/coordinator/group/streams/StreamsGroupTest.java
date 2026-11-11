@@ -47,7 +47,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
-import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -134,6 +133,31 @@ public class StreamsGroupTest {
         );
         streamsGroup.updateTaskOffsets("member-id", newerOffsets);
         assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
+    }
+
+    @Test
+    public void testUpdateAndRetrieveHeartbeatVersions() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateHeartbeatVersion("old", 0);
+        streamsGroup.updateHeartbeatVersion("new", 1);
+
+        assertEquals(Map.of("old", 0, "new", 1), streamsGroup.heartbeatVersions());
+        // The refiner must not be able to change what the coordinator knows.
+        assertThrows(UnsupportedOperationException.class, () -> streamsGroup.heartbeatVersions().put("old", 1));
+
+        streamsGroup.updateHeartbeatVersion("old", 1);
+        assertEquals(1, streamsGroup.heartbeatVersions().get("old"));
+    }
+
+    @Test
+    public void testRemoveMemberForgetsItsHeartbeatVersion() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+
+        streamsGroup.removeMember("member-id");
+
+        assertEquals(Map.of(), streamsGroup.heartbeatVersions());
     }
 
     @Test
@@ -1391,6 +1415,23 @@ public class StreamsGroupTest {
         assertNotNull(describedGroup.topology());
         assertEquals(3, describedGroup.topology().epoch()); // ConfiguredTopology epoch
         assertEquals(0, describedGroup.topology().subtopologies().size()); // Empty configured topology
+    }
+
+    @Test
+    public void testAsDescribedGroupUsesConfiguredTopologyWithoutStreamsTopology() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-configured-only");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        ConfiguredTopology configuredTopology = new ConfiguredTopology(3, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty());
+        group.setGroupEpoch(3);
+        group.setConfiguredTopology(configuredTopology);
+        group.setTargetAssignmentMetadata(3, 12345L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
+
+        assertEquals(configuredTopology.asStreamsGroupDescribeTopology(), describedGroup.topology());
     }
 
     @Test

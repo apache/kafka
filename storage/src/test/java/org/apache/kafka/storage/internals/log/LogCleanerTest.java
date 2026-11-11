@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -353,6 +354,33 @@ public class LogCleanerTest {
 
         assertTrue(log.logSegments().iterator().next().log().channel().size() < originalMaxFileSize,
             "Cleaned segment file should be trimmed to its real size.");
+    }
+
+    /**
+     * Compaction rejects a compressed record whose decompressed body exceeds
+     * max.decompressed.message.bytes with InvalidRecordException (mapped to an uncleanable
+     * partition by LogCleaner) rather than OOMing. Injected via follower append to skip produce
+     * validation, mirroring a record that was already durable before the limit was lowered.
+     */
+    @Test
+    public void testCleanRejectsRecordExceedingConfiguredMaxDecompressedMessageBytes() throws IOException {
+        Cleaner cleaner = makeCleaner(10);
+        Properties logProps = new Properties();
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "10");
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+
+        // partitionLeaderEpoch must be valid (>= 0) for follower append to assign it to the epoch cache.
+        MemoryRecords oversized = MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L,
+            Compression.gzip().build(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE, 0, new SimpleRecord("k".getBytes(), new byte[100]));
+        log.appendAsFollower(oversized, Integer.MAX_VALUE);
+        log.roll();
+
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+            () -> cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false)));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size"),
+            "expected the configured-maximum guard message, got: " + e.getMessage());
     }
 
     @Test
@@ -834,6 +862,70 @@ public class LogCleanerTest {
         cleaner.doClean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false), Long.MAX_VALUE);
         assertEquals(List.of(1L), offsetsInLog(log));
         assertEquals(List.of(0L, 1L), lastOffsetsPerBatchInLog(log));
+    }
+
+    @Test
+    public void testCommittedTombstoneAfterAbortedTransactionBeforeCleaningStart() throws IOException, DigestException {
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
+        Properties logProps = new Properties();
+        // Index every batch, so that a pass reads from exactly its start offset, as it does in a large segment
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1);
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+        short producerEpoch = 0;
+        long producerId = 1L;
+
+        appendTransactionalAsLeader(log, producerId, producerEpoch).append(List.of(1));           // [0, 0]
+        log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, // [1, 1]
+            RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
+        for (int key = 2; key <= 5; key++)
+            log.appendAsLeader(record(key, key), 0);                                              // [2, 5]
+        // The same producer deletes key 2 in a committed transaction
+        log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, 1,
+            new SimpleRecord(time.milliseconds(), "2".getBytes(), null)), 0);                     // [6, 6]
+        log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, // [7, 7]
+            RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
+        log.roll();
+        log.updateHighWatermark(log.logEndOffset());
+
+        // A pass that starts after the abort marker, as after an earlier pass that filled its offset map at offset 4
+        long firstDirtyOffset = cleaner.doClean(new LogToClean(log, 4L, log.activeSegment().baseOffset(), false),
+            time.milliseconds()).getKey();
+        // A later pass after the delete horizon of the tombstone
+        log.appendAsLeader(record(8, 8), 0);
+        log.roll();
+        log.updateHighWatermark(log.logEndOffset());
+        cleaner.doClean(new LogToClean(log, firstDirtyOffset, log.activeSegment().baseOffset(), false),
+            time.milliseconds() + tombstoneRetentionMs + 1);
+
+        assertEquals(List.of(3L, 4L, 5L, 8L), LogTestUtils.keysInLog(log));
+    }
+
+    @Test
+    public void testBuildOffsetMapSkipsAbortedTransactionSpanningCleaningStart() throws IOException, DigestException {
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
+        Properties logProps = new Properties();
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1);
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+        short producerEpoch = 0;
+        long producerId = 1L;
+
+        var appendTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch);
+        appendTransaction.append(List.of(1));                                                     // [0, 0]
+        log.appendAsLeader(record(2, 2), 0);                                                      // [1, 1]
+        log.appendAsLeader(record(3, 3), 0);                                                      // [2, 2]
+        appendTransaction.append(List.of(4));                                                     // [3, 3]
+        log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, // [4, 4]
+            RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
+        log.appendAsLeader(record(5, 5), 0);                                                      // [5, 5]
+        log.roll();
+
+        // The transaction began before the start offset and was aborted after it
+        var offsetMap = new LogTestUtils.FakeOffsetMap();
+        cleaner.buildOffsetMap(log, 2L, log.activeSegment().baseOffset(), offsetMap, new CleanerStats(time));
+
+        assertEquals(-1L, offsetMap.get(key(4)));
+        assertEquals(2L, offsetMap.get(key(3)));
+        assertEquals(5L, offsetMap.get(key(5)));
     }
 
     @Test

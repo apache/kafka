@@ -37,7 +37,8 @@ public class RecordsToDelete {
      * Delete all the records before the given {@code offset}
      *
      * @param offset    The offset before which all records will be deleted.
-     *                  Use {@code -1} to truncate to the high watermark.
+     *                  Use {@code -1} to truncate to the high watermark. Otherwise, the offset
+     *                  must be at least 0 and at most the high watermark of the partition.
      */
     public static RecordsToDelete beforeOffset(long offset) {
         return new RecordsToDelete(offset);

@@ -36,6 +36,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
 
     private static final String JAAS_USER_PREFIX = "user_";
+    private static final char[] UNKNOWN_USER_DUMMY_PASSWORD = {'\0'};
     private List<AppConfigurationEntry> jaasConfigEntries;
 
     @Override
@@ -65,7 +66,9 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
             String expectedPassword = JaasContext.configEntryOption(jaasConfigEntries,
                     JAAS_USER_PREFIX + username,
                     PlainLoginModule.class.getName());
-            return expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
+            char[] comparedPassword = expectedPassword != null ? expectedPassword.toCharArray() : UNKNOWN_USER_DUMMY_PASSWORD;
+            boolean matches = Utils.isEqualConstantTime(password, comparedPassword);
+            return matches && expectedPassword != null;
         }
     }
 

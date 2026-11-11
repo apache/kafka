@@ -64,9 +64,8 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -130,7 +129,7 @@ public class OptimizedKTableIntegrationTest {
             produceValueRange(key, 0, batch1NumMessages);
 
             // Assert that all messages in the first batch were processed in a timely manner
-            assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+            assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
 
             final AtomicReference<ReadOnlyKeyValueStore<Integer, Integer>> newActiveStore = new AtomicReference<>(null);
             TestUtils.retryOnExceptionWithTimeout(() -> {
@@ -142,11 +141,11 @@ public class OptimizedKTableIntegrationTest {
                 try {
                     // Assert that the current value in store reflects all messages being processed
                     if ((keyQueryMetadata.activeHost().port() % 2) == 1) {
-                        assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
+                        assertEquals(batch1NumMessages - 1, store1.get(key));
                         kafkaStreams1.close();
                         newActiveStore.set(store2);
                     } else {
-                        assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
+                        assertEquals(batch1NumMessages - 1, store2.get(key));
                         kafkaStreams2.close();
                         newActiveStore.set(store1);
                     }
@@ -162,7 +161,7 @@ public class OptimizedKTableIntegrationTest {
             // Wait for failover
             TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
                 // Assert that after failover we have recovered to the last store write
-                assertThat(newActiveStore.get().get(key), is(equalTo(batch1NumMessages - 1)));
+                assertEquals(batch1NumMessages - 1, newActiveStore.get().get(key));
             });
 
             final int totalNumMessages = batch1NumMessages + batch2NumMessages;
@@ -170,11 +169,11 @@ public class OptimizedKTableIntegrationTest {
             produceValueRange(key, batch1NumMessages, totalNumMessages);
 
             // Assert that all messages in the second batch were processed in a timely manner
-            assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+            assertTrue(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS));
 
             TestUtils.retryOnExceptionWithTimeout(60 * 1000, 100, () -> {
                 // Assert that the current value in store reflects all messages being processed
-                assertThat(newActiveStore.get().get(key), is(equalTo(totalNumMessages - 1)));
+                assertEquals(totalNumMessages - 1, newActiveStore.get().get(key));
             });
         } finally {
             kafkaStreams1.close();

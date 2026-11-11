@@ -124,7 +124,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             verify(httpsJwks, times(1)).refresh();
         }
     }
-    
+
     @Test
     public void testNullKeyId() throws Exception {
         MockTime time = new MockTime();

@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -80,6 +81,7 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
+                                                                    Uuid clientInstanceId,
                                                                     Metrics metrics,
                                                                     LogContext logContext,
                                                                     ApiVersions apiVersions,
@@ -90,6 +92,7 @@ public final class ConsumerUtils {
                                                                     ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,
@@ -131,10 +134,10 @@ public final class ConsumerUtils {
         return IsolationLevel.valueOf(s);
     }
 
-    public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
+    public static ConsumerSubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
         String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
-        return new SubscriptionState(logContext, strategy);
+        return new ConsumerSubscriptionState(logContext, strategy);
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
@@ -191,7 +194,7 @@ public final class ConsumerUtils {
      */
     public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
                                                final ConsumerMetadata metadata,
-                                               final SubscriptionState subscriptions) {
+                                               final ConsumerSubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -203,7 +206,7 @@ public final class ConsumerUtils {
                 // so we need to ignore seeking if that's the case
                 if (subscriptions.isAssigned(tp)) {
                     final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                    final ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                             offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
                             leaderAndEpoch);
 

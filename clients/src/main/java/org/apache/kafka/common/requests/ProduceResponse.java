@@ -289,8 +289,4 @@ public class ProduceResponse extends AbstractResponse {
         return new ProduceResponse(new ProduceResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 6;
-    }
 }

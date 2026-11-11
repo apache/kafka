@@ -35,7 +35,6 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 
-import static java.util.Collections.emptySet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomClientState;
@@ -269,7 +268,7 @@ public class RackAwareGraphConstructorTest {
             ClientState::unassignActive,
             ClientState::hasAssignedTask
         );
-        assertValidAssignment(0, taskIds, emptySet(), clientStateMap, new StringBuilder());
+        assertValidAssignment(0, taskIds, Set.of(), clientStateMap, new StringBuilder());
         if (constructorType.equals(BALANCE_SUBTOPOLOGY)) {
             assertBalancedTasks(clientStateMap);
         }

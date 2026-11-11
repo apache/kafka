@@ -38,10 +38,10 @@ import java.util.function.BiConsumer;
  *
  * This class is threadsafe.
  *
+ * See {@code EventAccumulatorTest} for examples of how to use it.
+ *
  * @param <K> The type of the key of the event.
  * @param <T> The type of the event itself. It implements the {@link Event} interface.
- *
- * There are a few examples about how to use it in the unit tests.
  */
 public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements AutoCloseable {
 
@@ -249,7 +249,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Adds the key to the available keys set.
+     * Adds the key to the available keys.
      *
      * This method must be called while holding the lock.
      */
@@ -259,8 +259,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Returns the next available key. The key is selected randomly
-     * from the available keys set.
+     * Returns the next available key. The key is selected randomly from the available keys.
      *
      * This method must be called while holding the lock.
      */

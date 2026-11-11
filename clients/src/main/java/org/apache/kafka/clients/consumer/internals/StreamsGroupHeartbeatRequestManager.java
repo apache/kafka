@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -413,10 +414,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs, time);
+        int requestTimeout = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(
             logContext,
             time,
-            0,
+            requestTimeout,
             retryBackoffMs,
             retryBackoffMaxMs,
             RETRY_BACKOFF_JITTER
@@ -530,9 +532,20 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() ||
-            membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
-
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // A heartbeat is only sent when the coordinator is known; poll() returns EMPTY otherwise
+        // (see the guard at the top of poll()). If the coordinator is unavailable (for example,
+        // while bootstrap DNS resolution is still in progress), the
+        // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
+        // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
+        // condition remains true and both the application and network threads end up busy-spinning.
+        // Wait a retry backoff to keep the application thread responsive without busy-spinning.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
+            return heartbeatRequestState.retryBackoffMs();
+        }
+        if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -649,6 +662,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
         final StreamsGroupHeartbeatResponseData data = response.data();
+
+        final List<String> unknownStatuses = unknownStatuses(data.status());
+        if (!unknownStatuses.isEmpty()) {
+            final String errorMessage = String.format(
+                "The group coordinator returned status %s in the Streams group heartbeat response, which this client "
+                    + "cannot interpret; it knows the status codes %s. A status code must not be sent to a client that "
+                    + "cannot interpret it, so this is a bug on the group coordinator.",
+                unknownStatuses,
+                StreamsGroupHeartbeatResponse.Status.knownCodes()
+            );
+            logger.error(errorMessage);
+            heartbeatRequestState.onFailedAttempt(currentTimeMs);
+            heartbeatState.reset();
+            handleFatalFailure(new KafkaException(errorMessage));
+            membershipManager.onFatalHeartbeatFailure();
+            return;
+        }
+
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
@@ -683,6 +714,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private static List<String> unknownStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        if (statuses == null) {
+            return List.of();
+        }
+        return statuses.stream()
+            .filter(status -> !StreamsGroupHeartbeatResponse.Status.isKnownCode(status.statusCode()))
+            .sorted(Comparator.comparing(StreamsGroupHeartbeatResponseData.Status::statusCode))
+            .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+            .collect(Collectors.toList());
     }
 
     private void maybeLogStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {

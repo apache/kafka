@@ -106,11 +106,11 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
     }
 
     /**
-     * Creates a {{@link TasksTuple}} from a
-     * {{@link org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue}}.
+     * Creates a {@link TasksTuple} from a
+     * {@link org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue}.
      *
      * @param record The record.
-     * @return A {{@link TasksTuple}}.
+     * @return A {@link TasksTuple}.
      */
     public static TasksTuple fromTargetAssignmentRecord(StreamsGroupTargetAssignmentMemberValue record) {
         return new TasksTuple(
@@ -135,6 +135,7 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
         );
     }
 
+    @Override
     public String toString() {
         return "(active=" + taskAssignmentToString(activeTasks) +
             ", standby=" + taskAssignmentToString(standbyTasks) +

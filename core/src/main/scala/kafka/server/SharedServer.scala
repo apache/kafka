@@ -23,6 +23,7 @@ import kafka.server.Server.MetricsPrefix
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.internals.AppInfoParser
 import org.apache.kafka.common.utils.internals.LogContext
@@ -277,6 +278,7 @@ class SharedServer(
           metrics = new Metrics()
         }
         sharedServerConfig.dynamicConfig.initialize(clientTelemetryExporterPluginOpt = None)
+        MessageUtil.setMaxArrayLength(sharedServerConfig.messageMaxArrayLength)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = new BrokerServerMetrics(metrics)
@@ -290,9 +292,14 @@ class SharedServer(
           Option(controllerServerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
         }
 
+        val raftManagerConfig = if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
+          controllerConfig
+        } else {
+          brokerConfig
+        }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
-          sharedServerConfig,
+          raftManagerConfig,
           metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
           MetadataRecordSerde.INSTANCE,
           KafkaRaftServer.MetadataPartition,

@@ -40,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -113,7 +112,7 @@ public class ClientUtils {
     public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
                                                                   final Consumer<byte[], byte[]> consumer) {
         if (partitions.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         final Map<TopicPartition, Long> committedOffsets;
@@ -192,7 +191,7 @@ public class ClientUtils {
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
                                                                              final Admin adminClient) {
         if (partitions.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
     }

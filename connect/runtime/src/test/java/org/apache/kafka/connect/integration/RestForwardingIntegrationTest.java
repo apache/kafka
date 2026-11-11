@@ -195,7 +195,7 @@ public class RestForwardingIntegrationTest {
             followerCallbackCaptor.getValue().onCompletion(forwardException, null);
             return null;
         }).when(followerHerder)
-                .putConnectorConfig(any(), any(), isNull(), anyBoolean(), followerCallbackCaptor.capture());
+                .putConnectorConfig(any(), any(), isNull(), isNull(), anyBoolean(), followerCallbackCaptor.capture());
 
         // Leader will reply
         ConnectorInfo connectorInfo = new ConnectorInfo("blah", Map.of(), List.of(), ConnectorType.SOURCE);
@@ -205,7 +205,7 @@ public class RestForwardingIntegrationTest {
             leaderCallbackCaptor.getValue().onCompletion(null, leaderAnswer);
             return null;
         }).when(leaderHerder)
-                .putConnectorConfig(any(), any(), isNull(), anyBoolean(), leaderCallbackCaptor.capture());
+                .putConnectorConfig(any(), any(), isNull(), isNull(), anyBoolean(), leaderCallbackCaptor.capture());
 
         // Client makes request to the follower
         URI followerUrl = followerServer.advertisedUrl();

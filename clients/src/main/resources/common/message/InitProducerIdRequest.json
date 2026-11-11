@@ -32,6 +32,10 @@
   "latestVersionUnstable": true,
   "validVersions": "0-6",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional id, or null if the producer is not transactional." },

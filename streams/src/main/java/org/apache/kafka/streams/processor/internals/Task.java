@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -212,7 +211,7 @@ public interface Task {
     void postCommit(boolean enforceCheckpoint);
 
     default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     /**
@@ -253,6 +252,10 @@ public interface Task {
     boolean commitNeeded();
 
     default long approximateNumUncommittedBytes() {
+        return 0;
+    }
+
+    default long maxStoreUncommittedBytes() {
         return 0;
     }
 

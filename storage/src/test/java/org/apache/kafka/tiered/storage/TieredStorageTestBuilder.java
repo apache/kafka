@@ -44,6 +44,7 @@ import org.apache.kafka.tiered.storage.actions.ShrinkReplicaAction;
 import org.apache.kafka.tiered.storage.actions.StartBrokerAction;
 import org.apache.kafka.tiered.storage.actions.StopBrokerAction;
 import org.apache.kafka.tiered.storage.actions.UpdateTopicConfigAction;
+import org.apache.kafka.tiered.storage.actions.WaitForEarliestLocalOffsetAction;
 import org.apache.kafka.tiered.storage.specs.ConsumableSpec;
 import org.apache.kafka.tiered.storage.specs.DeletableSpec;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
@@ -229,6 +230,15 @@ public final class TieredStorageTestBuilder {
 
     public TieredStorageTestBuilder waitForRemoteLogSegmentDeletion(String topic) {
         actions.add(buildDeleteTopicAction(topic, false));
+        return this;
+    }
+
+    public TieredStorageTestBuilder waitForEarliestLocalOffset(String topic,
+                                                               int partition,
+                                                               long earliestLocalOffset) {
+        assertTrue(partition >= 0, "Partition must be >= 0");
+        assertTrue(earliestLocalOffset >= 0, "Record offset must be >= 0");
+        actions.add(new WaitForEarliestLocalOffsetAction(new TopicPartition(topic, partition), earliestLocalOffset));
         return this;
     }
 

@@ -31,7 +31,7 @@ public class VersionedKeyQueryTest {
     }
 
     @Test
-    public void shouldThrowNPEWithNullAsOftimestamp() {
+    public void shouldThrowNPEWithNullAsOfTimestamp() {
         final VersionedKeyQuery<Integer, VersionedRecord<Integer>> query = VersionedKeyQuery.withKey(1);
         final Exception exception = assertThrows(NullPointerException.class, () -> query.asOf(null));
         assertEquals("asOf timestamp cannot be null.", exception.getMessage());

@@ -1077,7 +1077,11 @@ public final class LeaderState<T> implements EpochState {
 
     @Override
     public void close() {
-        changeVoterState.maybeResetPendingVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER);
+        changeVoterState.maybeResetPendingVoterHandlerState(
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            leaderAndEpoch(),
+            leaderEndpoints()
+        );
         kafkaRaftMetrics.removeLeaderMetrics();
 
         accumulator.close();

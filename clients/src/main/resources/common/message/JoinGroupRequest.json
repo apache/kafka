@@ -34,6 +34,10 @@
   // Version 9 is the same as version 8.
   "validVersions": "0-9",
   "flexibleVersions": "6+",
+  "headerVersions": {
+    "0-5": "1",
+    "6+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },

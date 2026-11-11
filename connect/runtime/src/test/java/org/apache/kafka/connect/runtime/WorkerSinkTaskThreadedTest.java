@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.Plugin;
@@ -71,8 +72,8 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -82,6 +83,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
@@ -127,6 +129,8 @@ public class WorkerSinkTaskThreadedTest {
     private ConnectMetrics metrics;
     @Mock
     private SinkTask sinkTask;
+    @Mock
+    private RebalanceConsumer rebalanceConsumer;
     private final ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext = ArgumentCaptor.forClass(WorkerSinkTaskContext.class);
     @Mock
     private PluginClassLoader pluginLoader;
@@ -141,7 +145,7 @@ public class WorkerSinkTaskThreadedTest {
     private WorkerSinkTask workerTask;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
-    private final ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+    private final ArgumentCaptor<RebalanceListener> rebalanceListener = ArgumentCaptor.forClass(RebalanceListener.class);
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
@@ -187,6 +191,7 @@ public class WorkerSinkTaskThreadedTest {
     @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
+        verifyNoInteractions(rebalanceConsumer);
     }
 
     @Test
@@ -439,21 +444,13 @@ public class WorkerSinkTaskThreadedTest {
             assertEquals(Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3), sinkTaskContext.getValue().assignment());
             return null;
         }).doAnswer(invocation -> {
-            try {
-                sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION);
-                fail("Trying to pause unassigned partition should have thrown an Connect exception");
-            } catch (ConnectException e) {
-                // expected
-            }
+            assertThrows(ConnectException.class, () -> sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION),
+                "Trying to pause unassigned partition should have thrown an Connect exception");
             sinkTaskContext.getValue().pause(TOPIC_PARTITION, TOPIC_PARTITION2);
             return null;
         }).doAnswer(invocation -> {
-            try {
-                sinkTaskContext.getValue().resume(UNASSIGNED_TOPIC_PARTITION);
-                fail("Trying to resume unassigned partition should have thrown an Connect exception");
-            } catch (ConnectException e) {
-                // expected
-            }
+            assertThrows(ConnectException.class, () -> sinkTaskContext.getValue().resume(UNASSIGNED_TOPIC_PARTITION),
+                "Trying to resume unassigned partition should have thrown an Connect exception");
             sinkTaskContext.getValue().resume(TOPIC_PARTITION, TOPIC_PARTITION2);
             return null;
         }).when(sinkTask).put(any(Collection.class));
@@ -555,7 +552,8 @@ public class WorkerSinkTaskThreadedTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(eq(List.of(TOPIC)), rebalanceListener.capture());
+        verify(consumer).setRebalanceListener(rebalanceListener.capture());
+        verify(consumer).subscribe(eq(List.of(TOPIC)));
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }
@@ -592,7 +590,7 @@ public class WorkerSinkTaskThreadedTest {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         when(consumer.poll(any(Duration.class))).thenAnswer(invocation -> {
-            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return ConsumerRecords.empty();
         }).thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
             // "Sleep" so time will progress
@@ -618,14 +616,14 @@ public class WorkerSinkTaskThreadedTest {
         offsets.put(TOPIC_PARTITION, startOffset);
 
         when(consumer.poll(any(Duration.class))).thenAnswer(invocation -> {
-            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return ConsumerRecords.empty();
         }).thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
             // "Sleep" so time will progress
             time.sleep(1L);
 
             sinkTaskContext.getValue().offset(offsets);
-            rebalanceListener.getValue().onPartitionsAssigned(partitions);
+            rebalanceListener.getValue().onPartitionsAssigned(partitions, rebalanceConsumer);
 
             TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(

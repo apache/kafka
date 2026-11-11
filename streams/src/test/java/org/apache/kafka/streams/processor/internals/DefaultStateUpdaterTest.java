@@ -34,8 +34,8 @@ import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
@@ -58,6 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -69,13 +70,10 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -121,6 +119,23 @@ class DefaultStateUpdaterTest {
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private final DefaultStateUpdater stateUpdater =
         new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
+    private final AtomicBoolean restoringActive = new AtomicBoolean(true);
+
+    @BeforeEach
+    public void setUp() {
+        restoringActive.set(true);
+        when(changelogReader.isRestoringActive()).thenAnswer(invocation -> restoringActive.get());
+        doAnswer(invocation -> {
+            restoringActive.set(true);
+            return null;
+        }).when(changelogReader).enforceRestoreActive();
+        doAnswer(invocation -> {
+            if (!restoringActive.compareAndSet(true, false)) {
+                throw new IllegalStateException("Changelog reader is already updating standbys");
+            }
+            return null;
+        }).when(changelogReader).transitToUpdateStandby();
+    }
 
     @AfterEach
     public void tearDown() {
@@ -633,7 +648,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart() {
-        assertThat(stateUpdater.taskEndOffsetSumSnapshot(), is(Collections.emptyMap()));
+        assertTrue(stateUpdater.taskEndOffsetSumSnapshot().isEmpty());
     }
 
     @Test
@@ -797,6 +812,38 @@ class DefaultStateUpdaterTest {
 
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         verify(changelogReader, times(1)).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldRestoreActiveModeAfterLastStandbyTaskFailed() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(task.id()));
+        final Map<TaskId, Task> updatingTasks = Map.of(task.id(), task);
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        doThrow(taskCorruptedException).when(changelogReader).restore(updatingTasks);
+
+        stateUpdater.start();
+        stateUpdater.add(task);
+
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, task));
+        verify(changelogReader).enforceRestoreActive();
+    }
+
+    @Test
+    public void shouldRestoreActiveModeAfterLastStandbyTaskRemoved() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final StateUpdater.RemovedTaskResult removedTask =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
+
+        assertEquals(new StateUpdater.RemovedTaskResult(task), removedTask);
+        verify(changelogReader).enforceRestoreActive();
     }
 
     @Test
@@ -1263,22 +1310,22 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        // Shutdown waits for the pause transition and contributes the second enforceRestoreActive call during cleanup.
         stateUpdater.shutdown(Duration.ofMinutes(1));
-        verify(changelogReader, times(1)).enforceRestoreActive();
+        verify(changelogReader, times(2)).enforceRestoreActive();
         verify(changelogReader, times(1)).transitToUpdateStandby();
     }
 
     @Test
-    public void shouldPauseStandbyTaskAndNotTransitToRestoreActive() throws Exception {
+    public void shouldPauseStandbyTaskAndNotTransitToRestoreActiveIfAnotherStandbyIsUpdating() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_A_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_B_0_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
 
         when(topologyMetadata.isPaused(task1.id().topologyName())).thenReturn(false).thenReturn(true);
 
-        stateUpdater.start();
         stateUpdater.add(task1);
         stateUpdater.add(task2);
+        stateUpdater.start();
 
         verifyPausedTasks(task1);
         verifyUpdatingTasks(task2);
@@ -1402,9 +1449,12 @@ class DefaultStateUpdaterTest {
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
+        // Shutdown waits for the resumed standby transition and contributes the second enforceRestoreActive call
+        // during cleanup.
         stateUpdater.shutdown(Duration.ofMinutes(1));
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
         verify(changelogReader, times(2)).transitToUpdateStandby();
+        verify(changelogReader, times(2)).enforceRestoreActive();
     }
 
     private void shouldResumeStatefulTask(final Task task) throws Exception {
@@ -1490,7 +1540,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldAddFailedTasksToQueueWhenRestoreThrowsStreamsExceptionWithoutTask() throws Exception {
-        final StreamTask task1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask task1 = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final String exceptionMessage = "The Streams were crossed!";
         final StreamsException streamsException = new StreamsException(exceptionMessage);
@@ -1510,6 +1560,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks();
         verifyUpdatingTasks();
         verifyRestoredActiveTasks();
+        verify(changelogReader).enforceRestoreActive();
         assertTrue(stateUpdater.isRunning());
     }
 
@@ -1949,7 +2000,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask4);
 
         verifyPausedTasks(activeTask2, standbyTask4);
-        assertThat(metrics.metrics().size(), is(11));
+        assertEquals(11, metrics.metrics().size());
 
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("thread-id", "test-state-updater");
@@ -1958,64 +2009,64 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The number of active tasks currently undergoing restoration",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-updating-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks currently undergoing state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("active-paused-tasks",
             "stream-state-updater-metrics",
             "The number of active tasks paused restoring",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-paused-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks paused state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("idle-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent being idle",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent restoring active tasks",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent updating standby tasks",
             tagMap);
-        verifyMetric(metrics, metricName, is(0.0d));
+        verifyMetric(metrics, metricName, value -> assertEquals(0.0d, value));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent checkpointing tasks restored progress",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("restore-records-rate",
             "stream-state-updater-metrics",
             "The average per-second number of records restored",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         metricName = new MetricName("restore-call-rate",
             "stream-state-updater-metrics",
             "The average per-second number of restore calls triggered",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
-        assertThat(metrics.metrics().size(), is(1));
+        assertEquals(1, metrics.metrics().size());
     }
 
     @Test
@@ -2292,13 +2343,12 @@ class DefaultStateUpdaterTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
-        assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
-        assertThat(metrics.metrics().get(metricName).metricName().tags(), is(metricName.tags()));
-        assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
+    private static void verifyMetric(final StreamsMetricsImpl metrics,
+                                     final MetricName metricName,
+                                     final Consumer<Object> valueAssertion) {
+        assertEquals(metricName.description(), metrics.metrics().get(metricName).metricName().description());
+        assertEquals(metricName.tags(), metrics.metrics().get(metricName).metricName().tags());
+        valueAssertion.accept(metrics.metrics().get(metricName).metricValue());
     }
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,

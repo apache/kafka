@@ -76,7 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(
-    types = {Type.KRAFT}, 
+    types = {Type.KRAFT},
     brokers = 3
 )
 public class ClientOAuthIntegrationTest {
@@ -131,6 +131,18 @@ public class ClientOAuthIntegrationTest {
     }
 
     private static List<ClusterConfig> clusterConfigs() {
+        return clusterConfigs("");
+    }
+
+    private static List<ClusterConfig> clusterConfigsWithJaasSslOptions() throws Exception {
+        // The JWKS endpoint of the mock server is plain HTTP, so these ssl.* options are never used to build
+        // an SSL socket factory; they only exercise the broker's tokenless login path (KAFKA-21143).
+        var truststore = TestUtils.tempFile();
+        return clusterConfigs("ssl.truststore.location=\"" + truststore.getAbsolutePath()
+            + "\" ssl.truststore.type=\"PKCS12\" ssl.truststore.password=\"changeit\"");
+    }
+
+    private static List<ClusterConfig> clusterConfigs(String brokerJaasOptions) {
         var serverProperties = new HashMap<String, String>();
         serverProperties.put("sasl.enabled.mechanisms", "PLAIN,OAUTHBEARER");
         serverProperties.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
@@ -142,7 +154,8 @@ public class ClientOAuthIntegrationTest {
         );
 
         var listenerPrefix = "listener.name.external.oauthbearer.";
-        serverProperties.put(listenerPrefix + SaslConfigs.SASL_JAAS_CONFIG, OAuthBearerLoginModule.class.getName() + " required ;");
+        serverProperties.put(listenerPrefix + SaslConfigs.SASL_JAAS_CONFIG,
+            OAuthBearerLoginModule.class.getName() + " required " + brokerJaasOptions + ";");
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ISSUER_ID);
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, mockOAuthServer.issuerUrl(ISSUER_ID).toString());
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, jwksUrl);
@@ -226,6 +239,30 @@ public class ClientOAuthIntegrationTest {
         assertDoesNotThrow(() -> cluster.producer(configs).close());
         assertDoesNotThrow(() -> cluster.consumer(configs).close());
         assertDoesNotThrow(() -> cluster.admin(configs).close());
+    }
+
+    @ClusterTemplate("clusterConfigsWithJaasSslOptions")
+    public void testBrokerStartsWithJaasSslOptionsForJwksClassic(ClusterInstance cluster) throws Exception {
+        verifyBrokerStartsWithJaasSslOptionsForJwks(cluster, "classic");
+    }
+
+    @ClusterTemplate("clusterConfigsWithJaasSslOptions")
+    public void testBrokerStartsWithJaasSslOptionsForJwksConsumer(ClusterInstance cluster) throws Exception {
+        verifyBrokerStartsWithJaasSslOptionsForJwks(cluster, "consumer");
+    }
+
+    private void verifyBrokerStartsWithJaasSslOptionsForJwks(ClusterInstance cluster, String groupProtocol) throws Exception {
+        var topic = "jaas-ssl-options-test";
+        var configs = defaultClientCredentialsConfigs();
+
+        try (var admin = cluster.admin(configs)) {
+            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
+        }
+        try (Producer<byte[], byte[]> producer = cluster.producer(configs)) {
+            producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes())).get();
+        }
+
+        consumeAndVerify(cluster, consumerConfigs(configs, groupProtocol), topic, "value");
     }
 
     @ClusterTemplate("clusterConfigs")
