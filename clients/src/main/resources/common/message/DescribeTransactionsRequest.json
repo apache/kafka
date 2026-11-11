@@ -18,7 +18,9 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "DescribeTransactionsRequest",
-  "validVersions": "0",
+  // Version 1 is the same as version 0; bumped together with DescribeTransactionsResponse v1,
+  // which adds TransactionLastUpdateTimeMs (KIP-994).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "2"

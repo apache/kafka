@@ -2575,8 +2575,10 @@ class TransactionCoordinatorTest {
 
   @Test
   def testDescribeTransactions(): Unit = {
+    val txnStartTimestamp = time.milliseconds()
+    val txnLastUpdateTimestamp = txnStartTimestamp + 100
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, txnStartTimestamp, txnLastUpdateTimestamp, TV_0)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -2588,7 +2590,8 @@ class TransactionCoordinatorTest {
     assertEquals(producerId, result.producerId)
     assertEquals(producerEpoch, result.producerEpoch)
     assertEquals(txnTimeoutMs, result.transactionTimeoutMs)
-    assertEquals(time.milliseconds(), result.transactionStartTimeMs)
+    assertEquals(txnStartTimestamp, result.transactionStartTimeMs)
+    assertEquals(txnLastUpdateTimestamp, result.transactionLastUpdateTimeMs)
 
     val addedPartitions = result.topics.stream.flatMap(topicData =>
         topicData.partitions.stream

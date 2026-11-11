@@ -2626,6 +2626,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnCoordinator.handleDescribeTransactions(transactionalId)
       }
 
+      // Reset the unsupported field to its default value to allow v0 serialization.
+      if (describeTransactionsRequest.version < 1) {
+        transactionState.setTransactionLastUpdateTimeMs(0L)
+      }
+
       // Include only partitions which the principal is authorized to describe
       val topicIter = transactionState.topics.iterator()
       while (topicIter.hasNext) {
@@ -2638,7 +2643,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new DescribeTransactionsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      new DescribeTransactionsResponse(response.setThrottleTimeMs(requestThrottleMs), describeTransactionsRequest.version))
   }
 
   def handleListTransactionsRequest(request: Request): Unit = {
