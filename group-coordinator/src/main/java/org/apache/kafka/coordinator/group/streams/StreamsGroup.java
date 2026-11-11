@@ -236,9 +236,9 @@ public class StreamsGroup implements Group {
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
-     * the target assignment, together with the assignment epoch it was derived for. Like {@link #taskOffsets}, this is
-     * held in memory only and never persisted; it is derived again from the persisted assignments after a coordinator
-     * failover.
+     * the target assignment, together with the assignment epoch and the {@link RefinerInputs} it was derived for. Like
+     * {@link #taskOffsets}, this is held in memory only and never persisted; it is derived again from the persisted
+     * assignments after a coordinator failover.
      * <p>
      * Every refinement step is an assignment epoch of its own, so the intermediate assignment is derived once per
      * epoch, when that epoch is minted, and stays fixed while the members reconcile toward it. It is therefore cached
@@ -248,19 +248,44 @@ public class StreamsGroup implements Group {
      * write rolls back. Rolling back restores an earlier assignment epoch, which the next epoch to be minted then
      * reuses -- with a target assignment that may differ from the one this was derived from. Left outside the rollback,
      * the cache would be hit for that epoch and reconcile the members toward an intermediate assignment of an
-     * assignment that no longer exists. The epoch and the assignment share one container so that a rollback can never
-     * restore one without the other.
+     * assignment that no longer exists. The epoch, the inputs and the assignment share one container so that a
+     * rollback can never restore one without the others.
      */
     private final TimelineObject<RefinedAssignment> refinedAssignment;
 
     /**
-     * An intermediate assignment together with the assignment epoch it was derived for.
+     * An intermediate assignment together with what it was derived for.
      *
      * @param assignmentEpoch The assignment epoch, or {@code -1} if nothing was derived yet.
+     * @param inputs          The inputs of the refiner it was derived from.
      * @param assignment      The intermediate assignment keyed by member ID.
      */
-    private record RefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> assignment) {
-        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of());
+    private record RefinedAssignment(int assignmentEpoch, RefinerInputs inputs, Map<String, TasksTuple> assignment) {
+        private static final RefinedAssignment NONE =
+            new RefinedAssignment(-1, new RefinerInputs(-1L, -1, -1L), Map.of());
+    }
+
+    /**
+     * Counts the changes to the inputs of the {@link AssignmentRefiner}: the members, the target assignment, the
+     * configured topology, the members' task offsets and their heartbeat versions.
+     * <p>
+     * It is a plain field rather than a timeline container, so a failed write does not take it back. The write's
+     * changes moved it, and the rollback restores an intermediate assignment cached before them, which then no longer
+     * matches: a rollback can cause one more derivation, but never the reuse of an intermediate assignment derived from
+     * inputs that changed since, including task offsets and heartbeat versions, which are not rolled back.
+     */
+    private long refinerInputsVersion = 0L;
+
+    /**
+     * Identifies the inputs the {@link AssignmentRefiner} derives an intermediate assignment from. The refiner keeps no
+     * state between calls, so for one assignment epoch, equal inputs give an equal intermediate assignment.
+     *
+     * @param version               The group's count of changes to the refiner's inputs, see
+     *                              {@link StreamsGroup#refinerInputs}.
+     * @param numWarmupReplicas     The group's {@code num.warmup.replicas}.
+     * @param acceptableRecoveryLag The group's {@code acceptable.recovery.lag}.
+     */
+    public record RefinerInputs(long version, int numWarmupReplicas, long acceptableRecoveryLag) {
     }
 
     /**
@@ -395,6 +420,7 @@ public class StreamsGroup implements Group {
         this.configuredTopology.set(Optional.ofNullable(configuredTopology));
         // Clear endpoint cache since subtopology source topics may have changed
         endpointToPartitionsCache.clear();
+        refinerInputsVersion++;
     }
 
     /**
@@ -569,6 +595,7 @@ public class StreamsGroup implements Group {
         updateStaticMember(oldMember, newMember);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(newMember.memberId());
+        refinerInputsVersion++;
     }
 
     /**
@@ -600,6 +627,7 @@ public class StreamsGroup implements Group {
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
         heartbeatVersions.remove(memberId);
+        refinerInputsVersion++;
     }
 
     /**
@@ -610,13 +638,17 @@ public class StreamsGroup implements Group {
      */
     public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
         taskOffsets.put(memberId, memberOffsets);
+        refinerInputsVersion++;
     }
 
     /**
      * Records the version of the latest streams group heartbeat of a member.
      */
     public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
-        heartbeatVersions.put(memberId, heartbeatVersion);
+        final Integer previousHeartbeatVersion = heartbeatVersions.put(memberId, heartbeatVersion);
+        if (previousHeartbeatVersion == null || previousHeartbeatVersion != heartbeatVersion) {
+            refinerInputsVersion++;
+        }
     }
 
     /**
@@ -656,8 +688,34 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Caches the intermediate assignment derived for the given assignment epoch. This is transient state; it must be
-     * set from the heartbeat path only, never while replaying records.
+     * Returns the intermediate assignment that was derived for the given assignment epoch from the given inputs, if
+     * any. Deriving it again would give the same intermediate assignment.
+     *
+     * @param assignmentEpoch The assignment epoch to return the intermediate assignment for.
+     * @param inputs          The inputs of the refiner now, from {@link #refinerInputs}.
+     *
+     * @return The intermediate assignment keyed by member ID, or {@code null} if it has to be derived.
+     */
+    public Map<String, TasksTuple> refinedAssignmentIfInputsUnchanged(int assignmentEpoch, RefinerInputs inputs) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        final boolean derivedFromInputs = cached.assignmentEpoch() == assignmentEpoch && cached.inputs().equals(inputs);
+        return derivedFromInputs ? cached.assignment() : null;
+    }
+
+    /**
+     * Identifies the current inputs of the {@link AssignmentRefiner}, to be read before an intermediate assignment is
+     * derived and cached with it.
+     *
+     * @param numWarmupReplicas     The group's {@code num.warmup.replicas}.
+     * @param acceptableRecoveryLag The group's {@code acceptable.recovery.lag}.
+     */
+    public RefinerInputs refinerInputs(int numWarmupReplicas, long acceptableRecoveryLag) {
+        return new RefinerInputs(refinerInputsVersion, numWarmupReplicas, acceptableRecoveryLag);
+    }
+
+    /**
+     * Caches the intermediate assignment derived for the given assignment epoch from the given inputs. This is
+     * transient state; it must be set from the heartbeat path only, never while replaying records.
      * <p>
      * The given map is copied, so that the cached assignment is genuinely fixed for its epoch rather than tracking
      * whatever the caller hands over: a refiner that returns the target assignment as-is would otherwise leave the
@@ -667,11 +725,17 @@ public class StreamsGroup implements Group {
      * back an already-immutable map unchanged.
      *
      * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
+     * @param inputs             The inputs of the refiner it was derived from, from {@link #refinerInputs}.
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
      */
-    public void setRefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> refinedAssignment) {
+    public void setRefinedAssignment(
+        int assignmentEpoch,
+        RefinerInputs inputs,
+        Map<String, TasksTuple> refinedAssignment
+    ) {
         this.refinedAssignment.set(new RefinedAssignment(
             assignmentEpoch,
+            Objects.requireNonNull(inputs),
             Map.copyOf(Objects.requireNonNull(refinedAssignment))
         ));
     }
@@ -699,7 +763,8 @@ public class StreamsGroup implements Group {
         final Map<String, TasksTuple> relabeled = new HashMap<>(cached.assignment());
         relabeled.remove(oldMemberId);
         relabeled.put(newMemberId, refinedTasks);
-        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled)));
+        this.refinedAssignment.set(
+            new RefinedAssignment(cached.assignmentEpoch(), cached.inputs(), Map.copyOf(relabeled)));
     }
 
     /**
@@ -789,6 +854,7 @@ public class StreamsGroup implements Group {
      */
     public void updateTargetAssignment(String memberId, TasksTuple newTargetAssignment) {
         targetAssignment.put(memberId, newTargetAssignment);
+        refinerInputsVersion++;
     }
 
     /**
@@ -798,6 +864,7 @@ public class StreamsGroup implements Group {
      */
     public void removeTargetAssignment(String memberId) {
         targetAssignment.remove(memberId);
+        refinerInputsVersion++;
     }
 
     /**

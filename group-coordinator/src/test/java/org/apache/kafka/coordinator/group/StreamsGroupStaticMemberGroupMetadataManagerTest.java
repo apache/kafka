@@ -1594,7 +1594,8 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         // Prime the frozen intermediate assignment for the current assignment epoch, keyed by the OLD member ID, as a
         // previous heartbeat of the departed member would have left it.
         StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
-        streamsGroup.setRefinedAssignment(groupEpoch, Map.of(oldMemberId, oldTargetAssignment));
+        streamsGroup.setRefinedAssignment(
+            groupEpoch, streamsGroup.refinerInputs(2, 10_000L), Map.of(oldMemberId, oldTargetAssignment));
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, DEFAULT_PROCESS_ID)
@@ -1659,7 +1660,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             memberId1, targetAssignment1,
             memberId2, targetAssignment2
         );
-        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+        streamsGroup.setRefinedAssignment(groupEpoch, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
 
         // Member 1 rejoins with its own member id and the released instance id 2. The join is
         // rejected and the cached intermediate assignment must be left untouched. In particular,
@@ -1718,7 +1719,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             memberId1, targetAssignment1,
             memberId2, targetAssignment2
         );
-        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+        streamsGroup.setRefinedAssignment(groupEpoch, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
 
         // Member 1 heartbeats with instance id 2, which is owned by member 2. The heartbeat is
         // fenced and the cached intermediate assignment must be left untouched.

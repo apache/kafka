@@ -2282,11 +2282,20 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
+        // Read after the task offsets and the heartbeat version are stored and before anything is derived, so that an
+        // intermediate assignment is cached with the inputs it was derived from.
+        final StreamsGroup.RefinerInputs refinerInputs = refinerInputs(group);
         Map<String, TasksTuple> refinedGroupAssignment = null;
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
-            // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
-            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology);
+            // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards. If no input
+            // of the refiner changed since the one cached for this epoch was derived, deriving it again would give the
+            // same result, so the cached one is used.
+            refinedGroupAssignment = group.refinedAssignmentIfInputsUnchanged(group.assignmentEpoch(), refinerInputs);
+            if (refinedGroupAssignment == null) {
+                refinedGroupAssignment =
+                    refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology, refinerInputs);
+            }
             if (!refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY).sameTasks(updatedMember.assignedTasks())) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
             }
@@ -2350,10 +2359,16 @@ public class GroupMetadataManager {
                 group,
                 updateTargetAssignmentResult.targetAssignmentEpoch(),
                 updateTargetAssignmentResult.targetAssignment,
-                updatedConfiguredTopology
+                updatedConfiguredTopology,
+                refinerInputs
             );
         } else {
-            maybeCacheRefinedAssignment(group, updateTargetAssignmentResult.targetAssignmentEpoch(), refinedGroupAssignment);
+            maybeCacheRefinedAssignment(
+                group,
+                updateTargetAssignmentResult.targetAssignmentEpoch(),
+                refinerInputs,
+                refinedGroupAssignment
+            );
         }
         TasksTuple refinedAssignment = refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
 
@@ -4681,16 +4696,17 @@ public class GroupMetadataManager {
      * @param group              The streams group.
      * @param targetAssignment   All members' target assignments.
      * @param configuredTopology The configured topology.
+     * @param refinerInputs      The group's refiner inputs, whose warm-up configurations the derivation uses.
      *
      * @return The intermediate assignment keyed by member ID.
      */
     private Map<String, TasksTuple> refineAssignment(
         final StreamsGroup group,
         final Map<String, TasksTuple> targetAssignment,
-        final ConfiguredTopology configuredTopology
+        final ConfiguredTopology configuredTopology,
+        final StreamsGroup.RefinerInputs refinerInputs
     ) {
-        final int numWarmupReplicas = streamsGroupNumWarmupReplicas(group.groupId());
-        if (numWarmupReplicas == 0) {
+        if (refinerInputs.numWarmupReplicas() == 0) {
             // Warm-up tasks are disabled, so there is nothing to refine and no state to keep for the group.
             return targetAssignment;
         }
@@ -4710,8 +4726,8 @@ public class GroupMetadataManager {
             group.taskOffsets(),
             group.heartbeatVersions(),
             Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
-            numWarmupReplicas,
-            streamsGroupAcceptableRecoveryLag(group.groupId())
+            refinerInputs.numWarmupReplicas(),
+            refinerInputs.acceptableRecoveryLag()
         );
         if (!AssignmentRefiner.preservesActiveTaskCount(targetAssignment, refinedAssignment)) {
             // Reconciling towards an intermediate assignment that lost or duplicated an active task would leave input
@@ -4736,6 +4752,7 @@ public class GroupMetadataManager {
      * @param assignmentEpoch    The assignment epoch the members are being reconciled to.
      * @param targetAssignment   All members' target assignments.
      * @param configuredTopology The configured topology.
+     * @param refinerInputs      The group's refiner inputs, read before anything is derived.
      *
      * @return The intermediate assignment keyed by member ID.
      */
@@ -4743,35 +4760,40 @@ public class GroupMetadataManager {
         final StreamsGroup group,
         final int assignmentEpoch,
         final Map<String, TasksTuple> targetAssignment,
-        final ConfiguredTopology configuredTopology
+        final ConfiguredTopology configuredTopology,
+        final StreamsGroup.RefinerInputs refinerInputs
     ) {
         final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch);
         if (cached != null) {
             return cached;
         }
-        final Map<String, TasksTuple> refinedAssignment = refineAssignment(group, targetAssignment, configuredTopology);
-        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
+        final Map<String, TasksTuple> refinedAssignment =
+            refineAssignment(group, targetAssignment, configuredTopology, refinerInputs);
+        maybeCacheRefinedAssignment(group, assignmentEpoch, refinerInputs, refinedAssignment);
         return refinedAssignment;
     }
 
     /**
      * Freezes the given intermediate assignment as the one of the given assignment epoch, so that the decisions of a
-     * refinement step do not change while the members reconcile toward it.
+     * refinement step do not change while the members reconcile toward it. It is kept with the inputs it was derived
+     * from, so that the heartbeats of a stable group reuse it until one of them changes.
      * <p>
      * Nothing is kept for a group that has warm-up tasks disabled: the intermediate assignment is then just the target
      * assignment, which the caller has anyway, so there is nothing to freeze.
      *
      * @param group              The streams group.
      * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
+     * @param refinerInputs      The group's refiner inputs the intermediate assignment was derived from.
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
      */
     private void maybeCacheRefinedAssignment(
         final StreamsGroup group,
         final int assignmentEpoch,
+        final StreamsGroup.RefinerInputs refinerInputs,
         final Map<String, TasksTuple> refinedAssignment
     ) {
-        if (streamsGroupNumWarmupReplicas(group.groupId()) > 0) {
-            group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+        if (refinerInputs.numWarmupReplicas() > 0) {
+            group.setRefinedAssignment(assignmentEpoch, refinerInputs, refinedAssignment);
         }
     }
 
@@ -10013,6 +10035,16 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.flatMap(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
+    }
+
+    /**
+     * The current inputs of the group's refiner, with the group's warm-up configurations.
+     */
+    private StreamsGroup.RefinerInputs refinerInputs(StreamsGroup group) {
+        return group.refinerInputs(
+            streamsGroupNumWarmupReplicas(group.groupId()),
+            streamsGroupAcceptableRecoveryLag(group.groupId())
+        );
     }
 
     /**

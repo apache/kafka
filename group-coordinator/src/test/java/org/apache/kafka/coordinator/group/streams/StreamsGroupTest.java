@@ -53,7 +53,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,7 +67,9 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
@@ -169,7 +173,7 @@ public class StreamsGroupTest {
         Map<String, TasksTuple> refinedAssignment = Map.of(
             "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
         );
-        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
 
         assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
         // An intermediate assignment derived for one assignment epoch must not be used for another one: a new epoch is
@@ -186,7 +190,7 @@ public class StreamsGroupTest {
         Map<String, TasksTuple> derived = new HashMap<>();
         derived.put("member-id", memberTasks);
 
-        streamsGroup.setRefinedAssignment(5, derived);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), derived);
 
         // The intermediate assignment of an epoch is fixed once derived. A refiner that returns the target assignment
         // as-is hands over a view of it, which changes as records are replayed, so the cache must copy rather than alias.
@@ -202,7 +206,7 @@ public class StreamsGroupTest {
 
         TasksTuple oldMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
         TasksTuple otherMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of());
-        streamsGroup.setRefinedAssignment(5, Map.of(
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), Map.of(
             "old-member-id", oldMemberTasks,
             "other-member-id", otherMemberTasks
         ));
@@ -226,7 +230,7 @@ public class StreamsGroupTest {
         Map<String, TasksTuple> refinedAssignment = Map.of(
             "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
         );
-        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
 
         // Nothing was derived for that member, so there is nothing to re-key -- and in particular the cached
         // assignment of the epoch must not be disturbed.
@@ -246,13 +250,98 @@ public class StreamsGroupTest {
             "member-id", new TasksTuple(Map.of("sub-1", Set.of(0, 1)), Map.of(), Map.of())
         );
 
-        streamsGroup.setRefinedAssignment(5, refinedAssignmentOfEpoch5);
-        streamsGroup.setRefinedAssignment(6, refinedAssignmentOfEpoch6);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), refinedAssignmentOfEpoch5);
+        streamsGroup.setRefinedAssignment(6, streamsGroup.refinerInputs(2, 10_000L), refinedAssignmentOfEpoch6);
 
         // The cache is a single slot, so deriving for a new epoch evicts the previous one rather than accumulating an
         // entry per epoch. Only the epoch the members are currently reconciling towards is ever asked for.
         assertEquals(refinedAssignmentOfEpoch6, streamsGroup.refinedAssignment(6));
         assertNull(streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRefinedAssignmentIsReusedOnlyForTheEpochAndInputsItWasDerivedFor() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
+
+        assertEquals(
+            refinedAssignment,
+            streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 10_000L))
+        );
+        // A member heartbeating again with the same version changes nothing the refiner reads.
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+        assertEquals(
+            refinedAssignment,
+            streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 10_000L))
+        );
+        // Another epoch is another refinement step, and the warm-up configurations can change without a new epoch.
+        assertNull(streamsGroup.refinedAssignmentIfInputsUnchanged(6, streamsGroup.refinerInputs(2, 10_000L)));
+        assertNull(streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(3, 10_000L)));
+        assertNull(streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 5_000L)));
+    }
+
+    private static Stream<Arguments> refinerInputChanges() {
+        TasksTuple otherTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        return Stream.of(
+            Arguments.of("member updated", (Consumer<StreamsGroup>) group ->
+                group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(5).build())),
+            Arguments.of("member removed", (Consumer<StreamsGroup>) group -> group.removeMember("member-id")),
+            Arguments.of("target assignment updated", (Consumer<StreamsGroup>) group ->
+                group.updateTargetAssignment("member-id", otherTasks)),
+            Arguments.of("target assignment removed", (Consumer<StreamsGroup>) group ->
+                group.removeTargetAssignment("member-id")),
+            Arguments.of("topology configured", (Consumer<StreamsGroup>) group -> group.setConfiguredTopology(
+                new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()))),
+            Arguments.of("task offsets reported", (Consumer<StreamsGroup>) group -> group.updateTaskOffsets(
+                "member-id", new MemberTaskOffsets(Map.of("sub-1", Map.of(0, 10L)), Map.of("sub-1", Map.of(0, 20L))))),
+            Arguments.of("heartbeat version changed", (Consumer<StreamsGroup>) group ->
+                group.updateHeartbeatVersion("member-id", 2))
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("refinerInputChanges")
+    public void testRefinedAssignmentIsNotReusedOnceAnInputOfTheRefinerChanged(
+        String inputChange,
+        Consumer<StreamsGroup> changeInput
+    ) {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateTargetAssignment("member-id", TasksTuple.EMPTY);
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+        streamsGroup.setRefinedAssignment(
+            5, streamsGroup.refinerInputs(2, 10_000L), Map.of("member-id", TasksTuple.EMPTY));
+
+        changeInput.accept(streamsGroup);
+
+        assertNull(streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 10_000L)));
+    }
+
+    @Test
+    public void testRefinedAssignmentRestoredByARollbackIsNotReusedForInputsThatStayed() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        Map<String, TasksTuple> derivedFromOldOffsets = Map.of("member-id", TasksTuple.EMPTY);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), derivedFromOldOffsets);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        // Task offsets live outside the timeline, so the write that fails below does not roll them back.
+        streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
+        ));
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), Map.of(
+            "member-id", new TasksTuple(Map.of(), Map.of(), Map.of("sub-1", Set.of(0)))
+        ));
+        snapshotRegistry.revertToSnapshot(1);
+
+        // The rollback brings back the intermediate assignment derived from the old offsets, while the new ones stay.
+        assertEquals(derivedFromOldOffsets, streamsGroup.refinedAssignment(5));
+        assertNull(streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 10_000L)));
     }
 
     @Test

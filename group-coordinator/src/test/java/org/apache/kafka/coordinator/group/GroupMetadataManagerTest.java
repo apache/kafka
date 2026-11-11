@@ -19973,6 +19973,42 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupRefinesASettledGroupAgainOnlyWhenAnInputOfTheRefinerChanged() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId, refiner, topic, Map.of(memberId, List.of(0, 1, 2)), Map.of(memberId, DEFAULT_PROCESS_ID));
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+        assertEquals(1, refiner.numRefinements());
+
+        // Nothing the refiner reads changed, so the intermediate assignment derived for the epoch is used again.
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+        assertEquals(1, refiner.numRefinements());
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2))
+                .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId("subtopology1")
+                    .setPartition(0)
+                    .setOffset(42L))));
+        assertEquals(2, refiner.numRefinements());
+
+        // The warm-up configurations are read on every heartbeat, and changing them does not bump the epoch.
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "3");
+        context.updateGroupConfig(groupId, groupConfig);
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+        assertEquals(3, refiner.numRefinements());
+    }
+
+    @Test
     public void testStreamsGroupReconcilesTowardsTheRefinedAssignment() {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();
