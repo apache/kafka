@@ -27,8 +27,8 @@ Run the demo in two terminals, starting the second instance after the first repo
 examples/bin/java-rebalance-listener-demo.sh
 ```
 
-The default eager rebalance may revoke all partitions before reassignment. The listener commits on revocation,
-demonstrates an explicit seek on assignment, and does not commit lost partitions. Stop either consumer with `Ctrl+C` to trigger another rebalance.
+The default eager rebalance may revoke all partitions before reassignment. The listener commits offsets only for revoked partitions,
+reports starting positions on assignment, and does not commit lost partitions. Stop either consumer with `Ctrl+C` to trigger another rebalance.
 
 ## Exactly-once demo
 

@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -42,6 +41,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Demonstrates manual offset management with a {@link RebalanceListener} and the callback-scoped
  * {@link RebalanceConsumer}. The {@code RebalanceConsumer} passed to a callback is valid only while that callback is
  * executing and must not be retained for later use.
+ *
+ * <p>Expected callback behavior:
+ * <ul>
+ *   <li>{@code onPartitionsAssigned}: reports assigned partitions' starting positions,
+ *       initialized from committed offsets or the earliest offsets.</li>
+ *   <li>{@code onPartitionsRevoked}: commits the next offsets for revoked partitions
+ *       before giving up ownership.</li>
+ *   <li>{@code onPartitionsLost}: reports lost partitions without committing their offsets.</li>
+ * </ul>
  */
 public class KafkaRebalanceListenerDemo {
     private static final String TOPIC_NAME = "rebalance-listener-demo";
@@ -151,10 +159,13 @@ public class KafkaRebalanceListenerDemo {
                 return;
             }
 
-            // Complete the final offset commit before partition ownership changes.
-            consumer.commitSync(CALLBACK_OPERATION_TIMEOUT);
-            Utils.printOut("[onPartitionsRevoked] clientId=%s revoked %s after committing current offsets",
-                clientId, partitions);
+            // Each poll batch is processed synchronously, so positions reflect the next offsets to consume.
+            Map<TopicPartition, OffsetAndMetadata> revokedOffsets = new HashMap<>();
+            for (TopicPartition partition : partitions) {
+                revokedOffsets.put(partition, new OffsetAndMetadata(consumer.position(partition, CALLBACK_OPERATION_TIMEOUT)));
+            }
+            consumer.commitSync(revokedOffsets, CALLBACK_OPERATION_TIMEOUT);
+            Utils.printOut("[onPartitionsRevoked] clientId=%s committed %s before revocation", clientId, revokedOffsets);
         }
 
         @Override
@@ -165,18 +176,12 @@ public class KafkaRebalanceListenerDemo {
                 return;
             }
 
-            Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Set.copyOf(partitions), CALLBACK_OPERATION_TIMEOUT);
-            Map<TopicPartition, OffsetAndMetadata> soughtOffsets = new HashMap<>();
+            Map<TopicPartition, Long> positions = new HashMap<>();
             for (TopicPartition partition : partitions) {
-                OffsetAndMetadata offsetAndMetadata = committed.get(partition);
-                if (offsetAndMetadata != null) {
-                    // Kafka initializes committed offsets automatically; seek demonstrates an external checkpoint.
-                    consumer.seek(partition, offsetAndMetadata);
-                    soughtOffsets.put(partition, offsetAndMetadata);
-                }
+                positions.put(partition, consumer.position(partition, CALLBACK_OPERATION_TIMEOUT));
             }
-            Utils.printOut("[onPartitionsAssigned] clientId=%s assigned %s and demonstrated seek using committed offsets %s",
-                clientId, partitions, soughtOffsets);
+            Utils.printOut("[onPartitionsAssigned] clientId=%s assigned %s at positions %s",
+                clientId, partitions, positions);
         }
 
         @Override
