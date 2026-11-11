@@ -21,7 +21,10 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AllocateProducerIdsRequest;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.Collections;
@@ -45,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.coordinator.transaction.RPCProducerIdManager.RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -54,6 +59,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProducerIdManagerTest {
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion());
 
     private final NodeToControllerChannelManager brokerToController = Mockito.mock(NodeToControllerChannelManager.class);
 
@@ -78,7 +87,7 @@ public class ProducerIdManagerTest {
                               boolean hasAuthenticationException,
                               boolean hasVersionMismatch,
                               boolean hasNoResponse) {
-            super(brokerId, time, () -> 1L, brokerToController);
+            super(brokerId, time, () -> 1L, brokerToController, () -> LATEST_REQUEST_HEADER_VERSION);
             this.idStart = idStart;
             this.idLen = idLen;
             this.errorQueue = errorQueue;
@@ -279,6 +288,26 @@ public class ProducerIdManagerTest {
         manager.handleAllocateProducerIdsResponse(clientResponse);
 
         assertNull(manager.nextProducerIdBlock.get(), "The manager should have rejected the overlapping block.");
+    }
+
+    @Test
+    public void testRequestVersionFollowsRequestHeaderVersionChange() {
+        ArgumentCaptor<AbstractRequest.Builder<AllocateProducerIdsRequest>> requestCapture = ArgumentCaptor.captor();
+        var requestHeaderVersion = new AtomicReference<>(OLDEST_REQUEST_HEADER_VERSION);
+        var manager = new RPCProducerIdManager(0, new MockTime(), () -> 1L, brokerToController, requestHeaderVersion::get);
+
+        manager.sendRequest();
+        Mockito.verify(brokerToController).sendRequest(requestCapture.capture(), Mockito.any());
+        short requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(OLDEST_REQUEST_HEADER_VERSION), requestVersion);
+        assertEquals(OLDEST_REQUEST_HEADER_VERSION, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
+
+        requestHeaderVersion.set(LATEST_REQUEST_HEADER_VERSION);
+        manager.sendRequest();
+        Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(requestCapture.capture(), Mockito.any());
+        requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(LATEST_REQUEST_HEADER_VERSION), requestVersion);
+        assertEquals(LATEST_REQUEST_HEADER_VERSION, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
     }
 
     private Queue<Errors> queue(Errors... errors) {
