@@ -42,10 +42,10 @@ import org.mockito.quality.Strictness;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -65,7 +65,7 @@ public class MaterializedInternalTest {
         final MaterializedInternal<Object, Object, StateStore> materialized =
             new MaterializedInternal<>(Materialized.with(null, null), nameProvider, prefix);
 
-        assertThat(materialized.storeName(), equalTo(generatedName));
+        assertEquals(generatedName, materialized.storeName());
     }
 
     @Test
@@ -73,7 +73,7 @@ public class MaterializedInternalTest {
         final String storeName = "store-name";
         final MaterializedInternal<Object, Object, StateStore> materialized =
             new MaterializedInternal<>(Materialized.as(storeName), nameProvider, prefix);
-        assertThat(materialized.storeName(), equalTo(storeName));
+        assertEquals(storeName, materialized.storeName());
     }
 
     @Test
@@ -82,7 +82,7 @@ public class MaterializedInternalTest {
         when(supplier.name()).thenReturn(storeName);
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), nameProvider, prefix);
-        assertThat(materialized.storeName(), equalTo(storeName));
+        assertEquals(storeName, materialized.storeName());
     }
 
     @SuppressWarnings("deprecation")
@@ -99,7 +99,7 @@ public class MaterializedInternalTest {
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
-        assertThat(materialized.dslStoreSuppliers(), equalTo(Optional.of(Materialized.StoreType.IN_MEMORY)));
+        assertEquals(Optional.of(Materialized.StoreType.IN_MEMORY), materialized.dslStoreSuppliers());
     }
 
     @SuppressWarnings("deprecation")
@@ -117,8 +117,8 @@ public class MaterializedInternalTest {
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
-        assertThat(materialized.dslStoreSuppliers().isPresent(), is(true));
-        assertThat(materialized.dslStoreSuppliers().get(), instanceOf(TestStoreSupplier.class));
+        assertTrue(materialized.dslStoreSuppliers().isPresent());
+        assertInstanceOf(TestStoreSupplier.class, materialized.dslStoreSuppliers().get());
     }
 
     @Test
@@ -133,7 +133,7 @@ public class MaterializedInternalTest {
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
-        assertThat(materialized.dslStoreSuppliers().isPresent(), is(false));
+        assertFalse(materialized.dslStoreSuppliers().isPresent());
     }
 
     public static class TestStoreSupplier implements DslStoreSuppliers {

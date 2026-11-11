@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
-import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
@@ -146,8 +146,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
- * classic and consumer groups. It holds the hard and the soft state of the groups. This class
- * has two kinds of methods:
+ * classic, consumer, share and streams groups. It holds the hard and the soft state of the
+ * groups. This class has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
  *    hard state via the replay methods.
@@ -275,6 +275,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withStreamsGroupAssignors(config.streamsGroupAssignors())
+                .withStreamsGroupAssignmentRefiner(config.streamsGroupAssignmentRefiner())
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
@@ -381,7 +382,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic, consumer and streams group size counter key to schedule a timer task.
+     * The group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
@@ -438,6 +439,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
+     * @param time                  The time.
+     * @param timer                 The coordinator timer.
+     * @param config                The group coordinator config.
      * @param coordinatorMetrics    The coordinator metrics.
      * @param metricsShard          The coordinator metrics shard.
      */
@@ -582,11 +586,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a SyncGroup request.
      *
-     * @param context The request context.
-     * @param request The actual SyncGroup request.
+     * @param context        The request context.
+     * @param request        The actual SyncGroup request.
+     * @param responseFuture The sync group response future.
      *
-     * @return A Result containing the SyncGroup response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a list of records to update the state machine. The response is
+     *         completed through the response future.
      */
     public CoordinatorResult<Void, CoordinatorRecord> classicGroupSync(
         AuthorizableRequestContext context,
@@ -770,7 +775,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param groupId - The group ID
      * @param topics - The set of topics which were deleted successfully by the persister
-     * @return the final response {@link DeleteShareGroupOffsetsResponseData} for the DeleteShareGroupOffsetsRequest
+     * @param errorTopicResponseList - The topic responses for the topics which were not deleted
+     *                                 successfully
+     * @return A Result containing the final response {@link DeleteShareGroupOffsetsResponseData}
+     *         for the DeleteShareGroupOffsetsRequest and a list of records to update the state
+     *         machine.
      */
     public CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> completeDeleteShareGroupOffsets(
         String groupId,
@@ -821,7 +830,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param epoch     The epoch (or offset) used to read from the
      *                  timeline data structure.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -851,7 +860,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Handles an TxnOffsetCommit request.
+     * Handles a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual TxnOffsetCommit request.
@@ -893,10 +902,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ConsumerGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
-     *
      */
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
         List<String> groupIds,
@@ -908,11 +917,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a StreamsGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A {@link StreamsGroupDescribeResult} containing the described groups and per-group
      *         stored description topology epoch (KIP-1331).
-     *
      */
     public StreamsGroupDescribeResult streamsGroupDescribe(
         List<String> groupIds,
@@ -934,8 +943,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param committedOffset  A committed offset corresponding to the desired snapshot.
      * @throws GroupIdNotFoundException if the group does not exist.
      * @throws UnknownMemberIdException if the member is not in the group.
-     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
-     *                                  current topology epoch.
+     * @throws StreamsInvalidTopologyEpochException if {@code pushedEpoch} does not match the
+     *                                              group's current topology epoch.
      */
     public void validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
@@ -1066,10 +1075,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ShareGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ShareGroupDescribeResponseData.DescribedGroup.
-     *
      */
     public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
         List<String> groupIds,
@@ -1112,7 +1121,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Handles a OffsetDelete request.
+     * Handles an OffsetDelete request.
      *
      * @param context The request context.
      * @param request The actual OffsetDelete request.
@@ -1204,7 +1213,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic/consumer groups.
+     * Schedules (or reschedules) the group size counter for the classic, consumer, share and
+     * streams groups.
      */
     private void scheduleGroupSizeCounter() {
         timer.schedule(
@@ -1221,7 +1231,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Cancels the group size counter for the classic/consumer groups.
+     * Cancels the group size counter for the classic, consumer, share and streams groups.
      */
     private void cancelGroupSizeCounter() {
         timer.cancel(GROUP_SIZE_COUNTER_KEY);

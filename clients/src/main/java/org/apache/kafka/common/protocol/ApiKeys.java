@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -304,6 +305,13 @@ public enum ApiKeys {
 
     public short requestHeaderVersion(short apiVersion) {
         return messageType.requestHeaderVersion(apiVersion);
+    }
+
+    public short latestVersionForRequestHeader(short headerVersion) {
+        for (short version = latestVersion(); version >= oldestVersion(); version--) {
+            if (requestHeaderVersion(version) <= headerVersion) return version;
+        }
+        throw new UnsupportedVersionException(this + " has no version using request header v" + headerVersion + " or lower");
     }
 
     public short responseHeaderVersion(short apiVersion) {

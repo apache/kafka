@@ -19,15 +19,17 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
@@ -68,6 +70,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -91,7 +94,7 @@ public class KafkaShareConsumerTest {
     private final int heartbeatIntervalMs = 1000;
 
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ShareSubscriptionState subscription = new ShareSubscriptionState(new LogContext());
 
     @Test
     public void testVerifyHeartbeats() throws InterruptedException {
@@ -456,5 +459,31 @@ public class KafkaShareConsumerTest {
         } finally {
             consumer.close();
         }
+    }
+
+    @Test
+    public void testShareConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero() {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no share consumer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            ConsumerConfig.GROUP_ID_CONFIG, "test-share-group"
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaShareConsumer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
+            () -> new KafkaShareConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

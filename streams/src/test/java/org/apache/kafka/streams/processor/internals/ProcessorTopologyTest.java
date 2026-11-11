@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.FixedPartitionPartitioner;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -70,12 +71,6 @@ import java.util.function.Supplier;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -173,7 +168,7 @@ public class ProcessorTopologyTest {
 
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.terminalNodes(), equalTo(Set.of("processor-2", "sink-1")));
+        assertEquals(Set.of("processor-2", "sink-1"), processorTopology.terminalNodes());
     }
 
     @Test
@@ -183,11 +178,11 @@ public class ProcessorTopologyTest {
         final String newTopic = "topic-2";
         topology.addSource(sourceNode, topic);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
-        assertThat(processorTopology.source(newTopic), is(nullValue()));
+        assertNull(processorTopology.source(newTopic));
 
         processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, asList(topic, newTopic)));
 
-        assertThat(processorTopology.source(newTopic).name(), equalTo(sourceNode));
+        assertEquals(sourceNode, processorTopology.source(newTopic).name());
     }
 
     @Test
@@ -197,11 +192,11 @@ public class ProcessorTopologyTest {
         final String topicToRemove = "topic-2";
         topology.addSource(sourceNode, topic, topicToRemove);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
-        assertThat(processorTopology.source(topicToRemove).name(), equalTo(sourceNode));
+        assertEquals(sourceNode, processorTopology.source(topicToRemove).name());
 
         processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, Collections.singletonList(topic)));
 
-        assertThat(processorTopology.source(topicToRemove), is(nullValue()));
+        assertNull(processorTopology.source(topicToRemove));
     }
 
     @Test
@@ -210,11 +205,11 @@ public class ProcessorTopologyTest {
         final String topic = "topic-1";
         topology.addSource(sourceNode, topic);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
-        assertThat(processorTopology.source(topic).name(), equalTo(sourceNode));
+        assertEquals(sourceNode, processorTopology.source(topic).name());
 
         processorTopology.updateSourceTopics(Collections.singletonMap(sourceNode, Collections.emptyList()));
 
-        assertThat(processorTopology.source(topic), is(nullValue()));
+        assertNull(processorTopology.source(topic));
     }
 
     @Test
@@ -232,8 +227,8 @@ public class ProcessorTopologyTest {
             )
         );
 
-        assertThat(processorTopology.source(topicOutsideSubtopology), is(nullValue()));
-        assertThat(processorTopology.sources().size(), equalTo(1));
+        assertNull(processorTopology.source(topicOutsideSubtopology));
+        assertEquals(1, processorTopology.sources().size());
     }
 
     @Test
@@ -251,7 +246,7 @@ public class ProcessorTopologyTest {
                 existingSourceNode, Collections.singletonList(topicOfExistingSourceNode)
             ))
         );
-        assertThat(exception.getMessage(), is("Node " + nonExistingSourceNode + " not found in full topology"));
+        assertEquals("Node " + nonExistingSourceNode + " not found in full topology", exception.getMessage());
     }
 
     @Test
@@ -271,10 +266,7 @@ public class ProcessorTopologyTest {
                 mkEntry(updatedSourceNode, Arrays.asList(topic, doublySubscribedTopic))
             ))
         );
-        assertThat(
-            exception.getMessage(),
-            startsWith("Topic " + doublySubscribedTopic + " was already registered to source node")
-        );
+        assertTrue(exception.getMessage().startsWith("Topic " + doublySubscribedTopic + " was already registered to source node"));
     }
 
     @Test
@@ -860,12 +852,9 @@ public class ProcessorTopologyTest {
         inputTopic.pipeInput("key2", "value2@2000");
         inputTopic.pipeInput("key3", "value3@3000");
         final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER);
-        assertThat(outputTopic.readRecord(),
-                equalTo(new TestRecord<>("key1", "value1", null, 1000L)));
-        assertThat(outputTopic.readRecord(),
-                equalTo(new TestRecord<>("key2", "value2", null, 2000L)));
-        assertThat(outputTopic.readRecord(),
-                equalTo(new TestRecord<>("key3", "value3", null, 3000L)));
+        assertEquals(new TestRecord<>("key1", "value1", null, 1000L), outputTopic.readRecord());
+        assertEquals(new TestRecord<>("key2", "value2", null, 2000L), outputTopic.readRecord());
+        assertEquals(new TestRecord<>("key3", "value3", null, 3000L), outputTopic.readRecord());
     }
 
 
@@ -890,7 +879,7 @@ public class ProcessorTopologyTest {
         topology.addSource("source", "topic1", "topic2");
         final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
-        assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
+        assertTrue(result.contains("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
     }
 
     @Test
@@ -899,8 +888,8 @@ public class ProcessorTopologyTest {
         topology.addSource("source2", "t", "t1", "t2");
         final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
-        assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
-        assertThat(result, containsString("source2:\n\t\ttopics:\t\t[t, t1, t2]\n"));
+        assertTrue(result.contains("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
+        assertTrue(result.contains("source2:\n\t\ttopics:\t\t[t, t1, t2]\n"));
     }
 
     @Test
@@ -910,9 +899,9 @@ public class ProcessorTopologyTest {
                 .addProcessor("other", mockProcessorSupplier, "source");
         final ProcessorTopology processorTopology = topology.getInternalBuilder().buildTopology();
         final String result = processorTopology.toString();
-        assertThat(result, containsString("\t\tchildren:\t[processor, other]"));
-        assertThat(result, containsString("processor:\n"));
-        assertThat(result, containsString("other:\n"));
+        assertTrue(result.contains("\t\tchildren:\t[processor, other]"));
+        assertTrue(result.contains("processor:\n"));
+        assertTrue(result.contains("other:\n"));
     }
 
     @Test
@@ -925,8 +914,8 @@ public class ProcessorTopologyTest {
                 .addProcessor("child-two-one", mockProcessorSupplier, "child-two");
 
         final String result = topology.getInternalBuilder().buildTopology().toString();
-        assertThat(result, containsString("child-one:\n\t\tchildren:\t[child-one-one]"));
-        assertThat(result, containsString("child-two:\n\t\tchildren:\t[child-two-one]"));
+        assertTrue(result.contains("child-one:\n\t\tchildren:\t[child-one-one]"));
+        assertTrue(result.contains("child-two:\n\t\tchildren:\t[child-two-one]"));
     }
 
     @Test
@@ -1074,23 +1063,18 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
-    @SuppressWarnings({"deprecation", "removal"})
-    private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
-        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
-    }
-
     private Topology createSimpleTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", ForwardingProcessor::new, "source")
-            .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
+            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", TimestampProcessor::new, "source")
-            .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
+            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
@@ -1099,8 +1083,8 @@ public class ProcessorTopologyTest {
             .addProcessor("processor", () -> new FanOutTimestampProcessor("child1", "child2"), "source")
             .addProcessor("child1", ForwardingProcessor::new, "processor")
             .addProcessor("child2", TimestampProcessor::new, "processor")
-            .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
-            .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
+            .addSink("sink1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "child1")
+            .addSink("sink2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner<>(partition), "child2");
     }
 
     static class DroppingPartitioner implements StreamPartitioner<String, String> {
@@ -1183,10 +1167,10 @@ public class ProcessorTopologyTest {
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", ForwardingProcessor::new, "source-1")
-                .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
+                .addSink("sink-1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
                 .addProcessor("processor-2", ForwardingProcessor::new, "source-2")
-                .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
+                .addSink("sink-2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner<>(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {

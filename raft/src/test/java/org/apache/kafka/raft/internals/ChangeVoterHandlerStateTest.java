@@ -17,13 +17,17 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Endpoints;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.ReplicaKey;
 
 import org.junit.jupiter.api.Test;
@@ -62,7 +66,7 @@ public class ChangeVoterHandlerStateTest {
                 false,
                 time.timer(1000)
             );
-            CompletableFuture<AddRaftVoterResponseData> future = addVoterState.future();
+            CompletableFuture<AddRaftVoterResponseData> future = addVoterState.future().toCompletableFuture();
 
             state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
             assertTrue(state.addVoterHandlerState().isPresent());
@@ -100,7 +104,7 @@ public class ChangeVoterHandlerStateTest {
                 100L,
                 time.timer(1000)
             );
-            CompletableFuture<RemoveRaftVoterResponseData> future = removeVoterState.future();
+            CompletableFuture<RemoveRaftVoterResponseData> future = removeVoterState.future().toCompletableFuture();
 
             state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(removeVoterState));
             assertTrue(state.removeVoterHandlerState().isPresent());
@@ -131,7 +135,7 @@ public class ChangeVoterHandlerStateTest {
         try {
             ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
 
-            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
 
             AddVoterHandlerState addVoterState = new AddVoterHandlerState(
                 ReplicaKey.of(1, Uuid.randomUuid()),
@@ -142,16 +146,17 @@ public class ChangeVoterHandlerStateTest {
             state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
 
             time.sleep(500);
-            assertEquals(500, state.maybeExpirePendingOperation(time.milliseconds()));
+            assertEquals(500, state.maybeExpirePendingOperation(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertTrue(state.addVoterHandlerState().isPresent());
             assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
             time.sleep(500);
-            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertFalse(state.addVoterHandlerState().isPresent());
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
-            assertTrue(addVoterState.future().isDone());
-            assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(addVoterState.future().join().errorCode()));
+            var future = addVoterState.future().toCompletableFuture();
+            assertTrue(future.isDone());
+            assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(future.join().errorCode()));
         } finally {
             raftMetrics.close();
             metrics.close();
@@ -175,16 +180,17 @@ public class ChangeVoterHandlerStateTest {
             state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(removeVoterState));
 
             time.sleep(500);
-            assertEquals(500, state.maybeExpirePendingOperation(time.milliseconds()));
+            assertEquals(500, state.maybeExpirePendingOperation(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertTrue(state.removeVoterHandlerState().isPresent());
             assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
             time.sleep(500);
-            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE, state.maybeExpirePendingOperation(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertFalse(state.removeVoterHandlerState().isPresent());
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
-            assertTrue(removeVoterState.future().isDone());
-            assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(removeVoterState.future().join().errorCode()));
+            var future = removeVoterState.future().toCompletableFuture();
+            assertTrue(future.isDone());
+            assertEquals(Errors.REQUEST_TIMED_OUT, Errors.forCode(future.join().errorCode()));
         } finally {
             raftMetrics.close();
             metrics.close();
@@ -201,7 +207,7 @@ public class ChangeVoterHandlerStateTest {
         try {
             ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
 
-            assertFalse(state.isOperationPending(time.milliseconds()));
+            assertFalse(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
             AddVoterHandlerState addVoterState = new AddVoterHandlerState(
@@ -212,11 +218,11 @@ public class ChangeVoterHandlerStateTest {
             );
             state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
 
-            assertTrue(state.isOperationPending(time.milliseconds()));
+            assertTrue(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
             time.sleep(1000);
-            assertFalse(state.isOperationPending(time.milliseconds()));
+            assertFalse(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertFalse(state.addVoterHandlerState().isPresent());
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
         } finally {
@@ -235,7 +241,7 @@ public class ChangeVoterHandlerStateTest {
         try {
             ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
 
-            assertFalse(state.isOperationPending(time.milliseconds()));
+            assertFalse(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
 
             RemoveVoterHandlerState removeVoterState = new RemoveVoterHandlerState(
                 100L,
@@ -243,11 +249,11 @@ public class ChangeVoterHandlerStateTest {
             );
             state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(removeVoterState));
 
-            assertTrue(state.isOperationPending(time.milliseconds()));
+            assertTrue(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
             time.sleep(1000);
-            assertFalse(state.isOperationPending(time.milliseconds()));
+            assertFalse(state.isOperationPending(LeaderAndEpoch.UNKNOWN, Endpoints.empty(), time.milliseconds()));
             assertFalse(state.removeVoterHandlerState().isPresent());
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
         } finally {
@@ -274,12 +280,16 @@ public class ChangeVoterHandlerStateTest {
             );
             state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
 
-            CompletableFuture<AddRaftVoterResponseData> addFuture = addVoterState.future();
+            CompletableFuture<AddRaftVoterResponseData> addFuture = addVoterState.future().toCompletableFuture();
 
             assertFalse(addFuture.isDone());
             assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
-            state.maybeResetPendingVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER);
+            state.maybeResetPendingVoterHandlerState(
+                Errors.NOT_LEADER_OR_FOLLOWER,
+                LeaderAndEpoch.UNKNOWN,
+                Endpoints.empty()
+            );
 
             assertFalse(state.addVoterHandlerState().isPresent());
             assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
@@ -379,7 +389,7 @@ public class ChangeVoterHandlerStateTest {
                 false,
                 time.timer(1000)
             );
-            CompletableFuture<AddRaftVoterResponseData> firstFuture = firstAddVoter.future();
+            CompletableFuture<AddRaftVoterResponseData> firstFuture = firstAddVoter.future().toCompletableFuture();
             state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(firstAddVoter));
 
             AddVoterHandlerState secondAddVoter = new AddVoterHandlerState(
@@ -415,7 +425,7 @@ public class ChangeVoterHandlerStateTest {
                 100L,
                 time.timer(1000)
             );
-            CompletableFuture<RemoveRaftVoterResponseData> firstFuture = firstRemoveVoter.future();
+            CompletableFuture<RemoveRaftVoterResponseData> firstFuture = firstRemoveVoter.future().toCompletableFuture();
             state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(firstRemoveVoter));
 
             RemoveVoterHandlerState secondRemoveVoter = new RemoveVoterHandlerState(
@@ -427,6 +437,229 @@ public class ChangeVoterHandlerStateTest {
             assertTrue(state.removeVoterHandlerState().isPresent());
             assertEquals(secondRemoveVoter, state.removeVoterHandlerState().get());
             assertFalse(state.addVoterHandlerState().isPresent());
+            assertTrue(firstFuture.isDone());
+            assertEquals(Errors.OPERATION_NOT_ATTEMPTED, Errors.forCode(firstFuture.join().errorCode()));
+        } finally {
+            raftMetrics.close();
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testCannotSetAddVoterWhenUpdateVoterPresent() {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.addLeaderMetrics();
+
+        try {
+            ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
+
+            UpdateVoterHandlerState updateVoterState = new UpdateVoterHandlerState(
+                ReplicaKey.of(1, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+            state.resetUpdateVoterHandlerState(
+                Errors.NONE,
+                LeaderAndEpoch.UNKNOWN,
+                Endpoints.empty(),
+                Optional.of(updateVoterState)
+            );
+            assertTrue(state.updateVoterHandlerState().isPresent());
+
+            AddVoterHandlerState addVoterState = new AddVoterHandlerState(
+                ReplicaKey.of(2, Uuid.randomUuid()),
+                Endpoints.empty(),
+                false,
+                time.timer(1000)
+            );
+
+            assertThrows(IllegalStateException.class, () -> {
+                state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
+            });
+
+            assertTrue(state.updateVoterHandlerState().isPresent());
+            assertFalse(state.addVoterHandlerState().isPresent());
+        } finally {
+            raftMetrics.close();
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testCannotSetRemoveVoterWhenUpdateVoterPresent() {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.addLeaderMetrics();
+
+        try {
+            ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
+
+            UpdateVoterHandlerState updateVoterState = new UpdateVoterHandlerState(
+                ReplicaKey.of(1, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+            state.resetUpdateVoterHandlerState(
+                Errors.NONE,
+                LeaderAndEpoch.UNKNOWN,
+                Endpoints.empty(),
+                Optional.of(updateVoterState)
+            );
+            assertTrue(state.updateVoterHandlerState().isPresent());
+
+            RemoveVoterHandlerState removeVoterState = new RemoveVoterHandlerState(
+                100L,
+                time.timer(1000)
+            );
+
+            assertThrows(IllegalStateException.class, () -> {
+                state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(removeVoterState));
+            });
+
+            assertTrue(state.updateVoterHandlerState().isPresent());
+            assertFalse(state.removeVoterHandlerState().isPresent());
+        } finally {
+            raftMetrics.close();
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testCannotSetUpdateVoterWhenAddVoterPresent() {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.addLeaderMetrics();
+
+        try {
+            ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
+
+            AddVoterHandlerState addVoterState = new AddVoterHandlerState(
+                ReplicaKey.of(1, Uuid.randomUuid()),
+                Endpoints.empty(),
+                false,
+                time.timer(1000)
+            );
+            state.resetAddVoterHandlerState(Errors.NONE, null, Optional.of(addVoterState));
+            assertTrue(state.addVoterHandlerState().isPresent());
+
+            UpdateVoterHandlerState updateVoterState = new UpdateVoterHandlerState(
+                ReplicaKey.of(2, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+
+            assertThrows(IllegalStateException.class, () -> {
+                state.resetUpdateVoterHandlerState(
+                    Errors.NONE,
+                    LeaderAndEpoch.UNKNOWN,
+                    Endpoints.empty(),
+                    Optional.of(updateVoterState)
+                );
+            });
+
+            assertTrue(state.addVoterHandlerState().isPresent());
+            assertFalse(state.updateVoterHandlerState().isPresent());
+        } finally {
+            raftMetrics.close();
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testCannotSetUpdateVoterWhenRemoveVoterPresent() {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.addLeaderMetrics();
+
+        try {
+            ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
+
+            RemoveVoterHandlerState removeVoterState = new RemoveVoterHandlerState(
+                100L,
+                time.timer(1000)
+            );
+            state.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.of(removeVoterState));
+            assertTrue(state.removeVoterHandlerState().isPresent());
+
+            UpdateVoterHandlerState updateVoterState = new UpdateVoterHandlerState(
+                ReplicaKey.of(1, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+
+            assertThrows(IllegalStateException.class, () -> {
+                state.resetUpdateVoterHandlerState(
+                    Errors.NONE,
+                    LeaderAndEpoch.UNKNOWN,
+                    Endpoints.empty(),
+                    Optional.of(updateVoterState)
+                );
+            });
+
+            assertTrue(state.removeVoterHandlerState().isPresent());
+            assertFalse(state.updateVoterHandlerState().isPresent());
+        } finally {
+            raftMetrics.close();
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testCanReplaceUpdateVoterWithAnotherUpdateVoter() {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        raftMetrics.addLeaderMetrics();
+
+        try {
+            ChangeVoterHandlerState state = new ChangeVoterHandlerState(raftMetrics);
+
+            UpdateVoterHandlerState firstUpdateVoter = new UpdateVoterHandlerState(
+                ReplicaKey.of(1, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+            CompletableFuture<UpdateRaftVoterResponseData> firstFuture = firstUpdateVoter.future().toCompletableFuture();
+            state.resetUpdateVoterHandlerState(
+                Errors.NONE,
+                LeaderAndEpoch.UNKNOWN,
+                Endpoints.empty(),
+                Optional.of(firstUpdateVoter)
+            );
+
+            UpdateVoterHandlerState secondUpdateVoter = new UpdateVoterHandlerState(
+                ReplicaKey.of(2, Uuid.randomUuid()),
+                Endpoints.empty(),
+                new ListenerName("PLAINTEXT"),
+                new SupportedVersionRange((short) 0, (short) 1),
+                time.timer(1000)
+            );
+            state.resetUpdateVoterHandlerState(
+                Errors.OPERATION_NOT_ATTEMPTED,
+                LeaderAndEpoch.UNKNOWN,
+                Endpoints.empty(),
+                Optional.of(secondUpdateVoter)
+            );
+
+            assertTrue(state.updateVoterHandlerState().isPresent());
+            assertEquals(secondUpdateVoter, state.updateVoterHandlerState().get());
+            assertFalse(state.addVoterHandlerState().isPresent());
+            assertFalse(state.removeVoterHandlerState().isPresent());
             assertTrue(firstFuture.isDone());
             assertEquals(Errors.OPERATION_NOT_ATTEMPTED, Errors.forCode(firstFuture.join().errorCode()));
         } finally {

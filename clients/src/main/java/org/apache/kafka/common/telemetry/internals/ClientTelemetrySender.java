@@ -99,7 +99,7 @@ public interface ClientTelemetrySender extends AutoCloseable {
      *                        enclosing client instance is otherwise unusable.
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
      *
-     * @return If present, optional of the client's assigned instance id used for metrics collection.
+     * @return If present, optional of the client's instance id used for metrics collection.
      */
 
     Optional<Uuid> clientInstanceId(Duration timeout);

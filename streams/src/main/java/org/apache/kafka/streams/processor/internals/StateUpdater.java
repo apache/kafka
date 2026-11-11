@@ -193,6 +193,25 @@ public interface StateUpdater {
     boolean hasExceptionsAndFailedTasks();
 
     /**
+     * Drains the tasks that wait in the queues of the state updater, i.e., tasks that were not picked up from the input
+     * queue yet, restored tasks that were not handed over yet, and failed tasks. Tasks that the state updater is
+     * updating or has paused are not returned.
+     *
+     * The returned tasks are removed from the state updater.
+     *
+     * In contrast to {@link StateUpdater#tasks()}, the returned tasks are the tasks themselves and not read-only
+     * copies, so that the caller can close them.
+     *
+     * This method is intended for the shutdown of the state updater and must only be called once the state updater
+     * does not update tasks anymore. It drains the failed tasks, so calling it while the state updater is running
+     * would hide tasks that {@link StateUpdater#drainExceptionsAndFailedTasks()} has to hand over to the stream
+     * thread.
+     *
+     * @return the tasks that wait in the queues of the state updater
+     */
+    Set<Task> drainQueuedTasks();
+
+    /**
      * Gets the exception that made the state updater die.
      *
      * A state updater that died cannot update any task anymore, neither the tasks it owned when it died nor tasks that
@@ -211,6 +230,7 @@ public interface StateUpdater {
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#drainQueuedTasks()}</li>
      *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
@@ -237,6 +257,7 @@ public interface StateUpdater {
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#drainQueuedTasks()}</li>
      *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *

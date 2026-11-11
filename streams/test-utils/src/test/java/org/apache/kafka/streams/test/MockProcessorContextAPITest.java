@@ -59,9 +59,9 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockProcessorContextAPITest {
     @Test
@@ -93,11 +93,11 @@ public class MockProcessorContextAPITest {
             new CapturedForward<>(new Record<>("foo5", 8L, 0L)),
             new CapturedForward<>(new Record<>("barbaz50", 56L, 0L))
         );
-        assertThat(actual, is(expected));
+        assertEquals(expected, actual);
 
         context.resetForwards();
 
-        assertThat(context.forwarded(), empty());
+        assertTrue(context.forwarded().isEmpty());
     }
 
     @Test
@@ -141,7 +141,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("george");
@@ -150,7 +150,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("foo5", 8L, 0L), Optional.of("george"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("pete");
@@ -159,7 +159,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("barbaz50", 56L, 0L), Optional.of("pete"))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         {
             final List<CapturedForward<? extends String, ? extends Long>> forwarded = context.forwarded("steve");
@@ -167,7 +167,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("start", -1L, 0L))
             );
 
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
     }
 
@@ -197,15 +197,15 @@ public class MockProcessorContextAPITest {
         processor.process(new Record<>("foo", 5L, 0L));
         processor.process(new Record<>("barbaz", 50L, 0L));
 
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
 
         processor.process(new Record<>("foobar", 500L, 0L));
 
-        assertThat(context.committed(), is(true));
+        assertTrue(context.committed());
 
         context.resetCommit();
 
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
     }
 
     @SuppressWarnings("unchecked")
@@ -306,9 +306,9 @@ public class MockProcessorContextAPITest {
         processor.process(new Record<>("foo", 5L, 0L));
         processor.process(new Record<>("bar", 50L, 0L));
 
-        assertThat(store.get("foo"), is(5L));
-        assertThat(store.get("bar"), is(50L));
-        assertThat(store.get("all"), is(55L));
+        assertEquals(5L, store.get("foo"));
+        assertEquals(50L, store.get("bar"));
+        assertEquals(55L, store.get("all"));
     }
 
 
@@ -356,7 +356,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("taskId", new TaskId(0, 0), 0L)),
                 new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
         context.resetForwards();
         context.setRecordMetadata("t1", 0, 0L);
@@ -371,7 +371,7 @@ public class MockProcessorContextAPITest {
                 new CapturedForward<>(new Record<>("offset", 0L, 0L)),
                 new CapturedForward<>(new Record<>("record", new Record<>("foo", 5L, 0L), 0L))
             );
-            assertThat(forwarded, is(expected));
+            assertEquals(expected, forwarded);
         }
     }
 
@@ -396,14 +396,14 @@ public class MockProcessorContextAPITest {
         processor.init(context);
 
         final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
-        assertThat(capturedPunctuator.getInterval(), is(Duration.ofMillis(1000L)));
-        assertThat(capturedPunctuator.getType(), is(PunctuationType.WALL_CLOCK_TIME));
-        assertThat(capturedPunctuator.cancelled(), is(false));
+        assertEquals(Duration.ofMillis(1000L), capturedPunctuator.getInterval());
+        assertEquals(PunctuationType.WALL_CLOCK_TIME, capturedPunctuator.getType());
+        assertFalse(capturedPunctuator.cancelled());
 
         final Punctuator punctuator = capturedPunctuator.getPunctuator();
-        assertThat(context.committed(), is(false));
+        assertFalse(context.committed());
         punctuator.punctuate(1234L);
-        assertThat(context.committed(), is(true));
+        assertTrue(context.committed());
     }
 
     @SuppressWarnings("resource")
@@ -419,12 +419,12 @@ public class MockProcessorContextAPITest {
         final MockProcessorContext<Void, Void> context =
             new MockProcessorContext<>(config, new TaskId(1, 1), dummyFile);
 
-        assertThat(context.applicationId(), is("testFullConstructor"));
-        assertThat(context.taskId(), is(new TaskId(1, 1)));
-        assertThat(context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG), is("testFullConstructor"));
-        assertThat(context.appConfigsWithPrefix("application.").get("id"), is("testFullConstructor"));
-        assertThat(context.keySerde().getClass(), is(Serdes.StringSerde.class));
-        assertThat(context.valueSerde().getClass(), is(Serdes.LongSerde.class));
-        assertThat(context.stateDir(), is(dummyFile));
+        assertEquals("testFullConstructor", context.applicationId());
+        assertEquals(new TaskId(1, 1), context.taskId());
+        assertEquals("testFullConstructor", context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG));
+        assertEquals("testFullConstructor", context.appConfigsWithPrefix("application.").get("id"));
+        assertEquals(Serdes.StringSerde.class, context.keySerde().getClass());
+        assertEquals(Serdes.LongSerde.class, context.valueSerde().getClass());
+        assertEquals(dummyFile, context.stateDir());
     }
 }

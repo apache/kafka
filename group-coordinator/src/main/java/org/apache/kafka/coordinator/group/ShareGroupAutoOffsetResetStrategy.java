@@ -91,9 +91,10 @@ public class ShareGroupAutoOffsetResetStrategy {
 
     /**
      * Delegates the timestamp calculation to the base strategy.
-     * @return the timestamp for the OffsetResetStrategy,
-     * if the strategy is EARLIEST or LATEST or duration is provided
-     * else return Optional.empty()
+     *
+     * @return {@code ListOffsetsRequest.EARLIEST_TIMESTAMP} for the EARLIEST strategy,
+     *         {@code ListOffsetsRequest.LATEST_TIMESTAMP} for the LATEST strategy, or the current
+     *         time minus the duration for the BY_DURATION strategy.
      */
     public Long timestamp() {
         return delegate.timestamp().get();
@@ -120,20 +121,6 @@ public class ShareGroupAutoOffsetResetStrategy {
                 '}';
     }
 
-    /**
-     * Factory method for creating EARLIEST strategy.
-     */
-    public static ShareGroupAutoOffsetResetStrategy earliest() {
-        return new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.EARLIEST, StrategyType.EARLIEST);
-    }
-
-    /**
-     * Factory method for creating LATEST strategy.
-     */
-    public static ShareGroupAutoOffsetResetStrategy latest() {
-        return new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.LATEST, StrategyType.LATEST);
-    }
-
     public static class Validator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -146,6 +133,7 @@ public class ShareGroupAutoOffsetResetStrategy {
             }
         }
 
+        @Override
         public String toString() {
             String values = Arrays.stream(StrategyType.values())
                 .map(strategyType -> {

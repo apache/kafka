@@ -55,12 +55,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,14 +95,12 @@ class RemoteTopicCrudTest {
 
     @ClusterTest
     void testCreateRemoteTopicWithValidRetentionTime() {
-        try (var admin = cluster.admin()) {
-            var topicConfig = Map.of(
-                TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
-                TopicConfig.RETENTION_MS_CONFIG, "60000",
-                TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "30000"
-            );
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig)));
-        }
+        var topicConfig = Map.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
+            TopicConfig.RETENTION_MS_CONFIG, "60000",
+            TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "30000"
+        );
+        cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
     }
 
     @ClusterTest
@@ -115,9 +110,7 @@ class RemoteTopicCrudTest {
             TopicConfig.RETENTION_BYTES_CONFIG, "512",
             TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "256"
         );
-        try (var admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig)));
-        }
+        cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
         verifyRemoteLogTopicConfigs(topicConfig);
     }
 
@@ -129,9 +122,7 @@ class RemoteTopicCrudTest {
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
             TopicConfig.RETENTION_MS_CONFIG, "1001"
         );
-        try (var admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig)));
-        }
+        cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
         verifyRemoteLogTopicConfigs(topicConfig);
     }
 
@@ -142,9 +133,7 @@ class RemoteTopicCrudTest {
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
             TopicConfig.RETENTION_BYTES_CONFIG, "1025"
         );
-        try (var admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig)));
-        }
+        cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
         verifyRemoteLogTopicConfigs(topicConfig);
     }
 
@@ -210,11 +199,7 @@ class RemoteTopicCrudTest {
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, cluster.config().serverProperties().get(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG)
         );
 
-        try (var admin = cluster.admin()) {
-            var result = admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig)));
-            assertDoesNotThrow(() -> result.all().get(30, TimeUnit.SECONDS));
-        }
-
+        cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
         verifyRemoteLogTopicConfigs(topicConfig);
     }
 
@@ -241,11 +226,11 @@ class RemoteTopicCrudTest {
 
             // 2. change the local.retention.ms value to the same value as retention.ms should successfully create the topic
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000");
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             // 3. change the local.retention.ms value to "-2" should also successfully create the topic
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
-            admin.createTopics(List.of(new NewTopic(testTopicName2, numPartitions, numReplicationFactor).configs(topicConfig))).values().get(testTopicName2).get();
+            cluster.createTopic(testTopicName2, numPartitions, numReplicationFactor, topicConfig);
 
             // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.ms and retention.ms value,
             //    it should successfully creates the topic.
@@ -254,7 +239,7 @@ class RemoteTopicCrudTest {
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100");
             topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1000");
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2");
-            admin.createTopics(List.of(new NewTopic(testTopicName3, numPartitions, numReplicationFactor).configs(topicConfig))).values().get(testTopicName3).get();
+            cluster.createTopic(testTopicName3, numPartitions, numReplicationFactor, topicConfig);
 
             // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
@@ -303,11 +288,11 @@ class RemoteTopicCrudTest {
 
             // 2. change the local.retention.bytes value to the same value as retention.bytes should successfully create the topic
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000");
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             // 3. change the local.retention.bytes value to "-2" should also successfully create the topic
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2");
-            admin.createTopics(List.of(new NewTopic(testTopicName2, numPartitions, numReplicationFactor).configs(topicConfig))).values().get(testTopicName2).get();
+            cluster.createTopic(testTopicName2, numPartitions, numReplicationFactor, topicConfig);
 
             // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.bytes and retention.bytes value,
             //    it should successfully creates the topic.
@@ -316,7 +301,7 @@ class RemoteTopicCrudTest {
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100");
             topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000");
             topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
-            admin.createTopics(List.of(new NewTopic(testTopicName3, numPartitions, numReplicationFactor).configs(topicConfig))).values().get(testTopicName3).get();
+            cluster.createTopic(testTopicName3, numPartitions, numReplicationFactor, topicConfig);
 
             // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
@@ -343,7 +328,7 @@ class RemoteTopicCrudTest {
     @ClusterTest
     void testEnableRemoteLogOnExistingTopic() throws Exception {
         try (var admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(Map.of()))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor);
 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -357,7 +342,7 @@ class RemoteTopicCrudTest {
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, value = "false")
     })
-    void testEnableRemoteLogWhenSystemRemoteStorageIsDisabled() throws ExecutionException, InterruptedException {
+    void testEnableRemoteLogWhenSystemRemoteStorageIsDisabled() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
@@ -365,7 +350,7 @@ class RemoteTopicCrudTest {
             var error = assertFutureThrows(InvalidConfigurationException.class, admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor).configs(topicConfig))).all());
             assertTrue(Objects.requireNonNull(error).getMessage().contains("Tiered Storage functionality is disabled in the broker"));
 
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor);
 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -384,8 +369,7 @@ class RemoteTopicCrudTest {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
             );
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -407,8 +391,7 @@ class RemoteTopicCrudTest {
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true" 
             );
 
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
                 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -424,14 +407,13 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithInheritedLocalRetentionTime() throws Exception {
+    void testUpdateTopicConfigWithInheritedLocalRetentionTime() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
             );
             
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get(); 
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
             
             // inherited local retention ms is 1000
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
@@ -446,14 +428,13 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithInheritedLocalRetentionSize() throws Exception {
+    void testUpdateTopicConfigWithInheritedLocalRetentionSize() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
             );
             
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             // inherited local retention bytes is 1024
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
@@ -468,14 +449,13 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithDisablingRemoteStorage() throws Exception {
+    void testUpdateTopicConfigWithDisablingRemoteStorage() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
             );
 
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
             
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -500,8 +480,7 @@ class RemoteTopicCrudTest {
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
             );
 
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             var configs = new HashMap<ConfigResource, Collection<AlterConfigOp>>();
             configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
@@ -536,8 +515,7 @@ class RemoteTopicCrudTest {
                 TopicConfig.RETENTION_MS_CONFIG, "200",
                 TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100"
             );
-            admin.createTopics(List.of(new NewTopic(testTopicName, numPartitions, numReplicationFactor)
-                .configs(topicConfig))).all().get();
+            cluster.createTopic(testTopicName, numPartitions, numReplicationFactor, topicConfig);
 
             admin.deleteTopics(List.of(testTopicName)).all().get();
 

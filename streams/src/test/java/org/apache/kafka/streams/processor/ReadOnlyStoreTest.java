@@ -39,8 +39,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedList;
 import java.util.List;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ReadOnlyStoreTest {
 
@@ -121,14 +120,14 @@ public class ReadOnlyStoreTest {
                 expectedResult.add(KeyValue.pair(1, "foo"));
                 expectedResult.add(KeyValue.pair(2, "bar"));
 
-                assertThat(storeContent, equalTo(expectedResult));
+                assertEquals(expectedResult, storeContent);
             }
 
             final List<KeyValue<Integer, String>> expectedResult = new LinkedList<>();
             expectedResult.add(KeyValue.pair(1, "bar -- foo"));
             expectedResult.add(KeyValue.pair(2, "foo -- bar"));
 
-            assertThat(output.readKeyValuesToList(), equalTo(expectedResult));
+            assertEquals(expectedResult, output.readKeyValuesToList());
         }
     }
 }

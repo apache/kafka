@@ -23,6 +23,9 @@
   // Version 2: adds TransactionalIdPattern to list transactions with the same pattern(KIP-1152)
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "StateFilters", "type": "[]string", "versions": "0+",
       "about": "The transaction states to filter by: if empty, all transactions are returned; if non-empty, then only transactions matching one of the filtered states will be returned."

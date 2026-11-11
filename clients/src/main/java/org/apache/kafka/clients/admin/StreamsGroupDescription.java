@@ -247,7 +247,9 @@ public class StreamsGroupDescription {
             ", members=" + members.stream().map(StreamsGroupMemberDescription::toString).collect(Collectors.joining(",")) +
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
-            ", authorizedOperations=" + authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(",")) +
+            ", authorizedOperations=" + (authorizedOperations == null ?
+                "null" :
+                authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(","))) +
             ", topologyDescription=" + topologyDescription.map(Object::toString).orElse("") +
             ", topologyDescriptionStatus=" + topologyDescriptionStatus +
             ", assignorName=" + assignorName.orElse("") +

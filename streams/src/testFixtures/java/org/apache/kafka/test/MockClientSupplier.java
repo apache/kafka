@@ -32,9 +32,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockClientSupplier implements KafkaClientSupplier {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
@@ -69,7 +69,9 @@ public class MockClientSupplier implements KafkaClientSupplier {
     @Override
     public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
         if (applicationId != null) {
-            assertThat((String) config.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
+            final String transactionalId = (String) config.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            assertNotNull(transactionalId);
+            assertTrue(transactionalId.startsWith(applicationId + "-"));
         } else {
             assertFalse(config.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
         }

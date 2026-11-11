@@ -314,6 +314,53 @@ public class RocksDBTransactionBufferTest {
     }
 
     @Test
+    public void stageAllShouldNotExposeAPartiallyStagedBatchToNonOwnerReads() throws Exception {
+        final int batchSize = 50;
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        // A non-owner read takes the read lock, which stageAll holds off for the whole batch, so the
+        // batch is either wholly absent or wholly present -- the all-or-nothing view a caller would
+        // otherwise get from a single WriteBatch write. Keys are scanned in the "k" range so the
+        // base-store keys (a, b, c) are excluded from the count.
+        final Thread reader = new Thread(() -> {
+            try {
+                while (!stop.get()) {
+                    int staged = 0;
+                    try (KeyValueIterator<Bytes, byte[]> iter = buffer.range(key("k000"), key("k999"), true, true)) {
+                        while (iter.hasNext()) {
+                            iter.next();
+                            staged++;
+                        }
+                    }
+                    if (staged != 0 && staged != batchSize) {
+                        throw new AssertionError("non-owner read observed a partially staged batch of " + staged
+                            + " of " + batchSize + " writes");
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.compareAndSet(null, t);
+            }
+        });
+        reader.start();
+        try {
+            for (int i = 0; i < 1_000 && failure.get() == null; i++) {
+                buffer.stageAll(() -> {
+                    for (int k = 0; k < batchSize; k++) {
+                        buffer.stage(key(String.format("k%03d", k)), val("v" + k));
+                    }
+                });
+                buffer.rollback();
+            }
+        } finally {
+            stop.set(true);
+            reader.join();
+        }
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent non-owner reader failed", failure.get());
+        }
+    }
+
+    @Test
     public void shouldNotShowStagedWritesInBaseAfterRollback() throws RocksDBException {
         buffer.stage(key("x"), val("staged-x"));
         buffer.rollback();
@@ -376,6 +423,39 @@ public class RocksDBTransactionBufferTest {
         assertEquals("new-b", str(db.get(cfHandle, key("b").get())));
         assertNull(db.get(cfHandle, key("c").get()));
         assertTrue(buffer.isEmpty());
+    }
+
+    @Test
+    public void shouldReportNoUncommittedBytesWhenNothingStaged() {
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportNoUncommittedBytesAfterCommit() {
+        buffer.stage(key("x"), val("v"));
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
+
+        buffer.commit();
+
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportNoUncommittedBytesAfterRollback() {
+        buffer.stage(key("x"), val("v"));
+        buffer.stageDeleteRange(cfHandle, key("a"), key("c"));
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
+
+        buffer.rollback();
+
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportUncommittedBytesForStagedRangeDelete() {
+        buffer.stageDeleteRange(cfHandle, key("a"), key("c"));
+
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
     }
 
     @Test
@@ -488,5 +568,58 @@ public class RocksDBTransactionBufferTest {
         assertEquals("data-d", str(db.get(cfHandle, key("d").get())));
         assertEquals("other-o", str(db.get(otherCfHandle, key("o").get())));
         assertTrue(buffer.isEmpty());
+    }
+
+    @Test
+    public void shouldCommitLastOverwriteToOtherCF() throws RocksDBException {
+        buffer.stage(otherCfHandle, key("o"), val("v1"));
+        buffer.stage(otherCfHandle, key("o"), val("v2"));
+
+        buffer.commit();
+
+        assertEquals("v2", str(db.get(otherCfHandle, key("o").get())));
+    }
+
+    @Test
+    public void shouldCommitPutAfterRangeDeleteOnOtherCF() throws RocksDBException {
+        db.put(otherCfHandle, key("a").get(), val("old-a"));
+        db.put(otherCfHandle, key("b").get(), val("old-b"));
+
+        buffer.stage(otherCfHandle, key("a"), val("new-a"));
+        buffer.stageDeleteRange(otherCfHandle, key("a"), key("c"));
+        buffer.stage(otherCfHandle, key("b"), val("new-b"));
+        buffer.commit();
+
+        assertNull(db.get(otherCfHandle, key("a").get()));
+        assertEquals("new-b", str(db.get(otherCfHandle, key("b").get())));
+    }
+
+    @Test
+    public void shouldKeepDataCFWriteWhenOtherCFRangeDeleted() throws RocksDBException {
+        buffer.stage(cfHandle, key("b"), val("data-b"));
+        buffer.stageDeleteRange(otherCfHandle, key("a"), key("c"));
+
+        assertEquals("data-b", str(buffer.get(key("b")).get()));
+
+        buffer.commit();
+
+        assertEquals("data-b", str(db.get(cfHandle, key("b").get())));
+    }
+
+    @Test
+    public void shouldCountOtherCFWritesInUncommittedBytes() {
+        buffer.stage(otherCfHandle, key("o"), new byte[5]);
+        buffer.stage(otherCfHandle, key("o"), new byte[5]);
+
+        assertEquals(key("o").get().length + 5, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldDiscardOtherCFWritesOnRollback() throws RocksDBException {
+        buffer.stage(otherCfHandle, key("o"), val("other-o"));
+        buffer.rollback();
+        buffer.commit();
+
+        assertNull(db.get(otherCfHandle, key("o").get()));
     }
 }

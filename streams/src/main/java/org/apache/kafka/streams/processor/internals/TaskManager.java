@@ -93,6 +93,7 @@ public class TaskManager {
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
     private final ProcessingMode processingMode;
+    private final boolean streamsProtocolEnabled;
     private final ChangelogReader changelogReader;
     private final TopologyMetadata topologyMetadata;
 
@@ -141,6 +142,7 @@ public class TaskManager {
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
         this.processingMode = topologyMetadata.processingMode();
+        this.streamsProtocolEnabled = topologyMetadata.streamsProtocolEnabled();
 
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -320,7 +322,7 @@ public class TaskManager {
 
             tasks.removeTask(task);
             task.revive();
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
         }
     }
 
@@ -335,7 +337,7 @@ public class TaskManager {
             }
             return activeTaskCreator.createTasks(mainConsumer, assignedTasks);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -351,7 +353,7 @@ public class TaskManager {
             }
             return standbyTaskCreator.createTasks(assignedTasks);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -832,7 +834,7 @@ public class TaskManager {
                 if (oldTask.isActive()) {
                     final StandbyTask standbyTask = convertActiveToStandby((StreamTask) oldTask, inputPartitions);
                     tasks.removeTask(oldTask);
-                    tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
+                    tasks.addPendingTasksToInit(Set.of(standbyTask));
                 } else {
                     final StreamTask activeTask = convertStandbyToActive((StandbyTask) oldTask, inputPartitions);
                     tasks.replaceStandbyWithActive(activeTask);
@@ -886,7 +888,7 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            tasks.addPendingTasksToInit(Collections.singleton(newTask));
+            tasks.addPendingTasksToInit(Set.of(newTask));
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -972,20 +974,20 @@ public class TaskManager {
                 stateUpdater.add(task);
             } else {
                 log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
-                tasks.addPendingTasksToInit(Collections.singleton(task));
+                tasks.addPendingTasksToInit(Set.of(task));
             }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
             log.info("Encountered lock exception. Reattempting locking the state in the next iteration. Error message was: {}",
                      lockException.getMessage());
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
         } catch (final TimeoutException timeoutException) {
             // A timeout can occur either during producer initialization OR while fetching committed offsets.
             // Retry in the next iteration.
             task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
-            tasks.addPendingTasksToInit(Collections.singleton(task));
+            tasks.addPendingTasksToInit(Set.of(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
             log.info("Encountered timeout exception. Reattempting initialization in the next iteration. Error message was: {}",
                      timeoutException.getMessage());
@@ -1291,8 +1293,15 @@ public class TaskManager {
      * For all other assigned tasks this thread owns, we overwrite the (potentially) state offset-sum from the
      * state directory with the latest changelog offset information. This step also add offset-sums for in-memory
      * state stores.
+     *
+     * <p>No-op under the classic protocol, which reports offset sums through {@link #taskOffsetSums()} instead and
+     * never reads this snapshot.
      */
     public void maybeUpdateTaskOffsetSumSnapshot() {
+        if (!streamsProtocolEnabled) {
+            return;
+        }
+
         final Map<TaskId, Long> offsetSums = new HashMap<>(stateDirectory.taskOffsetSums());
         for (final Task task : allTasks().values()) {
             if (task.isActive() && task.state() == State.RUNNING) {
@@ -1539,14 +1548,9 @@ public class TaskManager {
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task, false);
         }
-        // Handling all failures that occurred during the remove process
-        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
-            final Task failedTask = exceptionAndTask.task();
-            closeTaskDirty(failedTask, false);
-        }
-
-        // If there is anything left unhandled due to timeouts, handling now
-        for (final Task task : stateUpdater.tasks()) {
+        // Closing everything that is still left in the queues of the state updater, i.e., tasks that failed during
+        // the removals above and tasks that the state updater never got to hand over or pick up
+        for (final Task task : stateUpdater.drainQueuedTasks()) {
             closeTaskDirty(task, false);
         }
     }
@@ -1783,6 +1787,14 @@ public class TaskManager {
         return total;
     }
 
+    long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Task task : allRunningTasks().values()) {
+            max = Math.max(max, task.maxStoreUncommittedBytes());
+        }
+        return max;
+    }
+
     Set<Task> readOnlyAllTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -1868,6 +1880,15 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             // Wake up sleeping task executors after every poll, in case there is processing or punctuation to-do.
             schedulingTaskManager.signalTaskExecutors();
+        }
+    }
+
+    /**
+     * Pause or resume processing and punctuation on the processing threads, if they are enabled.
+     */
+    void setProcessingThreadsPaused(final boolean paused) {
+        if (schedulingTaskManager != null) {
+            schedulingTaskManager.setProcessingPaused(paused);
         }
     }
 
@@ -2200,7 +2221,7 @@ public class TaskManager {
             e -> {
                 throw e;
             },
-            e -> log.debug("Ignoring error in unclean {}", name));
+            e -> log.warn("Ignoring error in unclean {}", name, e));
     }
 
     private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {

@@ -56,9 +56,7 @@ import java.util.Map;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasItem;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -89,7 +87,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
-        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
+        store = new CachingKeyValueStore(underlyingStore);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
@@ -114,7 +112,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
         when(inner.name()).thenReturn("store");
         outer.init(context, outer);
         verify(inner).init(context, outer);
@@ -183,7 +181,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     private void setUpCloseTests() {
         underlyingStore = mock(KeyValueStore.class);
         when(underlyingStore.name()).thenReturn("store-name");
-        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE);
+        store = new CachingKeyValueStore(underlyingStore);
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
@@ -194,8 +192,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     public void shouldPutGetToFromCache() {
         store.put(bytesKey("key"), bytesValue("value"));
         store.put(bytesKey("key2"), bytesValue("value2"));
-        assertThat(store.get(bytesKey("key")), equalTo(bytesValue("value")));
-        assertThat(store.get(bytesKey("key2")), equalTo(bytesValue("value2")));
+        assertArrayEquals(bytesValue("value"), store.get(bytesKey("key")));
+        assertArrayEquals(bytesValue("value2"), store.get(bytesKey("key2")));
         // nothing evicted so underlying store should be empty
         assertEquals(2, cache.size());
         assertEquals(0, underlyingStore.approximateNumEntries());
@@ -604,10 +602,10 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldPutIfAbsent() {
         store.putIfAbsent(bytesKey("b"), bytesValue("2"));
-        assertThat(store.get(bytesKey("b")), equalTo(bytesValue("2")));
+        assertArrayEquals(bytesValue("2"), store.get(bytesKey("b")));
 
         store.putIfAbsent(bytesKey("b"), bytesValue("3"));
-        assertThat(store.get(bytesKey("b")), equalTo(bytesValue("2")));
+        assertArrayEquals(bytesValue("2"), store.get(bytesKey("b")));
     }
 
     @Test
@@ -616,8 +614,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         entries.add(new KeyValue<>(bytesKey("a"), bytesValue("1")));
         entries.add(new KeyValue<>(bytesKey("b"), bytesValue("2")));
         store.putAll(entries);
-        assertThat(store.get(bytesKey("a")), equalTo(bytesValue("1")));
-        assertThat(store.get(bytesKey("b")), equalTo(bytesValue("2")));
+        assertArrayEquals(bytesValue("1"), store.get(bytesKey("a")));
+        assertArrayEquals(bytesValue("2"), store.get(bytesKey("b")));
     }
 
     @Test
@@ -653,14 +651,14 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store.put(bytesKey("c"), bytesValue("cache-val"));
         assertEquals(0, underlyingStore.approximateNumEntries());
         final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        assertThat(view.get(bytesKey("c")), equalTo(bytesValue("cache-val")));
+        assertArrayEquals(bytesValue("cache-val"), view.get(bytesKey("c")));
     }
 
     @Test
     public void shouldReadUncommittedViewGetFromStoreOnly() {
         underlyingStore.put(bytesKey("s"), bytesValue("store-val"));
         final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        assertThat(view.get(bytesKey("s")), equalTo(bytesValue("store-val")));
+        assertArrayEquals(bytesValue("store-val"), view.get(bytesKey("s")));
     }
 
     @Test
@@ -668,7 +666,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         underlyingStore.put(bytesKey("k"), bytesValue("store-val"));
         store.put(bytesKey("k"), bytesValue("cache-val"));
         final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        assertThat(view.get(bytesKey("k")), equalTo(bytesValue("cache-val")));
+        assertArrayEquals(bytesValue("cache-val"), view.get(bytesKey("k")));
     }
 
     @Test
@@ -757,7 +755,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingKeyValueStore.class);
              final KeyValueIterator<Bytes, byte[]> it = store.range(bytesKey("z"), bytesKey("a"))) {
             assertFalse(it.hasNext());
-            assertThat(appender.getMessages(), hasItem(
+            assertTrue(appender.getMessages().contains(
                 "Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -771,7 +769,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingKeyValueStore.class);
              final KeyValueIterator<Bytes, byte[]> it = view.range(bytesKey("z"), bytesKey("a"))) {
             assertFalse(it.hasNext());
-            assertThat(appender.getMessages(), hasItem(
+            assertTrue(appender.getMessages().contains(
                 "Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +

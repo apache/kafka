@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -129,7 +130,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
     @AfterEach
     public void tearDown() {
         if (streams != null) {
-            closeStreams(streams);
+            streams.close(STREAMS_CLOSE_TIMEOUT);
             streams.cleanUp();
         }
     }
@@ -145,8 +146,9 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         return builder;
     }
 
-    private void closeStreams(final KafkaStreams kafkaStreams) {
-        kafkaStreams.close(STREAMS_CLOSE_TIMEOUT);
+    private void closeStreamsWithLeaveGroup(final KafkaStreams kafkaStreams) {
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(STREAMS_CLOSE_TIMEOUT));
     }
 
     private KafkaStreams startStreams() throws Exception {
@@ -289,7 +291,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         waitForOutput(batch1.size());
 
         // Clean stop — verify CF state, then restart without cleanUp
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         assertStoreStatus(0L);
@@ -329,7 +331,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         );
         produceRecords(batch1);
         waitForOutput(batch1.size());
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         // Cycle 2
@@ -340,7 +342,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         );
         produceRecords(batch2);
         waitForOutput(batch1.size() + batch2.size());
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         // Cycle 3
@@ -381,7 +383,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         produceRecords(batch1);
         waitForOutput(batch1.size());
 
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         // Verify CF state after clean shutdown: status=closed, offsets populated
@@ -419,7 +421,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
 
         // Start and immediately stop — no records produced
         startStreams(true);
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         // After clean shutdown with no data, status should still be closed
@@ -485,7 +487,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         assertEquals(2L, countsBefore.get("A"));
         assertEquals(1L, countsBefore.get("B"));
 
-        closeStreams(streams);
+        closeStreamsWithLeaveGroup(streams);
         streams = null;
 
         // Verify CF persisted correctly

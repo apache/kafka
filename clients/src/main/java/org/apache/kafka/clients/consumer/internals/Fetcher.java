@@ -47,7 +47,7 @@ import java.util.Map;
  * <ul>
  *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
  *     all access to that state must be synchronized on the Fetcher instance.</li>
- *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
+ *     <li>If a response handler accesses any shared state of the coordinator (e.g. ConsumerSubscriptionState),
  *     it is assumed that all access to that state is synchronized on the coordinator instance by
  *     the caller.</li>
  *     <li>At most one request is pending for each node at any time. Nodes with pending requests are
@@ -65,7 +65,7 @@ public class Fetcher<K, V> extends AbstractFetch {
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
+                   ConsumerSubscriptionState subscriptions,
                    FetchConfig fetchConfig,
                    Deserializers<K, V> deserializers,
                    FetchMetricsManager metricsManager,
@@ -103,7 +103,7 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
-        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests().requests();
         sendFetchesInternal(
                 fetchRequests,
                 (fetchTarget, data, clientResponse) -> {
@@ -121,7 +121,7 @@ public class Fetcher<K, V> extends AbstractFetch {
 
     protected void maybeCloseFetchSessions(final Timer timer) {
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
-                prepareCloseFetchSessionRequests(),
+                prepareCloseFetchSessionRequests().requests(),
                 this::handleCloseFetchSessionSuccess,
                 this::handleCloseFetchSessionFailure
         );

@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
@@ -60,7 +59,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+        return Set.of(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
 

@@ -71,8 +71,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -203,7 +202,7 @@ public class GlobalKTableIntegrationTest {
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp = IntegrationTestUtils
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
         assertNotNull(replicatedStoreWithTimestamp);
-        assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
+        assertEquals(ValueAndTimestamp.make("J", firstTimestamp + 4L), replicatedStoreWithTimestamp.get(5L));
 
         firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
@@ -290,7 +289,7 @@ public class GlobalKTableIntegrationTest {
         final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp = IntegrationTestUtils
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
         assertNotNull(replicatedStoreWithTimestamp);
-        assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
+        assertEquals(ValueAndTimestamp.make("J", firstTimestamp + 4L), replicatedStoreWithTimestamp.get(5L));
 
         firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
@@ -332,20 +331,20 @@ public class GlobalKTableIntegrationTest {
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
-        assertThat(store.approximateNumEntries(), equalTo(4L));
+        assertEquals(4L, store.approximateNumEntries());
 
         ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> timestampedStore = IntegrationTestUtils
             .getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
         assertNotNull(timestampedStore);
 
-        assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
+        assertEquals(4L, timestampedStore.approximateNumEntries());
         kafkaStreams.close();
 
         startStreams();
         store = IntegrationTestUtils.getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
-        assertThat(store.approximateNumEntries(), equalTo(4L));
+        assertEquals(4L, store.approximateNumEntries());
         timestampedStore = IntegrationTestUtils.getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-        assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
+        assertEquals(4L, timestampedStore.approximateNumEntries());
     }
 
     @ParameterizedTest

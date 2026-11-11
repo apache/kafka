@@ -82,10 +82,9 @@ public class ChunkedByteBufferOutputStreamTest {
             assertThrows(IllegalStateException.class, stream::position);
             assertThrows(IllegalStateException.class, stream::buffer);
             assertThrows(IllegalStateException.class, stream::attachedCapacity);
-            assertThrows(IllegalStateException.class, stream::limit);
             assertThrows(IllegalStateException.class, stream::initialCapacity);
             assertThrows(IllegalStateException.class, () -> stream.position(1));
-            assertThrows(IllegalStateException.class, () -> stream.ensureRemaining(1));
+            assertThrows(IllegalStateException.class, () -> stream.throwIfInsufficientRemaining(1));
             assertThrows(IllegalStateException.class, () -> stream.write(1));
             assertThrows(IllegalStateException.class, () -> stream.write(new byte[]{4}, 0, 1));
             assertThrows(IllegalStateException.class, () -> stream.write(ByteBuffer.wrap(new byte[]{5})));
@@ -182,7 +181,7 @@ public class ChunkedByteBufferOutputStreamTest {
     }
 
     @Test
-    public void testEnsureRemainingDoesNotWasteCurrentChunk() throws Exception {
+    public void testThrowIfInsufficientRemainingDoesNotWasteCurrentChunk() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
@@ -191,7 +190,7 @@ public class ChunkedByteBufferOutputStreamTest {
             // Requesting more than the current chunk's free bytes (5) but no more than the total
             // free bytes across chunks (13) must not skip ahead: the bytes left in the current chunk
             // stay writable.
-            stream.ensureRemaining(chunkSize + 1);
+            stream.throwIfInsufficientRemaining(chunkSize + 1);
             assertEquals(2 * chunkSize - 3, stream.remaining());
             stream.write(new byte[]{4, 5}, 0, 2);
             assertEquals(5, stream.position());

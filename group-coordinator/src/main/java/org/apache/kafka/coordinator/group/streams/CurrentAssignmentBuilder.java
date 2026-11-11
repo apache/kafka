@@ -209,7 +209,7 @@ public class CurrentAssignmentBuilder {
                 // without any tasks and to reconcile it again from scratch.
                 if ((ownedTasks.isEmpty() || !ownedTasks.get().isEmpty())) {
                     throw new FencedMemberEpochException(
-                        "The streams group member is in a unknown state. "
+                        "The streams group member is in an unknown state. "
                             + "The member must abandon all its tasks and rejoin.");
                 }
 

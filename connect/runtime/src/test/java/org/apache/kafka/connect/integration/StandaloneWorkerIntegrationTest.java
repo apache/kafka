@@ -245,7 +245,7 @@ public class StandaloneWorkerIntegrationTest {
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.STOPPED
+            CreateConnectorRequest.InitialState.STOPPED, null
         );
         connect.configureConnector(createConnectorRequest);
 

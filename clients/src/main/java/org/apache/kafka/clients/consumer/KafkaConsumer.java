@@ -20,7 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -287,8 +287,19 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <b>Note: The committed offset should always be the offset of the next message that your application will read.</b>
  * Thus, when calling {@link #commitSync(Map) commitSync(offsets)} you should use {@code nextRecordToBeProcessed.offset()}
  * or if {@link ConsumerRecords} is exhausted already {@link ConsumerRecords#nextOffsets()} instead.
- * You should also add the leader epoch as commit metadata, which can be obtained from
- * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+ * <p>
+ * <b>You should also include the leader epoch of the consumed record in the committed
+ * {@link OffsetAndMetadata}</b>, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+ * {@link ConsumerRecords#nextOffsets()}, e.g.
+ * {@code new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")}. The consumer uses the
+ * committed leader epoch to validate that the committed offset still exists in the partition when
+ * resuming from it, and to correct the position if the log was truncated after a partition leader
+ * change. Offsets committed without a leader epoch (e.g. constructed with
+ * {@link OffsetAndMetadata#OffsetAndMetadata(long)}) skip this validation: should such an offset no
+ * longer exist, the consumer resuming from it fails with an {@code OFFSET_OUT_OF_RANGE} error and falls
+ * back to the {@code auto.offset.reset} policy, which may cause duplicate processing (reset to earliest)
+ * or data loss (reset to latest). The offsets returned by {@link ConsumerRecords#nextOffsets()}, as used
+ * in the example above, already include the leader epoch.
  *
  * <h4><a name="manualassignment">Manual Partition Assignment</a></h4>
  *
@@ -623,7 +634,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Deserializer<K> keyDeserializer,
                   Deserializer<V> valueDeserializer,
                   KafkaClient client,
-                  SubscriptionState subscriptions,
+                  ConsumerSubscriptionState subscriptions,
                   ConsumerMetadata metadata,
                   List<ConsumerPartitionAssignor> assignors) {
         delegate = CREATOR.create(
@@ -693,15 +704,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *     <li>{@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} will be invoked when the rebalance completes (even if no new partitions are assigned to the consumer)</li>
      * </ul>
      * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
-     * also only be invoked during that time.
+     * also only be invoked during that time. The exception is giving up the assignment on {@link #unsubscribe()} or
+     * {@link #close()}, which invokes {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} (or
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)}) as part of that call.
      *
      * The provided listener will immediately override any listener set in a previous call to subscribe.
      * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
      * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
      *
-     * <p>deprecated Use {@link #subscribe(Collection)} to subscribe and
-     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
-     *             separately.
      * @param topics The list of topics to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
@@ -709,8 +719,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(Collection)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         delegate.subscribe(topics, listener);
     }
@@ -765,8 +779,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(Pattern)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
     }
@@ -811,17 +829,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * when there is a change to the topics matching the provided pattern and when consumer group membership changes.
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
-     * <p>deprecated Use {@link #subscribe(SubscriptionPattern)} to subscribe and
-     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
-     *             separately.
      * @param pattern  Pattern to subscribe to, that must be compatible with Google RE2/J.
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics.
      * @throws IllegalArgumentException If pattern is null or empty, or if the listener is null.
      * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
      *                                  previously (without a subsequent call to {@link #unsubscribe()}).
+     * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link #subscribe(SubscriptionPattern)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
     }
@@ -858,6 +877,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * If the consumer owns partitions assigned by the group, the rebalance listener is invoked to give them up
+     * ({@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}, or
+     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)}) as part of this call, without requiring a call
+     * to {@link #poll(Duration)}.
      * <p>
      * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
      * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
@@ -1076,8 +1100,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1130,8 +1158,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1219,8 +1251,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
      * i.e. {@code nextRecordToBeProcessed.offset()} (or {@link ConsumerRecords#nextOffsets()}).
-     * You should also add the leader epoch as commit metadata, which can be obtained from
-     * {@link ConsumerRecord#leaderEpoch()} or {@link ConsumerRecords#nextOffsets()}.
+     * You should also include the leader epoch of the consumed record in the committed
+     * {@link OffsetAndMetadata}, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
+     * {@link ConsumerRecords#nextOffsets()}. Without it, the consumer cannot validate the committed
+     * offset when resuming from it and falls back to the {@code auto.offset.reset} policy if the offset
+     * no longer exists in the partition; see the "Manual Offset Control" section of the class
+     * documentation for details.
      * If automatic group management with {@link #subscribe(Collection)} is used,
      * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
@@ -1266,6 +1302,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Note that, the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
      * So, the consumer might wait for {@code fetch.max.wait.ms} before starting to fetch the records from desired offset.
+     * <p>
+     * Note that this method clears the leader epoch of the consumer position, so offsets committed before any
+     * further records are consumed (e.g. via {@link #commitSync()}) will not include a leader epoch and cannot
+     * be validated when a consumer resumes from them. Use {@link #seek(TopicPartition, OffsetAndMetadata)} to
+     * seek with a leader epoch; see the "Manual Offset Control" section of the class documentation for details.
      *
      * @param partition the TopicPartition on which the seek will be performed.
      * @param offset the next offset returned by poll().
@@ -1448,8 +1489,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the consumer
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the consumer
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link ConsumerConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -1465,7 +1506,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
      *                               is set to `{@code false}`.
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      */
     @Override
     public Uuid clientInstanceId(Duration timeout) {

@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -484,6 +485,58 @@ public class PlaintextConsumerCallbackTest {
         }
     }
 
+    @ClusterTest
+    public void testClassicConsumerRebalanceListenerRetainedAfterUnsubscribe() throws InterruptedException {
+        testRebalanceListenerRetainedAfterUnsubscribe(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerRebalanceListenerRetainedAfterUnsubscribe() throws InterruptedException {
+        testRebalanceListenerRetainedAfterUnsubscribe(CONSUMER);
+    }
+
+    private void testRebalanceListenerRetainedAfterUnsubscribe(GroupProtocol groupProtocol) throws InterruptedException {
+        var assignedCount = new AtomicInteger(0);
+        var revokedCount = new AtomicInteger(0);
+        try (var consumer = createConsumer(groupProtocol)) {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        assignedCount.incrementAndGet();
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        revokedCount.incrementAndGet();
+                    }
+                }
+            });
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 1,
+                    "Timed out before expected rebalance completed"
+            );
+
+            // unsubscribe() invokes onPartitionsRevoked (no poll)
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke onPartitionsRevoked");
+
+            // The listener registered before unsubscribe() should still be invoked after re-subscribing
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 2,
+                    "Timed out waiting for the rebalance listener to be invoked after re-subscribing"
+            );
+        }
+        // close() invokes onPartitionsRevoked
+        assertEquals(2, revokedCount.get(), "close() should invoke onPartitionsRevoked");
+    }
+
     private void triggerOnPartitionsAssignedConsumerAware(
             TopicPartition tp,
             Consumer<byte[], byte[]> consumer,
@@ -613,6 +666,60 @@ public class PlaintextConsumerCallbackTest {
             );
         }
         assertTrue(partitionsRevoked.get());
+    }
+
+    @ClusterTest
+    public void testClassicConsumerCloseAfterUnsubscribeDoesNotInvokeCallbacks() throws InterruptedException {
+        testCloseAfterUnsubscribeDoesNotInvokeCallbacks(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerCloseAfterUnsubscribeDoesNotInvokeCallbacks() throws InterruptedException {
+        testCloseAfterUnsubscribeDoesNotInvokeCallbacks(CONSUMER);
+    }
+
+    /**
+     * unsubscribe() releases the assignment (onPartitionsRevoked), so a following close() owns no partitions and
+     * must not invoke any rebalance callback.
+     */
+    private void testCloseAfterUnsubscribeDoesNotInvokeCallbacks(GroupProtocol groupProtocol) throws InterruptedException {
+        var topicName = "close-after-unsubscribe";
+        cluster.createTopic(topicName, 2, (short) 1);
+        var bothPartitions = Set.of(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1));
+
+        var revokedCount = new AtomicInteger();
+        var lostCount = new AtomicInteger();
+        var listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revokedCount.incrementAndGet();
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                lostCount.incrementAndGet();
+            }
+        };
+
+        try (Consumer<byte[], byte[]> consumer = createConsumer(groupProtocol)) {
+            consumer.subscribe(List.of(topicName), listener);
+            ClientsTestUtils.awaitAssignment(consumer, bothPartitions);
+            assertEquals(0, revokedCount.get());
+            assertEquals(0, lostCount.get());
+
+            consumer.unsubscribe();
+            assertEquals(Set.of(), consumer.assignment());
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke onPartitionsRevoked once");
+            assertEquals(0, lostCount.get(), "unsubscribe() should not invoke onPartitionsLost");
+
+            consumer.close();
+            assertEquals(1, revokedCount.get(), "close() after unsubscribe() should not invoke onPartitionsRevoked");
+            assertEquals(0, lostCount.get(), "close() after unsubscribe() should not invoke onPartitionsLost");
+        }
     }
 
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol) {

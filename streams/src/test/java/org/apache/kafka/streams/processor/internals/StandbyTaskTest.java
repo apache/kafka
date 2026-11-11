@@ -70,13 +70,10 @@ import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.isA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -283,7 +280,7 @@ public class StandbyTaskTest {
     @Test
     public void shouldRequireSuspendingCreatedTasksBeforeClose() {
         task = createStandbyTask();
-        assertThat(task.state(), equalTo(CREATED));
+        assertEquals(CREATED, task.state());
         assertThrows(IllegalStateException.class, () -> task.closeClean());
 
         task.suspend();
@@ -331,7 +328,7 @@ public class StandbyTaskTest {
         task.closeClean();
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.
-        assertThat(getTaskMetrics(), empty());
+        assertTrue(getTaskMetrics().isEmpty());
     }
 
     @Test
@@ -344,7 +341,7 @@ public class StandbyTaskTest {
 
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.
-        assertThat(getTaskMetrics(), empty());
+        assertTrue(getTaskMetrics().isEmpty());
     }
 
     @Test
@@ -422,11 +419,11 @@ public class StandbyTaskTest {
 
         task.suspend();
         task.prepareRecycle(); // SUSPENDED
-        assertThat(task.state(), is(Task.State.CLOSED));
+        assertEquals(Task.State.CLOSED, task.state());
 
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.
-        assertThat(getTaskMetrics(), empty());
+        assertTrue(getTaskMetrics().isEmpty());
 
         verify(stateManager).recycle();
     }
@@ -434,18 +431,18 @@ public class StandbyTaskTest {
     @Test
     public void shouldAlwaysSuspendCreatedTasks() {
         task = createStandbyTask();
-        assertThat(task.state(), equalTo(CREATED));
+        assertEquals(CREATED, task.state());
         task.suspend();
-        assertThat(task.state(), equalTo(SUSPENDED));
+        assertEquals(SUSPENDED, task.state());
     }
 
     @Test
     public void shouldAlwaysSuspendRunningTasks() {
         task = createStandbyTask();
         task.initializeIfNeeded();
-        assertThat(task.state(), equalTo(RUNNING));
+        assertEquals(RUNNING, task.state());
         task.suspend();
-        assertThat(task.state(), equalTo(SUSPENDED));
+        assertEquals(SUSPENDED, task.state());
     }
 
     @Test
@@ -460,7 +457,7 @@ public class StandbyTaskTest {
             () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
 
-        assertThat(thrown.getCause(), isA(TimeoutException.class));
+        assertInstanceOf(TimeoutException.class, thrown.getCause());
 
     }
 
@@ -480,13 +477,13 @@ public class StandbyTaskTest {
         final KafkaMetric totalMetric = getMetric("update", "%s-total", task.id().toString());
         final KafkaMetric rateMetric = getMetric("update", "%s-rate", task.id().toString());
 
-        assertThat(totalMetric.metricValue(), equalTo(0.0));
-        assertThat(rateMetric.metricValue(), equalTo(0.0));
+        assertEquals(0.0, totalMetric.metricValue());
+        assertEquals(0.0, rateMetric.metricValue());
 
         // standby tasks have no remaining-records metric, so the offset-slot argument is ignored
         task.recordRestoration(time, 25L, 30L, false);
 
-        assertThat(totalMetric.metricValue(), equalTo(25.0));
+        assertEquals(25.0, totalMetric.metricValue());
         // the rate measures updated records per second, not update batches per second; with no time
         // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
         assertEquals(
@@ -499,7 +496,7 @@ public class StandbyTaskTest {
 
         task.recordRestoration(time, 50L, 55L, false);
 
-        assertThat(totalMetric.metricValue(), equalTo(75.0));
+        assertEquals(75.0, totalMetric.metricValue());
         assertEquals(
             75.0 / 30.0,
             ((Number) rateMetric.metricValue()).doubleValue(),
@@ -562,7 +559,7 @@ public class StandbyTaskTest {
     private void verifyCloseTaskMetric(final double expected, final StreamsMetricsImpl streamsMetrics, final MetricName metricName) {
         final KafkaMetric metric = (KafkaMetric) streamsMetrics.metrics().get(metricName);
         final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
-        assertThat(totalCloses, equalTo(expected));
+        assertEquals(expected, totalCloses);
     }
 
     private List<MetricName> getTaskMetrics() {

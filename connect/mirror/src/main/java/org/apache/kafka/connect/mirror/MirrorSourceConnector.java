@@ -455,11 +455,9 @@ public class MirrorSourceConnector extends SourceConnector {
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
         // get source and target topics with respective partition counts
         Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
         Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
 
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();

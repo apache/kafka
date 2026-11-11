@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -144,7 +143,7 @@ final class TaskMovement {
             final ProcessId destination = clientStateEntry.getKey();
             final ClientState state = clientStateEntry.getValue();
             for (final TaskId task : state.standbyTasks()) {
-                if (warmups.getOrDefault(destination, Collections.emptySet()).contains(task)) {
+                if (warmups.getOrDefault(destination, Set.of()).contains(task)) {
                     // this is a warmup, so we won't move it.
                 } else if (taskIsNotCaughtUpOnClientAndOtherMoreCaughtUpClientsExist(task, destination, clientStates, tasksToCaughtUpClients, tasksToClientByLag)) {
                     // if the desired client is not caught up, and there is another client that _is_ more caught up, then
