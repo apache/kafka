@@ -28,7 +28,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -314,6 +314,20 @@ public class ShareGroupDLQStateManager {
         public static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
         public static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
 
+        // DLQ context header keys. An original record header reusing one of these keys is always
+        // dropped, even when no DLQ header is added under that key for this call (e.g. no delivery count
+        // or cause). The most likely way for an original record to carry one is a record forwarded from
+        // a DLQ topic back onto a normal topic and DLQ'ed again, in which case preserving the stale
+        // headers from the earlier DLQ round would be misleading.
+        private static final Set<String> RESERVED_DLQ_HEADER_KEYS = Set.of(
+            HEADER_DLQ_ERRORS_TOPIC,
+            HEADER_DLQ_ERRORS_PARTITION,
+            HEADER_DLQ_ERRORS_OFFSET,
+            HEADER_DLQ_ERRORS_GROUP,
+            HEADER_DLQ_ERRORS_DELIVERY_COUNT,
+            HEADER_DLQ_ERRORS_MESSAGE
+        );
+
         public ProduceRequestHandler(
             ShareGroupDLQRecordParameter param,
             CompletableFuture<Void> result,
@@ -458,11 +472,13 @@ public class ShareGroupDLQStateManager {
                 ByteBuffer key = null;
                 ByteBuffer value = null;
                 Record record = originalRecordData.get(offset);
+                Header[] originalRecordHeaders = null;
                 if (record != null) {
                     key = record.hasKey() ? record.key() : null;
                     value = record.hasValue() ? record.value() : null;
+                    originalRecordHeaders = record.headers();
                 }
-                Header[] recordHeaders = headers(offset);
+                Header[] recordHeaders = headers(originalRecordHeaders, offset);
                 if (baseTimestamp == null) {
                     baseTimestamp = timestamp;
                 }
@@ -578,21 +594,27 @@ public class ShareGroupDLQStateManager {
                 ")";
         }
 
-        private Header[] headers(long offset) {
-            List<Header> headers = new ArrayList<>();
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, recordTopic().getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_GROUP, param.groupId().getBytes(StandardCharsets.UTF_8)));
-            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
-                new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
+        private Header[] headers(Header[] originalRecordHeaders, long offset) {
+            RecordHeaders headers = new RecordHeaders();
+            if (originalRecordHeaders != null) {
+                for (Header header : originalRecordHeaders) {
+                    if (!RESERVED_DLQ_HEADER_KEYS.contains(header.key())) {
+                        headers.add(header);
+                    }
+                }
+            }
+            headers.add(HEADER_DLQ_ERRORS_TOPIC, recordTopic().getBytes(StandardCharsets.UTF_8));
+            headers.add(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8));
+            headers.add(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
+            headers.add(HEADER_DLQ_ERRORS_GROUP, param.groupId().getBytes(StandardCharsets.UTF_8));
+            param.deliveryCount().ifPresent(deliveryCount ->
+                headers.add(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8)));
             param.cause().ifPresent(cause -> {
                 if (cause.getMessage() != null) {
-                    headers.add(new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, cause.getMessage().getBytes(StandardCharsets.UTF_8)));
+                    headers.add(HEADER_DLQ_ERRORS_MESSAGE, cause.getMessage().getBytes(StandardCharsets.UTF_8));
                 }
             });
-
-            return headers.toArray(new Header[0]);
+            return headers.toArray();
         }
 
         private String recordTopic() {
