@@ -20,10 +20,11 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
+import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse}
+import org.apache.kafka.common.requests.{HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.nio.ByteBuffer
 import java.util.Collections
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 
@@ -704,6 +706,183 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         typesFilter = List(Group.GroupType.CONSUMER.toString)
       )
     )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade"),
+      // The initial rebalance of the classic group does not complete during the test.
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "600000")
+    )
+  )
+  def testUpgradeFromClassicGroupWithoutSelectedProtocol(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topics.
+    createTopic(topic = "foo", numPartitions = 3)
+    createTopic(topic = "bar", numPartitions = 3)
+
+    // Classic member 1 joins the classic group. The protocols have different subscriptions.
+    val groupId = "grp"
+    val protocols = List("range" -> List("foo"), "cooperative-sticky" -> List("bar"))
+    val memberId1 = sendJoinRequestWithProtocols(groupId, "", protocols).memberId
+    val joinFuture1 = CompletableFuture.supplyAsync(() => sendJoinRequestWithProtocols(groupId, memberId1, protocols))
+
+    // The group is in PreparingRebalance until the initial rebalance completes, and it has not
+    // selected a protocol yet.
+    waitForClassicGroupState(groupId, ClassicGroupState.PREPARING_REBALANCE)
+
+    // The joining request with a consumer group member 2 is accepted.
+    val response = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+    assertEquals(1, response.memberEpoch)
+
+    // The pending join request of the classic member is asked to rejoin.
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, joinFuture1.get(30, TimeUnit.SECONDS).errorCode)
+
+    // The group has become a consumer group. The classic member is converted with the
+    // protocol that the next generation would select, which is "range".
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+    assertEquals(
+      Map(memberId1 -> List("foo"), response.memberId -> List("foo")),
+      subscribedTopicNames(groupId)
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
+  def testUpgradeFromClassicGroupWithMemberNotSupportingSelectedProtocol(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topics.
+    createTopic(topic = "foo", numPartitions = 3)
+    createTopic(topic = "bar", numPartitions = 3)
+
+    // Classic member 1 joins the classic group, which becomes stable on "range". The protocols
+    // have different subscriptions.
+    val groupId = "grp"
+    val protocols1 = List("range" -> List("foo"), "cooperative-sticky" -> List("bar"))
+    val memberId1 = sendJoinRequestWithProtocols(groupId, "", protocols1).memberId
+    val joinResponse1 = sendJoinRequestWithProtocols(groupId, memberId1, protocols1)
+    assertEquals(Errors.NONE.code, joinResponse1.errorCode)
+    assertEquals("range", joinResponse1.protocolName)
+    verifySyncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId1,
+      generationId = joinResponse1.generationId,
+      protocolName = "range",
+      assignments = List(new SyncGroupRequestAssignment()
+        .setMemberId(memberId1)
+        .setAssignment(assignment(List(0, 1, 2)))),
+      expectedProtocolName = "range",
+      expectedAssignment = assignment(List(0, 1, 2))
+    )
+
+    // Classic member 2, which only supports "cooperative-sticky", joins the group. The group
+    // is in PreparingRebalance, and it still has "range" as its selected protocol.
+    val protocols2 = List("cooperative-sticky" -> List("bar"))
+    val memberId2 = sendJoinRequestWithProtocols(groupId, "", protocols2).memberId
+    val joinFuture2 = CompletableFuture.supplyAsync(() => sendJoinRequestWithProtocols(groupId, memberId2, protocols2))
+    waitForClassicGroupState(groupId, ClassicGroupState.PREPARING_REBALANCE)
+
+    // The joining request with a consumer group member 3 is accepted.
+    val response = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("bar"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+    assertEquals(joinResponse1.generationId + 1, response.memberEpoch)
+
+    // The pending join request of classic member 2 is asked to rejoin.
+    assertEquals(Errors.REBALANCE_IN_PROGRESS.code, joinFuture2.get(30, TimeUnit.SECONDS).errorCode)
+
+    // The group has become a consumer group. The classic members are converted with
+    // "cooperative-sticky", which every member supports.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.RECONCILING.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+    assertEquals(
+      Map(memberId1 -> List("bar"), memberId2 -> List("bar"), response.memberId -> List("bar")),
+      subscribedTopicNames(groupId)
+    )
+  }
+
+  private def sendJoinRequestWithProtocols(
+    groupId: String,
+    memberId: String,
+    protocols: List[(String, List[String])]
+  ): JoinGroupResponseData = {
+    val joinGroupRequestData = new JoinGroupRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId)
+      .setRebalanceTimeoutMs(5 * 60 * 1000)
+      .setSessionTimeoutMs(600000)
+      .setProtocolType("consumer")
+      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        protocols.map { case (name, topics) =>
+          new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName(name)
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+              new ConsumerPartitionAssignor.Subscription(topics.asJava)
+            ).array)
+        }.asJava.iterator
+      ))
+
+    val joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData)
+      .build(ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled))
+    connectAndReceive[JoinGroupResponse](joinGroupRequest).data
+  }
+
+  private def waitForClassicGroupState(groupId: String, state: ClassicGroupState): Unit = {
+    TestUtils.waitUntilTrue(
+      () => listGroups(List.empty, List(Group.GroupType.CLASSIC.toString))
+        .exists(group => group.groupId == groupId && group.groupState == state.toString),
+      msg = s"The group $groupId did not reach the state $state."
+    )
+  }
+
+  private def subscribedTopicNames(groupId: String): Map[String, List[String]] = {
+    consumerGroupDescribe(List(groupId)).head.members.asScala
+      .map(member => member.memberId -> member.subscribedTopicNames.asScala.toList)
+      .toMap
   }
 
   private def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
