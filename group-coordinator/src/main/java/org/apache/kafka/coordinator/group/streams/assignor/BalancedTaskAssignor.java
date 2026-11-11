@@ -82,8 +82,7 @@ import java.util.stream.Collectors;
  * concerns in the streams rebalance protocol: warm-up tasks are inserted by the group coordinator when it applies the
  * target assignment (so the member's {@link MemberAssignmentState#taskOffsets()} and
  * {@link MemberAssignmentState#taskEndOffsets()} are not read here, and {@link MemberAssignmentState#warmupTasks()}
- * only tells the fan-out which member of a process holds a task's state). The classic assignor's cross-rack traffic
- * optimization is not implemented either: it needs the racks of the partitions, which the assignor does not get.
+ * only tells the fan-out which member of a process holds a task's state).
  */
 public class BalancedTaskAssignor implements TaskAssignor {
 
@@ -246,10 +245,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
                                                   final SortedSet<TaskId> statefulTasks,
                                                   final int numStandbyReplicas,
                                                   final List<String> rackAwareAssignmentTags) {
-        final boolean rackAware = !rackAwareAssignmentTags.isEmpty();
-        final Map<TaskId, Integer> rackAwareReplicas = rackAware
-            ? assignRackAwareStandbyReplicaTasks(processes, statefulTasks, numStandbyReplicas, rackAwareAssignmentTags)
-            : Map.of();
+        final Map<TaskId, Integer> rackAwareStandbys = rackAwareAssignmentTags.isEmpty()
+            ? Map.of()
+            : assignRackAwareStandbys(processes, statefulTasks, numStandbyReplicas, rackAwareAssignmentTags);
 
         // The queue orders the processes by their load as of the time they were offered. A polled process is offered
         // again after its load changed, so the order stays valid.
@@ -259,7 +257,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
         int tasksShortOfReplicas = 0;
         int missingReplicas = 0;
         for (final TaskId task : statefulTasks) {
-            int remainingReplicas = numStandbyReplicas - rackAwareReplicas.getOrDefault(task, 0);
+            int remainingReplicas = numStandbyReplicas - rackAwareStandbys.getOrDefault(task, 0);
             while (remainingReplicas > 0) {
                 final ProcessTasks process = pollLeastLoadedProcessWithoutTask(processesByLoad, task);
                 if (process == null) {
@@ -288,7 +286,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
         balanceTasksOverProcesses(
             processes,
             process -> process.standbyTasks,
-            rackAware ? new RackDiversity(processes, statefulTasks.size(), rackAwareAssignmentTags) : null
+            rackAwareAssignmentTags.isEmpty() ? null : new RackDiversity(processes, statefulTasks.size(), rackAwareAssignmentTags)
         );
     }
 
@@ -297,14 +295,14 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * most diverse ones, and returns the number placed per task. A process takes them while one of its members is
      * below the per-member task quota.
      */
-    private static Map<TaskId, Integer> assignRackAwareStandbyReplicaTasks(final Collection<ProcessTasks> processes,
-                                                                          final SortedSet<TaskId> statefulTasks,
-                                                                          final int numStandbyReplicas,
-                                                                          final List<String> rackAwareAssignmentTags) {
-        final Map<TaskId, ProcessTasks> activeProcess = Utils.newHashMap(statefulTasks.size());
+    private static Map<TaskId, Integer> assignRackAwareStandbys(final Collection<ProcessTasks> processes,
+                                                               final SortedSet<TaskId> statefulTasks,
+                                                               final int numStandbyReplicas,
+                                                               final List<String> rackAwareAssignmentTags) {
+        final Map<TaskId, ProcessTasks> activeTaskToProcess = Utils.newHashMap(statefulTasks.size());
         for (final ProcessTasks process : processes) {
             for (final TaskId task : process.statefulActiveTasks) {
-                activeProcess.put(task, process);
+                activeTaskToProcess.put(task, process);
             }
         }
 
@@ -317,9 +315,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
             ProcessTasks::assignedTaskLoad,
             quota::hasRoom
         );
-        final Map<TaskId, Integer> placedReplicas = Utils.newHashMap(statefulTasks.size());
+        final Map<TaskId, Integer> rackAwareStandbys = Utils.newHashMap(statefulTasks.size());
         for (final TaskId task : statefulTasks) {
-            picker.startTask(List.of(activeProcess.get(task)));
+            picker.startTask(List.of(activeTaskToProcess.get(task)));
             int placed = 0;
             while (placed < numStandbyReplicas) {
                 final RackAwareStandbyPicker.Pick<ProcessTasks> pick = picker.pick();
@@ -337,9 +335,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 }
                 placed++;
             }
-            placedReplicas.put(task, placed);
+            rackAwareStandbys.put(task, placed);
         }
-        return placedReplicas;
+        return rackAwareStandbys;
     }
 
     /**
@@ -453,50 +451,50 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * so the member that takes the n-th task of a process with c members reaches ceil(n / c).
      */
     private static final class TaskQuota {
-        private int members;
-        private long tasks;
-        private int tasksPerMember;
+        private int totalMembersWithTaskCapacity;
+        private long totalTasks;
+        private int totalTasksPerMember;
 
         /**
          * @param standbysToPlace The standbys still to place; the tasks the processes hold count as placed one by one.
          */
         private TaskQuota(final Collection<ProcessTasks> processes, final long standbysToPlace) {
-            tasks = standbysToPlace;
+            totalTasks = standbysToPlace;
             for (final ProcessTasks process : processes) {
-                members += process.capacity();
-                tasks += process.assignedTaskCount();
+                totalMembersWithTaskCapacity += process.capacity();
+                totalTasks += process.assignedTaskCount();
             }
-            tasksPerMember = tasksPerMember();
+            totalTasksPerMember = computeTasksPerMember(totalTasks, totalMembersWithTaskCapacity);
             for (final ProcessTasks process : processes) {
                 for (int taskCount = 1; taskCount <= process.assignedTaskCount(); taskCount++) {
-                    memberReached(memberTaskCount(taskCount, process.capacity()));
+                    maybeUpdateTotalTasksPerMember(memberTaskCount(taskCount, process.capacity()));
                 }
             }
         }
 
         /** Whether one of the members of the process is below the quota. */
         private boolean hasRoom(final ProcessTasks process) {
-            return process.assignedTaskCount() < (long) process.capacity() * tasksPerMember;
+            return process.assignedTaskCount() < (long) process.capacity() * totalTasksPerMember;
         }
 
         /** Counts the task just added to the process; returns whether the quota dropped. */
         private boolean taskAdded(final ProcessTasks process) {
-            return memberReached(memberTaskCount(process.assignedTaskCount(), process.capacity()));
+            return maybeUpdateTotalTasksPerMember(memberTaskCount(process.assignedTaskCount(), process.capacity()));
         }
 
-        private boolean memberReached(final int memberTaskCount) {
-            if (memberTaskCount != tasksPerMember) {
+        private boolean maybeUpdateTotalTasksPerMember(final int taskNo) {
+            if (taskNo != totalTasksPerMember) {
                 return false;
             }
-            members--;
-            tasks -= memberTaskCount;
-            final int previousTasksPerMember = tasksPerMember;
-            tasksPerMember = tasksPerMember();
-            return tasksPerMember < previousTasksPerMember;
+            totalMembersWithTaskCapacity--;
+            totalTasks -= taskNo;
+            final int previousTotalTasksPerMember = totalTasksPerMember;
+            totalTasksPerMember = computeTasksPerMember(totalTasks, totalMembersWithTaskCapacity);
+            return totalTasksPerMember < previousTotalTasksPerMember;
         }
 
-        private int tasksPerMember() {
-            return members == 0 ? 0 : (int) ((tasks + members - 1) / members);
+        private static int computeTasksPerMember(final long numberOfTasks, final int numberOfMembers) {
+            return numberOfMembers == 0 ? 0 : (int) ((numberOfTasks + numberOfMembers - 1) / numberOfMembers);
         }
 
         /** The task count of the member that takes the {@code processTaskCount}-th task of a levelled process. */
