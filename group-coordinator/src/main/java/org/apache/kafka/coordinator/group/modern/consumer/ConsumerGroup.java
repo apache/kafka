@@ -43,7 +43,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
-import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -118,6 +117,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineObject<ConsumerGroupState> state;
 
     /**
+     * The number of stable members at each member epoch.
+     */
+    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
      * The static group members.
      */
     private final TimelineHashMap<String, String> staticMembers;
@@ -164,6 +168,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         super(snapshotRegistry, groupId);
         this.log = logContext.logger(ConsumerGroup.class);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
+        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -325,6 +330,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateSubscribedRegularExpression(oldMember, newMember);
         updateStaticMember(oldMember, newMember);
+        maybeUpdateNumStableMembers(oldMember, newMember);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
@@ -354,6 +360,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeRemovePartitionEpoch(oldMember);
         maybeUpdateSubscribedRegularExpression(oldMember, null);
         removeStaticMember(oldMember);
+        maybeUpdateNumStableMembers(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, null);
@@ -967,15 +974,44 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
-            for (ModernGroupMember member : members.values()) {
-                if (!member.isReconciledTo(assignmentEpoch())) {
-                    newState = RECONCILING;
-                    break;
-                }
+            Integer numStableMembers = numStableMembersByEpoch.get(assignmentEpoch());
+            if (numStableMembers == null || numStableMembers < members.size()) {
+                newState = RECONCILING;
             }
         }
 
         state.set(newState);
+    }
+
+    /**
+     * Updates the number of stable members at each member epoch.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateNumStableMembers(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        boolean oldStable = oldMember != null && oldMember.state() == MemberState.STABLE;
+        boolean newStable = newMember != null && newMember.state() == MemberState.STABLE;
+
+        if (oldStable && newStable && oldMember.memberEpoch() == newMember.memberEpoch()) {
+            // The member is stable at the same member epoch before and after
+            // the update, so the counts do not change.
+            return;
+        }
+
+        if (oldStable) {
+            // The old member is no longer counted at its member epoch. The
+            // entry is removed when its count drops to zero.
+            numStableMembersByEpoch.compute(oldMember.memberEpoch(), Utils::decValue);
+        }
+
+        if (newStable) {
+            // The new member is counted at its member epoch.
+            numStableMembersByEpoch.compute(newMember.memberEpoch(), Utils::incValue);
+        }
     }
 
     /**
