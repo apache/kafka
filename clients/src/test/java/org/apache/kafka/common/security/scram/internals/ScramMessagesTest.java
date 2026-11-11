@@ -120,6 +120,19 @@ public class ScramMessagesTest {
     }
 
     @Test
+    public void validClientMessagesWithLongFields() throws SaslException {
+        String nonce = formatter.secureRandomString();
+        String saslName = "u".repeat(500_000);
+        String str = String.format("n,,n=%s,r=%s", saslName, nonce);
+        checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), saslName, nonce, "");
+
+        String channelBinding = randomBytesAsString();
+        String proof = randomBytesAsString();
+        str = String.format("c=%s,r=%s%s,p=%s", channelBinding, nonce, ",ext=val".repeat(50_000), proof);
+        checkClientFinalMessage(createScramMessage(ClientFinalMessage.class, str), channelBinding, nonce, proof);
+    }
+
+    @Test
     public void invalidClientFirstMessage() {
         String nonce = formatter.secureRandomString();
         // Invalid entry in gs2-header
