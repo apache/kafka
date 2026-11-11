@@ -6080,7 +6080,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a classic group HeartbeatRequest to a consumer group. A response with
+     * Handle a classic group HeartbeatRequest to a consumer group. The subscription
+     * metadata is refreshed first if it has expired. A response with
      * REBALANCE_IN_PROGRESS is returned if 1) the member epoch is smaller than the
      * group epoch, 2) the member is in UNREVOKED_PARTITIONS, or 3) the member is in
      * UNRELEASED_PARTITIONS and all its partitions pending assignment are free.
@@ -6099,6 +6100,7 @@ public class GroupMetadataManager {
         String groupId = request.groupId();
         String memberId = request.memberId();
         String instanceId = request.groupInstanceId();
+        List<CoordinatorRecord> records = new ArrayList<>();
         ConsumerGroupMember member = validateConsumerGroupMember(group, memberId, instanceId);
 
         throwIfMemberDoesNotUseClassicProtocol(member);
@@ -6106,12 +6108,27 @@ public class GroupMetadataManager {
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
 
+        int groupEpoch = group.groupEpoch();
+
+        if (group.hasMetadataExpired(time.milliseconds())) {
+            // The subscription metadata is updated when the refresh deadline has been reached.
+            UpdateSubscriptionMetadataResult result = updateSubscriptionMetadata(
+                group,
+                false,
+                member,
+                member,
+                records
+            );
+
+            groupEpoch = result.groupEpoch;
+        }
+
         Errors error = Errors.NONE;
         // The member should rejoin if any of the following conditions is met.
         // 1) The group epoch is bumped so the member need to rejoin to catch up.
         // 2) The member needs to revoke some partitions and rejoin to reconcile with the new epoch.
         // 3) The member's partitions pending assignment are free, so it can rejoin to get the complete assignment.
-        if (member.memberEpoch() < group.groupEpoch() ||
+        if (member.memberEpoch() < groupEpoch ||
             member.state() == MemberState.UNREVOKED_PARTITIONS ||
             (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.waitingOnUnreleasedPartition(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;
@@ -6119,7 +6136,7 @@ public class GroupMetadataManager {
         }
 
         return new CoordinatorResult<>(
-            Collections.emptyList(),
+            records,
             new HeartbeatResponseData().setErrorCode(error.code())
         );
     }
