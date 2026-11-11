@@ -306,25 +306,10 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
         self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
+        if self.IMAGE_TYPE == "jvm":
+            self.wordcount_with_rocksdb()
 
-class DockerSanityTestIsolatedMode(DockerSanityTest):
-    def setUp(self) -> None:
-        self.start_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
-    def tearDown(self) -> None:
-        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
-    def test_bed(self):
-        self.execute()
-
-class DockerStreamsTest(DockerSanityTest):
-    def setUp(self) -> None:
-        if self.IMAGE_TYPE != "jvm":
-            self.skipTest("The native image does not include a JVM or Streams applications")
-
-        compose_file = f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}"
-        self.addCleanup(self.destroy_compose, compose_file)
-        self.start_compose(compose_file)
-
-    def test_wordcount_with_rocksdb(self):
+    def wordcount_with_rocksdb(self):
         bootstrap = ["--bootstrap-server", "localhost:9092"]
         for topic in ("streams-plaintext-input", "streams-wordcount-output"):
             self.assertTrue(self.create_topic(topic, bootstrap))
@@ -353,6 +338,14 @@ class DockerStreamsTest(DockerSanityTest):
                 print(logs.stdout + logs.stderr)
             except (OSError, subprocess.TimeoutExpired) as e:
                 print(f"Failed to collect WordCount logs: {e}")
+
+class DockerSanityTestIsolatedMode(DockerSanityTest):
+    def setUp(self) -> None:
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
+    def tearDown(self) -> None:
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
+    def test_bed(self):
+        self.execute()
 
 def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
