@@ -103,8 +103,9 @@ class MirrorVersionTest {
     }
 
     @Test
-    void testSupportsMirroring() {
-        assertFalse(MirrorVersion.MV_0.supportsMirroring());
-        assertTrue(MirrorVersion.MV_1.supportsMirroring());
+    void testIsEnabled() {
+        assertFalse(MirrorVersion.isEnabled(Map.of()));
+        assertFalse(MirrorVersion.isEnabled(Map.of(MirrorVersion.FEATURE_NAME, MirrorVersion.MV_0.featureLevel())));
+        assertTrue(MirrorVersion.isEnabled(Map.of(MirrorVersion.FEATURE_NAME, MirrorVersion.MV_1.featureLevel())));
     }
 }
