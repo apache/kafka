@@ -101,12 +101,13 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final int FETCH_MIN_BYTES_DEFAULT = 1;
 
     public static final String FETCH_RESPONSE_MAX_BYTES_CONFIG = "fetch.response.max.bytes";
-    private static final String FETCH_RESPONSE_MAX_BYTES_DOC = "Maximum bytes expected for the entire fetch response. Records are fetched in batches, " +
-            "and if the first record batch in the first non-empty partition is larger than this value, the record batch will still be returned.";
+    private static final String FETCH_RESPONSE_MAX_BYTES_DOC = "Maximum bytes expected for the entire mirror fetch response from the source cluster. " +
+            "Records are fetched in batches, and if the first record batch in the first non-empty partition of the fetch is larger than this value, " +
+            "the record batch will still be returned.";
     private static final int FETCH_RESPONSE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024;
 
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
-    private static final String FETCH_MAX_BYTES_DOC = "The number of bytes of messages to attempt to fetch for each partition.";
+    private static final String FETCH_MAX_BYTES_DOC = "The number of bytes of messages to attempt to fetch for each partition in a mirror fetch request.";
     private static final int FETCH_MAX_BYTES_DEFAULT = 1024 * 1024;
 
     public static final String TOPIC_PROPERTIES_EXCLUDE_CONFIG = "topic.properties.exclude";
