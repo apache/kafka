@@ -675,6 +675,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
     private void clearAssignmentAndLeaveGroup() {
         subscriptions.unsubscribe();
         clearAssignment();
+        notifyAssignmentChange(Collections.emptySet());
 
         // Transition to ensure that a heartbeat request is sent out to effectively leave the
         // group (even in the case where the member had no assignment to release or when the

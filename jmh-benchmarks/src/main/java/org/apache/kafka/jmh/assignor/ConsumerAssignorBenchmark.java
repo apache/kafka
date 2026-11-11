@@ -419,7 +419,7 @@ public class ConsumerAssignorBenchmark {
                 ));
             }
 
-            var spec = new GroupSpecImpl(
+            var spec = new GroupSpecImpl.ConsumerGroupSpec(
                 image,
                 members,
                 subscription == Subscription.HOMOGENEOUS ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS

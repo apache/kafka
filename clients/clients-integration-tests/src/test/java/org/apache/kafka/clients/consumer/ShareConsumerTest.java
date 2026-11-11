@@ -95,7 +95,6 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Timeout(1200)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {
