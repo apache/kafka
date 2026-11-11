@@ -116,7 +116,7 @@ import java.util.Collection;
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   consumer.setRebalanceListener(new ConsumerRebalanceListener() {
+ *   consumer.setRebalanceListener(new RebalanceListener() {
  *       @Override
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
@@ -140,9 +140,12 @@ import java.util.Collection;
  * }
  * </pre>
  *
+ * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link RebalanceListener} and register it via
+ *             {@link Consumer#setRebalanceListener(RebalanceListener)} instead.
  * @see RebalanceListener
  * @see RebalanceConsumer
  */
+@Deprecated(since = "4.5", forRemoval = true)
 @InterfaceAudience.Public
 public interface ConsumerRebalanceListener extends RebalanceListener {
 
