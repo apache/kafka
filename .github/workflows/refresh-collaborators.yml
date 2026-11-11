@@ -61,9 +61,12 @@ jobs:
           collaborators = after["github"].pop("collaborators")
           before["github"].pop("collaborators")
           if not isinstance(collaborators, list) or not collaborators or not all(
-              isinstance(login, str) and login.strip() for login in collaborators
+              isinstance(login, str) and login and login.isascii()
+              and not any(char.isspace() for char in login) for login in collaborators
           ):
               raise ValueError("Refusing an empty or invalid collaborator list")
+          if len({login.casefold() for login in collaborators}) != len(collaborators):
+              raise ValueError("Refusing duplicate collaborators")
           if before != after:
               raise ValueError("Unexpected configuration changes outside collaborators")
           PYTHON
