@@ -1765,10 +1765,13 @@ class KafkaZkClient private[zk] (
   }
 
   /**
-   * When there is a ConnectionLossException while updating the /migration znode, the update may have actually succeeded
-   * on the server before the connection dropped, so the retried request can fail with BadVersionException even though
-   * our own write went through. This checker reads back the current data and, if its migration-relevant fields match
-   * what we intended to write, treats it as our own write having succeeded, returning the real current version.
+   * Reads back the current data of the znode and checks whether its migration-relevant fields match the data we
+   * intended to write.
+   *
+   * @return (true, current version) if they match, otherwise (false, current version), where the version is
+   *         ZkVersion.UnknownVersion if the znode does not exist
+   * @throws MigrationConflictException if the current data cannot be read, as we then cannot tell whether the data
+   *                                    is our own
    */
   private def checkMigrationStateZkData(
                                          zkClient: KafkaZkClient,
@@ -1804,7 +1807,9 @@ class KafkaZkClient private[zk] (
       migrationState.withMigrationZkVersion(newVersion)
     } else {
       throw new MigrationConflictException(s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = " +
-        s"$expectedVersion. Current zkVersion = $newVersion.")
+        s"$expectedVersion. " +
+        (if (newVersion == ZkVersion.UnknownVersion) "The znode does not exist. " else s"Current zkVersion = $newVersion. ") +
+        s"The failed write was: $migrationState.")
     }
   }
 

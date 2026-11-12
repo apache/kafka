@@ -1542,7 +1542,11 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     // Our own cached state is stale, but this was not our own write.
     // The checker should see the content mismatch and correctly continue to fail.
-    assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+    val exception = assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+    val message = exception.getMessage
+    assertTrue(message.contains("Sent zkVersion = 0"), message)
+    assertTrue(message.contains("Current zkVersion = 1"), message)
+    assertTrue(message.contains(s"The failed write was: $migrationState"), message)
   }
 
   @Test
@@ -1569,7 +1573,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
     migrationState = zkClient.getOrCreateMigrationState(migrationState)
     zkClient.deletePath(MigrationZNode.path)
 
-    assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+    val exception = assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+    assertTrue(exception.getMessage.contains("The znode does not exist."), exception.getMessage)
   }
 
   @Test
