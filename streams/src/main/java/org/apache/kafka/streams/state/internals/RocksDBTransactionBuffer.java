@@ -31,6 +31,7 @@ import org.rocksdb.WriteOptions;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -40,7 +41,10 @@ import java.util.TreeMap;
 
 /**
  * A {@link TransactionBuffer} implementation for RocksDB-backed stores.
- * Uses a {@link WriteBatch} (without index) to accumulate writes for atomic commit.
+ * Writes are staged on the heap only. {@link #prepareFlush()} builds a {@link WriteBatch} from the
+ * staged state at commit, outside the write lock, so the data is not also held in native memory
+ * between commits. Range deletes go into the batch before point writes; this is correct because a
+ * range delete removes the staged point writes it covers.
  * Reads are handled entirely by the shared staging map in
  * {@link AbstractTransactionBuffer}, so a {@code WriteBatchWithIndex} is not needed.
  * <p>
@@ -58,7 +62,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     private final ColumnFamilyHandle cfHandle;
     private final WriteOptions wOptions;
     private final String storeName;
-    private WriteBatch writeBatch;
+    // Staged writes to column families other than cfHandle; they are never read back, only committed.
+    private final Map<ColumnFamilyHandle, NavigableMap<Bytes, Optional<byte[]>>> otherCfWrites = new HashMap<>();
+    private final List<PendingRangeDelete> pendingRangeDeletes = new ArrayList<>();
+    // Non-null only between prepareFlush() and the end of flushToBase().
+    private WriteBatch preparedBatch;
     private volatile NavigableMap<Bytes, List<Bytes>> rangeTombstones = Collections.emptyNavigableMap();
     // Position deltas for writes staged in the current (uncommitted) transaction. Merged into the
     // store's committed Position and cleared on commit; discarded on rollback. Guarded by
@@ -74,7 +82,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         this.cfHandle = cfHandle;
         this.wOptions = wOptions;
         this.storeName = storeName;
-        this.writeBatch = new WriteBatch();
     }
 
     @Override
@@ -82,31 +89,28 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return key.get().length;
     }
 
-    @Override
-    void stageToBackend(final Bytes key, final byte[] value) {
-        stage(cfHandle, key, value);
+    private long entrySize(final Bytes key, final Optional<byte[]> value) {
+        return estimateKeySize(key) + value.map(v -> v.length).orElse(0);
     }
 
     /**
-     * Stages a write for an explicit column family. Updates the shared read buffer
-     * ({@code pendingWrites}) and appends the write to the shared {@link WriteBatch}
-     * under {@code cf}, so every staged CF is committed atomically on {@link #commit()}.
+     * Stages a write for an explicit column family. Writes to the data column family go to the
+     * shared read buffer ({@code pendingWrites}); writes to any other column family are held
+     * separately. All staged column families are committed atomically on {@link #commit()}.
      */
     void stage(final ColumnFamilyHandle cf, final Bytes key, final byte[] value) {
         snapshotLock.writeLock().lock();
         try {
             if (cf == cfHandle) {
-                pendingWrites.put(key, Optional.ofNullable(value));
-                pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
-            }
-            try {
-                if (value != null) {
-                    writeBatch.put(cf, key.get(), value);
-                } else {
-                    writeBatch.delete(cf, key.get());
+                super.stage(key, value);
+            } else {
+                final Optional<byte[]> staged = Optional.ofNullable(value);
+                final Optional<byte[]> previous =
+                    otherCfWrites.computeIfAbsent(cf, c -> new TreeMap<>()).put(key, staged);
+                if (previous != null) {
+                    pendingWritesBytes -= entrySize(key, previous);
                 }
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
+                pendingWritesBytes += entrySize(key, staged);
             }
         } finally {
             snapshotLock.writeLock().unlock();
@@ -135,8 +139,8 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     /**
      * Stages a range deletion for an explicit column family. Updates the shared
      * {@code pendingWrites} and {@code rangeTombstones} so iterators opened before
-     * commit hide the deleted range, and appends the range delete to the shared
-     * {@link WriteBatch} under {@code cf}.
+     * commits hide the deleted range, and records the range delete for {@code cf} so
+     * {@link #prepareFlush()} adds it to the {@link WriteBatch}.
      */
     void stageDeleteRange(final ColumnFamilyHandle cf, final Bytes from, final Bytes to) {
         snapshotLock.writeLock().lock();
@@ -144,7 +148,15 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             // Multi-node subMap().clear() on the (non-thread-safe) TreeMap staging buffer must hold
             // the write lock; doing it together with the rangeTombstones swap also makes the two
             // updates atomic with respect to a non-owner snapshot scan.
-            pendingWrites.subMap(from, true, to, false).clear();
+            final NavigableMap<Bytes, Optional<byte[]>> staged =
+                cf == cfHandle ? pendingWrites : otherCfWrites.get(cf);
+            if (staged != null) {
+                final NavigableMap<Bytes, Optional<byte[]>> covered = staged.subMap(from, true, to, false);
+                for (final Map.Entry<Bytes, Optional<byte[]>> entry : covered.entrySet()) {
+                    pendingWritesBytes -= entrySize(entry.getKey(), entry.getValue());
+                }
+                covered.clear();
+            }
             // Copy-on-write: clone the map AND the affected key's list, so a non-owner iterator
             // holding the previous rangeTombstones map (and its lists) is never mutated underneath
             // it. A shallow map copy alone would share the List<Bytes> values and corrupt in-flight
@@ -156,11 +168,7 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             copy.put(from, updated);
             rangeTombstones = copy;
             pendingWritesBytes += estimateKeySize(from) + estimateKeySize(to);
-            try {
-                writeBatch.deleteRange(cf, from.get(), to.get());
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error staging delete range in transaction buffer for store " + storeName, e);
-            }
+            pendingRangeDeletes.add(new PendingRangeDelete(cf, from, to));
         } finally {
             snapshotLock.writeLock().unlock();
         }
@@ -287,20 +295,57 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     }
 
     @Override
+    void prepareFlush() {
+        preparedBatch = new WriteBatch();
+        try {
+            for (final PendingRangeDelete delete : pendingRangeDeletes) {
+                preparedBatch.deleteRange(delete.cf, delete.from.get(), delete.to.get());
+            }
+            addPoints(cfHandle, pendingWrites);
+            for (final Map.Entry<ColumnFamilyHandle, NavigableMap<Bytes, Optional<byte[]>>> cfWrites : otherCfWrites.entrySet()) {
+                addPoints(cfWrites.getKey(), cfWrites.getValue());
+            }
+        } catch (final RocksDBException e) {
+            preparedBatch.close();
+            preparedBatch = null;
+            throw new ProcessorStateException("Error preparing commit batch for store " + storeName, e);
+        }
+    }
+
+    private void addPoints(final ColumnFamilyHandle cf,
+                           final NavigableMap<Bytes, Optional<byte[]>> writes) throws RocksDBException {
+        for (final Map.Entry<Bytes, Optional<byte[]>> entry : writes.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                preparedBatch.put(cf, entry.getKey().get(), entry.getValue().get());
+            } else {
+                preparedBatch.delete(cf, entry.getKey().get());
+            }
+        }
+    }
+
+    @Override
     void flushToBase() {
         try {
-            db.write(wOptions, writeBatch);
+            db.write(wOptions, preparedBatch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error committing transaction buffer for store " + storeName, e);
+        } finally {
+            preparedBatch.close();
+            preparedBatch = null;
         }
-        writeBatch.close();
-        writeBatch = new WriteBatch();
+        otherCfWrites.clear();
+        pendingRangeDeletes.clear();
         rangeTombstones = Collections.emptyNavigableMap();
     }
 
     @Override
     void discardPendingBatch() {
-        writeBatch.clear();
+        if (preparedBatch != null) {
+            preparedBatch.close();
+            preparedBatch = null;
+        }
+        otherCfWrites.clear();
+        pendingRangeDeletes.clear();
         rangeTombstones = Collections.emptyNavigableMap();
         pendingPosition = Position.emptyPosition();
     }
@@ -334,16 +379,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     }
 
     @Override
-    public long approximateNumUncommittedBytes() {
-        // an empty WriteBatch still reports its fixed header, which no commit can release; counting it would
-        // keep the uncommitted-bytes limit exceeded after every commit when the limit is below that baseline
-        final long batchBytes = writeBatch.count() > 0 ? writeBatch.getDataSize() : 0;
-        return super.approximateNumUncommittedBytes() + batchBytes;
-    }
-
-    @Override
     public void close() {
-        writeBatch.close();
+        if (preparedBatch != null) {
+            preparedBatch.close();
+            preparedBatch = null;
+        }
     }
 
     static boolean isCoveredByRangeTombstone(final Bytes key,
@@ -359,6 +399,18 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             }
         }
         return false;
+    }
+
+    private static final class PendingRangeDelete {
+        private final ColumnFamilyHandle cf;
+        private final Bytes from;
+        private final Bytes to;
+
+        PendingRangeDelete(final ColumnFamilyHandle cf, final Bytes from, final Bytes to) {
+            this.cf = cf;
+            this.from = from;
+            this.to = to;
+        }
     }
 
     private static class RangeTombstoneFilterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
