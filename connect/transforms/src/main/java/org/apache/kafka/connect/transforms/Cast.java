@@ -387,7 +387,8 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         for (String mapping : mappings) {
             final String[] parts = mapping.split(":");
             if (parts.length > 2) {
-                throw new ConfigException(ReplaceField.ConfigName.RENAMES, mappings, "Invalid rename mapping: " + mapping);
+                throw new ConfigException(SPEC_CONFIG, mapping,
+                        "Each mapping in the casting spec must be a single type or a field:type pair");
             }
             if (parts.length == 1) {
                 Schema.Type targetType;
