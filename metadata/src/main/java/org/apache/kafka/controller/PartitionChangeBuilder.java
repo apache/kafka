@@ -85,7 +85,7 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
-    private final int minISR;
+    private final int minInSyncReplicas;
     private final Map<Integer, Uuid> targetDirectories;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
@@ -118,7 +118,7 @@ public class PartitionChangeBuilder {
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
-        this.minISR = effectiveMinIsr(minInSyncReplicas, partition);
+        this.minInSyncReplicas = minInSyncReplicas;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -205,12 +205,6 @@ public class PartitionChangeBuilder {
 
     public List<Integer> targetIsr() {
         return targetIsr;
-    }
-
-    // Visible to test.
-    static int effectiveMinIsr(int minInSyncReplicas, PartitionRegistration partition) {
-        // Must match Partition#effectiveMinIsr on the broker.
-        return Math.min(minInSyncReplicas, partition.replicas.length);
     }
 
     // VisibleForTesting
@@ -538,8 +532,12 @@ public class PartitionChangeBuilder {
     private void maybePopulateTargetElr() {
         if (!eligibleLeaderReplicasEnabled) return;
 
-        // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
-        if (targetIsr.size() >= minISR) {
+        // Must match Partition#effectiveMinIsr on the broker. Use the target replicas,
+        // because a completed reassignment can change the replica count.
+        int effectiveMinIsr = Math.min(minInSyncReplicas, targetReplicas.size());
+
+        // If the ISR is larger or equal to the effective min ISR, clear the ELR and LastKnownElr.
+        if (targetIsr.size() >= effectiveMinIsr) {
             targetElr = List.of();
             targetLastKnownElr = List.of();
             return;

@@ -258,9 +258,29 @@ public class PartitionChangeBuilderTest {
     }
 
     @Test
-    public void testEffectiveMinIsrIsCappedAtReplicaCount() {
-        assertEquals(3, PartitionChangeBuilder.effectiveMinIsr(5, FOO));
-        assertEquals(2, PartitionChangeBuilder.effectiveMinIsr(2, FOO));
+    public void testEligibleLeaderReplicas_EffectiveMinIsrUsesReplicasAfterReassignment() {
+        // Removing replicas 0, 1 and 2 completes at once, because replica 4 is already in the ISR.
+        PartitionRegistration partition = new PartitionRegistration.Builder()
+            .setReplicas(new int[] {4, 0, 1, 2})
+            .setDirectories(new Uuid[] {
+                DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED
+            })
+            .setIsr(new int[] {4, 0, 1, 2})
+            .setRemovingReplicas(new int[] {0, 1, 2})
+            .setLeader(4)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(100)
+            .setPartitionEpoch(200)
+            .build();
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, Uuid.randomUuid(), 0, r -> true,
+            MetadataVersion.IBP_4_0_IV1, 3, true)
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
+
+        PartitionChangeRecord record = (PartitionChangeRecord) builder.build().get().message();
+        assertEquals(List.of(4), record.replicas());
+        assertEquals(List.of(4), record.isr());
+        // The partition now has one replica, so the effective min ISR is 1 and the ISR meets it.
+        assertNull(record.eligibleLeaderReplicas());
     }
 
     @ParameterizedTest
