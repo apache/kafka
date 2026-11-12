@@ -765,6 +765,43 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def testListTransactionsSkipsPartitionsNoLongerOwned(): Unit = {
+    val ownedTransaction = transactionMetadata("b", 5L)
+    val staleTransaction = transactionMetadata("a", 10L)
+
+    assertEquals(0, transactionManager.partitionFor(ownedTransaction.transactionalId))
+    assertEquals(1, transactionManager.partitionFor(staleTransaction.transactionalId))
+
+    transactionManager.addLoadedTransactionsToCache(0, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
+    transactionManager.putTransactionStateIfNotExists(ownedTransaction)
+    transactionManager.addLoadedTransactionsToCache(1, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
+    transactionManager.putTransactionStateIfNotExists(staleTransaction)
+
+    def listedTransactionalIds: Set[String] = {
+      val response = transactionManager.listTransactionStates(Set.empty, Set.empty, -1L, null)
+      assertEquals(Errors.NONE, Errors.forCode(response.errorCode))
+      response.transactionStates.asScala.map(_.transactionalId).toSet
+    }
+
+    assertEquals(Set("a", "b"), listedTransactionalIds)
+
+    // The replica became a follower but the partition has not been unloaded yet.
+    partitionLeadership = {
+      case 0 => (true, coordinatorEpoch)
+      case 1 => (false, coordinatorEpoch + 1)
+    }
+    assertTrue(transactionManager.transactionMetadataCache.contains(1))
+    assertEquals(Set("b"), listedTransactionalIds)
+
+    // The broker became leader again at a newer epoch but the stale cache has not been reloaded yet.
+    partitionLeadership = {
+      case 0 => (true, coordinatorEpoch)
+      case 1 => (true, coordinatorEpoch + 1)
+    }
+    assertEquals(Set("b"), listedTransactionalIds)
+  }
+
+  @Test
   def testListTransactionsFiltering(): Unit = {
     for (partitionId <- 0 until numPartitions) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
