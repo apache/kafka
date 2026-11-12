@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # Check body
     check(len(body) != 0, "Body is not empty", "Body is empty")
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
-    check("Committer Checklist" not in body, "PR template text not present", "Old PR template text should be removed")
+    check("Committer Checklist" not in body, "Old PR template text not present", "Old PR template text should be removed")
 
     paragraph_iter = split_paragraphs(body)
     new_paragraphs = []
