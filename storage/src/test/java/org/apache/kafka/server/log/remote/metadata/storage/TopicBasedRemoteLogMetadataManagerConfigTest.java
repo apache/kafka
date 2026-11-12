@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -168,7 +167,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     }
 
     private Map<String, Object> createValidConfigProps() {
-        return this.createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+        return this.createValidConfigProps(Map.of(), Map.of(), Map.of(), Map.of());
     }
 
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,

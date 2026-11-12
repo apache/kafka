@@ -87,7 +87,7 @@ public class OffsetsRequestManagerTest {
 
     private OffsetsRequestManager requestManager;
     private ConsumerMetadata metadata;
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private final Time time = mock(Time.class);
     private ApiVersions apiVersions;
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
@@ -105,7 +105,7 @@ public class OffsetsRequestManagerTest {
     public void setup() {
         LogContext logContext = new LogContext();
         metadata = mock(ConsumerMetadata.class);
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
@@ -635,7 +635,7 @@ public class OffsetsRequestManagerTest {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
                 Optional.of(3));
         TopicPartition tp = TEST_PARTITION_1;
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(currentOffset,
                 Optional.of(10), leaderAndEpoch);
 
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
@@ -661,7 +661,7 @@ public class OffsetsRequestManagerTest {
     public void testValidatePositionsMissingLeader() {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(Node.noNode()),
                 Optional.of(5));
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(5L,
                 Optional.of(10), leaderAndEpoch);
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
         when(subscriptionState.position(any())).thenReturn(position, position);
@@ -676,7 +676,7 @@ public class OffsetsRequestManagerTest {
     public void testValidatePositionsFailureWithUnrecoverableAuthException() {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
                 Optional.of(5));
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(5L,
                 Optional.of(10), leaderAndEpoch);
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
@@ -703,7 +703,7 @@ public class OffsetsRequestManagerTest {
         int currentOffset = 5;
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
                 Optional.of(3));
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(currentOffset,
                 Optional.of(10), leaderAndEpoch);
 
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
@@ -749,7 +749,7 @@ public class OffsetsRequestManagerTest {
             Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
 
         assertTrue(updatePositions1.isDone(), "Update positions should complete after the OffsetFetch response");
-        SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition expectedPosition = new ConsumerSubscriptionState.FetchPosition(
                 offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
         verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
     }
@@ -783,7 +783,7 @@ public class OffsetsRequestManagerTest {
 
         assertTrue(updatePositions1.isDone());
         assertTrue(updatePositions2.isDone());
-        SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition expectedPosition = new ConsumerSubscriptionState.FetchPosition(
                 offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
         verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
     }
@@ -848,7 +848,7 @@ public class OffsetsRequestManagerTest {
             Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
 
         // Position should have been updated for tp1 using the committed offset
-        SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition expectedPosition = new ConsumerSubscriptionState.FetchPosition(
             offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
         verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
 
@@ -902,7 +902,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.initializingPartitions()).thenReturn(initializingPartitions);
     }
 
-    private void mockSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
+    private void mockSuccessfulBuildRequestForValidatingPositions(ConsumerSubscriptionState.FetchPosition position, Node leader) {
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
         when(subscriptionState.positionOrNull(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();

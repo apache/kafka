@@ -169,6 +169,7 @@ public class OffsetIndexTest {
         OffsetPosition sec = new OffsetPosition(52, 1);
         index.append(first.offset(), first.position());
         index.append(sec.offset(), sec.position());
+        index.trimToValidSize();
         index.close();
         OffsetIndex idxRo = new OffsetIndex(index.file(), index.baseOffset());
         assertEquals(first, idxRo.lookup(first.offset()));

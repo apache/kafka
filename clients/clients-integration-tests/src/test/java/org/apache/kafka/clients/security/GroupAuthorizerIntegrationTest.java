@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.security;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -106,13 +103,7 @@ public class GroupAuthorizerIntegrationTest {
                 clusterInstance
         );
 
-        NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
-        try (Admin admin = clusterInstance.admin(Map.of(
-                AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true))
-        ) {
-            admin.createTopics(Collections.singleton(offsetTopic));
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
-        }
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
     }
 
     public static class GroupPrincipalBuilder extends DefaultKafkaPrincipalBuilder {

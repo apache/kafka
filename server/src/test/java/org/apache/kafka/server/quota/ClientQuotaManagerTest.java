@@ -419,6 +419,19 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
 
     @Test
+    public void testThrottleTimeCappedToIntRange() {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
+            clientQuotaManager.updateQuota(
+                    Optional.empty(),
+                    Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+                    Optional.of(new Quota(1, true))
+            );
+
+            assertEquals(Integer.MAX_VALUE, maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 1e9));
+        });
+    }
+
+    @Test
     public void testExpireThrottleTimeSensor() {
         withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             clientQuotaManager.updateQuota(

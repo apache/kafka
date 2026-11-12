@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -60,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
 
 public class PartitionGroupTest {
 
@@ -706,7 +709,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
             assertTrue(result.isReady());
             assertTrue(result.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Ready for processing because max.task.idle.ms is disabled.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tBuffered partitions: [topic-1]\n" +
@@ -745,7 +748,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
             assertTrue(result.isReady());
             assertTrue(result.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] All partitions were buffered locally, so this task is ready for processing."));
         }
     }
@@ -843,7 +846,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result2 = group.readyToProcess(1L);
             assertTrue(result2.isReady());
             assertTrue(result2.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Continuing to process although some partitions are empty on the broker.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tPartitions with local data: [topic-1].\n" +
@@ -857,7 +860,7 @@ public class PartitionGroupTest {
             final AbstractPartitionGroup.ReadyToProcessResult result3 = group.readyToProcess(2L);
             assertTrue(result3.isReady());
             assertTrue(result3.getLogMessage().isEmpty());
-            assertTrue(appender.getMessages("TRACE").contains(
+            assertTrue(appender.getMessages(Level.TRACE).contains(
                 "[test] Continuing to process although some partitions are empty on the broker.\n" +
                     "\tThere may be out-of-order processing for this task as a result.\n" +
                     "\tPartitions with local data: [topic-1].\n" +
@@ -865,6 +868,40 @@ public class PartitionGroupTest {
                     "\tConfigured max.task.idle.ms: 1.\n" +
                     "\tCurrent wall-clock time: 2."));
         }
+    }
+
+    @Test
+    public void shouldNotFormatNotReadyLogMessageUntilRequested() {
+        // KAFKA-21372: readyToProcess runs per record and the caller rarely logs the message
+        final AtomicInteger formatted = new AtomicInteger();
+        final TopicPartition idlePartition = spy(new TopicPartition(partition2.topic(), partition2.partition()));
+        doAnswer(invocation -> {
+            formatted.incrementAndGet();
+            return invocation.callRealMethod();
+        }).when(idlePartition).toString();
+
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(idlePartition, queue2)
+            ),
+            tp -> OptionalLong.of(0L),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            1L
+        );
+        group.updateLags();
+        group.addRawRecords(partition1, List.of(new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue)));
+
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertEquals(0, formatted.get());
+        assertEquals(
+            "Partition topic-2 has fetched lag of 0\n" +
+                "Partition topic-2 has current lag 0 and current time is 0. " +
+                "Waiting for new data to be produced for configured idle time 1 (deadline is 1).",
+            result.getLogMessage().orElseThrow());
     }
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {

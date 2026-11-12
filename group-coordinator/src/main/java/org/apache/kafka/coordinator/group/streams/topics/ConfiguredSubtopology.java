@@ -26,14 +26,16 @@ import java.util.Set;
 /**
  * Internal representation of a subtopology.
  * <p>
- * The subtopology is configured according to the number of partitions available in the source topics. It has regular expressions already
- * resolved and defined exactly the information that is being used by streams groups assignment reconciliation.
+ * The subtopology is configured according to the number of partitions available in the source
+ * topics. It has regular expressions already resolved and defines exactly the information that is
+ * being used by streams groups assignment reconciliation.
  * <p>
  * Configured subtopologies may be recreated every time the input topics used by the subtopology are modified.
  *
- * @param numberOfTasks           Precomputed number of tasks. Not that not every source topic may have a partition for
- *                                every task, in cases where there are multiple source topics with an unequal number of
- *                                partitions (e.g., one topic has 3 partitions and another has 5 and both are used in a
+ * @param numberOfTasks           Precomputed number of tasks. Note that not every source topic may
+ *                                have a partition for every task, in cases where there are multiple
+ *                                source topics with an unequal number of partitions (e.g., one
+ *                                topic has 3 partitions and another has 5 and both are used in a
  *                                merge).
  * @param sourceTopics            The source topics of the subtopology.
  * @param repartitionSourceTopics The repartition source topics of the subtopology.

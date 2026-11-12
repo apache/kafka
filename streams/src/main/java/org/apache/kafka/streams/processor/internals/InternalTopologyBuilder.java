@@ -598,30 +598,25 @@ public class InternalTopologyBuilder {
     public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder cannot be null");
-        addStateStore(StoreBuilderWrapper.wrapStoreBuilder(storeBuilder), false, processorNames);
+        addStateStore(StoreBuilderWrapper.wrapStoreBuilder(storeBuilder), processorNames);
     }
 
     public final void addStateStore(final StoreFactory storeFactory,
                                     final String... processorNames) {
-        addStateStore(storeFactory, false, processorNames);
-    }
-
-    public final void addStateStore(final StoreFactory storeFactory,
-                                    final boolean allowOverride,
-                                    final String... processorNames) {
-        Objects.requireNonNull(storeFactory, "stateStoreFactory cannot be null");
+        Objects.requireNonNull(storeFactory, "storeFactory cannot be null");
         final String storeName = storeFactory.storeName();
         Objects.requireNonNull(storeName, "state store name cannot be null");
 
         final StoreFactory stateFactory = stateFactories.get(storeName);
-        if (!allowOverride && stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
+        if (stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
             throw new TopologyException("A different StateStore has already been added with the name " + storeName);
         }
         if (globalStateBuilders.containsKey(storeName)) {
             throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
 
-        stateFactories.put(storeName, storeFactory);
+        // Reuse existing compatible factory to preserve connectedProcessorNames (KAFKA-20464).
+        stateFactories.putIfAbsent(storeName, storeFactory);
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {

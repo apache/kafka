@@ -28,12 +28,19 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DeleteShareGroupStateRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupStateRequest> {
 
         private final DeleteShareGroupStateRequestData data;
 
-        public Builder(DeleteShareGroupStateRequestData data) {
-            super(ApiKeys.DELETE_SHARE_GROUP_STATE);
+        /**
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
+        public Builder(DeleteShareGroupStateRequestData data, short requestHeaderVersion) {
+            super(ApiKeys.DELETE_SHARE_GROUP_STATE,
+                ApiKeys.DELETE_SHARE_GROUP_STATE.oldestVersion(),
+                ApiKeys.DELETE_SHARE_GROUP_STATE.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

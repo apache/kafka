@@ -149,6 +149,9 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 public class ReplicationControlManager {
     static final int MAX_ELECTIONS_PER_IMBALANCE = 1_000;
 
+    // The file name limit on most filesystems.
+    private static final int MAX_LOG_DIR_NAME_LENGTH = 255;
+
     static class Builder {
         private SnapshotRegistry snapshotRegistry = null;
         private LogContext logContext = null;
@@ -823,6 +826,7 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
+        validateLogDirNameLength(topic.name(), numPartitions);
         try {
             context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
         } catch (ThrottlingQuotaExceededException e) {
@@ -1226,6 +1230,24 @@ public class ReplicationControlManager {
     }
 
     /**
+     * Validates that the log directory name of the last partition, "topic-partitionId", fits in the
+     * 255 character file name limit. The brokers can never create a longer directory.
+     *
+     * @param topicName the topic name.
+     * @param numPartitions the total number of partitions of the topic.
+     * @throws InvalidPartitionsException if the log directory name would be too long.
+     */
+    static void validateLogDirNameLength(String topicName, int numPartitions) {
+        int lastPartitionId = numPartitions - 1;
+        int logDirNameLength = topicName.length() + 1 + String.valueOf(lastPartitionId).length();
+        if (logDirNameLength > MAX_LOG_DIR_NAME_LENGTH) {
+            throw new InvalidPartitionsException("The log directory name for partition " + lastPartitionId +
+                " would be " + logDirNameLength + " characters, which is longer than the max allowed length " +
+                MAX_LOG_DIR_NAME_LENGTH + ".");
+        }
+    }
+
+    /**
      * Validates that a batch of topics will create at most maxRecordsPerBatch partitions, using partitions as a
      * proxy for the number of metadata records the request will generate. Exceeding this number has led to
      * out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory. Validates an
@@ -1254,6 +1276,36 @@ public class ReplicationControlManager {
             }
             if (totalPartitions > maxRecordsPerBatch) {
                 throw new PolicyViolationException("Too many partitions in request.");
+            }
+        }
+    }
+
+    /**
+     * Validates that a batch of partition changes will create at most {@link #maxRecordsPerBatch} additional partitions.
+     *
+     * @param topicsToCreate a batch of new partitions to create.
+     *
+     * @throws PolicyViolationException if total number of partitions exceeds {@link #maxRecordsPerBatch}.
+     */
+    void validateTotalNumberOfPartitions(List<CreatePartitionsTopic> topicsToCreate) {
+        long totalAdditionalPartitions = 0;
+        for (CreatePartitionsTopic topic : topicsToCreate) {
+            if (topic.count() < 0) {
+                continue;
+            }
+            Uuid topicId = this.topicsByName.get(topic.name());
+            if (topicId == null) {
+                continue;
+            }
+            int additionalPartitions = topic.count() - topics.get(topicId).parts.size();
+            if (additionalPartitions <= 0) {
+                continue;
+            }
+            totalAdditionalPartitions += additionalPartitions;
+            if (totalAdditionalPartitions > this.maxRecordsPerBatch) {
+                throw new PolicyViolationException(
+                    "Excessively large number of additional partitions per request."
+                );
             }
         }
     }
@@ -1903,6 +1955,7 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
+        validateTotalNumberOfPartitions(topics);
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(maxRecordsPerBatch);
         List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(maxRecordsPerBatch);
         for (CreatePartitionsTopic topic : topics) {
@@ -1942,6 +1995,7 @@ public class ReplicationControlManager {
                 "has " + topicInfo.parts.size() + " partition(s); " + topic.count() +
                 " would not be an increase.");
         }
+        validateLogDirNameLength(topic.name(), topic.count());
         int additional = topic.count() - topicInfo.parts.size();
         if (topic.assignments() != null) {
             if (topic.assignments().size() != additional) {

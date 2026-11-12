@@ -35,9 +35,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.WindowStore;
@@ -50,6 +53,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -58,11 +62,15 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
@@ -191,6 +199,72 @@ public class InternalTopicIntegrationTest {
         }
     }
 
+
+    /*
+     * Fixed repartition topics elsewhere in the topology must not make a copartition group of flexible
+     * repartition topics fail, nor influence its partition count.
+     */
+    @Test
+    public void shouldGetToRunningWithUnrelatedFixedRepartitionTopicsOfDifferentPartitionCounts() throws Exception {
+        verifyCopartitionGroupIgnoresUnrelatedFixedRepartitionTopics(APP_ID + "-two-unrelated-fixed", 3, 5);
+    }
+
+    @Test
+    public void shouldUseMaxSourcePartitionsForCopartitionGroupWithUnrelatedFixedRepartitionTopic() throws Exception {
+        verifyCopartitionGroupIgnoresUnrelatedFixedRepartitionTopics(APP_ID + "-one-unrelated-fixed", 3);
+    }
+
+    private void verifyCopartitionGroupIgnoresUnrelatedFixedRepartitionTopics(final String appID,
+                                                                              final int... fixedPartitionCounts) throws Exception {
+        configureStreams(true, false, appID);
+        final String left = appID + "-left";
+        final String right = appID + "-right";
+        CLUSTER.createTopic(left, 2, 1);
+        CLUSTER.createTopic(right, 4, 1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        // A copartition group made only of flexible repartition topics, whose source topics have 2 and 4 partitions.
+        builder.<String, String>stream(left).selectKey((k, v) -> v)
+            .join(
+                builder.<String, String>stream(right).selectKey((k, v) -> v),
+                (l, r) -> l + r,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(1)),
+                StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()))
+            .foreach((k, v) -> { });
+
+        // Unrelated repartition topics with a fixed number of partitions, which are not part of any copartition group.
+        final Map<String, Integer> fixedRepartitionTopics = new HashMap<>();
+        for (int i = 0; i < fixedPartitionCounts.length; i++) {
+            final String source = appID + "-fixed-source-" + i;
+            CLUSTER.createTopic(source, 1, 1);
+            builder.<String, String>stream(source)
+                .repartition(Repartitioned.<String, String>as("fixed-" + i).withNumberOfPartitions(fixedPartitionCounts[i]))
+                .foreach((k, v) -> { });
+            fixedRepartitionTopics.put(appID + "-fixed-" + i + "-repartition", fixedPartitionCounts[i]);
+        }
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
+             final Admin admin = createAdminClient()) {
+            // Bounded explicitly: the overload without a timeout waits for far longer than the test timeout.
+            startApplicationAndWaitUntilRunning(List.of(streams), Duration.ofMinutes(2));
+
+            final Set<String> repartitionTopics = admin.listTopics().names().get().stream()
+                .filter(t -> t.startsWith(appID + "-") && t.endsWith("-repartition"))
+                .collect(Collectors.toSet());
+            final Map<String, Integer> partitionCounts = admin.describeTopics(repartitionTopics).allTopicNames().get()
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().partitions().size()));
+
+            fixedRepartitionTopics.forEach((topic, count) -> assertEquals(count, partitionCounts.get(topic), topic));
+
+            // The repartition topics of the join take the maximum partition count of their own source topics.
+            final Map<String, Integer> joinRepartitionTopics = new HashMap<>(partitionCounts);
+            joinRepartitionTopics.keySet().removeAll(fixedRepartitionTopics.keySet());
+            assertEquals(2, joinRepartitionTopics.size(), joinRepartitionTopics.toString());
+            joinRepartitionTopics.forEach((topic, count) -> assertEquals(4, count, topic));
+        }
+    }
 
     @ParameterizedTest
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})

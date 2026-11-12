@@ -37,6 +37,16 @@ public interface CoordinatorMetadataImage {
 
     Optional<TopicMetadata> topicMetadata(Uuid topicId);
 
+    /**
+     * @return The id of the topic, or null if the topic does not exist.
+     */
+    Uuid topicId(String topicName);
+
+    /**
+     * @return The name of the topic, or null if the topic does not exist.
+     */
+    String topicName(Uuid topicId);
+
     CoordinatorMetadataDelta emptyDelta();
 
     long version();
@@ -77,6 +87,16 @@ public interface CoordinatorMetadataImage {
             @Override
             public Optional<TopicMetadata> topicMetadata(Uuid topicId) {
                 return Optional.empty();
+            }
+
+            @Override
+            public Uuid topicId(String topicName) {
+                return null;
+            }
+
+            @Override
+            public String topicName(Uuid topicId) {
+                return null;
             }
 
             @Override

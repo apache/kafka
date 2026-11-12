@@ -112,7 +112,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  *   <li> {@link RestartRequest Restart requests}: records representing requests to restart a connector and / or its
  *   tasks. See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308623">KIP-745</a> for more
  *   details.
- *   <li> Task count records: an integer value that that tracks the number of task producers (for source connectors) that
+ *   <li> Task count records: an integer value that tracks the number of task producers (for source connectors) that
  *   will have to be fenced out if a connector is reconfigured before bringing up any tasks with the new set of task
  *   configurations. This is required for exactly-once support for source connectors, see
  *   <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>

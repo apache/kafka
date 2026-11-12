@@ -48,6 +48,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -70,12 +71,13 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -114,8 +116,8 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldUseDefaultSerdes(final boolean withHeaders) {
-        final String testId = "-shouldInheritSerdes";
+    public void shouldUseDefaultSerdes(final boolean withHeaders, final TestInfo testInfo) {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -167,8 +169,8 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldInheritSerdes(final boolean withHeaders) {
-        final String testId = "-shouldInheritSerdes";
+    public void shouldInheritSerdes(final boolean withHeaders, final TestInfo testInfo) {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -235,7 +237,7 @@ public class SuppressionIntegrationTest {
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
             final long start = System.currentTimeMillis();
-            while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT) {
+            while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT_MS) {
                 final ConsumerRecords<Object, Object> records = consumer.poll(ofMillis(500));
 
                 if (!records.isEmpty()) {
@@ -249,8 +251,8 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldShutdownWhenRecordConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
-        final String testId = "-shouldShutdownWhenRecordConstraintIsViolated";
+    public void shouldShutdownWhenRecordConstraintIsViolated(final boolean withHeaders, final TestInfo testInfo) throws InterruptedException {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -292,8 +294,8 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldShutdownWhenBytesConstraintIsViolated(final boolean withHeaders) throws InterruptedException {
-        final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
+    public void shouldShutdownWhenBytesConstraintIsViolated(final boolean withHeaders, final TestInfo testInfo) throws InterruptedException {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -336,14 +338,14 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldAllowOverridingChangelogConfig(final boolean withHeaders) {
-        final String testId = "-shouldAllowOverridingChangelogConfig";
+    public void shouldAllowOverridingChangelogConfig(final boolean withHeaders, final TestInfo testInfo) {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
         final Map<String, String> logConfig = Collections.singletonMap("retention.ms", "1000");
-        final String changeLog = "suppressionintegrationtest-shouldAllowOverridingChangelogConfig-KTABLE-SUPPRESS-STATE-STORE-0000000004-changelog";
+        final String changeLog = appId + "-KTABLE-SUPPRESS-STATE-STORE-0000000004-changelog";
 
         cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
@@ -397,13 +399,13 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldCreateChangelogByDefault(final boolean withHeaders) {
-        final String testId = "-shouldCreateChangelogByDefault";
+    public void shouldCreateChangelogByDefault(final boolean withHeaders, final TestInfo testInfo) {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
-        final String changeLog = "suppressionintegrationtest-shouldCreateChangelogByDefault-KTABLE-SUPPRESS-STATE-STORE-0000000004-changelog";
+        final String changeLog = appId + "-KTABLE-SUPPRESS-STATE-STORE-0000000004-changelog";
 
         cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 
@@ -454,8 +456,8 @@ public class SuppressionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldAllowDisablingChangelog(final boolean withHeaders) {
-        final String testId = "-shouldAllowDisablingChangelog";
+    public void shouldAllowDisablingChangelog(final boolean withHeaders, final TestInfo testInfo) {
+        final String testId = "-" + safeUniqueTestName(testInfo);
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
@@ -546,7 +548,7 @@ public class SuppressionIntegrationTest {
     }
 
     private static void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
-        waitForCondition(() -> !driver.state().isRunningOrRebalancing(), DEFAULT_TIMEOUT, "Streams didn't shut down.");
+        waitForCondition(() -> !driver.state().isRunningOrRebalancing(), DEFAULT_TIMEOUT_MS, "Streams didn't shut down.");
         waitForCondition(() -> driver.state() == KafkaStreams.State.ERROR, "Streams didn't transit to ERROR state");
     }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.ConfigException;
@@ -102,10 +101,10 @@ public class ProducerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        configs.put(ProducerConfig.SECURITY_PROTOCOL_CONFIG, "abc");
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertTrue(ce.getMessage().contains(ProducerConfig.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test
@@ -115,7 +114,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ProducerConfig producerConfig = new ProducerConfig(configs);
-        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, producerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, producerConfig.getString(ProducerConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 
     @Test
@@ -123,10 +122,10 @@ public class ProducerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        configs.put(ProducerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertTrue(ce.getMessage().contains(ProducerConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 
     @Test
@@ -170,10 +169,10 @@ public class ProducerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
+        configs.put(ProducerConfig.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ProducerConfig producerConfig = new ProducerConfig(configs);
-        assertEquals(saslSslLowerCase, producerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertEquals(saslSslLowerCase, producerConfig.originals().get(ProducerConfig.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

@@ -37,13 +37,13 @@ The Processor API can be used to implement both **stateless** as well as **state
 
 **Tip**
 
-**Combining the DSL and the Processor API:** You can combine the convenience of the DSL with the power and flexibility of the Processor API as described in the section [Applying processors (Processor API integration)](../dsl-api#streams-developer-guide-dsl-process).
+**Combining the DSL and the Processor API:** You can combine the convenience of the DSL with the power and flexibility of the Processor API as described in the section [Applying processors (Processor API integration)](../dsl-api/#applying-processors).
 
 For a complete list of available API functionality, see the [Streams](/{version}/javadoc/org/apache/kafka/streams/package-summary.html) API docs.
 
 # Defining a Stream Processor
 
-A [stream processor](../../core-concepts#streams_processor_node) is a node in the processor topology that represents a single processing step. With the Processor API, you can define arbitrary stream processors that processes one received record at a time, and connect these processors with their associated state stores to compose the processor topology.
+A [stream processor](../../core-concepts/#stream-processing-topology) is a node in the processor topology that represents a single processing step. With the Processor API, you can define arbitrary stream processors that processes one received record at a time, and connect these processors with their associated state stores to compose the processor topology.
 
 You can define a customized stream processor by implementing the `Processor` interface, which provides the `process()` API method. The `process()` method is called on each of the received records.
 
@@ -53,7 +53,7 @@ The `Processor` interface takes four generic parameters: `KIn, VIn, KOut, VOut`.
 
 Both the `Processor#process()` and the `ProcessorContext#forward()` methods handle records in the form of the `Record<K, V>` data class. This class gives you access to the main components of a Kafka record: the key, value, timestamp and headers. When forwarding records, you can use the constructor to create a new `Record` from scratch, or you can use the convenience builder methods to replace one of the `Record`'s properties and copy over the rest. For example, `inputRecord.withValue(newValue)` would copy the key, timestamp, and headers from `inputRecord` while setting the output record's value to `newValue`. Note that this does not mutate `inputRecord`, but instead creates a shallow copy. Beware that this is only a shallow copy, so if you plan to mutate the key, value, or headers elsewhere in the program, you will want to create a deep copy of those fields yourself.
 
-In addition to handling incoming records via `Processor#process()`, you have the option to schedule periodic invocation (called "punctuation") in your processor's `init()` method by calling `ProcessorContext#schedule()` and passing it a `Punctuator`. The `PunctuationType` determines what notion of time is used for the punctuation scheduling: either [stream-time](../../core-concepts#streams_time) or wall-clock-time (by default, stream-time is configured to represent event-time via `TimestampExtractor`). When stream-time is used, `punctuate()` is triggered purely by data because stream-time is determined (and advanced forward) by the timestamps derived from the input data. When there is no new input data arriving, stream-time is not advanced and thus `punctuate()` is not called.
+In addition to handling incoming records via `Processor#process()`, you have the option to schedule periodic invocation (called "punctuation") in your processor's `init()` method by calling `ProcessorContext#schedule()` and passing it a `Punctuator`. The `PunctuationType` determines what notion of time is used for the punctuation scheduling: either [stream-time](../../core-concepts/#time) or wall-clock-time (by default, stream-time is configured to represent event-time via `TimestampExtractor`). When stream-time is used, `punctuate()` is triggered purely by data because stream-time is determined (and advanced forward) by the timestamps derived from the input data. When there is no new input data arriving, stream-time is not advanced and thus `punctuate()` is not called.
 
 For example, if you schedule a `Punctuator` function every 10 seconds based on `PunctuationType.STREAM_TIME` and if you process a stream of 60 records with consecutive timestamps from 1 (first record) to 60 seconds (last record), then `punctuate()` would be called 6 times. This happens regardless of the time required to actually process those records. `punctuate()` would be called 6 times regardless of whether processing these 60 records takes a second, a minute, or an hour.
 
@@ -61,7 +61,7 @@ When wall-clock-time (i.e. `PunctuationType.WALL_CLOCK_TIME`) is used, `punctuat
 
 **Attention**
 
-Stream-time is only advanced when Streams processes records. If there are no records to process, or if Streams is waiting for new records due to the [Task Idling](/documentation/#streamsconfigs_max.task.idle.ms) configuration, then the stream time will not advance and `punctuate()` will not be triggered if `PunctuationType.STREAM_TIME` was specified. This behavior is independent of the configured timestamp extractor, i.e., using `WallclockTimestampExtractor` does not enable wall-clock triggering of `punctuate()`.
+Stream-time is only advanced when Streams processes records. If there are no records to process, or if Streams is waiting for new records due to the [Task Idling](/{version}/streams/developer-guide/config-streams/#maxtaskidlems) configuration, then the stream time will not advance and `punctuate()` will not be triggered if `PunctuationType.STREAM_TIME` was specified. This behavior is independent of the configured timestamp extractor, i.e., using `WallclockTimestampExtractor` does not enable wall-clock triggering of `punctuate()`.
 
 **Example**
 
@@ -122,7 +122,7 @@ Kafka Streams comes with a `test-utils` module to help you write unit tests for 
 
 # State Stores
 
-To implement a **stateful** `Processor`, you must provide one or more state stores to the processor (_stateless_ processors do not need state stores). State stores can be used to remember recently received input records, to track rolling aggregates, to de-duplicate input records, and more. Another feature of state stores is that they can be [interactively queried](../interactive-queries#streams-developer-guide-interactive-queries) from other applications, such as a NodeJS-based dashboard or a microservice implemented in Scala or Go.
+To implement a **stateful** `Processor`, you must provide one or more state stores to the processor (_stateless_ processors do not need state stores). State stores can be used to remember recently received input records, to track rolling aggregates, to de-duplicate input records, and more. Another feature of state stores is that they can be [interactively queried](../interactive-queries/) from other applications, such as a NodeJS-based dashboard or a microservice implemented in Scala or Go.
 
 The available state store types in Kafka Streams have fault tolerance enabled by default.
 
@@ -172,17 +172,17 @@ Yes (enabled by default)
   * **The recommended store type for most use cases.**
   * Stores its data on local disk.
   * Storage capacity: managed local state can be larger than the memory (heap space) of an application instance, but must fit into the available local disk space.
-  * RocksDB settings can be fine-tuned, see [RocksDB configuration](../config-streams#streams-developer-guide-rocksdb-config).
-  * Available [persistent store variants](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>): plain key-value store (values only — no embedded record timestamp in state), timestamped key-value store, versioned key-value store, windowed store, session store. Header-aware variants are also described below.
-  * Use [persistentKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>) when you need a persistent plain key-value store (no embedded record timestamp).
-  * Use [persistentTimestampedKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)>) when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.
-  * Use [persistentVersionedKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)>) when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.
-  * Use [persistentWindowStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) or [persistentTimestampedWindowStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) when you need a persistent plain windowed store or a persistent timestamped windowed store, respectively.
-  * Use [persistentSessionStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore(java.lang.String,java.time.Duration)>) when you need a persistent session store.
-  * **Headers:** To persist [record headers](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) in state, use a `WithHeaders` store supplier together with its corresponding `StoreBuilder` factory (see [Headers in State Stores](#headers-in-state-stores) below). There are no `WithHeaders` suppliers for plain persistent key-value or plain persistent windowed stores. `WithHeaders` suppliers exist only for persistent timestamped key-value, persistent timestamped windowed, and session stores.
-  * Use [persistentTimestampedKeyValueStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStoreWithHeaders(java.lang.String)>) with [timestampedKeyValueStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedKeyValueStoreWithHeadersBuilder(org.apache.kafka.streams.state.KeyValueBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent key-(value/timestamp) store that retains headers and supports put/get/delete and range queries.
-  * Use [persistentTimestampedWindowStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStoreWithHeaders(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) with [timestampedWindowStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedWindowStoreWithHeadersBuilder(org.apache.kafka.streams.state.WindowBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent timestamped windowed store that retains headers.
-  * Use [persistentSessionStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStoreWithHeaders(java.lang.String,java.time.Duration)>) with [sessionStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#sessionStoreWithHeadersBuilder(org.apache.kafka.streams.state.SessionBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent session store that retains headers.
+  * RocksDB settings can be fine-tuned, see [RocksDB configuration](../config-streams/#rocksdbconfigsetter).
+  * Available [persistent store variants](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>): plain key-value store (values only — no embedded record timestamp in state), timestamped key-value store, versioned key-value store, windowed store, session store. Header-aware variants are also described below.
+  * Use [persistentKeyValueStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>) when you need a persistent plain key-value store (no embedded record timestamp).
+  * Use [persistentTimestampedKeyValueStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)>) when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.
+  * Use [persistentVersionedKeyValueStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)>) when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.
+  * Use [persistentWindowStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) or [persistentTimestampedWindowStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) when you need a persistent plain windowed store or a persistent timestamped windowed store, respectively.
+  * Use [persistentSessionStore](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore(java.lang.String,java.time.Duration)>) when you need a persistent session store.
+  * **Headers:** To persist [record headers](</{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) in state, use a `WithHeaders` store supplier together with its corresponding `StoreBuilder` factory (see [Headers in State Stores](#headers-in-state-stores) below). There are no `WithHeaders` suppliers for plain persistent key-value or plain persistent windowed stores. `WithHeaders` suppliers exist only for persistent timestamped key-value, persistent timestamped windowed, and session stores.
+  * Use [persistentTimestampedKeyValueStoreWithHeaders](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStoreWithHeaders(java.lang.String)>) with [timestampedKeyValueStoreWithHeadersBuilder](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedKeyValueStoreWithHeadersBuilder(org.apache.kafka.streams.state.KeyValueBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent key-(value/timestamp) store that retains headers and supports put/get/delete and range queries.
+  * Use [persistentTimestampedWindowStoreWithHeaders](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStoreWithHeaders(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) with [timestampedWindowStoreWithHeadersBuilder](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedWindowStoreWithHeadersBuilder(org.apache.kafka.streams.state.WindowBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent timestamped windowed store that retains headers.
+  * Use [persistentSessionStoreWithHeaders](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStoreWithHeaders(java.lang.String,java.time.Duration)>) with [sessionStoreWithHeadersBuilder](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#sessionStoreWithHeadersBuilder(org.apache.kafka.streams.state.SessionBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent session store that retains headers.
 
 
     
@@ -222,7 +222,7 @@ Yes (enabled by default)
   * Stores its data in memory.
   * Storage capacity: managed local state must fit into memory (heap space) of an application instance.
   * Useful when application instances run in an environment where local disk space is either not available or local disk space is wiped in-between app instance restarts.
-  * Available [in-memory store variants](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore(java.lang.String)>): plain key-value store, windowed store, session store.
+  * Available [in-memory store variants](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore(java.lang.String)>): plain key-value store, windowed store, session store.
   * Use [TimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html) when you need a key-(value/timestamp) store that supports put/get/delete and range queries.
   * Use [TimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html) when you need to store windowedKey-(value/timestamp) pairs.
   * There is no built-in in-memory, versioned key-value store at this time.
@@ -248,9 +248,9 @@ Yes (enabled by default)
 
 ## Fault-tolerant State Stores
 
-To make state stores fault-tolerant and to allow for state store migration without data loss, a state store can be continuously backed up to a Kafka topic behind the scenes. For example, to migrate a stateful stream task from one machine to another when [elastically adding or removing capacity from your application](../running-app#streams-developer-guide-execution-scaling). This topic is sometimes referred to as the state store's associated _changelog topic_ , or its _changelog_. For example, if you experience machine failure, the state store and the application's state can be fully restored from its changelog. You can enable or disable this backup feature for a state store.
+To make state stores fault-tolerant and to allow for state store migration without data loss, a state store can be continuously backed up to a Kafka topic behind the scenes. For example, to migrate a stateful stream task from one machine to another when [elastically adding or removing capacity from your application](../running-app/#elastic-scaling-of-your-application). This topic is sometimes referred to as the state store's associated _changelog topic_ , or its _changelog_. For example, if you experience machine failure, the state store and the application's state can be fully restored from its changelog. You can enable or disable this backup feature for a state store.
 
-Fault-tolerant state stores are backed by a [compacted](https://kafka.apache.org/documentation.html#compaction) changelog topic. The purpose of compacting this topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster, and to minimize recovery time if a state store needs to be restored from its changelog topic.
+Fault-tolerant state stores are backed by a [compacted](/{version}/design/design/#log-compaction) changelog topic. The purpose of compacting this topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster, and to minimize recovery time if a state store needs to be restored from its changelog topic.
 
 Fault-tolerant windowed state stores are backed by a topic that uses both compaction and deletion. Because of the structure of the message keys that are being sent to the changelog topics, this combination of deletion and compaction is required for the changelog topics of window stores. For window stores, the message keys are composite keys that include the "normal" key and window timestamps. For these types of composite keys it would not be sufficient to only enable compaction to prevent a changelog topic from growing out of bounds. With deletion enabled, old windows that have expired will be cleaned up by Kafka's log cleaner as the log segments expire. The default retention setting is `Windows#maintainMs()` \+ 1 day. You can override this setting by specifying `StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG` in the `StreamsConfig`.
 
@@ -274,9 +274,9 @@ Example for disabling fault-tolerance:
 
 Attention
 
-If the changelog is disabled then the attached state store is no longer fault tolerant and it can't have any [standby replicas](../config-streams#streams-developer-guide-standby-replicas).
+If the changelog is disabled then the attached state store is no longer fault tolerant and it can't have any [standby replicas](../config-streams/#numstandbyreplicas).
 
-Here is an example for enabling fault tolerance, with additional changelog-topic configuration: You can add any log config from [kafka.log.LogConfig](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala). Unrecognized configs will be ignored.
+Here is an example for enabling fault tolerance, with additional changelog-topic configuration: You can add any log config from [kafka.log.LogConfig](https://github.com/apache/kafka/blob/trunk/storage/src/main/java/org/apache/kafka/storage/internals/log/LogConfig.java). Unrecognized configs will be ignored.
     
     
     import org.apache.kafka.streams.state.StoreBuilder;
@@ -306,13 +306,13 @@ You can query timestamped state stores both with and without a timestamp.
 
 ## Headers in State Stores {#headers-in-state-stores}
 
-You can materialize Kafka [record headers](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) into RocksDB-backed state together with keys and values. Plain persistent key-value stores keep values without an embedded record timestamp; suppliers for timestamped key-value, windowed, or session semantics expose timestamps according to each store type. Use this when downstream processing needs access to record headers from prior input — for example, when an aggregation or join implemented with the Processor API must propagate headers to its output.
+You can materialize Kafka [record headers](</{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) into RocksDB-backed state together with keys and values. Plain persistent key-value stores keep values without an embedded record timestamp; suppliers for timestamped key-value, windowed, or session semantics expose timestamps according to each store type. Use this when downstream processing needs access to record headers from prior input — for example, when an aggregation or join implemented with the Processor API must propagate headers to its output.
 
 Only persistent, RocksDB-backed suppliers exist for header-aware stores (the `Stores` factory names start with `persistent` and end with `WithHeaders`). 
 
 Use [`Stores`](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html) methods whose names end with `WithHeaders`, each paired with the corresponding `StoreBuilder` factory. For example, pair `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreWithHeadersBuilder`, `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`, and `persistentSessionStoreWithHeaders` with `sessionStoreWithHeadersBuilder`.
 
-Key-value and window reads return [ValueTimestampHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html>), which combines the value, its timestamp, and the associated headers. [SessionStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/SessionStoreWithHeaders.html>) stores session aggregations as [AggregationWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html>): the aggregated value together with the headers tied to that session.
+Key-value and window reads return [ValueTimestampHeaders](</{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html>), which combines the value, its timestamp, and the associated headers. [SessionStoreWithHeaders](</{version}/javadoc/org/apache/kafka/streams/state/SessionStoreWithHeaders.html>) stores session aggregations as [AggregationWithHeaders](</{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html>): the aggregated value together with the headers tied to that session.
 
 **Upgrade note:** Rolling bounce, changelog compatibility, lazy on-disk migration, performance trade-offs, and downgrade constraints are covered in the [Kafka Streams upgrade guide](../../upgrade-guide/#kip-1271-headers-aware-stores).
 
@@ -320,23 +320,23 @@ Key-value and window reads return [ValueTimestampHeaders](<https://kafka.apache.
 
 Versioned key-value state stores are available since Kafka Streams 3.5. Rather than storing a single record version (value and timestamp) per key, versioned state stores may store multiple record versions per key. This allows versioned state stores to support timestamped retrieval operations to return the latest record (per key) as of a specified timestamp.
 
-You can create a persistent, versioned state store by passing a [VersionedBytesStoreSupplier](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore\(java.lang.String,java.time.Duration\)) to the [versionedKeyValueStoreBuilder](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#versionedKeyValueStoreBuilder\(java.lang.String,java.time.Duration\)), or by implementing your own [VersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html).
+You can create a persistent, versioned state store by passing a [VersionedBytesStoreSupplier](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)>) to the [versionedKeyValueStoreBuilder](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#versionedKeyValueStoreBuilder(org.apache.kafka.streams.state.VersionedBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>), or by implementing your own [VersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html).
 
 Each versioned store has an associated, fixed-duration _history retention_ parameter which specifies long old record versions should be kept for. In particular, a versioned store guarantees to return accurate results for timestamped retrieval operations where the timestamp being queried is within history retention of the current observed stream time.
 
 History retention also doubles as its _grace period_ , which determines how far back in time out-of-order writes to the store will be accepted. A versioned store will not accept writes (inserts, updates, or deletions) if the timestamp associated with the write is older than the current observed stream time by more than the grace period. Stream time in this context is tracked per-partition, rather than per-key, which means it's important that grace period (i.e., history retention) be set high enough to accommodate a record with one key arriving out-of-order relative to a record for another key.
 
-Because the memory footprint of versioned key-value stores is higher than that of non-versioned key-value stores, you may want to adjust your [RocksDB memory settings](../memory-mgmt#streams-developer-guide-memory-management-rocksdb) accordingly. Benchmarking your application with versioned stores is also advised as performance is expected to be worse than when using non-versioned stores.
+Because the memory footprint of versioned key-value stores is higher than that of non-versioned key-value stores, you may want to adjust your [RocksDB memory settings](../memory-mgmt/#rocksdb) accordingly. Benchmarking your application with versioned stores is also advised as performance is expected to be worse than when using non-versioned stores.
 
 Versioned stores do not support caching or interactive queries at this time. Also, window stores and global tables may not be versioned.
 
 **Upgrade note:** Versioned state stores are opt-in only; no automatic upgrades from non-versioned to versioned stores will take place. 
 
-Upgrades are supported from persistent, non-versioned key-value stores to persistent, versioned key-value stores as long as the original store has the same changelog topic format as the versioned store being upgraded to. Both persistent [key-value stores](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore\(java.lang.String\)) and [timestamped key-value stores](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore\(java.lang.String\)) share the same changelog topic format as [persistent versioned key-value stores](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore\(java.lang.String,java.time.Duration\)), and therefore both are eligible for upgrades.
+Upgrades are supported from persistent, non-versioned key-value stores to persistent, versioned key-value stores as long as the original store has the same changelog topic format as the versioned store being upgraded to. Both persistent [key-value stores](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>) and [timestamped key-value stores](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)>) share the same changelog topic format as [persistent versioned key-value stores](</{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)>), and therefore both are eligible for upgrades.
 
 If you wish to upgrade an application using persistent, non-versioned key-value stores to use persistent, versioned key-value stores instead, you can perform the following procedure:
 
-  * Stop all application instances, and [clear any local state directories](../app-reset-tool#streams-developer-guide-reset-local-environment) for the store(s) being upgraded.
+  * Stop all application instances, and [clear any local state directories](../app-reset-tool/#step-2-reset-the-local-environments-of-your-application-instances) for the store(s) being upgraded.
   * Update your application code to use versioned stores where desired.
   * Update your changelog topic configs, for the relevant state stores, to set the value of `min.compaction.lag.ms` to be at least your desired history retention. History retention plus one day is recommended as buffer for the use of broker wall clock time during compaction.
   * Restart your application instances and allow time for the versioned stores to rebuild state from changelog.
@@ -345,7 +345,7 @@ If you wish to upgrade an application using persistent, non-versioned key-value 
 
 ## ReadOnly State Stores
 
-A read-only state store materialized the data from its input topic. It also uses the input topic for fault-tolerance, and thus does not have an additional changelog topic (the input topic is re-used as changelog). Thus, the input topic should be configured with [log compaction](https://kafka.apache.org/documentation.html#compaction). Note that no other processor should modify the content of the state store, and the only writer should be the associated "state update processor"; other processors may read the content of the read-only store.
+A read-only state store materialized the data from its input topic. It also uses the input topic for fault-tolerance, and thus does not have an additional changelog topic (the input topic is re-used as changelog). Thus, the input topic should be configured with [log compaction](/{version}/design/design/#log-compaction). Note that no other processor should modify the content of the state store, and the only writer should be the associated "state update processor"; other processors may read the content of the read-only store.
 
 **note:** beware of the partitioning requirements when using read-only state stores for lookups during processing. You might want to make sure the original changelog topic is co-partitioned with the processors reading the read-only statestore.
 
@@ -424,10 +424,8 @@ In these topologies, the `"Process"` stream processor node is considered a downs
 
 Note that the `Topology#addProcessor` function takes a `ProcessorSupplier` as argument, and that the supplier pattern requires that a new `Processor` instance is returned each time `ProcessorSupplier#get()` is called. Creating a single `Processor` object and returning the same object reference in `ProcessorSupplier#get()` would be a violation of the supplier pattern and leads to runtime exceptions. So remember not to provide a singleton `Processor` instance to `Topology`. The `ProcessorSupplier` should always generate a new instance each time `ProcessorSupplier#get()` gets called.
 
-Now that you have fully defined your processor topology in your application, you can proceed to [running the Kafka Streams application](../running-app#streams-developer-guide-execution).
+Now that you have fully defined your processor topology in your application, you can proceed to [running the Kafka Streams application](../running-app/#starting-a-kafka-streams-application).
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
   * [Developer Guide](/documentation/streams/developer-guide/)
-
-

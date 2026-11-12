@@ -110,7 +110,7 @@ public class GroupCoordinatorConfig {
     public static final String OFFSETS_LOAD_BUFFER_SIZE_CONFIG = "offsets.load.buffer.size";
     public static final int OFFSETS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
     public static final String OFFSETS_LOAD_BUFFER_SIZE_DOC = "Batch size for reading from the offsets segments when loading group metadata " +
-        " into the cache (soft-limit, overridden if records are too large).";
+        "into the cache (soft-limit, overridden if records are too large).";
 
     public static final String OFFSET_COMMIT_TIMEOUT_MS_CONFIG = "offsets.commit.timeout.ms";
     public static final int OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000;
@@ -223,7 +223,7 @@ public class GroupCoordinatorConfig {
         new RangeAssignor()
     );
     public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
-    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for customer assignors. " +
+    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for custom assignors. " +
         "The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor. " +
         "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
         "The supported builtin assignors are: " + CONSUMER_GROUP_BUILTIN_ASSIGNORS.stream().map(ConsumerGroupPartitionAssignor::name).collect(Collectors.joining(", ")) + ".";
@@ -883,15 +883,9 @@ public class GroupCoordinatorConfig {
     protected List<ConsumerGroupPartitionAssignor> consumerGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, ConsumerGroupPartitionAssignor> builtInAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+        Map<String, ConsumerGroupPartitionAssignor> defaultAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
-        // A built-in may be configured either by its name or by its class name, so it is recognised
-        // by class rather than by how it was resolved below.
-        Set<Class<? extends ConsumerGroupPartitionAssignor>> builtInAssignorClasses = CONSUMER_GROUP_BUILTIN_ASSIGNORS
-            .stream()
-            .map(ConsumerGroupPartitionAssignor::getClass)
-            .collect(Collectors.toSet());
 
         List<ConsumerGroupPartitionAssignor> assignors = new ArrayList<>();
         Set<String> assignorNames = new HashSet<>();
@@ -900,7 +894,7 @@ public class GroupCoordinatorConfig {
             // `configuredAssignor` is either the name of a built-in assignor,
             // or a fully qualified class name of a custom assignor
             for (String configuredAssignor : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
-                ConsumerGroupPartitionAssignor assignor = builtInAssignors.get(configuredAssignor);
+                ConsumerGroupPartitionAssignor assignor = defaultAssignors.get(configuredAssignor);
                 if (assignor == null) {
                     try {
                         assignor = Utils.newInstance(configuredAssignor, ConsumerGroupPartitionAssignor.class);
@@ -918,12 +912,6 @@ public class GroupCoordinatorConfig {
                 }
 
                 assignors.add(assignor);
-
-                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
-                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
-                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
-                            "A custom assignor must not reuse the name of a built-in assignor");
-                }
 
                 if (!assignorNames.add(assignor.name())) {
                     throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
@@ -1326,7 +1314,7 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The consumer group heartbeat interval in milliseconds.
+     * The share group heartbeat interval in milliseconds.
      */
     public int shareGroupHeartbeatIntervalMs() {
         return shareGroupHeartbeatIntervalMs;

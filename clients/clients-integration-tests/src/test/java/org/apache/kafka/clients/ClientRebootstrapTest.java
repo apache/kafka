@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -55,7 +56,7 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrap(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrap(ClusterInstance clusterInstance) throws Exception {
         var broker0 = 0;
         var broker1 = 1;
         var timeout = 60;
@@ -63,11 +64,10 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), timeout * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -75,7 +75,7 @@ public class ClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
+            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS));
             assertTrue(topics.contains(TOPIC));
         }
     }
@@ -87,18 +87,17 @@ public class ClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) throws Exception {
         var broker0 = 0;
         var broker1 = 1;
 
         clusterInstance.shutdownBroker(broker0);
 
-        var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
+        var admin = clusterInstance.admin(Map.of(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
         try {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS))).all().get();
             // Only the broker 1 is available for the admin client during the bootstrap.
-            var topics = assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS));
-            assertTrue(topics.contains(TOPIC));
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.SECONDS).contains(TOPIC), 60 * 1000, "Topic not visible after creation");
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -121,9 +120,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testProducerRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
-        }
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
@@ -156,9 +153,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testProducerRebootstrapDisabled(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
-        }
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
@@ -166,7 +161,7 @@ public class ClientRebootstrapTest {
         // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
         clusterInstance.shutdownBroker(broker0);
 
-        var producer = clusterInstance.producer(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
+        var producer = clusterInstance.producer(Map.of(ProducerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
 
         // Only the broker 1 is available for the producer during the bootstrap.
         var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
@@ -254,7 +249,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var consumer = clusterInstance.consumer(Map.of(
-            CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
+            ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
             ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name)
         )) {
             // Only the server 1 is available for the consumer during the bootstrap.
@@ -309,9 +304,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testRebootstrapOnMetadataClusterCheckFail(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, 2, (short) 1)));
-        }
+        clusterInstance.createTopic(TOPIC, 2, (short) 1);
 
         try (var producer = clusterInstance.producer()) {
             var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, 0, null, "value 0".getBytes())).get();

@@ -159,7 +159,7 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldBuildGlobalTableWithQueryaIbleStoreName() {
+    public void shouldBuildGlobalTableWithQueryableStoreName() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(Materialized.as("globalTable"), builder, storePrefix);
         final GlobalKTable<String, String> table1 = builder.globalTable("topic2", consumed, materializedInternal);
@@ -572,7 +572,7 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldMarkFirstStreamStreamJoinAsSelfJoinNwaySameSource() {
+    public void shouldMarkFirstStreamStreamJoinAsSelfJoinNWaySameSource() {
         // Given:
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
@@ -598,7 +598,7 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldMarkFirstStreamStreamJoinAsSelfJoinNway() {
+    public void shouldMarkFirstStreamStreamJoinAsSelfJoinNWay() {
         // Given:
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
