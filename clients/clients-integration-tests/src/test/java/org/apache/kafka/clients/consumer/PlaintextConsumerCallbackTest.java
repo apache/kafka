@@ -550,7 +550,9 @@ public class PlaintextConsumerCallbackTest {
     private void testRebalanceListenerRemovedByNull(GroupProtocol groupProtocol) throws InterruptedException {
         var assignedCount = new AtomicInteger(0);
         var revokedCount = new AtomicInteger(0);
-        try (var consumer = createConsumer(groupProtocol)) {
+        var totalRecords = 10;
+        var consumer = createConsumer(groupProtocol);
+        try {
             consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
@@ -573,25 +575,43 @@ public class PlaintextConsumerCallbackTest {
                     "Timed out before expected rebalance completed"
             );
 
+            // positive control: while the listener is set, unsubscribe() invokes onPartitionsRevoked
+            // without a poll, so the silence asserted further down is a real change of behaviour
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke the listener while it is set");
+
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 2,
+                    "Timed out before the listener was invoked again"
+            );
+
             consumer.setRebalanceListener(null);
 
-            // with a listener set, unsubscribe() invokes onPartitionsRevoked without a poll, see
-            // testRebalanceListenerRetainedAfterUnsubscribe
+            // the very same call that invoked onPartitionsRevoked above is now silent
             consumer.unsubscribe();
-            assertEquals(0, revokedCount.get(), "unsubscribe() should not invoke the removed listener");
+            assertEquals(1, revokedCount.get(), "unsubscribe() should not invoke the removed listener");
 
-            // the partition coming back proves the rebalance really happened, yet no callback ran
+            // consuming every record proves the new assignment is fully usable without the callback,
+            // not merely present in assignment()
             consumer.subscribe(List.of(topic));
             ClientsTestUtils.pollUntilTrue(
                     consumer,
                     () -> consumer.assignment().contains(tp),
                     "Timed out before the partition was assigned again"
             );
-            assertEquals(1, assignedCount.get(), "re-subscribing should not invoke the removed listener");
+            sendRecords(cluster, tp, totalRecords, 0L);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, 0);
+            assertEquals(2, assignedCount.get(), "re-subscribing should not invoke the removed listener");
+            assertEquals(1, revokedCount.get());
+        } finally {
+            consumer.close();
         }
         // close() gives up the assignment, again without invoking the removed listener
-        assertEquals(0, revokedCount.get(), "close() should not invoke the removed listener");
-        assertEquals(1, assignedCount.get());
+        assertThrows(IllegalStateException.class, consumer::assignment, "close() should have closed the consumer");
+        assertEquals(1, revokedCount.get(), "close() should not invoke the removed listener");
+        assertEquals(2, assignedCount.get());
     }
 
     private void triggerOnPartitionsAssignedConsumerAware(

@@ -18,12 +18,16 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -32,21 +36,27 @@ import org.mockito.quality.Strictness;
 import java.util.HashSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests that the invoker skips the dispatch entirely when no rebalance listener is registered,
- * which is the case after {@link org.apache.kafka.clients.consumer.Consumer#setRebalanceListener(
- * org.apache.kafka.clients.consumer.RebalanceListener)} is passed null. The subscription state is
- * mocked rather than real on purpose: a real one silently drops the callbacks itself, so it would
- * hide whether the invoker checked at all.
+ * Tests the two things this invoker adds on top of the dispatch: it skips the dispatch entirely
+ * when no rebalance listener is registered, which is the case after
+ * {@link org.apache.kafka.clients.consumer.Consumer#setRebalanceListener(
+ * org.apache.kafka.clients.consumer.RebalanceListener)} is passed null, and it turns a failing
+ * listener into a returned exception while letting {@link WakeupException} and
+ * {@link InterruptException} through. The subscription state is mocked rather than real on purpose:
+ * a real one silently drops the callbacks itself, so it would hide whether the invoker checked at all.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -116,5 +126,73 @@ public class ConsumerRebalanceListenerInvokerTest {
         verify(metricsManager).recordPartitionsAssignedLatency(anyLong());
         verify(metricsManager).recordPartitionsRevokedLatency(anyLong());
         verify(metricsManager).recordPartitionsLostLatency(anyLong());
+    }
+
+    @Test
+    public void testInvokePartitionsAssignedReturnsListenerException() {
+        RuntimeException exception = new RuntimeException("Test exception");
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        doThrow(exception).when(subscriptions).onPartitionsAssigned(partitions);
+
+        assertSame(exception, invoker.invokePartitionsAssigned(partitions));
+        verifyNoInteractions(metricsManager);
+    }
+
+    @Test
+    public void testInvokePartitionsRevokedReturnsListenerException() {
+        RuntimeException exception = new RuntimeException("Test exception");
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        when(subscriptions.pausedPartitions()).thenReturn(new HashSet<>());
+        doThrow(exception).when(subscriptions).onPartitionsRevoked(partitions);
+
+        assertSame(exception, invoker.invokePartitionsRevoked(partitions));
+        verifyNoInteractions(metricsManager);
+    }
+
+    @Test
+    public void testInvokePartitionsLostReturnsListenerException() {
+        RuntimeException exception = new RuntimeException("Test exception");
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        when(subscriptions.pausedPartitions()).thenReturn(new HashSet<>());
+        doThrow(exception).when(subscriptions).onPartitionsLost(partitions);
+
+        assertSame(exception, invoker.invokePartitionsLost(partitions));
+        verifyNoInteractions(metricsManager);
+    }
+
+    @ParameterizedTest
+    @MethodSource("rethrownExceptions")
+    public void testInvokePartitionsAssignedRethrows(RuntimeException exception) {
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        doThrow(exception).when(subscriptions).onPartitionsAssigned(partitions);
+
+        assertSame(exception, assertThrows(RuntimeException.class, () -> invoker.invokePartitionsAssigned(partitions)));
+        verifyNoInteractions(metricsManager);
+    }
+
+    @ParameterizedTest
+    @MethodSource("rethrownExceptions")
+    public void testInvokePartitionsRevokedRethrows(RuntimeException exception) {
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        when(subscriptions.pausedPartitions()).thenReturn(new HashSet<>());
+        doThrow(exception).when(subscriptions).onPartitionsRevoked(partitions);
+
+        assertSame(exception, assertThrows(RuntimeException.class, () -> invoker.invokePartitionsRevoked(partitions)));
+        verifyNoInteractions(metricsManager);
+    }
+
+    @ParameterizedTest
+    @MethodSource("rethrownExceptions")
+    public void testInvokePartitionsLostRethrows(RuntimeException exception) {
+        when(subscriptions.hasRebalanceListener()).thenReturn(true);
+        when(subscriptions.pausedPartitions()).thenReturn(new HashSet<>());
+        doThrow(exception).when(subscriptions).onPartitionsLost(partitions);
+
+        assertSame(exception, assertThrows(RuntimeException.class, () -> invoker.invokePartitionsLost(partitions)));
+        verifyNoInteractions(metricsManager);
+    }
+
+    private static Stream<RuntimeException> rethrownExceptions() {
+        return Stream.of(new WakeupException(), new InterruptException("Test interrupt"));
     }
 }
