@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
@@ -48,6 +49,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -1673,5 +1675,32 @@ public class StreamsGroupTest {
         when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
 
         assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testBuildEndpointToPartitionsWithoutConfiguredSubtopologies() {
+        StreamsGroup group = createStreamsGroup("foo");
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host2").setPort(9093))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+        group.updateMember(member1);
+        group.updateMember(member2);
+
+        // No configured topology yet.
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Topology configuration failed, so there are no subtopologies.
+        group.setConfiguredTopology(new ConfiguredTopology(
+            1, 0, Optional.empty(), Map.of(), Optional.of(TopicConfigurationException.missingSourceTopics("Source topics foo are missing."))));
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Once subtopologies are configured, every member with an endpoint is reported.
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        assertEquals(2, group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null).size());
     }
 }

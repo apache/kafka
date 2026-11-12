@@ -1565,7 +1565,8 @@ public class StreamsGroup implements Group {
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
      * @param maybeReplacedStaticMember The replaced static member. it can be null.
-     * @return The list of endpoint-to-partitions mappings for all members with endpoints.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints, or an empty list if the group
+     *         has no configured subtopologies, for example because source topics are missing.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
