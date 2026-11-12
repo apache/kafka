@@ -18,22 +18,37 @@ package org.apache.kafka.storage.internals.log;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetMapTest {
 
     private static final int MEMORY_SIZE = 4096;
 
+    static Stream<String> hashAlgorithms() {
+        return Stream.of("MD2", "MD5", "SHA-1", "SHA-256", "SHA-384", "SHA-512");
+    }
+
+    static Stream<Arguments> algorithmsAndItems() {
+        return hashAlgorithms().flatMap(algorithm ->
+            IntStream.of(10, 100, 1000, 5000).mapToObj(items -> Arguments.of(algorithm, items)));
+    }
+
     @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 5000})
-    public void testBasicValidation(int items) throws Exception {
-        SkimpyOffsetMap map = new SkimpyOffsetMap(items * 48);
+    @MethodSource("algorithmsAndItems")
+    public void testBasicValidation(String algorithm, int items) throws Exception {
+        int bytesPerEntry = MessageDigest.getInstance(algorithm).getDigestLength() + 8;
+        SkimpyOffsetMap map = new SkimpyOffsetMap(items * bytesPerEntry * 2, algorithm);
         IntStream.range(0, items).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         for (int i = 0; i < items; i++) {
             assertEquals(i, map.get(key(i)));
@@ -53,9 +68,10 @@ public class OffsetMapTest {
         }
     }
 
-    @Test
-    public void testGetWhenFull() throws Exception {
-        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
+    @ParameterizedTest
+    @MethodSource("hashAlgorithms")
+    public void testGetWhenFull(String algorithm) throws Exception {
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE, algorithm);
         int i = 37;
         while (map.size() < map.slots()) {
             map.put(key(i), i);
@@ -89,7 +105,7 @@ public class OffsetMapTest {
         }
         assertEquals(i - 1, map.latestOffset());
     }
-    
+
     @Test
     public void testUtilization() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
@@ -100,6 +116,19 @@ public class OffsetMapTest {
             assertEquals((double) map.size() / map.slots(), map.utilization());
             i++;
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("hashAlgorithms")
+    void testBytesPerEntryMatchesDigestLength(String algorithm) throws Exception {
+        int expected = MessageDigest.getInstance(algorithm).getDigestLength() + 8;
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE, algorithm);
+        assertEquals(expected, map.bytesPerEntry);
+    }
+
+    @Test
+    void testUnknownAlgorithmThrows() {
+        assertThrows(NoSuchAlgorithmException.class, () -> new SkimpyOffsetMap(MEMORY_SIZE, "NOT-A-REAL-HASH"));
     }
 
     private ByteBuffer key(Integer key) {

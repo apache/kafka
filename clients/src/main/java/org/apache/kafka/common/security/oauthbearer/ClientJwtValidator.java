@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
@@ -57,6 +58,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  * </ol>
  */
 
+@InterfaceAudience.Public
 public class ClientJwtValidator implements JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.TimeoutException;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.TimeoutException;
  * this class extends TimeoutException.
  *
  */
+@InterfaceAudience.Public
 public class BufferExhaustedException extends TimeoutException {
 
     private static final long serialVersionUID = 1L;

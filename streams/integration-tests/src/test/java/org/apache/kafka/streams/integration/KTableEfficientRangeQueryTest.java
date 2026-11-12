@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -48,8 +49,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Tag("integration")
@@ -119,7 +119,7 @@ public class KTableEfficientRangeQueryTest {
         builder.table("input", stateStoreConfig);
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());
@@ -172,7 +172,7 @@ public class KTableEfficientRangeQueryTest {
              final KeyValueIterator<String, String> expectedIterator = forward ? store.all() : store.reverseAll()) {
             final List<KeyValue<String, String>> result = Utils.toList(resultIterator);
             final List<KeyValue<String, String>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
+            assertEquals(expected, result);
         }
     }
 

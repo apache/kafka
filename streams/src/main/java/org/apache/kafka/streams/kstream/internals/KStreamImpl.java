@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithStreamAndMappedKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
@@ -641,7 +642,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             tableParentNode = repartitionNodeBuilder.build();
             builder.addGraphNode(graphNode, tableParentNode);
-            subTopologySourceNodes = Collections.singleton(sourceName);
+            subTopologySourceNodes = Set.of(sourceName);
         } else {
             tableParentNode = graphNode;
             subTopologySourceNodes = this.subTopologySourceNodes;
@@ -917,7 +918,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 name.name() != null);
         }
 
-        joinThis.ensureCopartitionWith(Collections.singleton(joinOther));
+        joinThis.ensureCopartitionWith(Set.of(joinOther));
 
         return join.join(
             joinThis,
@@ -960,7 +961,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionedSourceName,
             repartitionKeySerde,
             repartitionValueSerde,
-            Collections.singleton(repartitionedSourceName),
+            Set.of(repartitionedSourceName),
             false,
             repartitionNode,
             builder);
@@ -1117,7 +1118,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                               final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
                                                               final JoinedInternal<K, V, VTable> joinedInternal,
                                                               final boolean leftJoin) {
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VTable>) table));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Set.of((AbstractStream<K, VTable>) table));
 
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
@@ -1185,10 +1186,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                 final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                 final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
         return doGlobalTableJoin(globalTable, keySelector, joiner, false, NamedInternal.empty());
+    }
+
+    @Override
+    public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                                final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                                final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
+        return doGlobalTableJoinWithStreamAndMappedKey(globalTable, keySelector, joiner, false, NamedInternal.empty());
     }
 
     @Override
@@ -1200,11 +1209,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                 final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                 final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
                                                                 final Named named) {
         return doGlobalTableJoin(globalTable, keySelector, joiner, false, named);
+    }
+
+    @Override
+    public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                                final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                                final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                                final Named named) {
+        return doGlobalTableJoinWithStreamAndMappedKey(globalTable, keySelector, joiner, false, named);
     }
 
     @Override
@@ -1215,10 +1233,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                     final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                     final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
         return doGlobalTableJoin(globalTable, keySelector, joiner, true, NamedInternal.empty());
+    }
+
+    @Override
+    public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                                    final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                                    final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
+        return doGlobalTableJoinWithStreamAndMappedKey(globalTable, keySelector, joiner, true, NamedInternal.empty());
     }
 
     @Override
@@ -1230,6 +1256,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                     final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                     final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
@@ -1237,10 +1264,31 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return doGlobalTableJoin(globalTable, keySelector, joiner, true, named);
     }
 
+    @Override
+    public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                                    final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                                    final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                                    final Named named) {
+        return doGlobalTableJoinWithStreamAndMappedKey(globalTable, keySelector, joiner, true, named);
+    }
+
     private <GlobalKey, GlobalValue, VOut> KStream<K, VOut> doGlobalTableJoin(
         final GlobalKTable<GlobalKey, GlobalValue> globalTable,
         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
         final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+        final boolean leftJoin,
+        final Named named
+    ) {
+        Objects.requireNonNull(joiner, "joiner cannot be null");
+        final ValueJoinerWithStreamAndMappedKey<K, GlobalKey, V, GlobalValue, VOut> adapted =
+            (streamKey, mappedKey, streamValue, tableValue) -> joiner.apply(streamKey, streamValue, tableValue);
+        return doGlobalTableJoinWithStreamAndMappedKey(globalTable, keySelector, adapted, leftJoin, named);
+    }
+
+    private <GlobalKey, GlobalValue, VOut> KStream<K, VOut> doGlobalTableJoinWithStreamAndMappedKey(
+        final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner,
         final boolean leftJoin,
         final Named named
     ) {

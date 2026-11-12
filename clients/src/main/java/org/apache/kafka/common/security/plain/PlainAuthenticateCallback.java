@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.plain;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import javax.security.auth.callback.Callback;
 
 /*
@@ -24,6 +26,7 @@ import javax.security.auth.callback.Callback;
  * set authenticated flag to true if the client provided password in the callback
  * matches the expected password.
  */
+@InterfaceAudience.Public
 public class PlainAuthenticateCallback implements Callback {
     private final char[] password;
     private boolean authenticated;

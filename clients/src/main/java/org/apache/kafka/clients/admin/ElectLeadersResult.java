@@ -17,10 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
-
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Map;
@@ -32,6 +32,7 @@ import java.util.Set;
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public final class ElectLeadersResult {
     private final KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 

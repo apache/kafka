@@ -1,6 +1,6 @@
 ---
 title: Encryption and Authentication using SSL
-description: Encryption and Authentication using SSL
+description: Kafka SSL setup for broker and client encryption and authentication.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

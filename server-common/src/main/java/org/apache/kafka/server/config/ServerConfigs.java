@@ -19,7 +19,9 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
@@ -31,6 +33,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
@@ -39,13 +42,20 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ServerConfigs {
     /** ********* General Configuration ***********/
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final String BROKER_ID_CONFIG = "broker.id";
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server.";
+    @Deprecated(since = "4.4", forRemoval = true)
+    public static final String BROKER_ID_DOC = "The broker id for this server. " +
+            "This configuration is deprecated and will be removed in Apache Kafka 5.0. Please use <code>node.id</code> instead.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
             "This can be set per topic with the topic level <code>" + TopicConfig.MAX_MESSAGE_BYTES_CONFIG + "</code> config.";
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_DOC = TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_DOC +
+            " This can be set per topic with the topic level <code>" + TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG + "</code> config.";
 
     public static final String NUM_IO_THREADS_CONFIG = "num.io.threads";
     public static final int NUM_IO_THREADS_DEFAULT = 8;
@@ -115,6 +125,13 @@ public class ServerConfigs {
     public static final String UNSTABLE_API_VERSIONS_ENABLE_CONFIG = "unstable.api.versions.enable";
     public static final String UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG = "unstable.feature.versions.enable";
 
+    public static final String MESSAGE_MAX_ARRAY_LENGTH_CONFIG = "message.max.array.length";
+    public static final int MESSAGE_MAX_ARRAY_LENGTH_DEFAULT = MessageUtil.MAX_ARRAY_LENGTH;
+    public static final String MESSAGE_MAX_ARRAY_LENGTH_DOC = "The maximum number of elements the protocol message readers accept for any single array, rejecting " +
+        "larger declarations before reading them. Applies to every message this process parses, including " +
+        "requests, responses and on-disk state such as producer snapshots. Raise it if a legitimate message " +
+        "(for example a producer snapshot with more producer IDs) exceeds the limit.";
+
     /************* Authorizer Configuration ***********/
     public static final String AUTHORIZER_CLASS_NAME_CONFIG = "authorizer.class.name";
     public static final String AUTHORIZER_CLASS_NAME_DEFAULT = "";
@@ -128,6 +145,7 @@ public class ServerConfigs {
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
             .define(MESSAGE_MAX_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
+            .define(MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_DEFAULT, between(1, Records.SOFT_MAX_ARRAY_LENGTH), MEDIUM, MAX_DECOMPRESSED_MESSAGE_BYTES_DOC)
             .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)
             .define(NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
             .define(BACKGROUND_THREADS_CONFIG, INT, BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, BACKGROUND_THREADS_DOC)
@@ -157,5 +175,6 @@ public class ServerConfigs {
             // This indicates whether unreleased APIs should be advertised by this node.
             .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
             // This indicates whether unreleased MetadataVersions should be enabled on this node.
-            .defineInternal(UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
+            .defineInternal(UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
+            .defineInternal(MESSAGE_MAX_ARRAY_LENGTH_CONFIG, INT, MESSAGE_MAX_ARRAY_LENGTH_DEFAULT, atLeast(1), LOW, MESSAGE_MAX_ARRAY_LENGTH_DOC);
 }

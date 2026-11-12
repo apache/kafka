@@ -56,11 +56,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -264,7 +262,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(inner.get(KEY_BYTES)).thenReturn(VALUE_AND_TIMESTAMP_BYTES);
         init();
 
-        assertThat(metered.get(KEY), equalTo(VALUE_AND_TIMESTAMP));
+        assertEquals(VALUE_AND_TIMESTAMP, metered.get(KEY));
 
         final KafkaMetric metric = metric("get-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -319,7 +317,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
 
         final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.range(KEY, KEY);
-        assertThat(iterator.next().value, equalTo(VALUE_AND_TIMESTAMP));
+        assertEquals(VALUE_AND_TIMESTAMP, iterator.next().value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -335,7 +333,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
 
         final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all();
-        assertThat(iterator.next().value, equalTo(VALUE_AND_TIMESTAMP));
+        assertEquals(VALUE_AND_TIMESTAMP, iterator.next().value);
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -440,15 +438,15 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
 
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
-        assertThat(openIteratorsMetric, not(nullValue()));
+        assertNotNull(openIteratorsMetric);
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
         try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
-            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         }
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
     }
 
     @SuppressWarnings("unused")
@@ -460,27 +458,27 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
-        assertThat(iteratorDurationAvgMetric, not(nullValue()));
-        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
 
-        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
-        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
         try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
 
         try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(3);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
     }
 
     @SuppressWarnings("unused")
@@ -491,7 +489,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
 
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+        assertNotNull(oldestIteratorTimestampMetric);
 
         KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
         final long secondTimestamp;
@@ -499,24 +497,24 @@ public class MeteredTimestampedKeyValueStoreTest {
             try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
 
                 final long oldestTimestamp = mockTime.milliseconds();
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
 
                 // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
                 second = metered.all();
                 secondTimestamp = mockTime.milliseconds();
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertEquals(secondTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
         } finally {
             if (second != null) {
                 second.close();
             }
         }
         // now that all iterators are closed, the metric should be zero
-        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) oldestIteratorTimestampMetric.metricValue());
     }
 }

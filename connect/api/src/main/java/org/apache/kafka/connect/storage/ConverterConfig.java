@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -28,6 +29,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * Abstract class that defines the configuration options for {@link Converter} and {@link HeaderConverter} instances.
  */
+@InterfaceAudience.Public
 public abstract class ConverterConfig extends AbstractConfig {
 
     public static final String TYPE_CONFIG = "converter.type";

@@ -17,12 +17,15 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.List;
 
 /**
  * A partition reassignment, which has been listed via {@link AdminClient#listPartitionReassignments()}.
  */
+@InterfaceAudience.Public
 public class PartitionReassignment {
 
     private final List<Integer> replicas;

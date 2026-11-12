@@ -247,6 +247,18 @@ public class GlobalStateTaskTest {
 
 
     @Test
+    public void shouldDelegateApproximateNumUncommittedBytesToStateManager() {
+        stateMgr.approximateNumUncommittedBytes = 4242L;
+        assertEquals(4242L, globalStateTask.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldDelegateMaxStoreUncommittedBytesToStateManager() {
+        stateMgr.maxStoreUncommittedBytes = 4242L;
+        assertEquals(4242L, globalStateTask.maxStoreUncommittedBytes());
+    }
+
+    @Test
     public void shouldCommitStateManagerWithOffsets() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);

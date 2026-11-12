@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
@@ -71,6 +72,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
         delegate.subscribe(topics, callback);
     }
@@ -85,6 +87,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final Pattern pattern, final ConsumerRebalanceListener callback) {
         delegate.subscribe(pattern, callback);
     }
@@ -95,6 +98,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final SubscriptionPattern pattern, final ConsumerRebalanceListener callback) {
         delegate.subscribe(pattern, callback);
     }
@@ -167,6 +171,11 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     @Override
     public void seek(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
         delegate.seek(partition, offsetAndMetadata);
+    }
+
+    @Override
+    public void setRebalanceListener(final RebalanceListener callback) {
+        delegate.setRebalanceListener(callback);
     }
 
     @Override

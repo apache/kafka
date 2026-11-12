@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -35,8 +37,33 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeFeaturesTest {
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testApiVersions(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            versions.allSupportedApiVersions().forEach((key, version) -> assertTrue(key.inScope(ApiMessageType.ListenerType.BROKER)));
+        }
+
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            versions.allSupportedApiVersions().forEach((key, version) -> assertTrue(key.inScope(ApiMessageType.ListenerType.CONTROLLER)));
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, standalone = true)
+    public void testDescribeKRaftVersion(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = clusterInstance.admin()) {
+            assertKRaftVersion(admin);
+        }
+
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            assertKRaftVersion(admin);
+        }
+    }
 
     @ClusterTest(
         types = {Type.KRAFT},
@@ -101,6 +128,18 @@ public class DescribeFeaturesTest {
                 ExecutionException.class,
                 () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(0).timeoutMs(1000)).featureMetadata().get());
         }
+    }
+
+    private void assertKRaftVersion(Admin admin) throws Exception {
+        FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
+        assertEquals(
+            new SupportedVersionRange(KRaftVersion.KRAFT_VERSION_0.featureLevel(), KRaftVersion.KRAFT_VERSION_1.featureLevel()),
+            featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME)
+        );
+        assertEquals(
+            new FinalizedVersionRange(KRaftVersion.KRAFT_VERSION_1.featureLevel(), KRaftVersion.KRAFT_VERSION_1.featureLevel()),
+            featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME)
+        );
     }
 
     private void assertFeatures(Admin admin, int nodeId, boolean unstable, MetadataVersion metadataVersion) {

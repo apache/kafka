@@ -152,6 +152,11 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         store.close();
     }

@@ -1,6 +1,6 @@
 ---
 title: MirrorMaker Configs
-description: MirrorMaker Configs
+description: Kafka MirrorMaker configuration reference.
 weight: 9
 tags: ['kafka', 'docs']
 aliases: 

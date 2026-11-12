@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -60,17 +61,43 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     private final String name;
     private final RocksDBStore physicalStore;
     private final PrefixKeyFormatter prefixKeyFormatter;
+    // Non-null for read-only views produced by {@link #readOnly(IsolationLevel)}: all reads go
+    // through this accessor (bypassing any transaction buffer for READ_COMMITTED); writes are
+    // disallowed. Null for regular segments, which use the physicalStore's current accessor.
+    private final RocksDBStore.DBAccessor readAccessor;
 
     final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     LogicalKeyValueSegment(final long id,
                            final String name,
                            final RocksDBStore physicalStore) {
+        this(id, name, physicalStore, null);
+    }
+
+    private LogicalKeyValueSegment(final long id,
+                                   final String name,
+                                   final RocksDBStore physicalStore,
+                                   final RocksDBStore.DBAccessor readAccessor) {
         this.id = id;
         this.name = name;
         this.physicalStore = Objects.requireNonNull(physicalStore);
-
+        this.readAccessor = readAccessor;
         this.prefixKeyFormatter = new PrefixKeyFormatter(serializeLongToBytes(id));
+    }
+
+    /**
+     * Returns a read-only view of this segment bound to the given isolation level. Reads go
+     * through the accessor appropriate for {@code level}; mutating calls throw.
+     */
+    @Override
+    public LogicalKeyValueSegment readOnly(final IsolationLevel level) {
+        return new LogicalKeyValueSegment(id, name, physicalStore, physicalStore.dbAccessor.readOnly(level));
+    }
+
+    private void rejectIfReadOnly() {
+        if (readAccessor != null) {
+            throw new UnsupportedOperationException("Write operations are not supported on a read-only segment view");
+        }
     }
 
     @Override
@@ -80,6 +107,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized void destroy() {
+        rejectIfReadOnly();
         if (id < 0) {
             throw new IllegalStateException("Negative segment ID indicates a reserved segment, "
                 + "which should not be destroyed. Reserved segments are cleaned up only when "
@@ -95,6 +123,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        rejectIfReadOnly();
         physicalStore.deleteRange(
             prefixKeyFormatter.addPrefix(keyFrom),
             prefixKeyFormatter.addPrefix(keyTo));
@@ -102,6 +131,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
+        rejectIfReadOnly();
         physicalStore.put(
             prefixKeyFormatter.addPrefix(key),
             value);
@@ -109,6 +139,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
+        rejectIfReadOnly();
         return physicalStore.putIfAbsent(
             prefixKeyFormatter.addPrefix(key),
             value);
@@ -116,6 +147,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        rejectIfReadOnly();
         physicalStore.putAll(entries.stream()
             .map(kv -> new KeyValue<>(
                 prefixKeyFormatter.addPrefix(kv.key),
@@ -125,6 +157,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
+        rejectIfReadOnly();
         return physicalStore.delete(prefixKeyFormatter.addPrefix(key));
     }
 
@@ -184,13 +217,18 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     }
 
     private synchronized byte[] get(final Bytes key, final Optional<Snapshot> snapshot) {
+        final Bytes prefixed = prefixKeyFormatter.addPrefix(key);
         if (snapshot.isPresent()) {
             try (ReadOptions readOptions = new ReadOptions()) {
                 readOptions.setSnapshot(snapshot.get());
-                return physicalStore.get(prefixKeyFormatter.addPrefix(key), readOptions);
+                return readAccessor == null
+                    ? physicalStore.get(prefixed, readOptions)
+                    : physicalStore.get(prefixed, readOptions, readAccessor);
             }
         } else {
-            return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+            return readAccessor == null
+                ? physicalStore.get(prefixed)
+                : physicalStore.get(prefixed, readAccessor);
         }
     }
 

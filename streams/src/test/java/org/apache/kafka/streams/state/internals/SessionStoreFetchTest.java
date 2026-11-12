@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -60,8 +61,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class SessionStoreFetchTest {
@@ -226,7 +226,7 @@ public class SessionStoreFetchTest {
 
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());
@@ -267,7 +267,7 @@ public class SessionStoreFetchTest {
              final KeyValueIterator<Windowed<String>, Long> expectedIterator = forward ? store.fetch(null, null) : store.backwardFetch(null, null)) {
             final List<KeyValue<Windowed<String>, Long>> result = Utils.toList(resultIterator);
             final List<KeyValue<Windowed<String>, Long>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
+            assertEquals(expected, result);
         }
     }
 

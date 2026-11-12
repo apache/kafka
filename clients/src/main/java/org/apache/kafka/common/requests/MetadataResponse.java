@@ -514,8 +514,4 @@ public class MetadataResponse extends AbstractResponse {
         return new MetadataResponse(responseData, hasReliableEpoch);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 6;
-    }
 }

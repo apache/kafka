@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * This topic/partition doesn't exist.
@@ -23,6 +26,7 @@ package org.apache.kafka.common.errors;
  *
  * @see InvalidTopicException
  */
+@InterfaceAudience.Public
 public class UnknownTopicOrPartitionException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

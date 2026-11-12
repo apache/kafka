@@ -142,6 +142,7 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
@@ -190,6 +191,7 @@ public class MockConsumerTest {
     }
     
     @Test
+    @SuppressWarnings("removal")
     public void testRe2JPatternSubscription() {
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));
@@ -239,18 +241,19 @@ public class MockConsumerTest {
 
         List<TopicPartition> lost = new ArrayList<>();
         List<TopicPartition> revoked = new ArrayList<>();
-        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 revoked.addAll(partitions);
             }
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {}
             @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 lost.addAll(partitions);
             }
         });
+        consumer.subscribe(List.of("test"));
 
         consumer.rebalance(assigned);
         consumer.losePartitions(List.of(tp0));
@@ -317,14 +320,15 @@ public class MockConsumerTest {
         TopicPartition tp2 = new TopicPartition("test", 2);
 
         List<TopicPartition> assigned = new ArrayList<>();
-        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {}
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 assigned.addAll(partitions);
             }
         });
+        consumer.subscribe(List.of("test"));
 
         consumer.rebalance(List.of(tp0, tp1));
         assigned.clear();
@@ -334,5 +338,33 @@ public class MockConsumerTest {
 
         assertEquals(List.of(tp2), assigned);
         assertEquals(Set.of(tp1, tp2), consumer.assignment());
+    }
+    @Test
+    public void testRebalanceWithConsumerAwareListener() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        List<RebalanceConsumer> capturedOnAssign = new ArrayList<>();
+        List<RebalanceConsumer> capturedOnRevoke = new ArrayList<>();
+
+        consumer.setRebalanceListener(new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                capturedOnAssign.add(rc);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                capturedOnRevoke.add(rc);
+            }
+        });
+        consumer.subscribe(Collections.singleton("test"));
+
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(1, capturedOnAssign.size());
+        assertThrows(IllegalStateException.class, () -> capturedOnAssign.get(0).assignment());
+
+        consumer.rebalance(List.of(tp0));
+        assertEquals(1, capturedOnRevoke.size());
+        assertEquals(2, capturedOnAssign.size());
+        assertThrows(IllegalStateException.class, () -> capturedOnRevoke.get(0).assignment());
     }
 }

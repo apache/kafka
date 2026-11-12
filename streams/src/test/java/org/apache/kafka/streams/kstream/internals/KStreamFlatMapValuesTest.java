@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -60,7 +61,7 @@ public class KStreamFlatMapValuesTest {
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream.flatMapValues(mapper).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Integer, Integer> inputTopic =
                     driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
@@ -97,7 +98,7 @@ public class KStreamFlatMapValuesTest {
 
         stream.flatMapValues(mapper).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Integer, Integer> inputTopic =
                     driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             for (final int expectedKey : expectedKeys) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
  * Using an allowlist pattern {@link EnvVarConfigProvider#ALLOWLIST_PATTERN_CONFIG} that supports regular expressions,
  * it is possible to limit access to specific environment variables. Default allowlist pattern is ".*".
  */
+@InterfaceAudience.Public
 public class EnvVarConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(EnvVarConfigProvider.class);

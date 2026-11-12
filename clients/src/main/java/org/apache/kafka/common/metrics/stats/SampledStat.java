@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
@@ -33,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  * 
  * Subclasses of this class define different statistics measured using this basic pattern.
  */
+@InterfaceAudience.Public
 public abstract class SampledStat implements MeasurableStat {
 
     private final double initialValue;

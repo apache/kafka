@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.List;
 
@@ -24,6 +26,7 @@ import java.util.List;
  * A compound stat is a stat where a single measurement and associated data structure feeds many metrics. This is the
  * example for a histogram which has many associated percentiles.
  */
+@InterfaceAudience.Public
 public interface CompoundStat extends Stat {
 
     List<NamedMeasurable> stats();

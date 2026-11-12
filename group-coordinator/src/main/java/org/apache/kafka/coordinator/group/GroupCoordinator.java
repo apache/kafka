@@ -47,6 +47,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -75,7 +77,7 @@ public interface GroupCoordinator {
      * Heartbeat to a Consumer Group.
      *
      * @param context           The request context.
-     * @param request           The ConsumerGroupHeartbeatResponse data.
+     * @param request           The ConsumerGroupHeartbeatRequest data.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -89,7 +91,7 @@ public interface GroupCoordinator {
      * Heartbeat to a Streams Group.
      *
      * @param context           The request context.
-     * @param request           The StreamsGroupHeartbeatResponseData data.
+     * @param request           The StreamsGroupHeartbeatRequest data.
      *
      * @return  A future yielding the response together with internal topics to create.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -100,10 +102,31 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Persist the full topology description pushed by a Streams group member.
+     *
+     * <p>The broker forwards the description to the configured
+     * {@code StreamsGroupTopologyDescriptionPlugin}. On success the broker writes a
+     * metadata record advancing {@code StoredDescriptionTopologyEpoch}. On a permanent
+     * plugin failure it writes {@code FailedDescriptionTopologyEpoch} to stop re-soliciting
+     * at the same epoch. On a transient failure no record is written and the broker arms
+     * an in-memory back-off.
+     *
+     * @param context   The request context.
+     * @param request   The StreamsGroupTopologyDescriptionUpdateRequest data.
+     *
+     * @return A future yielding the response. The error code is set to indicate any error
+     *         encountered during the execution.
+     */
+    CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
+        AuthorizableRequestContext context,
+        StreamsGroupTopologyDescriptionUpdateRequestData request
+    );
+
+    /**
      * Heartbeat to a Share Group.
      *
      * @param context           The request context.
-     * @param request           The ShareGroupHeartbeatResponse data.
+     * @param request           The ShareGroupHeartbeatRequest data.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -118,7 +141,7 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param request           The JoinGroupRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -134,7 +157,7 @@ public interface GroupCoordinator {
      *
      * @param context           The coordinator request context.
      * @param request           The SyncGroupRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -177,7 +200,7 @@ public interface GroupCoordinator {
      * List Groups.
      *
      * @param context           The coordinator request context.
-     * @param request           The ListGroupRequest data.
+     * @param request           The ListGroupsRequest data.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -217,14 +240,21 @@ public interface GroupCoordinator {
     /**
      * Describe streams groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context                       The coordinator request context.
+     * @param groupIds                      The group ids.
+     * @param includeTopologyDescription    Whether the client requested the full topology
+     *                                      description from the topology description plugin.
+     *                                      When {@code false}, the
+     *                                      {@code TopologyDescription} / {@code TopologyDescriptionStatus}
+     *                                      fields are left at their defaults and the plugin
+     *                                      is not consulted.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     );
 
     /**
@@ -246,6 +276,7 @@ public interface GroupCoordinator {
      * @param context     The request context.
      * @param groupId     The group id.
      * @param requestData The AlterShareGroupOffsetsRequest data.
+     *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
@@ -259,7 +290,7 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param groupIds          The group ids.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the results.
      *          The error codes of the results are set to indicate the errors occurred during the execution.
@@ -275,6 +306,9 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
+     * @param requireStable     Whether the fetch waits for the offsets already written to the log
+     *                          to be committed, and returns the UNSTABLE_OFFSET_COMMIT error for
+     *                          the partitions with pending transactional offsets.
      *
      * @return  A future yielding the results.
      *          The error codes of the results are set to indicate the errors occurred during the execution.
@@ -288,7 +322,7 @@ public interface GroupCoordinator {
     /**
      * Describe the Share Group Offsets for a given group.
      *
-     * @param context           The request context
+     * @param context           The request context.
      * @param request           The DescribeShareGroupOffsetsRequestGroup request.
      *
      * @return  A future yielding the results.
@@ -302,7 +336,7 @@ public interface GroupCoordinator {
     /**
      * Describe all Share Group Offsets for a given group.
      *
-     * @param context           The request context
+     * @param context           The request context.
      * @param request           The DescribeShareGroupOffsetsRequestGroup request.
      *
      * @return  A future yielding the results.
@@ -316,8 +350,8 @@ public interface GroupCoordinator {
     /**
      * Delete the Share Group Offsets for a given group.
      *
-     * @param context           The request context
-     * @param request           The DeleteShareGroupOffsetsRequestGroup request.
+     * @param context           The request context.
+     * @param request           The DeleteShareGroupOffsetsRequest data.
      *
      * @return  A future yielding the results.
      *          The error codes of the response are set to indicate the errors occurred during the execution.
@@ -332,7 +366,7 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param request           The OffsetCommitRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -347,8 +381,8 @@ public interface GroupCoordinator {
      * Commit transactional offsets for a given Group.
      *
      * @param context           The request context.
-     * @param request           The TnxOffsetCommitRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param request           The TxnOffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -364,7 +398,7 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param request           The OffsetDeleteRequest data.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     * @param bufferSupplier    The buffer supplier tied to the request thread.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -457,6 +491,7 @@ public interface GroupCoordinator {
      * Return the configuration of the provided group.
      *
      * @param groupId       The group id.
+     *
      * @return The group config.
      */
     Optional<GroupConfig> groupConfig(String groupId);
@@ -465,7 +500,7 @@ public interface GroupCoordinator {
      * Update the configuration of the provided group.
      *
      * @param groupId           The group id.
-     * @param newGroupConfig    The new group config
+     * @param newGroupConfig    The new group config.
      */
     void updateGroupConfig(String groupId, Properties newGroupConfig);
 

@@ -338,6 +338,13 @@ public class OffsetMetadataManagerTest {
             return isOffsetsEmptyForGroup;
         }
 
+        public boolean groupHasNoOffsets(String groupId) {
+            // Existing branch tests don't drive snapshot semantics — they replay records
+            // directly, so reading at Long.MAX_VALUE is equivalent to "latest" and exercises
+            // the same predicates the snapshot-aware path runs.
+            return offsetMetadataManager.groupHasNoOffsets(groupId, Long.MAX_VALUE);
+        }
+
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
             String groupId,
             List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
@@ -3249,6 +3256,36 @@ public class OffsetMetadataManagerTest {
         assertEquals(List.of(), records);
     }
 
+    @Test
+    public void testGroupHasNoOffsetsReturnsTrueWhenGroupAbsentAndNoOpenTxn() {
+        // Unknown group with no entry in offsetsByGroup and no open transactions: the
+        // topology-cleanup cycle is free to call plugin.deleteTopology and clear the stored
+        // epoch. Mirrors the post-state the offset-expiration cycle leaves behind once it has
+        // tombstoned the last committed offset for a group.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        assertTrue(context.groupHasNoOffsets("unknown-group-id"));
+    }
+
+    @Test
+    public void testGroupHasNoOffsetsReturnsFalseWhenOpenTxnPending() {
+        // A pending transactional commit creates an openTransactions entry without populating
+        // the durable offsets map. Even though offsetsByGroup is null, the open txn could land
+        // a fresh offset on commit — the topology cycle must hold off.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.commitOffset(42L, "group-id", "foo", 0, 100L, 0, context.time.milliseconds());
+        assertFalse(context.groupHasNoOffsets("group-id"));
+    }
+
+    @Test
+    public void testGroupHasNoOffsetsReturnsFalseWhenCommittedOffsetExists() {
+        // Group still has a durable committed offset: the offset-expiration cycle has not
+        // tombstoned it yet (either still inside the retention window or held by an active
+        // subscription), so the topology cycle is not eligible to fire.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.commitOffset("group-id", "foo", 0, 100L, 0);
+        assertFalse(context.groupHasNoOffsets("group-id"));
+    }
+
     private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
         int partition,
         long offset,
@@ -3720,6 +3757,43 @@ public class OffsetMetadataManagerTest {
         records = new ArrayList<>();
         assertTrue(context.cleanupExpiredOffsets("group-id", records));
         verify(context.metrics).record(OFFSET_EXPIRED_SENSOR_NAME, 3);
+    }
+
+    @Test
+    public void testOffsetsExpiredSensorWithNonEmptyRecords() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+        context.commitOffset("group-id", "topic", 0, 100L, 0, commitTimestamp);
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("topic")).thenReturn(false);
+
+        // The list is shared across groups, so it already holds records of another group.
+        List<CoordinatorRecord> records = new ArrayList<>(List.of(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 0),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 1)
+        ));
+        assertTrue(context.offsetMetadataManager.cleanupExpiredOffsets("group-id", records));
+
+        assertEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 0),
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 1),
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0)
+            ),
+            records
+        );
+        verify(context.metrics).record(OFFSET_EXPIRED_SENSOR_NAME, 1);
     }
 
     @Test

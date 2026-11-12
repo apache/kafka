@@ -160,7 +160,7 @@ public class CreateTopicsRequestWithPolicyTest {
     }
 
     @ClusterTest
-    public void testErrorCreateTopicsRequests(ClusterInstance cluster) throws Exception {
+    public void testErrorCreateTopicsRequests(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             String existingTopic = "existing-topic";
             cluster.createTopic(existingTopic, 5, (short) 1);

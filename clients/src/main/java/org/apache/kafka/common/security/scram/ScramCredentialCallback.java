@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.scram;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.security.auth.callback.Callback;
 
 /**
  * Callback used for SCRAM mechanisms.
  */
+@InterfaceAudience.Public
 public class ScramCredentialCallback implements Callback {
     private ScramCredential scramCredential;
 

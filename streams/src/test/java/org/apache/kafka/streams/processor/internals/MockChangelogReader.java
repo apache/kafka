@@ -74,6 +74,11 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
+        return Collections.emptyMap();
+    }
+
+    @Override
     public boolean allChangelogsCompleted() {
         return false;
     }

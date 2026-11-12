@@ -20,6 +20,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,7 +39,7 @@ public class StreamsGroupBuilder {
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
     private long metadataHash = 0L;
     private int validatedTopologyEpoch = -1;
-    private final Map<String, String> lastAssignmentConfigs = new HashMap<>();
+    private AssignmentConfigsImpl lastAssignmentConfigs = AssignmentConfigsImpl.DEFAULT;
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -83,8 +84,8 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
-        this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
+    public StreamsGroupBuilder withLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
+        this.lastAssignmentConfigs = lastAssignmentConfigs;
         return this;
     }
 

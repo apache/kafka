@@ -17,9 +17,12 @@
 
 package org.apache.kafka.connect.health;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Describes the status, worker ID, and any errors associated with a connector.
  */
+@InterfaceAudience.Public
 public class ConnectorState extends AbstractState {
 
     /**

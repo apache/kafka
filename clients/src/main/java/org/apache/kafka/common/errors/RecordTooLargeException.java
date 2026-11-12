@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 /**
  * This record is larger than the maximum allowable size
  */
+@InterfaceAudience.Public
 public class RecordTooLargeException extends ApiException {
 
     private static final long serialVersionUID = 1L;

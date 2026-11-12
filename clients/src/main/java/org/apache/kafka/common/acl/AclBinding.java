@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.resource.ResourcePattern;
 
 import java.util.Objects;
@@ -24,6 +25,7 @@ import java.util.Objects;
 /**
  * Represents a binding between a resource pattern and an access control entry.
  */
+@InterfaceAudience.Public
 public class AclBinding {
     private final ResourcePattern pattern;
     private final AccessControlEntry entry;

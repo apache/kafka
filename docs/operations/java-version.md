@@ -1,6 +1,6 @@
 ---
 title: Java Version
-description: Java Version
+description: Java version support and runtime recommendations for Kafka.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

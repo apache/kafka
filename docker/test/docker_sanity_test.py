@@ -15,22 +15,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import subprocess
-from HTMLTestRunner import HTMLTestRunner
-import test.constants as constants
 import os
+import subprocess
+import time
+import unittest
+
+import pytest
+import test.constants as constants
+from common import detect_compose_command
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
-    MODE="jvm"
-    
+    CONTAINER_RUNTIME="docker"
+    COMPOSE_COMMAND=None
+
+    def compose_command(self):
+        if self.COMPOSE_COMMAND is None:
+            return detect_compose_command(self.CONTAINER_RUNTIME)
+        return self.COMPOSE_COMMAND
+
     def resume_container(self):
-        subprocess.run(["docker", "start", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
 
     def stop_container(self) -> None:
-        subprocess.run(["docker", "stop", constants.BROKER_CONTAINER])
+        subprocess.run([self.CONTAINER_RUNTIME, "stop", constants.BROKER_CONTAINER])
 
     def update_file(self, filename, old_string, new_string):
         with open(filename) as f:
@@ -42,10 +51,10 @@ class DockerSanityTest(unittest.TestCase):
     def start_compose(self, filename) -> None:
         self.update_file(filename, "image: {$IMAGE}", f"image: {self.IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", "{$DIR}", self.FIXTURES_DIR)
-        subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
-    
+        subprocess.run(self.compose_command() + ["-f", filename, "up", "-d"])
+
     def destroy_compose(self, filename) -> None:
-        subprocess.run(["docker-compose", "-f", filename, "down"])
+        subprocess.run(self.compose_command() + ["-f", filename, "down"])
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", self.FIXTURES_DIR, "{$DIR}")
 
@@ -71,6 +80,40 @@ class DockerSanityTest(unittest.TestCase):
         message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip()
     
+    def consume_share_message(self, topic, consumer_config):
+        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_SHARE_CONSUMER}", "--topic", topic, "--formatter-property", "'print.key=true'", "--formatter-property", "'key.separator=:'", "--max-messages", "1", "--timeout-ms", f"{constants.CLIENT_TIMEOUT}"]
+        command.extend(consumer_config)
+        message = subprocess.check_output(["bash", "-c", " ".join(command)])
+        return message.decode("utf-8").strip()
+
+    def set_share_group_offset_reset_strategy(self, group_id, strategy, command_config):
+        # Set the offset reset strategy for the share group.
+        offset_reset_config = f"share.auto.offset.reset={strategy}"
+        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONFIGS}", "--group", group_id, "--alter", "--add-config", offset_reset_config]
+        command.extend(command_config)
+        subprocess.run(["bash", "-c", " ".join(command)], check=True)
+
+        # Wait for a broker to report the updated strategy.
+        describe = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONFIGS}", "--group", group_id, "--describe", "--all"]
+        describe.extend(command_config)
+        deadline = time.monotonic() + constants.SHARE_GROUP_CONFIG_TIMEOUT_SECONDS
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                configs = subprocess.check_output(["bash", "-c", " ".join(describe)], timeout=remaining).decode("utf-8")
+            except subprocess.TimeoutExpired:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            # Match the actual config value, ignoring synonyms.
+            if any(line.strip().startswith(f"{offset_reset_config} ") for line in configs.splitlines()):
+                return
+            time.sleep(min(1, remaining))
+        raise AssertionError(f"Timed out waiting for {offset_reset_config} to become visible for group {group_id}")
+
     def get_metrics(self, jmx_tool_config):
         command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_RUN_CLASS}", constants.JMX_TOOL]
         command.extend(jmx_tool_config)
@@ -106,7 +149,7 @@ class DockerSanityTest(unittest.TestCase):
         
         metrics_after_message = self.get_metrics(jmx_tool_config)
         try:
-            self.assertEqual(len(metrics_before_message), 2)
+            self.assertEqual(len(metrics_after_message), 2)
             self.assertEqual(metrics_after_message[0], constants.BROKER_METRICS_HEADING)
             before_metrics_data, after_metrics_data = metrics_before_message[1].split(","), metrics_after_message[1].split(",")
             self.assertEqual(len(before_metrics_data), len(after_metrics_data))
@@ -117,6 +160,48 @@ class DockerSanityTest(unittest.TestCase):
                     self.assertEqual(after_metrics_data[i], before_metrics_data[i])
         except AssertionError as e:
             errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
+
+        return errors
+
+    def consumer_group_protocol_flow(self):
+        print(f"Running {constants.CONSUMER_GROUP_PROTOCOL_TESTS}")
+        errors = []
+        try:
+            self.assertTrue(self.create_topic(constants.CONSUMER_GROUP_PROTOCOL_TOPIC, ["--bootstrap-server", "localhost:9092"]))
+        except AssertionError as e:
+            errors.append(constants.CONSUMER_GROUP_PROTOCOL_ERROR_PREFIX + str(e))
+            return errors
+
+        producer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "client.id=host"]
+        self.produce_message(constants.CONSUMER_GROUP_PROTOCOL_TOPIC, producer_config, "key", "message")
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--group", constants.CONSUMER_GROUP_PROTOCOL_GROUP_ID, "--command-property", "group.protocol=consumer"]
+        message = self.consume_message(constants.CONSUMER_GROUP_PROTOCOL_TOPIC, consumer_config)
+        try:
+            self.assertEqual(message, "key:message")
+        except AssertionError as e:
+            errors.append(constants.CONSUMER_GROUP_PROTOCOL_ERROR_PREFIX + str(e))
+
+        return errors
+
+    def share_group_protocol_flow(self):
+        print(f"Running {constants.SHARE_GROUP_PROTOCOL_TESTS}")
+        errors = []
+        try:
+            self.assertTrue(self.create_topic(constants.SHARE_GROUP_PROTOCOL_TOPIC, ["--bootstrap-server", "localhost:9092"]))
+            # Configure earliest before the first share fetch initializes the share partition.
+            self.set_share_group_offset_reset_strategy(constants.SHARE_GROUP_PROTOCOL_GROUP_ID, "earliest", ["--bootstrap-server", "localhost:9092"])
+        except AssertionError as e:
+            errors.append(constants.SHARE_GROUP_PROTOCOL_ERROR_PREFIX + str(e))
+            return errors
+
+        producer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "client.id=host"]
+        self.produce_message(constants.SHARE_GROUP_PROTOCOL_TOPIC, producer_config, "key", "message")
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--group", constants.SHARE_GROUP_PROTOCOL_GROUP_ID]
+        message = self.consume_share_message(constants.SHARE_GROUP_PROTOCOL_TOPIC, consumer_config)
+        try:
+            self.assertEqual(message, "key:message")
+        except AssertionError as e:
+            errors.append(constants.SHARE_GROUP_PROTOCOL_ERROR_PREFIX + str(e))
 
         return errors
 
@@ -181,6 +266,16 @@ class DockerSanityTest(unittest.TestCase):
             print(constants.BROKER_METRICS_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         try:
+            total_errors.extend(self.consumer_group_protocol_flow())
+        except Exception as e:
+            print(constants.CONSUMER_GROUP_PROTOCOL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        try:
+            total_errors.extend(self.share_group_protocol_flow())
+        except Exception as e:
+            print(constants.SHARE_GROUP_PROTOCOL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        try:
             total_errors.extend(self.secure_flow('localhost:9093', constants.SSL_CLIENT_CONFIG, constants.SSL_FLOW_TESTS, constants.SSL_ERROR_PREFIX, constants.SSL_TOPIC))
         except Exception as e:
             print(constants.SSL_ERROR_PREFIX, str(e))
@@ -190,13 +285,11 @@ class DockerSanityTest(unittest.TestCase):
         except Exception as e:
             print(constants.FILE_INPUT_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
-        # SASL is not supported on native image due to missing reflection config (KAFKA-19584)
-        if self.MODE == "jvm":
-            try:
-                total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
-            except Exception as e:
-                print(constants.SASL_ERROR_PREFIX, str(e))
-                total_errors.append(str(e))
+        try:
+            total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
+        except Exception as e:
+            print(constants.SASL_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
         try:
             total_errors.extend(self.broker_restart_flow())
         except Exception as e:
@@ -221,27 +314,26 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
-    DockerSanityTest.MODE = mode
+    DockerSanityTest.CONTAINER_RUNTIME = container_runtime
+    DockerSanityTest.COMPOSE_COMMAND = compose_command or detect_compose_command(container_runtime)
 
-    test_classes_to_run = []
-    if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
-    
-    loader = unittest.TestLoader()
-    suites_list = []
-    for test_class in test_classes_to_run:
-        suite = loader.loadTestsFromTestCase(test_class)
-        suites_list.append(suite)
-    combined_suite = unittest.TestSuite(suites_list)
     cur_directory = os.path.dirname(os.path.realpath(__file__))
-    outfile = open(f"{cur_directory}/report_{mode}.html", "w")
-    runner = HTMLTestRunner.HTMLTestRunner(
-                stream=outfile,
-                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
-                description='This demonstrates the report output.'
-                )
-    result = runner.run(combined_suite)
-    return result.failure_count
+    report_path = f"{cur_directory}/report_{mode}.html"
+
+    class ReportTitlePlugin:
+        @pytest.hookimpl(optionalhook=True)
+        def pytest_html_report_title(self, report):
+            report.title = f"Test Report: Apache Kafka {mode.capitalize()} Docker Image"
+
+    return pytest.main([
+        "--pyargs",
+        __name__,
+        f"--html={report_path}",
+        "--self-contained-html",
+        "--capture=tee-sys",
+        "-p",
+        "no:cacheprovider",
+    ], plugins=[ReportTitlePlugin()])

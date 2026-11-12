@@ -825,16 +825,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Function<String, TemporaryStage> reportStage,
             boolean doLog
     ) {
+        connectorProps = removeCustomConfigProviders(connectorProps);
+
+        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
+        if (connType == null) {
+            throw new BadRequestException("Connector config contains no connector type");
+        }
+
+        Map<String, String> originalProps = new HashMap<>(connectorProps);
         String stageDescription;
         if (worker.configTransformer() != null) {
             stageDescription = "resolving transformed configuration properties for the connector";
             try (TemporaryStage stage = reportStage.apply(stageDescription)) {
                 connectorProps = worker.configTransformer().transform(connectorProps);
             }
-        }
-        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
-        if (connType == null) {
-            throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
         }
 
         VersionRange connVersion;
@@ -848,7 +852,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         } catch (VersionedPluginLoadingException e) {
             log.warn("Failed to load connector {} with version {}, skipping additional validations (connector, converters, transformations, client overrides) ",
                     connType, connectorProps.get(CONNECTOR_VERSION), e);
-            return invalidVersionedConnectorValidation(connectorProps, e, reportStage);
+            return redactResolvedValues(
+                    invalidVersionedConnectorValidation(connectorProps, e, reportStage),
+                    originalProps, connectorProps);
         } catch (Exception e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -882,12 +888,58 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, connectorType, connector.getClass(), reportStage, doLog);
             ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
 
-            return mergeConfigInfos(connType,
-                    connectorConfigInfo,
-                    clientOverrideInfo,
-                    converterConfigInfo
-            );
+            return redactResolvedValues(
+                    mergeConfigInfos(connType, connectorConfigInfo, clientOverrideInfo, converterConfigInfo),
+                    originalProps,
+                    connectorProps);
         }
+    }
+
+    static Map<String, String> removeCustomConfigProviders(Map<String, String> connectorProps) {
+        Map<String, String> sanitized = new HashMap<>(connectorProps);
+        String prefix = AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".";
+        sanitized.keySet().removeIf(k -> k.equals(AbstractConfig.CONFIG_PROVIDERS_CONFIG) || k.startsWith(prefix));
+        return sanitized;
+    }
+
+    static ConfigInfos redactResolvedValues(ConfigInfos infos, Map<String, String> originalProps, Map<String, String> resolvedProps) {
+        Map<String, String> substitutedKeys = new HashMap<>();
+        for (Map.Entry<String, String> entry : originalProps.entrySet()) {
+            String resolvedValue = resolvedProps.get(entry.getKey());
+            if (resolvedValue != null && !resolvedValue.equals(entry.getValue())) {
+                substitutedKeys.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (substitutedKeys.isEmpty()) {
+            return infos;
+        }
+
+        List<ConfigInfo> redactedConfigs = new ArrayList<>();
+        int errorCount = 0;
+        for (ConfigInfo info : infos.configs()) {
+            ConfigValueInfo cv = info.configValue();
+            if (cv != null && substitutedKeys.containsKey(cv.name())) {
+                String placeholder = substitutedKeys.get(cv.name());
+                List<String> errors = List.of();
+                if (!cv.errors().isEmpty()) {
+                    if (log.isTraceEnabled()) {
+                        log.trace("Error while validating configuration {} for connector {}: {}",
+                                cv.name(), originalProps.get(CONNECTOR_CLASS_CONFIG), cv.errors());
+                    }
+                    errors = List.of("Invalid value for configuration '" + cv.name()
+                            + "': the value resolved from the config provider reference failed validation");
+                }
+                ConfigValueInfo redacted = new ConfigValueInfo(cv.name(), placeholder, List.of(), errors, cv.visible());
+                redactedConfigs.add(new ConfigInfo(info.configKey(), redacted));
+                errorCount += errors.size();
+            } else {
+                redactedConfigs.add(info);
+                if (cv != null) {
+                    errorCount += cv.errors().size();
+                }
+            }
+        }
+        return new ConfigInfos(infos.name(), errorCount, infos.groups(), redactedConfigs);
     }
 
     private static ConfigInfos mergeConfigInfos(String connType, ConfigInfos... configInfosList) {
@@ -1074,8 +1126,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             messages.append("Connector configuration is invalid and contains the following ")
                 .append(errors).append(" error(s):");
             for (ConfigInfo configInfo : configInfos.configs()) {
-                for (String msg : configInfo.configValue().errors()) {
-                    messages.append('\n').append(msg);
+                if (configInfo.configValue() != null) {
+                    for (String msg : configInfo.configValue().errors()) {
+                        messages.append('\n').append(msg);
+                    }
                 }
             }
             callback.onCompletion(
@@ -1261,6 +1315,66 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @param cb callback to invoke upon completion
      */
     protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    /**
+     * Validate the offsets supplied via the {@code initial_offsets} field of a connector creation request. Performs no
+     * I/O, so that an invalid request is rejected before any of the connector's existing offsets are wiped.
+     *
+     * @param connName the name of the connector being created
+     * @param initialOffsets the offsets supplied by the user; may not be {@code null}
+     * @throws BadRequestException if the offsets cannot be used as a connector's initial offsets
+     */
+    protected void validateInitialOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> initialOffsets) {
+        if (initialOffsets.isEmpty()) {
+            throw new BadRequestException("The initial offsets for connector " + connName + " may not be empty");
+        }
+        // A null offset means "delete this partition's offset" when altering, but is meaningless on create: every offset
+        // the connector has is wiped before these are written, so there is nothing left to delete. Issuing the delete
+        // anyway targets the consumer group our own wipe just removed, which the alter path (unlike the reset path) does
+        // not tolerate. This is deliberately stricter than PATCH /connectors/{connector}/offsets.
+        // Not Map::containsValue, which throws rather than returning false on the immutable maps Map.of(...) produces.
+        if (initialOffsets.values().stream().anyMatch(offset -> offset == null)) {
+            throw new BadRequestException("The initial offsets for connector " + connName + " may not contain null offset "
+                    + "values. All existing offsets for the connector are removed before the initial offsets are written, "
+                    + "so a null offset has nothing to delete.");
+        }
+    }
+
+    /**
+     * Wipe every offset the connector currently has and write {@code initialOffsets} in their place.
+     * <p>
+     * Unlike {@link #alterConnectorOffsets} and {@link #resetConnectorOffsets}, this skips the usual preconditions (that
+     * the connector exists and is STOPPED with no running tasks): the connector is being created, so it is not expected
+     * to exist and has no tasks. Its config has not been written yet, so nothing can be running under this name.
+     */
+    protected void setInitialConnectorOffsets(String connName, Map<String, String> config,
+                                              Map<Map<String, ?>, Map<String, ?>> initialOffsets, Callback<Message> cb) {
+        worker.modifyConnectorOffsets(connName, config, initialOffsets, true, cb);
+    }
+
+    /**
+     * Remove the initial offsets written for a connector whose creation could not subsequently be completed, so that a
+     * failed creation does not leave offsets behind for a connector that does not exist, and then complete
+     * {@code callback} with the original failure rather than with any error from the cleanup itself.
+     */
+    protected void wipeInitialOffsetsAfterFailedCreate(String connName, Map<String, String> config,
+                                                       Throwable configWriteError, Callback<Created<ConnectorInfo>> callback) {
+        log.error("Failed to create connector {} after its initial offsets had been written; "
+                + "removing those offsets so that the failed creation does not leave them behind", connName, configWriteError);
+        Callback<Message> cleanupCallback = (wipeError, ignored) -> {
+            if (wipeError != null) {
+                log.error("Failed to remove the initial offsets for connector {} after its creation failed. Offsets may "
+                        + "remain for a connector that was not created; re-submitting the identical creation request is "
+                        + "safe and will overwrite them.", connName, wipeError);
+            }
+            callback.onCompletion(configWriteError, null);
+        };
+        try {
+            worker.modifyConnectorOffsets(connName, config, null, cleanupCallback);
+        } catch (Throwable t) {
+            cleanupCallback.onCompletion(t, null);
+        }
+    }
 
     @Override
     public LoggerLevel loggerLevel(String logger) {

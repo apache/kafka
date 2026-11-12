@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Objects;
@@ -25,6 +26,7 @@ import java.util.Optional;
  * Represents a broker endpoint.
  */
 
+@InterfaceAudience.Public
 public class Endpoint {
 
     private final String listener;

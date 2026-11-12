@@ -38,11 +38,6 @@ public class AlterUserScramCredentialsResponse extends AbstractResponse {
     }
 
     @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

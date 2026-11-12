@@ -23,9 +23,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,8 +36,8 @@ public class PositionBoundTest {
         final PositionBound positionBound = PositionBound.at(position);
         position.withComponent("topic", 1, 2L);
 
-        assertThat(position.getTopics(), equalTo(Set.of("topic")));
-        assertThat(positionBound.position().getTopics(), empty());
+        assertEquals(Set.of("topic"), position.getTopics());
+        assertTrue(positionBound.position().isEmpty());
     }
 
     @Test
@@ -52,7 +49,7 @@ public class PositionBoundTest {
     @Test
     public void unboundedShouldReturnEmptyPosition() {
         final PositionBound bound = PositionBound.unbounded();
-        assertThat(bound.position(), equalTo(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), bound.position());
     }
 
     @Test

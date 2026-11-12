@@ -1,6 +1,6 @@
 ---
 title: Message Format
-description: Message Format
+description: The on-disk binary formats for Kafka record batches and records.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

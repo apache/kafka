@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
@@ -31,6 +32,7 @@ import java.util.Map;
  * String encoding defaults to UTF8 and can be customized by setting the property key.deserializer.encoding,
  * value.deserializer.encoding or deserializer.encoding. The first two take precedence over the last.
  */
+@InterfaceAudience.Public
 public class StringDeserializer implements Deserializer<String> {
     private Charset encoding = StandardCharsets.UTF_8;
 

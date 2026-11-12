@@ -17,6 +17,8 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.ConfigException;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -60,11 +62,27 @@ public class DynamicConfig {
             return BROKER_CONFIGS.names();
         }
 
-        public static Map<String, Object> validate(Properties props) {
-            // Validate Names
-            Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
-            // ValidateValues
-            return BROKER_CONFIGS.parse(propResolved);
+        public static Map<String, Object> validate(Properties propsOriginal, Properties propsResolved) {
+            for (Map.Entry<String, ConfigKey> entry : BROKER_CONFIGS.configKeys().entrySet()) {
+                String name = entry.getKey();
+                ConfigKey key = entry.getValue();
+                Object resolvedValue = propsResolved.get(name);
+                if (resolvedValue != null) {
+                    try {
+                        Object parsed = ConfigDef.parseType(name, resolvedValue, key.type);
+                        if (key.validator != null) {
+                            key.validator.ensureValid(name, parsed);
+                        }
+                    } catch (ConfigException ce) {
+                        Object originalValue = propsOriginal.get(name);
+                        if (originalValue != null && !originalValue.equals(resolvedValue)) {
+                            throw new ConfigException(name, originalValue);
+                        }
+                        throw ce;
+                    }
+                }
+            }
+            return BROKER_CONFIGS.parse(propsResolved);
         }
     }
 

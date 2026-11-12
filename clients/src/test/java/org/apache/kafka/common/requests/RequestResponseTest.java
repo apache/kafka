@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
@@ -242,6 +243,8 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterControllerRequestData;
+import org.apache.kafka.common.message.UnregisterControllerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
@@ -319,6 +322,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
+import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_CONTROLLER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -347,6 +351,8 @@ public class RequestResponseTest {
         toSkip.put(ELECT_LEADERS, List.of((short) 0));
         // UnregisterBroker v0 contains the error message in the response
         toSkip.put(UNREGISTER_BROKER, List.of((short) 0));
+        // UnregisterController v0 contains the error message in the response
+        toSkip.put(UNREGISTER_CONTROLLER, List.of((short) 0));
 
         for (ApiKeys apikey : ApiKeys.values()) {
             for (short version : apikey.allVersions()) {
@@ -356,6 +362,38 @@ public class RequestResponseTest {
                 checkErrorResponse(request, unknownServerException);
                 checkResponse(getResponse(apikey, version), version);
             }
+        }
+    }
+
+    @Test
+    public void testKip219BoundariesHaveThrottleTimeField() {
+        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) -> {
+            assertTrue(getResponse(apiKey, boundaryVersion).shouldClientThrottle(boundaryVersion),
+                apiKey + " should client throttle at KIP-219 boundary " + boundaryVersion);
+            assertNotNull(apiKey.messageType.responseSchemas()[boundaryVersion].get("throttle_time_ms"),
+                apiKey + " KIP-219 boundary " + boundaryVersion +
+                    " precedes the version that added throttle_time_ms");
+        });
+    }
+
+    @Test
+    public void testKip219BoundariesAreStillNeeded() {
+        Kip219ClientThrottleVersion.BOUNDARIES.forEach((apiKey, boundaryVersion) ->
+            assertTrue(apiKey.messageType.lowestSupportedVersion() < boundaryVersion,
+                apiKey + " KIP-219 boundary " + boundaryVersion + " is obsolete and should be removed"));
+    }
+
+    @Test
+    public void testClientThrottleForCommonResponses() {
+        assertClientThrottle(PRODUCE, (short) 6);
+        assertClientThrottle(FETCH, (short) 8);
+        assertClientThrottle(METADATA, (short) 6);
+    }
+
+    private void assertClientThrottle(ApiKeys apiKey, short boundaryVersion) {
+        for (short version : apiKey.allVersions()) {
+            assertEquals(version >= boundaryVersion, getResponse(apiKey, version).shouldClientThrottle(version),
+                "Unexpected shouldClientThrottle result for " + apiKey + " version " + version);
         }
     }
 
@@ -685,8 +723,8 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
+        final UnsupportedProtocolFieldException exception = assertThrows(
+            UnsupportedProtocolFieldException.class, () -> {
                 CreateTopicsRequestData data = new CreateTopicsRequestData()
                     .setTimeoutMs(123)
                     .setValidateOnly(false);
@@ -701,8 +739,7 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
-        assertTrue(exception.getMessage().contains("[foo, bar]"));
+        assertTrue(exception.getMessage().contains("does not support [default partitions/replication for topics [foo,bar]] in CREATE_TOPICS API version 3"));
     }
 
     @Test
@@ -874,16 +911,33 @@ public class RequestResponseTest {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "customer error message";
+        String customErrorMessage = "custom error message";
 
         UnregisterBrokerResponse response = request.getErrorResponse(
             0,
-            new RuntimeException(customerErrorMessage)
+            new RuntimeException(customErrorMessage)
         );
 
         assertEquals(0, response.throttleTimeMs());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
-        assertEquals(customerErrorMessage, response.data().errorMessage());
+        assertEquals(customErrorMessage, response.data().errorMessage());
+    }
+
+    @Test
+    public void testUnregisterControllerResponseWithUnknownServerError() {
+        UnregisterControllerRequest request = new UnregisterControllerRequest.Builder(
+            new UnregisterControllerRequestData()
+        ).build((short) 0);
+        String customErrorMessage = "custom error message";
+
+        UnregisterControllerResponse response = request.getErrorResponse(
+            0,
+            new RuntimeException(customErrorMessage)
+        );
+
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
@@ -1090,6 +1144,7 @@ public class RequestResponseTest {
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1144,10 +1199,10 @@ public class RequestResponseTest {
             case ALTER_CLIENT_QUOTAS: return createAlterClientQuotasResponse();
             case DESCRIBE_USER_SCRAM_CREDENTIALS: return createDescribeUserScramCredentialsResponse();
             case ALTER_USER_SCRAM_CREDENTIALS: return createAlterUserScramCredentialsResponse();
-            case VOTE: return createVoteResponse();
-            case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
-            case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
-            case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
+            case VOTE: return createVoteResponse(version);
+            case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse(version);
+            case END_QUORUM_EPOCH: return createEndQuorumEpochResponse(version);
+            case DESCRIBE_QUORUM: return createDescribeQuorumResponse(version);
             case ALTER_PARTITION: return createAlterPartitionResponse();
             case UPDATE_FEATURES: return createUpdateFeaturesResponse();
             case ENVELOPE: return createEnvelopeResponse();
@@ -1163,7 +1218,7 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
-            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse(version);
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CONFIG_RESOURCES: return createListConfigResourcesResponse();
@@ -1186,6 +1241,7 @@ public class RequestResponseTest {
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1242,7 +1298,7 @@ public class RequestResponseTest {
                                                 ))
                                 ))
                 ));
-        return new AssignReplicasToDirsRequest.Builder(data).build(version);
+        return new AssignReplicasToDirsRequest.Builder(data, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(version)).build(version);
     }
 
     private AssignReplicasToDirsResponse createAssignReplicasToDirsResponse() {
@@ -1610,9 +1666,40 @@ public class RequestResponseTest {
         return new DescribeQuorumRequest.Builder(data).build(version);
     }
 
-    private DescribeQuorumResponse createDescribeQuorumResponse() {
+    private DescribeQuorumResponse createDescribeQuorumResponse(short version) {
+        DescribeQuorumResponseData.ReplicaState replicaState = new DescribeQuorumResponseData.ReplicaState()
+                .setReplicaId(1);
+        if (version >= 1) {
+            replicaState.setLastFetchTimestamp(123L)
+                .setLastCaughtUpTimestamp(123L);
+        }
+        if (version >= 2) {
+            replicaState.setReplicaDirectoryId(Uuid.randomUuid());
+        }
+        DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setCurrentVoters(singletonList(replicaState))
+                .setObservers(singletonList(replicaState));
+        DescribeQuorumResponseData.TopicData topicData = new DescribeQuorumResponseData.TopicData()
+                .setTopicName("__cluster_metadata")
+                .setPartitions(singletonList(partitionData));
         DescribeQuorumResponseData data = new DescribeQuorumResponseData()
-                .setErrorCode(Errors.NONE.code());
+                .setErrorCode(Errors.NONE.code())
+                .setTopics(singletonList(topicData));
+        if (version >= 2) {
+            partitionData.setErrorMessage("error message");
+            data.setErrorMessage("error message");
+            DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(1);
+            DescribeQuorumResponseData.ListenerCollection listeners = new DescribeQuorumResponseData.ListenerCollection(1);
+            listeners.add(new DescribeQuorumResponseData.Listener()
+                    .setName("CONTROLLER")
+                    .setHost("localhost")
+                    .setPort(9012));
+            nodes.add(new DescribeQuorumResponseData.Node()
+                    .setNodeId(1)
+                    .setListeners(listeners));
+            data.setNodes(nodes);
+        }
         return new DescribeQuorumResponse(data);
     }
 
@@ -1629,14 +1716,25 @@ public class RequestResponseTest {
         return new EndQuorumEpochRequest.Builder(data).build(version);
     }
 
-    private EndQuorumEpochResponse createEndQuorumEpochResponse() {
+    private EndQuorumEpochResponse createEndQuorumEpochResponse(short version) {
         EndQuorumEpochResponseData data = new EndQuorumEpochResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new EndQuorumEpochResponseData.TopicData()
                         .setPartitions(singletonList(new EndQuorumEpochResponseData.PartitionData()
                                 .setErrorCode(Errors.NONE.code())
+                                .setLeaderId(1)
                                 .setLeaderEpoch(1)))
                         .setTopicName("topic1")));
+        if (version >= 1) {
+            EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints = new EndQuorumEpochResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new EndQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new EndQuorumEpochResponse(data);
     }
 
@@ -1651,7 +1749,7 @@ public class RequestResponseTest {
         return new BeginQuorumEpochRequest.Builder(data).build(version);
     }
 
-    private BeginQuorumEpochResponse createBeginQuorumEpochResponse() {
+    private BeginQuorumEpochResponse createBeginQuorumEpochResponse(short version) {
         BeginQuorumEpochResponseData data = new BeginQuorumEpochResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new BeginQuorumEpochResponseData.TopicData()
@@ -1660,6 +1758,17 @@ public class RequestResponseTest {
                                 .setLeaderEpoch(0)
                                 .setLeaderId(1)
                                 .setPartitionIndex(2)))));
+        if (version >= 1) {
+            BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints = new BeginQuorumEpochResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new BeginQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new BeginQuorumEpochResponse(data);
     }
 
@@ -1681,7 +1790,7 @@ public class RequestResponseTest {
         return new VoteRequest.Builder(data).build(version);
     }
 
-    private VoteResponse createVoteResponse() {
+    private VoteResponse createVoteResponse(short version) {
         VoteResponseData.PartitionData partitionData = new VoteResponseData.PartitionData()
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(0)
@@ -1692,6 +1801,16 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new VoteResponseData.TopicData()
                         .setPartitions(singletonList(partitionData))));
+        if (version >= 1) {
+            VoteResponseData.NodeEndpointCollection nodeEndpoints = new VoteResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new VoteResponseData.NodeEndpoint()
+                        .setNodeId(2)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new VoteResponse(data);
     }
 
@@ -1753,7 +1872,7 @@ public class RequestResponseTest {
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data).build(version);
+        return new AlterPartitionRequest.Builder(data, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse() {
@@ -1804,7 +1923,7 @@ public class RequestResponseTest {
         AllocateProducerIdsRequestData data = new AllocateProducerIdsRequestData()
                 .setBrokerEpoch(123L)
                 .setBrokerId(2);
-        return new AllocateProducerIdsRequest.Builder(data).build(version);
+        return new AllocateProducerIdsRequest.Builder(data, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(version)).build(version);
     }
 
     private AllocateProducerIdsResponse createAllocateProducerIdsResponse() {
@@ -3575,6 +3694,15 @@ public class RequestResponseTest {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
     }
 
+    private UnregisterControllerRequest createUnregisterControllerRequest(short version) {
+        UnregisterControllerRequestData data = new UnregisterControllerRequestData().setControllerId(1);
+        return new UnregisterControllerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterControllerResponse createUnregisterControllerResponse() {
+        return new UnregisterControllerResponse(new UnregisterControllerResponseData());
+    }
+
     private DescribeTransactionsRequest createDescribeTransactionsRequest(short version) {
         DescribeTransactionsRequestData data = new DescribeTransactionsRequestData()
             .setTransactionalIds(asList("t1", "t2", "t3"));
@@ -3644,9 +3772,12 @@ public class RequestResponseTest {
         ).build(version);
     }
 
-    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse() {
+    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse(short version) {
         GetTelemetrySubscriptionsResponseData response = new GetTelemetrySubscriptionsResponseData();
-        response.setClientInstanceId(Uuid.randomUuid());
+        // Only the v0 response has the client instance ID field.
+        if (version == 0) {
+            response.setClientInstanceId(Uuid.randomUuid());
+        }
         response.setSubscriptionId(1);
         response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
         response.setPushIntervalMs(60 * 1000);
@@ -3696,7 +3827,7 @@ public class RequestResponseTest {
                     .setPartition(0)
                     .setStateEpoch(0)
                     .setStartOffset(0)))));
-        return new InitializeShareGroupStateRequest.Builder(data).build(version);
+        return new InitializeShareGroupStateRequest.Builder(data, ApiKeys.INITIALIZE_SHARE_GROUP_STATE.requestHeaderVersion(version)).build(version);
     }
 
     private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {
@@ -3716,7 +3847,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new ReadShareGroupStateRequest.Builder(data).build(version);
+        return new ReadShareGroupStateRequest.Builder(data, ApiKeys.READ_SHARE_GROUP_STATE.requestHeaderVersion(version)).build(version);
     }
 
     private ReadShareGroupStateResponse createReadShareGroupStateResponse() {
@@ -3751,7 +3882,7 @@ public class RequestResponseTest {
                         .setLastOffset(0)
                         .setDeliveryState((byte) 0x0)
                         .setDeliveryCount((short) 0)))))));
-        return new WriteShareGroupStateRequest.Builder(data).build(version);
+        return new WriteShareGroupStateRequest.Builder(data, ApiKeys.WRITE_SHARE_GROUP_STATE.requestHeaderVersion(version)).build(version);
     }
 
     private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
@@ -3771,7 +3902,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new DeleteShareGroupStateRequest.Builder(data).build(version);
+        return new DeleteShareGroupStateRequest.Builder(data, ApiKeys.DELETE_SHARE_GROUP_STATE.requestHeaderVersion(version)).build(version);
     }
 
     private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
@@ -3791,7 +3922,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
                     .setPartition(0)))));
-        return new ReadShareGroupStateSummaryRequest.Builder(data).build(version);
+        return new ReadShareGroupStateSummaryRequest.Builder(data, ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(version)).build(version);
     }
 
     private ReadShareGroupStateSummaryResponse createReadShareGroupStateSummaryResponse() {

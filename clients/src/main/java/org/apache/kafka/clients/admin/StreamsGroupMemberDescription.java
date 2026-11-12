@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
  * A detailed description of a single streams groups member in the cluster.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class StreamsGroupMemberDescription {
 
     private final String memberId;

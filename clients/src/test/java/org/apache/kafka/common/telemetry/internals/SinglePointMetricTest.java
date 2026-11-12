@@ -24,10 +24,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import io.opentelemetry.proto.metrics.v1.AggregationTemporality;
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,8 +34,8 @@ public class SinglePointMetricTest {
     private Instant now;
 
     /*
-     Test compares the metric representation from returned builder to ensure that the metric is
-     constructed correctly.
+     Test compares the metric representation from the constructed SinglePointMetric to ensure that the
+     metric is constructed correctly.
 
      For example: Gauge metric with name "name" and double value 1.0 at certain time is represented as:
 
@@ -61,53 +57,42 @@ public class SinglePointMetricTest {
     @Test
     public void testGaugeWithNumberValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now, Collections.emptySet());
-        MetricKey metricKey = gaugeNumber.key();
-        assertEquals("name", metricKey.name());
+        assertEquals("name", gaugeNumber.key().name());
 
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-
-        NumberDataPoint point = metric.getGauge().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(0, point.getStartTimeUnixNano());
-        assertEquals(1, point.getAsInt());
-        assertEquals(0, point.getAttributesCount());
+        assertTrue(gaugeNumber.hasGauge());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), gaugeNumber.timeUnixNano());
+        assertEquals(0, gaugeNumber.startTimeUnixNano());
+        assertEquals(1, gaugeNumber.longValue());
+        assertEquals(0, gaugeNumber.attributesCount());
     }
 
     @Test
     public void testGaugeWithDoubleValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now, Collections.emptySet());
-        MetricKey metricKey = gaugeNumber.key();
-        assertEquals("name", metricKey.name());
+        assertEquals("name", gaugeNumber.key().name());
 
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-
-        NumberDataPoint point = metric.getGauge().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(0, point.getStartTimeUnixNano());
-        assertEquals(1.0, point.getAsDouble());
-        assertEquals(0, point.getAttributesCount());
+        assertTrue(gaugeNumber.hasGauge());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), gaugeNumber.timeUnixNano());
+        assertEquals(0, gaugeNumber.startTimeUnixNano());
+        assertEquals(1.0, gaugeNumber.doubleValue());
+        assertEquals(0, gaugeNumber.attributesCount());
     }
 
     @Test
     public void testGaugeWithMetricTags() {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now, Collections.emptySet());
+        assertEquals("name", gaugeNumber.key().name());
 
-        MetricKey key = gaugeNumber.key();
-        assertEquals("name", key.name());
-
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-
-        NumberDataPoint point = metric.getGauge().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(0, point.getStartTimeUnixNano());
-        assertEquals(1.0, point.getAsDouble());
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag", point.getAttributes(0).getKey());
-        assertEquals("value", point.getAttributes(0).getValue().getStringValue());
+        assertTrue(gaugeNumber.hasGauge());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), gaugeNumber.timeUnixNano());
+        assertEquals(0, gaugeNumber.startTimeUnixNano());
+        assertEquals(1.0, gaugeNumber.doubleValue());
+        assertEquals(1, gaugeNumber.attributesCount());
+        assertEquals(Collections.singletonMap("tag", "value"), gaugeNumber.attributes());
     }
 
     @Test
@@ -118,30 +103,17 @@ public class SinglePointMetricTest {
         MetricKey metricKey = new MetricKey("name", tags);
 
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now, Collections.singleton("random"));
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        NumberDataPoint point = metric.getGauge().getDataPoints(0);
-        assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
-            assertTrue(
-                point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
-            assertTrue(
-                point.getAttributes(i).getValue().getStringValue().equals("value1") || point.getAttributes(i).getValue().getStringValue().equals("value2"));
-        }
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(2, gaugeNumber.attributesCount());
+        assertEquals(Map.of("tag1", "value1", "tag2", "value2"), gaugeNumber.attributes());
 
         gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now, Collections.singleton("tag1"));
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        point = metric.getGauge().getDataPoints(0);
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag2", point.getAttributes(0).getKey());
-        assertEquals("value2", point.getAttributes(0).getValue().getStringValue());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(Collections.singletonMap("tag2", "value2"), gaugeNumber.attributes());
 
         gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now, tags.keySet());
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        point = metric.getGauge().getDataPoints(0);
-        assertEquals(0, point.getAttributesCount());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(0, gaugeNumber.attributesCount());
     }
 
     @Test
@@ -152,71 +124,49 @@ public class SinglePointMetricTest {
         MetricKey metricKey = new MetricKey("name", tags);
 
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now, Collections.singleton("random"));
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        NumberDataPoint point = metric.getGauge().getDataPoints(0);
-        assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
-            assertTrue(
-                point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
-            assertTrue(
-                point.getAttributes(i).getValue().getStringValue().equals("value1") || point.getAttributes(i).getValue().getStringValue().equals("value2"));
-        }
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(2, gaugeNumber.attributesCount());
+        assertEquals(Map.of("tag1", "value1", "tag2", "value2"), gaugeNumber.attributes());
 
         gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now, Collections.singleton("tag1"));
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        point = metric.getGauge().getDataPoints(0);
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag2", point.getAttributes(0).getKey());
-        assertEquals("value2", point.getAttributes(0).getValue().getStringValue());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(Collections.singletonMap("tag2", "value2"), gaugeNumber.attributes());
 
         gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now, tags.keySet());
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getGauge().getDataPointsCount());
-        point = metric.getGauge().getDataPoints(0);
-        assertEquals(0, point.getAttributesCount());
+        assertEquals(1, gaugeNumber.dataPointsCount());
+        assertEquals(0, gaugeNumber.attributesCount());
     }
 
     @Test
     public void testSum() {
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, false, now, null, Collections.emptySet());
+        assertEquals("name", sum.key().name());
 
-        MetricKey key = sum.key();
-        assertEquals("name", key.name());
-
-        Metric metric = sum.builder().build();
-        assertFalse(metric.getSum().getIsMonotonic());
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, metric.getSum().getAggregationTemporality());
-        assertEquals(1, metric.getSum().getDataPointsCount());
-
-        NumberDataPoint point = metric.getSum().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(0, point.getStartTimeUnixNano());
-        assertEquals(1.0, point.getAsDouble());
-        assertEquals(0, point.getAttributesCount());
+        assertTrue(sum.hasSum());
+        assertFalse(sum.isMonotonic());
+        assertFalse(sum.isDeltaTemporality());
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), sum.timeUnixNano());
+        assertEquals(0, sum.startTimeUnixNano());
+        assertEquals(1.0, sum.doubleValue());
+        assertEquals(0, sum.attributesCount());
     }
 
     @Test
     public void testSumWithStartTimeAndTags() {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now, now, Collections.emptySet());
+        assertEquals("name", sum.key().name());
 
-        MetricKey key = sum.key();
-        assertEquals("name", key.name());
-
-        Metric metric = sum.builder().build();
-        assertTrue(metric.getSum().getIsMonotonic());
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, metric.getSum().getAggregationTemporality());
-        assertEquals(1, metric.getSum().getDataPointsCount());
-
-        NumberDataPoint point = metric.getSum().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getStartTimeUnixNano());
-        assertEquals(1.0, point.getAsDouble());
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag", point.getAttributes(0).getKey());
-        assertEquals("value", point.getAttributes(0).getValue().getStringValue());
+        assertTrue(sum.hasSum());
+        assertTrue(sum.isMonotonic());
+        assertFalse(sum.isDeltaTemporality());
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), sum.timeUnixNano());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), sum.startTimeUnixNano());
+        assertEquals(1.0, sum.doubleValue());
+        assertEquals(1, sum.attributesCount());
+        assertEquals(Collections.singletonMap("tag", "value"), sum.attributes());
     }
 
     @Test
@@ -226,50 +176,33 @@ public class SinglePointMetricTest {
         tags.put("tag2", "value2");
         MetricKey metricKey = new MetricKey("name", tags);
 
-        SinglePointMetric gaugeNumber = SinglePointMetric.sum(metricKey, 1.0, true, now, Collections.singleton("random"));
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        NumberDataPoint point = metric.getSum().getDataPoints(0);
-        assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
-            assertTrue(
-                point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
-            assertTrue(
-                point.getAttributes(i).getValue().getStringValue().equals("value1") || point.getAttributes(i).getValue().getStringValue().equals("value2"));
-        }
+        SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now, Collections.singleton("random"));
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(2, sum.attributesCount());
+        assertEquals(Map.of("tag1", "value1", "tag2", "value2"), sum.attributes());
 
-        gaugeNumber = SinglePointMetric.sum(metricKey, 1.0, true, now, Collections.singleton("tag1"));
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        point = metric.getSum().getDataPoints(0);
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag2", point.getAttributes(0).getKey());
-        assertEquals("value2", point.getAttributes(0).getValue().getStringValue());
+        sum = SinglePointMetric.sum(metricKey, 1.0, true, now, Collections.singleton("tag1"));
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(Collections.singletonMap("tag2", "value2"), sum.attributes());
 
-        gaugeNumber = SinglePointMetric.sum(metricKey, 1.0, true, now, tags.keySet());
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        point = metric.getSum().getDataPoints(0);
-        assertEquals(0, point.getAttributesCount());
+        sum = SinglePointMetric.sum(metricKey, 1.0, true, now, tags.keySet());
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(0, sum.attributesCount());
     }
 
     @Test
     public void testDeltaSum() {
         SinglePointMetric sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, Collections.emptySet());
+        assertEquals("name", sum.key().name());
 
-        MetricKey key = sum.key();
-        assertEquals("name", key.name());
-
-        Metric metric = sum.builder().build();
-        assertTrue(metric.getSum().getIsMonotonic());
-        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, metric.getSum().getAggregationTemporality());
-        assertEquals(1, metric.getSum().getDataPointsCount());
-
-        NumberDataPoint point = metric.getSum().getDataPoints(0);
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
-        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getStartTimeUnixNano());
-        assertEquals(1.0, point.getAsDouble());
-        assertEquals(0, point.getAttributesCount());
+        assertTrue(sum.hasSum());
+        assertTrue(sum.isMonotonic());
+        assertTrue(sum.isDeltaTemporality());
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), sum.timeUnixNano());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), sum.startTimeUnixNano());
+        assertEquals(1.0, sum.doubleValue());
+        assertEquals(0, sum.attributesCount());
     }
 
     @Test
@@ -279,30 +212,17 @@ public class SinglePointMetricTest {
         tags.put("tag2", "value2");
         MetricKey metricKey = new MetricKey("name", tags);
 
-        SinglePointMetric gaugeNumber = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, Collections.singleton("random"));
-        Metric metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        NumberDataPoint point = metric.getSum().getDataPoints(0);
-        assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
-            assertTrue(
-                point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
-            assertTrue(
-                point.getAttributes(i).getValue().getStringValue().equals("value1") || point.getAttributes(i).getValue().getStringValue().equals("value2"));
-        }
+        SinglePointMetric sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, Collections.singleton("random"));
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(2, sum.attributesCount());
+        assertEquals(Map.of("tag1", "value1", "tag2", "value2"), sum.attributes());
 
-        gaugeNumber = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, Collections.singleton("tag1"));
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        point = metric.getSum().getDataPoints(0);
-        assertEquals(1, point.getAttributesCount());
-        assertEquals("tag2", point.getAttributes(0).getKey());
-        assertEquals("value2", point.getAttributes(0).getValue().getStringValue());
+        sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, Collections.singleton("tag1"));
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(Collections.singletonMap("tag2", "value2"), sum.attributes());
 
-        gaugeNumber = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, tags.keySet());
-        metric = gaugeNumber.builder().build();
-        assertEquals(1, metric.getSum().getDataPointsCount());
-        point = metric.getSum().getDataPoints(0);
-        assertEquals(0, point.getAttributesCount());
+        sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now, tags.keySet());
+        assertEquals(1, sum.dataPointsCount());
+        assertEquals(0, sum.attributesCount());
     }
 }

@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@InterfaceAudience.Public
 public enum TransactionState {
     ONGOING("Ongoing"),
     PREPARE_ABORT("PrepareAbort"),

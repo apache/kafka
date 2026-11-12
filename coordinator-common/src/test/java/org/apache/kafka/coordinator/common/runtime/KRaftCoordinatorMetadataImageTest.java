@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 class KRaftCoordinatorMetadataImageTest {
@@ -139,5 +140,32 @@ class KRaftCoordinatorMetadataImageTest {
 
         assertEquals(coordinatorMetadataImage.hashCode(), coordinatorMetadataImageCopy.hashCode());
         assertNotEquals(coordinatorMetadataImage.hashCode(), coordinatorMetadataImage2.hashCode());
+    }
+
+    @Test
+    public void testTopicIdAndTopicName() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "test-topic";
+        Uuid noPartitionTopicId = Uuid.randomUuid();
+        String noPartitionTopic = "no-partition-topic";
+
+        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 2)
+            .addTopic(noPartitionTopicId, noPartitionTopic, 0)
+            .build());
+
+        assertEquals(topicId, image.topicId(topicName));
+        assertEquals(topicName, image.topicName(topicId));
+        assertEquals(noPartitionTopicId, image.topicId(noPartitionTopic));
+        assertEquals(noPartitionTopic, image.topicName(noPartitionTopicId));
+
+        assertNull(image.topicId("unknown-topic"));
+        assertNull(image.topicName(Uuid.randomUuid()));
+    }
+
+    @Test
+    public void testTopicIdAndTopicNameOfEmptyImage() {
+        assertNull(CoordinatorMetadataImage.EMPTY.topicId("test-topic"));
+        assertNull(CoordinatorMetadataImage.EMPTY.topicName(Uuid.randomUuid()));
     }
 }

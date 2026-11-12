@@ -22,11 +22,11 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public interface RaftManager<T> {
 
-    CompletableFuture<ApiMessage> handleRequest(
+    CompletionStage<ApiMessage> handleRequest(
         RequestContext context,
         RequestHeader header,
         ApiMessage request,

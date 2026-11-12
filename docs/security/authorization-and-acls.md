@@ -1,6 +1,6 @@
 ---
 title: Authorization and ACLs
-description: Authorization and ACLs
+description: Kafka authorization model and ACL management.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 
@@ -2733,6 +2733,23 @@ Read
 <td>
 
 Topic
+</td>  
+<td>
+
+
+</td> </tr>  
+<tr>  
+<td>
+
+UNREGISTER_CONTROLLER (94)
+</td>  
+<td>
+
+Alter
+</td>  
+<td>
+
+Cluster
 </td>  
 <td>
 

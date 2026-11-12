@@ -14,8 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
 public class BooleanSerializer implements Serializer<Boolean> {
 
     private static final byte TRUE = 0x01;

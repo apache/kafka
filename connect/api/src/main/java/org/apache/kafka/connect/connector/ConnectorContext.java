@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.connect.connector;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.PluginMetrics;
 
 /**
  * ConnectorContext allows {@link Connector}s to proactively interact with the Kafka Connect runtime.
  */
+@InterfaceAudience.Public
 public interface ConnectorContext {
     /**
      * Requests that the runtime reconfigure the Tasks for this source. This should be used to

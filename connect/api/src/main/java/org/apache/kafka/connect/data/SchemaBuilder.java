@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.SchemaBuilderException;
 
@@ -51,6 +52,7 @@ import java.util.Map;
  *     </pre>
  * </p>
  */
+@InterfaceAudience.Public
 public class SchemaBuilder implements Schema {
     private static final String TYPE_FIELD = "type";
     private static final String OPTIONAL_FIELD = "optional";

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -75,6 +77,8 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: implements internal RecordCollector.Supplier for the existing test-utility contract — pending KIP review to promote the type or refactor")
 public class MockProcessorContext<KForward, VForward> implements ProcessorContext<KForward, VForward>, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
@@ -484,6 +488,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal RecordCollector — pending KIP review to promote or refactor")
     public RecordCollector recordCollector() {
         // This interface is assumed by state stores that add change-logging.
         // Rather than risk a mysterious ClassCastException during unit tests, throw an explanatory exception.

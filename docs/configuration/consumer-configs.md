@@ -1,6 +1,6 @@
 ---
 title: Consumer and Share Consumer Configs
-description: Consumer and Share Consumer Configs
+description: Kafka consumer and share consumer configuration reference.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

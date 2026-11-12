@@ -1,6 +1,6 @@
 ---
 title: Group Configs
-description: Group Configs
+description: Kafka group configuration reference for consumer, share, and streams groups.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

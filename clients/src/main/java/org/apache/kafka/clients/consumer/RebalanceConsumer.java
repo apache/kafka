@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
 
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -29,7 +30,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 
 /**
- * A restricted view of a {@link Consumer} passed to {@link ConsumerRebalanceListener} callback
+ * A restricted view of a {@link Consumer} passed to {@link RebalanceListener} callback
  * methods during a partition rebalance. This interface provides compile-time enforcement of safe
  * consumer operations during rebalance callbacks, replacing the previous pattern of capturing a
  * {@code Consumer} reference externally (e.g. via constructor injection), which gave callbacks
@@ -77,8 +78,9 @@ import java.util.Set;
  *   <li>{@code enforceRebalance()} - would trigger re-entrant rebalance</li>
  * </ul>
  *
- * @see ConsumerRebalanceListener
+ * @see RebalanceListener
  */
+@InterfaceAudience.Public
 public interface RebalanceConsumer {
 
     // --- Offset management ---

@@ -128,8 +128,8 @@ Broker, client, and Connect properties files contain keystore passwords, SASL cr
 
 The components built on top of the Kafka clients have their own security models, covered on separate pages:
 
-- [Kafka Connect](security-model-connect)
-- [Kafka Streams](security-model-streams)
+- [Kafka Connect](../security-model-connect)
+- [Kafka Streams](../security-model-streams)
 
 ## Development and Test Tooling
 
@@ -162,7 +162,7 @@ The following follow directly from the model above and are not, on their own, se
 - **Unauthenticated or unencrypted access to a default cluster.** Security is off by default; an open `PLAINTEXT` listener with no authorizer is a deployment choice, not a defect.
 - **A trusted principal performing an authorized operation.** Admin and inter-broker actions by a principal that holds the relevant ACLs — or by a `super.users` entry — are expected behaviour.
 - **Findings in development and test tooling.** Issues in `tools`, `bin`, Trogdor, `tests`, and similar are out of scope (see Development and Test Tooling above).
-- **Kafka Streams application-level issues.** Streams runs inside the user's application, so its security boundary is the application's, not the broker's (see the [Kafka Streams security model](security-model-streams)).
+- **Kafka Streams application-level issues.** Streams runs inside the user's application, so its security boundary is the application's, not the broker's (see the [Kafka Streams security model](../security-model-streams)).
 
 ## Reporting Security Issues
 

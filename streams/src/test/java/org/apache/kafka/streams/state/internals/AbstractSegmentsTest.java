@@ -14,8 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
 
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -110,6 +110,30 @@ abstract class AbstractSegmentsTest<S extends Segments> {
         segments = getSegments();
         final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, () -> segments.openExisting(context, 0L));
         assertEquals("Tasks [0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
+    }
+
+    @Test
+    public void shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable() throws Exception {
+        context = getEOSProcessorContext();
+        segments = getSegments();
+        segments.openExisting(context, 0L);
+        final Segment segment = segments.getOrCreateSegmentIfLive(0, context, 1L);
+
+        assertTrue(segment.isOpen());
+        segments.close();
+
+        simulateUncleanShutdownForAllSegments();
+        segments = getSegments();
+
+        // The first open fails with a (recoverable) TaskCorruptedException because the on-disk state is dirty.
+        assertThrows(TaskCorruptedException.class, () -> segments.openExisting(context, 0L));
+
+        // A segment that failed to open must not be retained in the segments map. Otherwise a subsequent
+        // open would return the stale, unopened segment instead of retrying to open it, and querying its
+        // committed offset during task re-initialization would then fail with a fatal
+        // InvalidStateStoreException. Re-opening must instead stay recoverable, i.e. keep throwing
+        // TaskCorruptedException until the dirty local state is wiped.
+        assertThrows(TaskCorruptedException.class, () -> segments.openExisting(context, 0L));
     }
 
     private void simulateUncleanShutdownForAllSegments() throws Exception {

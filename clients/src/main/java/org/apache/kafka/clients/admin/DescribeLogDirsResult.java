@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * The result of the {@link Admin#describeLogDirs(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> futures;
 

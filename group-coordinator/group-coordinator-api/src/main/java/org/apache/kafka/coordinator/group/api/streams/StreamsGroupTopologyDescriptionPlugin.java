@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.streams;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.concurrent.CompletableFuture;
@@ -31,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
  * {@link #deleteTopology} must also be idempotent — it may be called more than once
  * for the same {@code groupId}, including when nothing is stored.
  */
+@InterfaceAudience.Public
 @InterfaceStability.Evolving
 public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, AutoCloseable {
 

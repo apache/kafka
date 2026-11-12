@@ -17,11 +17,13 @@
 
 package org.apache.kafka.connect.connector.policy;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.health.ConnectorType;
 
 import java.util.Map;
 
+@InterfaceAudience.Public
 public class ConnectorClientConfigRequest {
 
     private final Map<String, Object> clientProps;

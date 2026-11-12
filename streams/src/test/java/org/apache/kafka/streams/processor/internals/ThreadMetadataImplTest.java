@@ -30,10 +30,9 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ThreadMetadataImplTest {
 
@@ -83,9 +82,9 @@ public class ThreadMetadataImplTest {
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertThat(isUnmodifiable(threadMetadata.producerClientIds()), is(true));
-        assertThat(isUnmodifiable(threadMetadata.activeTasks()), is(true));
-        assertThat(isUnmodifiable(threadMetadata.standbyTasks()), is(true));
+        assertTrue(isUnmodifiable(threadMetadata.producerClientIds()));
+        assertTrue(isUnmodifiable(threadMetadata.activeTasks()));
+        assertTrue(isUnmodifiable(threadMetadata.standbyTasks()));
     }
 
     @Test
@@ -100,8 +99,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, equalTo(same));
-        assertThat(threadMetadata.hashCode(), equalTo(same.hashCode()));
+        assertEquals(same, threadMetadata);
+        assertEquals(same.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -116,8 +115,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differThreadName)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differThreadName.hashCode())));
+        assertNotEquals(differThreadName, threadMetadata);
+        assertNotEquals(differThreadName.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -132,8 +131,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differThreadState)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differThreadState.hashCode())));
+        assertNotEquals(differThreadState, threadMetadata);
+        assertNotEquals(differThreadState.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -148,8 +147,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differMainConsumerClientId)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differMainConsumerClientId.hashCode())));
+        assertNotEquals(differMainConsumerClientId, threadMetadata);
+        assertNotEquals(differMainConsumerClientId.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -164,8 +163,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differRestoreConsumerClientId)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differRestoreConsumerClientId.hashCode())));
+        assertNotEquals(differRestoreConsumerClientId, threadMetadata);
+        assertNotEquals(differRestoreConsumerClientId.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -180,8 +179,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differProducerClientIds)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differProducerClientIds.hashCode())));
+        assertNotEquals(differProducerClientIds, threadMetadata);
+        assertNotEquals(differProducerClientIds.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -196,8 +195,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differAdminClientId)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differAdminClientId.hashCode())));
+        assertNotEquals(differAdminClientId, threadMetadata);
+        assertNotEquals(differAdminClientId.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -212,8 +211,8 @@ public class ThreadMetadataImplTest {
             Set.of(TM_0),
             STANDBY_TASKS
         );
-        assertThat(threadMetadata, not(equalTo(differActiveTasks)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differActiveTasks.hashCode())));
+        assertNotEquals(differActiveTasks, threadMetadata);
+        assertNotEquals(differActiveTasks.hashCode(), threadMetadata.hashCode());
     }
 
     @Test
@@ -228,8 +227,8 @@ public class ThreadMetadataImplTest {
             ACTIVE_TASKS,
             Set.of(TM_0)
         );
-        assertThat(threadMetadata, not(equalTo(differStandByTasks)));
-        assertThat(threadMetadata.hashCode(), not(equalTo(differStandByTasks.hashCode())));
+        assertNotEquals(differStandByTasks, threadMetadata);
+        assertNotEquals(differStandByTasks.hashCode(), threadMetadata.hashCode());
     }
 
     private static boolean isUnmodifiable(final Collection<?> collection) {

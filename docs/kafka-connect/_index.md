@@ -1,6 +1,6 @@
 ---
 title: Kafka Connect
-description: 
+description: Kafka Connect documentation for integrating Kafka with external systems.
 weight: 8
 tags: ['kafka', 'docs', 'connect']
 aliases: 

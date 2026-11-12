@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.utils.Bytes;
  * 1. Null value bytes in put operations should be treated as delete.
  * 2. Null value bytes should never be returned in range query results.
  */
+@InterfaceAudience.Public
 public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Bytes, byte[]>> {
 
     /**

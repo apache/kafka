@@ -67,7 +67,7 @@ public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
     implements WindowStore<K, V>, MeteredStateStore {
 
-    private final long windowSizeMs;
+    protected final long windowSizeMs;
     private final String metricsScope;
     protected final Time time;
     private final Serde<K> keySerde;

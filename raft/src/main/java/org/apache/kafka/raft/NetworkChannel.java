@@ -18,6 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.network.ListenerName;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * A simple network interface with few assumptions. We do not assume ordering
  * of requests or even that every outbound request will receive a response.
@@ -26,15 +28,22 @@ public interface NetworkChannel extends AutoCloseable {
 
     /**
      * Generate a new and unique correlationId for a new request to be sent.
+     *
+     * @return a unique integer for the lifetime of the channel
      */
     int newCorrelationId();
 
     /**
      * Send an outbound request message.
      *
+     * The complete stage return never completes with an exception. It always completes
+     * successfully. Exceptions are turn into error responses.
+     *
      * @param request outbound request to send
+     * @return a complete stage always complete successfully. Errors are always returned in the
+     *         response object
      */
-    void send(RaftRequest.Outbound request);
+    CompletionStage<RaftResponse.Inbound> send(RaftRequest.Outbound request);
 
     /**
      * The name of listener used when sending requests.
@@ -42,6 +51,4 @@ public interface NetworkChannel extends AutoCloseable {
      * @return the name of the listener
      */
     ListenerName listenerName();
-
-    default void close() throws InterruptedException {}
 }

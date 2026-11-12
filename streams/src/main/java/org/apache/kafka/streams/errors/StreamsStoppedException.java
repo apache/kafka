@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KafkaStreams.State;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
  * State#ERROR}. This Streams instance will need to be discarded and replaced before it can
  * serve queries. The caller may wish to query a different instance.
  */
+@InterfaceAudience.Public
 public class StreamsStoppedException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

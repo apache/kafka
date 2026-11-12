@@ -19,12 +19,14 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteRecords(Map)} call.
  */
+@InterfaceAudience.Public
 public class DeleteRecordsResult {
 
     private final Map<TopicPartition, KafkaFuture<DeletedRecords>> futures;

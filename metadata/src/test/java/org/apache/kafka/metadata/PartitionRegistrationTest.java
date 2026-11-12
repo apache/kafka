@@ -26,12 +26,6 @@ import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Provide;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -328,23 +322,9 @@ public class PartitionRegistrationTest {
         assertTrue(exceptions.isEmpty());
     }
 
-    @Property
-    public void testConsistentEqualsAndHashCode(
-        @ForAll("uniqueSamples") PartitionRegistration a,
-        @ForAll("uniqueSamples") PartitionRegistration b
-    ) {
-        if (a.equals(b)) {
-            assertEquals(a.hashCode(), b.hashCode(), "a=" + a + "\nb=" + b);
-        }
-
-        if (a.hashCode() != b.hashCode()) {
-            assertNotEquals(a, b, "a=" + a + "\nb=" + b);
-        }
-    }
-
-    @Provide
-    Arbitrary<PartitionRegistration> uniqueSamples() {
-        return Arbitraries.of(
+    @Test
+    public void testConsistentEqualsAndHashCode() {
+        List<PartitionRegistration> samples = List.of(
             new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2, 3}).
                 setDirectories(new Uuid[]{Uuid.fromString("HyTsxr8hT6Gq5heZMA2Bug"), Uuid.fromString("ePwTiSgFRvaKRBaUX3EcZQ"), Uuid.fromString("F3zwSDR1QWGKNNLMowVoYg")}).
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).setElr(new int[] {1, 2, 3}).build(),
@@ -374,6 +354,16 @@ public class PartitionRegistrationTest {
                 setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).setElr(new int[] {2, 3}).setLastKnownElr(new int[] {1, 2}).build()
         );
 
+        for (PartitionRegistration a : samples) {
+            for (PartitionRegistration b : samples) {
+                if (a.equals(b)) {
+                    assertEquals(a.hashCode(), b.hashCode(), "a=" + a + "\nb=" + b);
+                }
+                if (a.hashCode() != b.hashCode()) {
+                    assertNotEquals(a, b, "a=" + a + "\nb=" + b);
+                }
+            }
+        }
     }
 
     @Test

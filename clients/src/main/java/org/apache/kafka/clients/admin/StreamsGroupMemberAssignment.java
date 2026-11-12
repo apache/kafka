@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
  * A description of the assignments of a specific group member.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class StreamsGroupMemberAssignment {
 
     private final List<TaskIds> activeTasks;

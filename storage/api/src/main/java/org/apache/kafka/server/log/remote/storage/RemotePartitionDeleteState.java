@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,6 +49,7 @@ import java.util.stream.Collectors;
  * </PRE>
  * </P>
  */
+@InterfaceAudience.Public
 public enum RemotePartitionDeleteState {
 
     /**

@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The leader does not have an endpoint corresponding to the listener on which metadata was requested.
@@ -23,6 +26,7 @@ package org.apache.kafka.common.errors;
  * This is currently used only for missing listeners on leader brokers, but may be used for followers
  * in future.
  */
+@InterfaceAudience.Public
 public class ListenerNotFoundException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

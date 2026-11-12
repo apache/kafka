@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
@@ -55,6 +56,11 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
         final byte[] oldValue = inner.delete(key, timestamp);
         log(key, null, timestamp, new RecordHeaders());
         return oldValue;
+    }
+
+    @Override
+    public VersionedBytesStore readOnly(final IsolationLevel isolationLevel) {
+        return inner.readOnly(isolationLevel);
     }
 
     @Override public void log(final Bytes key, final byte[] value, final long timestamp, final Headers headers) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask.UserTopicIdPartition;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -65,6 +68,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class ConsumerTaskTest {
 
@@ -102,6 +109,18 @@ public class ConsumerTaskTest {
     public void testCloseOnNoAssignment() {
         assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
         assertDoesNotThrow(() -> consumerTask.closeConsumer(), "CloseConsumer method threw exception");
+    }
+
+    @Test
+    public void testCloseBeforeAssignmentDoesNotPollConsumer() {
+        final Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
+        final ConsumerTask task = new ConsumerTask(handler, partitioner, mockConsumer, 10L, 300_000L, Time.SYSTEM);
+
+        task.close();
+        task.ingestRecords();
+
+        verify(mockConsumer).wakeup();
+        verify(mockConsumer, never()).poll(any(Duration.class));
     }
 
     @Test

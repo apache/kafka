@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.api.Record;
 
@@ -30,6 +31,7 @@ import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.ma
  * Processing exception handler that logs a processing exception and then
  * signals the processing pipeline to stop processing more records and fail.
  */
+@InterfaceAudience.Public
 public class LogAndFailProcessingExceptionHandler implements ProcessingExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndFailProcessingExceptionHandler.class);
     private String deadLetterQueueTopic = null;

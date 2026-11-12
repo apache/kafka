@@ -17,12 +17,14 @@
 
 package org.apache.kafka.server.telemetry;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 /**
  * {@code ClientTelemetryContext} provides context information for client telemetry requests,
  * including the push interval.
  */
+@InterfaceAudience.Public
 public interface ClientTelemetryContext {
 
     /**

@@ -169,6 +169,10 @@ public class StateStoreMetrics {
     private static final String NUM_KEYS_DESCRIPTION =
             "The current number of keys in the in-memory state store";
 
+    private static final String UNCOMMITTED_BYTES = "uncommitted-bytes";
+    private static final String UNCOMMITTED_BYTES_DESCRIPTION =
+            "The approximate number of uncommitted bytes in the transactional state store buffer";
+
     private static final String OLDEST_ITERATOR_OPEN_SINCE_MS = "oldest-iterator-open-since-ms";
     private static final String OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION =
             "The UNIX timestamp the oldest still open iterator was created, in milliseconds";
@@ -561,6 +565,22 @@ public class StateStoreMetrics {
                 NUM_KEYS_DESCRIPTION,
                 RecordingLevel.INFO,
                 numKeysGauge
+        );
+    }
+
+    public static void addUncommittedBytesGauge(final String taskId,
+                                                final String storeType,
+                                                final String storeName,
+                                                final StreamsMetricsImpl streamsMetrics,
+                                                final Gauge<Long> uncommittedBytesGauge) {
+        streamsMetrics.addStoreLevelMutableMetric(
+                taskId,
+                storeType,
+                storeName,
+                UNCOMMITTED_BYTES,
+                UNCOMMITTED_BYTES_DESCRIPTION,
+                RecordingLevel.INFO,
+                uncommittedBytesGauge
         );
     }
 }

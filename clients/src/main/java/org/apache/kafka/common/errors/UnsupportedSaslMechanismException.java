@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * This exception indicates that the SASL mechanism requested by the client
  * is not enabled on the broker.
  */
+@InterfaceAudience.Public
 public class UnsupportedSaslMechanismException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;

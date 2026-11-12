@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -22,6 +25,7 @@ import java.util.Objects;
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
+@InterfaceAudience.Public
 public class PartitionInfo {
     private final String topic;
     private final int partition;

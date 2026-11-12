@@ -53,6 +53,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -116,29 +118,35 @@ public class KafkaNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void send(RaftRequest.Outbound request) {
+    public CompletionStage<RaftResponse.Inbound> send(RaftRequest.Outbound request) {
         Node node = request.destination();
         if (node != null) {
-            requestThread.sendRequest(new RequestAndCompletionHandler(
-                request.createdTimeMs(),
-                node,
-                buildRequest(request.data()),
-                response -> sendOnComplete(request, response)
-            ));
-        } else
-            sendCompleteFuture(request, errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE));
+            var future = new CompletableFuture<RaftResponse.Inbound>();
+            requestThread.sendRequest(
+                new RequestAndCompletionHandler(
+                    request.createdTimeMs(),
+                    node,
+                    buildRequest(request.data()),
+                    response -> sendOnCompleted(request, response, future)
+                )
+            );
+            return future;
+        } else {
+            return CompletableFuture.completedFuture(
+                new RaftResponse.Inbound(
+                    request.correlationId(),
+                    errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE),
+                    request.destination()
+                )
+            );
+        }
     }
 
-    private void sendCompleteFuture(RaftRequest.Outbound request, ApiMessage message) {
-        RaftResponse.Inbound response = new RaftResponse.Inbound(
-                request.correlationId(),
-                message,
-                request.destination()
-        );
-        request.completion.complete(response);
-    }
-
-    private void sendOnComplete(RaftRequest.Outbound request, ClientResponse clientResponse) {
+    private void sendOnCompleted(
+        RaftRequest.Outbound request,
+        ClientResponse clientResponse,
+        CompletableFuture<RaftResponse.Inbound> future
+    ) {
         ApiMessage response;
         if (clientResponse.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", request, clientResponse.versionMismatch());
@@ -155,7 +163,14 @@ public class KafkaNetworkChannel implements NetworkChannel {
         } else {
             response = clientResponse.responseBody().data();
         }
-        sendCompleteFuture(request, response);
+
+        future.complete(
+            new RaftResponse.Inbound(
+                request.correlationId(),
+                response,
+                request.destination()
+            )
+        );
     }
 
     private ApiMessage errorResponse(ApiMessage request, Errors error) {

@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -30,15 +31,18 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
+@InterfaceAudience.Public
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     final Logger log = LoggerFactory.getLogger(ListDeserializer.class);
@@ -148,7 +152,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         return SerializationStrategy.VALUES[serializationStrategyFlag];
     }
 
-    private List<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
+    private Set<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
         int nullIndexListSize = dis.readInt();
         if (nullIndexListSize < 0) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be negative.");
@@ -156,12 +160,12 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (nullIndexListSize > length / Integer.BYTES) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.");
         }
-        List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
+        Set<Integer> nullIndexes = new HashSet<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
-            nullIndexList.add(dis.readInt());
+            nullIndexes.add(dis.readInt());
             nullIndexListSize--;
         }
-        return nullIndexList;
+        return nullIndexes;
     }
 
     @Override
@@ -176,25 +180,33 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
-            List<Integer> nullIndexList = null;
+            Set<Integer> nullIndexes = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 if (primitiveSize == null) {
                     throw new SerializationException("Data is encoded as constant size entries, but configured inner deserializer is not a known fixed-size deserializer.");
                 }
                 // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
-                nullIndexList = deserializeNullIndexList(dis, data.length);
+                nullIndexes = deserializeNullIndexList(dis, data.length);
             }
             final int size = readListSize(dis, data.length);
+            if (nullIndexes != null && size - nullIndexes.size() > dis.available() / primitiveSize) {
+                throw new SerializationException("Corrupted byte[]. The declared number of list entries cannot be larger than the number of entries the remaining bytes can hold.");
+            }
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
                 int entrySize = readEntrySize(dis, serStrategy, data.length);
 
-                if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
+                if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexes != null && nullIndexes.contains(i))) {
                     deserializedList.add(null);
                     continue;
                 }
                 byte[] payload = new byte[entrySize];
-                if (dis.read(payload) == -1) {
+                try {
+                    // Use readFully (not read) so a stream truncated mid-entry is detected: read(byte[]) may
+                    // return a partial count without reaching EOF, which would silently leave the tail of the
+                    // payload zero-filled and hand a corrupted entry to the inner deserializer.
+                    dis.readFully(payload);
+                } catch (EOFException e) {
                     log.error("Ran out of bytes in serialized list");
                     log.trace("Deserialized list so far: {}", deserializedList); // avoid logging actual data above TRACE level since it may contain sensitive information
                     throw new SerializationException("End of the stream was reached prematurely");

@@ -19,8 +19,9 @@ package kafka.server
 
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
+import kafka.server.metadata.DynamicConfigPublisher
 
 import scala.collection.immutable
 import kafka.utils.Logging
@@ -34,13 +35,12 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
-import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, MetadataPublisher}
-import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures, RaftClientVotersSupplier}
+import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaftMetadataCachePublisher, MetadataPublisher}
+import org.apache.kafka.metadata.{KRaftMetadataCache, KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
-import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -61,7 +61,7 @@ import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -101,7 +101,6 @@ class ControllerServer(
   @volatile var quorumControllerMetrics: QuorumControllerMetrics = _
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
@@ -143,8 +142,7 @@ class ControllerServer(
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
       if (linuxIoMetricsCollector.usable()) {
-        metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-        metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+        linuxIoMetricsCollector.registerMetrics(metricsGroup)
       }
 
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)
@@ -211,14 +209,14 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      // Wait for the controller quorum voters to be resolvable before starting the controller.
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
         QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
-        controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
+        new RaftClientVotersSupplier(raftManager.client))
 
       val delegationTokenManagerConfigs = new DelegationTokenManagerConfigs(config)
       val delegationTokenKeyString = {
@@ -236,8 +234,6 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
-        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
-
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.brokerSessionTimeoutMs)
 
         new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
@@ -251,7 +247,7 @@ class ControllerServer(
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
-          setMaxIdleIntervalNs(maxIdleIntervalNs).
+          setMaxIdleIntervalNs(config.metadataMaxIdleIntervalNs).
           setMetrics(quorumControllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.toJava).
           setAlterConfigPolicy(alterConfigPolicy.toJava).
@@ -268,7 +264,8 @@ class ControllerServer(
           setDelegationTokenExpiryCheckIntervalMs(delegationTokenManagerConfigs.delegationTokenExpiryCheckIntervalMs).
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
           setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
-          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs)
+          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs).
+          setControllerMaxRecordsPerBatch(config.controllerMaxRecordsPerBatch)
       }
       controller = controllerBuilder.build()
 
@@ -285,7 +282,6 @@ class ControllerServer(
         metrics,
         time,
         s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizerPlugin,
         quotaManagers,
@@ -351,7 +347,8 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager
+        quotaManagers.userClientQuotaUpdaters(),
+        (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala)
       ))
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.

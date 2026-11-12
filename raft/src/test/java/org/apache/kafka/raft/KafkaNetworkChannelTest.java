@@ -62,6 +62,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -151,10 +152,10 @@ public class KafkaNetworkChannelTest {
         client.prepareResponseFrom(response, destinationNode, false);
 
         ioThread.start();
-        RaftRequest.Outbound request = sendTestRequest(ApiKeys.FETCH, destinationNode);
-
+        var result = sendTestRequest(ApiKeys.FETCH, destinationNode);
         ioThread.join();
-        assertResponseCompleted(request, Errors.INVALID_REQUEST);
+
+        assertResponseCompleted(result.request(), result.stage(), Errors.INVALID_REQUEST);
     }
 
     @Test
@@ -234,27 +235,32 @@ public class KafkaNetworkChannelTest {
         }
     }
 
-    private RaftRequest.Outbound sendTestRequest(ApiKeys apiKey, Node destination) {
+    record SendRequestResult(RaftRequest.Outbound request, CompletionStage<RaftResponse.Inbound> stage) { }
+
+    private SendRequestResult sendTestRequest(ApiKeys apiKey, Node destination) {
         int correlationId = channel.newCorrelationId();
         long createdTimeMs = time.milliseconds();
         ApiMessage apiRequest = buildTestRequest(apiKey);
-        RaftRequest.Outbound request = new RaftRequest.Outbound(
+        var request = new RaftRequest.Outbound(
             correlationId,
             apiRequest,
             destination,
             createdTimeMs
         );
-        channel.send(request);
-        return request;
+        var stage = channel.send(request);
+        return new SendRequestResult(request, stage);
     }
 
     private void assertResponseCompleted(
         RaftRequest.Outbound request,
+        CompletionStage<RaftResponse.Inbound> stage,
         Errors expectedError
     ) throws ExecutionException, InterruptedException {
-        assertTrue(request.completion.isDone());
+        var future = stage.toCompletableFuture();
 
-        RaftResponse.Inbound response = request.completion.get();
+        assertTrue(future.isDone());
+
+        var response = future.get();
         assertEquals(request.destination(), response.source());
         assertEquals(request.correlationId(), response.correlationId());
         assertEquals(request.data().apiKey(), response.data().apiKey());
@@ -266,9 +272,9 @@ public class KafkaNetworkChannelTest {
         Node destination,
         Errors error
     ) throws ExecutionException, InterruptedException {
-        RaftRequest.Outbound request = sendTestRequest(apiKey, destination);
+        var result = sendTestRequest(apiKey, destination);
         channel.pollOnce();
-        assertResponseCompleted(request, error);
+        assertResponseCompleted(result.request(), result.stage(), error);
     }
 
     private ApiMessage buildTestRequest(ApiKeys key) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -29,6 +30,7 @@ import java.util.Optional;
 /**
  * State store context interface.
  */
+@InterfaceAudience.Public
 public interface StateStoreContext {
 
     /**

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -26,6 +28,7 @@ import java.util.Objects;
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
  */
+@InterfaceAudience.Public
 public class UserScramCredentialsDescription {
     private final String name;
     private final List<ScramCredentialInfo> credentialInfos;

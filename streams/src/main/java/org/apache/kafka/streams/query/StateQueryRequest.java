@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.util.Optional;
@@ -30,6 +31,7 @@ import java.util.Set;
  * @param <R> The type of the query result.
  */
 @Evolving
+@InterfaceAudience.Public
 public class StateQueryRequest<R> {
 
     private final String storeName;

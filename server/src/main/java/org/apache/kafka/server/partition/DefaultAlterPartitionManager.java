@@ -18,6 +18,7 @@
 package org.apache.kafka.server.partition;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
@@ -48,7 +49,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class DefaultAlterPartitionManager implements AlterPartitionManager {
     private static final Logger log = LoggerFactory.getLogger(DefaultAlterPartitionManager.class);
@@ -56,6 +56,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     private final Scheduler scheduler;
     private final int brokerId;
     private final Supplier<Long> brokerEpochSupplier;
+    private final Supplier<Short> requestHeaderVersionSupplier;
 
     // Used to allow only one pending ISR update per partition (visible for testing)
     final ConcurrentHashMap<TopicIdPartition, AlterPartitionItem> unsentIsrUpdates = new ConcurrentHashMap<>();
@@ -63,11 +64,12 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     // Used to allow only one in-flight request at a time
     private final AtomicBoolean inflightRequest = new AtomicBoolean(false);
 
-    public DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier) {
+    public DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier, Supplier<Short> requestHeaderVersionSupplier) {
         this.controllerChannelManager = controllerChannelManager;
         this.scheduler = scheduler;
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
+        this.requestHeaderVersionSupplier = requestHeaderVersionSupplier;
     }
 
     public static DefaultAlterPartitionManager create(AbstractKafkaConfig config,
@@ -76,7 +78,8 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                                                       Time time,
                                                       Metrics metrics,
                                                       String threadNamePrefix,
-                                                      Supplier<Long> brokerEpochSupplier) {
+                                                      Supplier<Long> brokerEpochSupplier,
+                                                      Supplier<Short> requestHeaderVersionSupplier) {
         NodeToControllerChannelManager channelManager = new NodeToControllerChannelManagerImpl(
                 controllerNodeProvider,
                 time,
@@ -87,7 +90,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 Long.MAX_VALUE
         );
 
-        return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier);
+        return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier, requestHeaderVersionSupplier);
     }
 
     @Override
@@ -198,28 +201,26 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 .setBrokerId(brokerId)
                 .setBrokerEpoch(brokerEpoch);
 
-        inflightAlterPartitionItems.stream()
-                .collect(Collectors.groupingBy(item -> item.topicIdPartition().topicId()))
-                .forEach((topicId, items) -> {
-                    AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData().setTopicId(topicId);
-                    message.topics().add(topicData);
-
-                    items.forEach(item -> {
-                        AlterPartitionRequestData.PartitionData partitionData =
-                                new AlterPartitionRequestData.PartitionData()
-                                        .setPartitionIndex(item.topicIdPartition().partitionId())
-                                        .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
-                                        .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
-                                        .setPartitionEpoch(item.leaderAndIsr().partitionEpoch());
-
-                        partitionData.setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value());
-
-                        topicData.partitions().add(partitionData);
+        Map<Uuid, AlterPartitionRequestData.TopicData> topicDataByTopicId = new HashMap<>();
+        for (AlterPartitionItem item : inflightAlterPartitionItems) {
+            AlterPartitionRequestData.TopicData topicData = topicDataByTopicId.computeIfAbsent(
+                    item.topicIdPartition().topicId(),
+                    topicId -> {
+                        AlterPartitionRequestData.TopicData newTopicData =
+                                new AlterPartitionRequestData.TopicData().setTopicId(topicId);
+                        message.topics().add(newTopicData);
+                        return newTopicData;
                     });
 
-                });
+            topicData.partitions().add(new AlterPartitionRequestData.PartitionData()
+                    .setPartitionIndex(item.topicIdPartition().partitionId())
+                    .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
+                    .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
+                    .setPartitionEpoch(item.leaderAndIsr().partitionEpoch())
+                    .setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value()));
+        }
 
-        return new AlterPartitionRequest.Builder(message);
+        return new AlterPartitionRequest.Builder(message, requestHeaderVersionSupplier.get());
     }
 
     private Errors handleAlterPartitionResponse(AlterPartitionResponse alterPartitionResponse,
@@ -229,8 +230,10 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
         Errors error = Errors.forCode(data.errorCode());
         switch (error) {
             case STALE_BROKER_EPOCH -> log.warn("Broker had a stale broker epoch ({}), retrying.", sentBrokerEpoch);
-            case CLUSTER_AUTHORIZATION_FAILED -> log.error("Broker is not authorized to send AlterPartition to controller",
-                    Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"));
+            case CLUSTER_AUTHORIZATION_FAILED -> {
+                String msg = "Broker is not authorized to send AlterPartition to controller";
+                log.error(msg, Errors.CLUSTER_AUTHORIZATION_FAILED.exception(msg));
+            }
             case NONE -> {
                 // Collect partition-level responses to pass to the callbacks
                 Map<TopicIdPartition, LeaderAndIsr> successResponses = new HashMap<>();

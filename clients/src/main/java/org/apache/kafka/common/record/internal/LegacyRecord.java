@@ -19,10 +19,10 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.common.utils.internals.Checksums;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -272,6 +272,7 @@ public final class LegacyRecord {
         return this.buffer;
     }
 
+    @Override
     public String toString() {
         if (magic() > 0)
             return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, %s=%d, key=%d bytes, value=%d bytes)",
@@ -293,6 +294,7 @@ public final class LegacyRecord {
                                  value() == null ? 0 : value().limit());
     }
 
+    @Override
     public boolean equals(Object other) {
         if (this == other)
             return true;
@@ -304,6 +306,7 @@ public final class LegacyRecord {
         return this.buffer.equals(record.buffer);
     }
 
+    @Override
     public int hashCode() {
         return buffer.hashCode();
     }
@@ -378,7 +381,7 @@ public final class LegacyRecord {
                               ByteBuffer value,
                               CompressionType compressionType,
                               TimestampType timestampType) {
-        try (DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer))) {
+        try (DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buffer))) {
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);

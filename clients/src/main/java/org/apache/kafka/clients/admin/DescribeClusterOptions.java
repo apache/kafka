@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#describeCluster()}.
  */
+@InterfaceAudience.Public
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
     private boolean includeAuthorizedOperations;

@@ -212,6 +212,9 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with three bad topics
         WorkerHandle worker = connect.addWorker(); // should have failed to start before returning
+        // The worker is expected to fail startup, so shorten the request timeout to avoid
+        // blocking for the default 10 seconds on every health check.
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());
@@ -222,6 +225,7 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with two bad topics remaining
         worker = connect.addWorker(); // should have failed to start before returning
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());
@@ -232,6 +236,7 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with one bad topic remaining
         worker = connect.addWorker(); // should have failed to start before returning
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());
@@ -242,6 +247,34 @@ public class InternalTopicsIntegrationTest {
         // Try to start one worker, now using all good internal topics
         connect.addWorker();
         connect.assertions().assertAtLeastNumWorkersAreUp(1, "Worker did not start in time.");
+    }
+
+    @Test
+    void testFailToStartWhenInternalTopicsAreMissingWithDisabledInternalTopicCreation() throws InterruptedException {
+        workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "non-existent-config");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "non-existent-offset");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "non-existent-status");
+        workerProps.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG, "false");
+        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+                .workerProps(workerProps)
+                .numWorkers(0)
+                .numBrokers(1)
+                .brokerProps(brokerProps)
+                .build();
+        connect.start();
+
+        var worker = connect.addWorker();
+
+        assertFalse(connect.anyWorkersHealthy());
+        var herderTask = worker.herderTask();
+        assertThrows(
+                ExecutionException.class,
+                () -> herderTask.get(1, TimeUnit.MINUTES)
+        );
+        connect.assertions().assertTopicsDoNotExist("non-existent-config", "non-existent-offset", "non-existent-status");
     }
 
     @Test

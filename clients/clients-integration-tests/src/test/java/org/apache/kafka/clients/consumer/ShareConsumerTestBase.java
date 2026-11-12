@@ -715,26 +715,40 @@ public abstract class ShareConsumerTestBase {
 
     protected void waitForAssignment(String groupId, List<TopicPartition> tps) {
         try {
-            waitForCondition(() -> {
-                    try (Admin admin = createAdminClient()) {
-                        Collection<ShareMemberDescription> members = admin.describeShareGroups(List.of(groupId),
-                            new DescribeShareGroupsOptions().includeAuthorizedOperations(true)
-                        ).describedGroups().get(groupId).get().members();
-                        Set<TopicPartition> assigned = new HashSet<>();
-                        members.forEach(desc -> {
-                            if (desc.assignment() != null) {
-                                assigned.addAll(desc.assignment().topicPartitions());
-                            }
-                        });
-                        return assigned.containsAll(tps);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                },
+            waitForCondition(() -> assignedPartitions(groupId).containsAll(tps),
                 DEFAULT_MAX_WAIT_MS,
                 1000L,
                 () -> "tps not assigned to members"
             );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    protected void waitForExactAssignment(String groupId, Set<TopicPartition> tps) {
+        try {
+            waitForCondition(() -> assignedPartitions(groupId).equals(tps),
+                DEFAULT_MAX_WAIT_MS,
+                1000L,
+                () -> "tps not assigned to members"
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Set<TopicPartition> assignedPartitions(String groupId) {
+        try (Admin admin = createAdminClient()) {
+            Collection<ShareMemberDescription> members = admin.describeShareGroups(List.of(groupId),
+                new DescribeShareGroupsOptions().includeAuthorizedOperations(true)
+            ).describedGroups().get(groupId).get().members();
+            Set<TopicPartition> assigned = new HashSet<>();
+            members.forEach(desc -> {
+                if (desc.assignment() != null) {
+                    assigned.addAll(desc.assignment().topicPartitions());
+                }
+            });
+            return assigned;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

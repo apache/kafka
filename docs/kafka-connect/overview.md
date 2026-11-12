@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Overview
+description: Scalable, reliable data integration between Kafka and external systems.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

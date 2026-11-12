@@ -259,6 +259,16 @@ public class OffsetMetadataManager {
         }
 
         /**
+         * Snapshot-aware overload of {@link #contains(String)}: returns {@code true} if the
+         * given group had any pending transactional offsets at {@code committedOffset}. Used
+         * by read operations that must only observe committed state (e.g. the topology
+         * cleanup cycle's eligibility scan).
+         */
+        private boolean contains(String groupId, long committedOffset) {
+            return openTransactionsByGroup.containsKey(groupId, committedOffset);
+        }
+
+        /**
          * Returns {@code true} if the given group has any pending transactional offsets for the given topic and partition.
          *
          * @param groupId   The group id.
@@ -492,7 +502,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Validates an TxnOffsetCommit request.
+     * Validates a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual request.
@@ -543,7 +553,7 @@ public class OffsetMetadataManager {
      * Validates an OffsetFetch request.
      *
      * @param request               The actual request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      */
     private void validateOffsetFetch(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -670,7 +680,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Handles an TxnOffsetCommit request.
+     * Handles a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The TxnOffsetCommit request.
@@ -879,9 +889,9 @@ public class OffsetMetadataManager {
      * Fetch offsets for a given Group.
      *
      * @param request               The OffsetFetchRequestGroup request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -963,9 +973,9 @@ public class OffsetMetadataManager {
      * Fetch all offsets for a given Group.
      *
      * @param request               The OffsetFetchRequestGroup request.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -1035,6 +1045,24 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Whether {@code groupId} currently has no committed offsets and no pending transactional
+     * offsets at the snapshot {@code committedOffset}. Used by the topology-description plugin
+     * cleanup cycle on the eligibility read side — the regular offset-expiration cycle is
+     * already running periodically and tombstoning expired offsets, so by the time this is
+     * called the group's {@code offsetsByGroup} entry is gone iff every committed offset has
+     * been expired and no transactional commits are in flight.
+     *
+     * <p>{@code committedOffset} is the snapshot point the runtime hands to the read operation
+     * that calls this method. Both lookups go through that snapshot — the runtime contract is
+     * that read operations only observe committed state, so a concurrent uncommitted offset
+     * commit or pending-transaction record must not flip the eligibility outcome on us.
+     */
+    public boolean groupHasNoOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) == null
+            && !openTransactions.contains(groupId, committedOffset);
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1059,6 +1087,7 @@ public class OffsetMetadataManager {
             return false;
         }
 
+        int numRecordsBefore = records.size();
         AtomicBoolean allOffsetsExpired = new AtomicBoolean(true);
         OffsetExpirationCondition condition = offsetExpirationCondition.get();
 
@@ -1066,8 +1095,8 @@ public class OffsetMetadataManager {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
-                        !hasPendingTransactionalOffsets(groupId, topic, partition)) {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+                        && !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
@@ -1078,7 +1107,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size() - numRecordsBefore);
 
         // We don't want to remove the group if there are ongoing transactions with undeleted offsets.
         return allOffsetsExpired.get() && !openTransactions.contains(groupId);
@@ -1169,7 +1198,7 @@ public class OffsetMetadataManager {
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
-                log.debug("Replaying offset commit with key {}, value {}", key, value);
+                log.debug("[GroupId {}] Replaying offset commit with key {}, value {}", groupId, key, value);
                 // If the offset is not part of a transaction, it is directly stored
                 // in the offsets store.
                 OffsetAndMetadata previousValue = offsets.put(
@@ -1182,7 +1211,7 @@ public class OffsetMetadataManager {
                     metrics.incrementNumOffsets();
                 }
             } else {
-                log.debug("Replaying transactional offset commit with producer id {}, key {}, value {}", producerId, key, value);
+                log.debug("[GroupId {}] Replaying transactional offset commit with producer id {}, key {}, value {}", groupId, producerId, key, value);
                 // Otherwise, the transaction offset is stored in the pending transactional
                 // offsets store. Pending offsets there are moved to the main store when
                 // the transaction is committed; or removed when the transaction is aborted.
@@ -1256,9 +1285,9 @@ public class OffsetMetadataManager {
                         // offset commits. Without preserving information of the commit record offset, compaction of the
                         // __consumer_offsets topic itself may result in the wrong offset commit being materialized.
                         if (existingOffsetAndMetadata == null || offsetAndMetadata.recordOffset > existingOffsetAndMetadata.recordOffset) {
-                            log.debug("Committed transactional offset commit {} for producer id {} in group {} " +
+                            log.debug("[GroupId {}] Committed transactional offset commit {} for producer id {} " +
                                 "with topic {} and partition {}.",
-                                offsetAndMetadata, producerId, groupId, topicName, partitionId);
+                                groupId, offsetAndMetadata, producerId, topicName, partitionId);
                             OffsetAndMetadata previousValue = offsets.put(
                                 groupId,
                                 topicName,
@@ -1269,9 +1298,9 @@ public class OffsetMetadataManager {
                                 metrics.incrementNumOffsets();
                             }
                         } else {
-                            log.info("Skipped the materialization of transactional offset commit {} for producer id {} in group {} with topic {}, " +
+                            log.info("[GroupId {}] Skipped the materialization of transactional offset commit {} for producer id {} with topic {}, " +
                                 "partition {} since its record offset {} is smaller than the record offset {} of the last committed offset.",
-                                offsetAndMetadata, producerId, groupId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
+                                groupId, offsetAndMetadata, producerId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
                         }
                     });
                 });

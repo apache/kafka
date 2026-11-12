@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -664,7 +665,7 @@ public class ReplicaVerificationTool {
                 metrics,
                 time,
                 "replica-fetcher",
-                new HashMap<String, String>() {{
+                new HashMap<>() {{
                         put("broker-id", sourceNode.idString());
                         put("fetcher-id", String.valueOf(fetcherId));
                     }},
@@ -688,8 +689,9 @@ public class ReplicaVerificationTool {
                 false,
                 new ApiVersions(),
                 logContext,
-                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                consumerConfig.getBoolean(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
+                MetadataRecoveryStrategy.forName(consumerConfig.getString(ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                BootstrapConfiguration.DISABLED,
+                consumerConfig.getBoolean(ConsumerConfig.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
             );
         }
 

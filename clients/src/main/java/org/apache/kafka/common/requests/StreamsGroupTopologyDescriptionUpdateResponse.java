@@ -35,6 +35,7 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_MEMBER_ID}
  * - {@link Errors#GROUP_ID_NOT_FOUND}
  * - {@link Errors#STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}
+ * - {@link Errors#STREAMS_INVALID_TOPOLOGY_EPOCH}
  */
 public class StreamsGroupTopologyDescriptionUpdateResponse extends AbstractResponse {
 

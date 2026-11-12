@@ -55,6 +55,10 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
         this.physicalStore = new RocksDBStore(name, parentDir, metricsRecorder, false);
     }
 
+    RocksDBStore physicalStore() {
+        return physicalStore;
+    }
+
     @Override
     protected LogicalKeyValueSegment createSegment(final long segmentId, final String segmentName) {
         if (segmentId < 0) {

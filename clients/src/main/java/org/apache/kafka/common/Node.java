@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
 /**
  * Information about a Kafka node
  */
+@InterfaceAudience.Public
 public class Node {
 
     private static final Node NO_NODE = new Node(-1, "", -1);
@@ -40,17 +44,16 @@ public class Node {
     }
 
     public Node(int id, String host, int port, String rack) {
-        this.id = id;
-        this.idString = Integer.toString(id);
-        this.host = host;
-        this.port = port;
-        this.rack = rack;
-        this.isFenced = false;
+        this(id, host, port, rack, false);
     }
 
     public Node(int id, String host, int port, String rack, boolean isFenced) {
+        this(id, host, port, rack, isFenced, Integer.toString(id));
+    }
+
+    protected Node(int id, String host, int port, String rack, boolean isFenced, String idString) {
         this.id = id;
-        this.idString = Integer.toString(id);
+        this.idString = idString;
         this.host = host;
         this.port = port;
         this.rack = rack;
@@ -79,7 +82,8 @@ public class Node {
 
     /**
      * String representation of the node id.
-     * Typically the integer id is used to serialize over the wire, the string representation is used as an identifier with NetworkClient code
+     * Typically, the integer id is used to serialize over the wire, the string representation is used as an
+     * identifier with NetworkClient code
      */
     public String idString() {
         return idString;
@@ -157,5 +161,4 @@ public class Node {
     public String toString() {
         return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + ")";
     }
-
 }

@@ -198,7 +198,7 @@ public class OffsetStorageWriter {
         }
 
         return backingStore.set(offsetsSerialized, (error, result) -> {
-            boolean isCurrent = handleFinishWrite(flushId, error, result);
+            boolean isCurrent = handleFinishWrite(flushId, error);
             if (isCurrent && callback != null) {
                 callback.onCompletion(error, result);
             }
@@ -227,7 +227,7 @@ public class OffsetStorageWriter {
      * Handle completion of a write. Returns true if this callback is for the current flush
      * operation, false if it's for an old operation that should now be ignored.
      */
-    private synchronized boolean handleFinishWrite(long flushId, Throwable error, Void result) {
+    private synchronized boolean handleFinishWrite(long flushId, Throwable error) {
         // Callbacks need to be handled carefully since the flush operation may have already timed
         // out and been cancelled.
         if (flushId != currentFlushId)

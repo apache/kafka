@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.DslStoreFormat;
 
 import java.util.Objects;
@@ -24,6 +25,7 @@ import java.util.Objects;
  * {@code DslKeyValueParams} is a wrapper class for all parameters that function
  * as inputs to {@link DslStoreSuppliers#keyValueStore(DslKeyValueParams)}.
  */
+@InterfaceAudience.Public
 public class DslKeyValueParams {
 
     private final String name;

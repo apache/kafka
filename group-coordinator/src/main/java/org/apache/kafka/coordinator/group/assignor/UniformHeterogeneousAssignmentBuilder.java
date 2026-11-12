@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -150,14 +151,14 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         // Number the members 0 to M - 1.
         this.memberIds = new ArrayList<>(groupSpec.memberIds());
-        this.memberIndices = new HashMap<>();
+        this.memberIndices = Utils.newHashMap(this.memberIds.size());
         for (int memberIndex = 0; memberIndex < this.memberIds.size(); memberIndex++) {
             memberIndices.put(memberIds.get(memberIndex), memberIndex);
         }
 
         this.topicSubscribers = new HashMap<>();
 
-        this.targetAssignment = new HashMap<>();
+        this.targetAssignment = Utils.newHashMap(this.memberIds.size());
         this.memberTargetAssignmentSizes = new int[this.memberIds.size()];
 
         // Build set of all subscribed topics and sets of subscribers per topic.
@@ -217,7 +218,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         };
 
         // Initialize partition owners for the target assignments.
-        this.targetAssignmentPartitionOwners = new HashMap<>((int) ((this.subscribedTopicIds.size() / 0.75f) + 1));
+        this.targetAssignmentPartitionOwners = Utils.newHashMap(this.subscribedTopicIds.size());
         for (Uuid topicId : this.subscribedTopicIds) {
             int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
             int[] partitionOwners = new int[numPartitions];
@@ -863,7 +864,7 @@ public class UniformHeterogeneousAssignmentBuilder {
                 int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
                 int numSubscribers = topicSubscribers.get(topicId).size();
                 int estimatedPartitionsPerSubscriber = (numPartitions + numSubscribers - 1) / numSubscribers;
-                return new HashSet<>((int) ((estimatedPartitionsPerSubscriber / 0.75f) + 1));
+                return Utils.newHashSet(estimatedPartitionsPerSubscriber);
             })
             .add(partition);
 

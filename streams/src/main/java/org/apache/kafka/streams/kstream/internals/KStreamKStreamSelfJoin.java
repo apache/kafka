@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
@@ -67,7 +66,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return Collections.singleton(new FactoryWrappingStoreBuilder<>(windowStoreFactory));
+        return Set.of(new FactoryWrappingStoreBuilder<>(windowStoreFactory));
     }
 
     @Override

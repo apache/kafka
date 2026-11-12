@@ -26,6 +26,8 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
+import org.apache.kafka.server.share.fetch.PartitionRotateStrategy;
+import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 import org.apache.kafka.server.share.session.ShareSession;
 
 import org.slf4j.Logger;
@@ -143,12 +145,6 @@ public class ShareSessionContext extends ShareFetchContext {
                     boolean mustRespond = cachedPart.maybeUpdateResponseData(respData, updateShareContextAndRemoveUnselected);
                     if (mustRespond) {
                         nextElement = element;
-                        if (updateShareContextAndRemoveUnselected && ShareFetchResponse.recordsSize(respData) > 0) {
-                            // Session.partitionMap is of type ImplicitLinkedHashCollection<> which tracks the order of insertion of elements.
-                            // Since, we are updating an element in this case, we need to perform a remove and then a mustAdd to maintain the correct order
-                            session.partitionMap().remove(cachedPart);
-                            session.partitionMap().mustAdd(cachedPart);
-                        }
                     } else {
                         if (updateShareContextAndRemoveUnselected) {
                             iterator.remove();
@@ -203,6 +199,7 @@ public class ShareSessionContext extends ShareFetchContext {
                         session.key(), expectedEpoch, sessionEpoch);
                 return ShareFetchResponse.of(Errors.INVALID_SHARE_SESSION_EPOCH, 0, new LinkedHashMap<>(), List.of(), 0);
             }
+            updatePartitionOrder(updates);
             // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
             Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
                     updates.entrySet().iterator(), true);
@@ -212,6 +209,42 @@ public class ShareSessionContext extends ShareFetchContext {
             log.debug("Subsequent share session context with session key {} returning {}", session.key(),
                     partitionsToLogString(updates.keySet()));
             return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
+        }
+    }
+
+    /**
+     * Re-orders the partitions of the session as per the records returned in the response. The subsequent
+     * fetch reads the partitions in the order of the session, hence the partitions which returned records
+     * are moved to the end so the partitions which did not return records are read first. Among the partitions
+     * which returned records, the partition read first takes the largest share of the records, hence they are
+     * appended in the order decided by the {@link PartitionRotateStrategy} so the first position rotates.
+     * <p>
+     * The updates are expected in the fetch order of the partitions.
+     *
+     * @param updates The response data for the partitions, in fetch order.
+     */
+    private void updatePartitionOrder(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
+        List<TopicIdPartition> servedPartitions = new ArrayList<>();
+        updates.forEach((topicIdPartition, partitionData) -> {
+            if (ShareFetchResponse.recordsSize(partitionData) > 0) {
+                servedPartitions.add(topicIdPartition);
+            }
+        });
+        if (servedPartitions.isEmpty()) {
+            return;
+        }
+        List<TopicIdPartition> rotatedPartitions = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN)
+            .rotate(servedPartitions);
+        synchronized (session) {
+            rotatedPartitions.forEach(topicIdPartition -> {
+                CachedSharePartition cachedPart = session.partitionMap().find(new CachedSharePartition(topicIdPartition));
+                if (cachedPart != null) {
+                    // Session.partitionMap is of type ImplicitLinkedHashCollection which tracks the order of
+                    // insertion of elements, hence a remove and a mustAdd moves the element to the end.
+                    session.partitionMap().remove(cachedPart);
+                    session.partitionMap().mustAdd(cachedPart);
+                }
+            });
         }
     }
 

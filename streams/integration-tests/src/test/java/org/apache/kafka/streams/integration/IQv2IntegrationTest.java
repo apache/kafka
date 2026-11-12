@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -83,11 +85,9 @@ import java.util.stream.Stream;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -136,7 +136,7 @@ public class IQv2IntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
+                assertTrue(recordMetadata.hasOffset());
                 INPUT_POSITION.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
@@ -145,12 +145,12 @@ public class IQv2IntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 0L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 0L),
+            INPUT_POSITION);
     }
 
     private void setup(final String groupProtocol, final TestInfo testInfo) {
@@ -258,17 +258,13 @@ public class IQv2IntegrationTest {
                     partitions
                 );
 
-            assertThat(result.getPartitionResults().keySet(), is(partitions));
+            assertEquals(partitions, result.getPartitionResults().keySet());
             for (final Integer partition : partitions) {
-                assertThat(result.getPartitionResults().get(partition).isFailure(), is(true));
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureReason(),
-                    is(FailureReason.NOT_ACTIVE)
-                );
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureMessage(),
-                    is("Query requires a running active task,"
-                        + " but partition was in state PARTITIONS_ASSIGNED and was active.")
+                assertTrue(result.getPartitionResults().get(partition).isFailure());
+                assertEquals(FailureReason.NOT_ACTIVE, result.getPartitionResults().get(partition).getFailureReason());
+                assertEquals(
+                    "Query requires a running active task, but partition was in state PARTITIONS_ASSIGNED and was active.",
+                    result.getPartitionResults().get(partition).getFailureMessage()
                 );
             }
         }
@@ -288,7 +284,7 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
     @ParameterizedTest(name = "{1}")
@@ -304,7 +300,7 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
     @ParameterizedTest(name = "{1}")
@@ -443,7 +439,7 @@ public class IQv2IntegrationTest {
 
         // Discard the basic streams and replace with test-specific topology
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         }
         final String safeTestName = safeUniqueTestName(testInfo);
         this.groupProtocol = groupProtocol;
@@ -456,9 +452,9 @@ public class IQv2IntegrationTest {
 
         final QueryResult<ValueAndTimestamp<Integer>> queryResult =
             result.getPartitionResults().get(partition);
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-        assertThat(queryResult.getFailureMessage(), matchesPattern(
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, queryResult.getFailureReason());
+        assertTrue(queryResult.getFailureMessage().matches(
             "This store (.*) doesn't know how to execute the given query (.*)."
                 + " Contact the store maintainer if you need support for a new query type."
         ));
@@ -476,8 +472,6 @@ public class IQv2IntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
-        config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);

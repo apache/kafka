@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.nio.ByteBuffer;
@@ -39,6 +40,7 @@ import java.util.Objects;
  *     </pre>
  * </p>
  */
+@InterfaceAudience.Public
 public class Struct {
 
     private final Schema schema;

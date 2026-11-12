@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 
 import java.util.function.Supplier;
@@ -32,6 +33,7 @@ import java.util.function.Supplier;
  * @param <VOut> the type of output values
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface FixedKeyProcessorSupplier<KIn, VIn, VOut>
     extends ConnectedStoreProvider, Supplier<FixedKeyProcessor<KIn, VIn, VOut>> {
 

@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: This section provides an overview of what Kafka is, why it is useful, and how to get started using it.
+description: Start here to learn Kafka fundamentals and common use cases, try a local setup, and find Docker, upgrade, and compatibility guidance.
 weight: 1
 tags: ['kafka', 'docs', 'getting-started']
 aliases: 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 
 /**
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
  * @see KTable#mapValues(ValueMapperWithKey)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueMapper<V, VR> {
 
     /**

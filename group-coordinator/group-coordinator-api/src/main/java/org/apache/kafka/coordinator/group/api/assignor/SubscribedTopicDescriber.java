@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
@@ -24,6 +26,7 @@ import java.util.Set;
  * The subscribed topic describer is used by the {@link PartitionAssignor}
  * to obtain topic and partition metadata of the subscribed topics.
  */
+@InterfaceAudience.Public
 public interface SubscribedTopicDescriber {
     /**
      * The number of partitions for the given topic Id.

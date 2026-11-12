@@ -1,6 +1,6 @@
 ---
 title: Implementation
-description: 
+description: Kafka implementation internals for data storage, records, networking, and offset tracking.
 weight: 5
 tags: ['kafka', 'docs', 'implementation']
 aliases: 

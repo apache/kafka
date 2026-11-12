@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -25,8 +26,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)}} call.
+ * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)} call.
  */
+@InterfaceAudience.Public
 public class DescribeClassicGroupsResult {
 
     private final Map<String, KafkaFuture<ClassicGroupDescription>> futures;

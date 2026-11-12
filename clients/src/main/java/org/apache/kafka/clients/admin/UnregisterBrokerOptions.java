@@ -17,8 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#unregisterBroker(int, UnregisterBrokerOptions)}.
  */
+@InterfaceAudience.Public
 public class UnregisterBrokerOptions extends AbstractOptions<UnregisterBrokerOptions> {
 }

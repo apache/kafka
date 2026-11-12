@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.util.Objects;
@@ -26,6 +27,7 @@ import java.util.Objects;
  * @param <V> Type of values
  */
 @Evolving
+@InterfaceAudience.Public
 public final class KeyQuery<K, V> implements Query<V> {
 
     private final K key;

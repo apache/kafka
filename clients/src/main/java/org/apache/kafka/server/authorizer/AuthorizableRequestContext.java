@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.authorizer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
@@ -26,6 +27,7 @@ import java.net.InetAddress;
  * Request context interface that provides data from request header as well as connection
  * and authentication information to plugins.
  */
+@InterfaceAudience.Public
 public interface AuthorizableRequestContext {
 
     /**

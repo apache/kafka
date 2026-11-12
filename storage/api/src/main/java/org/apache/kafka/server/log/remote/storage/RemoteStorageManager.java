@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
@@ -37,8 +38,10 @@ import java.util.Optional;
  * This allows {@link RemoteStorageManager} to have eventual consistency on metadata (although the data is stored
  * in strongly consistent semantics).
  * <p>
- * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
+ * "node.id" and all properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
  * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
+ * "broker.id" is also passed with the same value as "node.id", but it is deprecated since 4.4 and will not be passed
+ * from Apache Kafka 5.0 onwards. Implementations should read "node.id" instead.
  *
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
@@ -49,6 +52,7 @@ import java.util.Optional;
  * {@link RemoteStorageException} should be thrown. This distinction allows RemoteLogManager to
  * handle retries gracefully and report metrics accurately.
  */
+@InterfaceAudience.Public
 public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**

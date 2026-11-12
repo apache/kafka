@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 import java.io.Closeable;
@@ -30,6 +31,7 @@ import java.time.Instant;
  *
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface WindowStoreIterator<V> extends KeyValueIterator<Long, V>, Closeable {
 
     @Override

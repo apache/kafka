@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -71,6 +72,7 @@ import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
  * @see TimestampExtractor
  */
 
+@InterfaceAudience.Public
 public final class SlidingWindows {
 
     /** The size of the windows in milliseconds, defined by the max time difference between records. */

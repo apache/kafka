@@ -30,6 +30,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -44,16 +45,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RepartitionWithMergeOptimizingTest {
@@ -74,10 +71,8 @@ public class RepartitionWithMergeOptimizingTest {
     private Properties streamsConfiguration;
     private TopologyTestDriver topologyTestDriver;
 
-    private final List<KeyValue<String, Long>> expectedCountKeyValues =
-        Arrays.asList(KeyValue.pair("A", 6L), KeyValue.pair("B", 6L), KeyValue.pair("C", 6L));
-    private final List<KeyValue<String, String>> expectedStringCountKeyValues =
-        Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
+    private final Map<String, Long> expectedCountKeyValues = Map.of("A", 6L, "B", 6L, "C", 6L);
+    private final Map<String, String> expectedStringCountKeyValues = Map.of("A", "6", "B", "6", "C", "6");
 
     @BeforeEach
     public void setUp() {
@@ -136,7 +131,7 @@ public class RepartitionWithMergeOptimizingTest {
 
         final Topology topology = builder.build(streamsConfiguration);
 
-        topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
+        topologyTestDriver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfiguration).build();
 
         final TestInputTopic<String, String> inputTopicA = topologyTestDriver.createInputTopic(INPUT_A_TOPIC, stringSerializer, stringSerializer);
         final TestInputTopic<String, String> inputTopicB = topologyTestDriver.createInputTopic(INPUT_B_TOPIC, stringSerializer, stringSerializer);
@@ -160,16 +155,8 @@ public class RepartitionWithMergeOptimizingTest {
         assertEquals(expectedNumberRepartitionTopics, getCountOfRepartitionTopicsFound(topologyString));
 
         // Verify the expected output
-        assertThat(countOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedCountKeyValues)));
-        assertThat(stringCountOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedStringCountKeyValues)));
-    }
-
-    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
-        final Map<K, V> map = new HashMap<>();
-        for (final KeyValue<K, V> pair : keyValuePairs) {
-            map.put(pair.key, pair.value);
-        }
-        return map;
+        assertEquals(expectedCountKeyValues, countOutputTopic.readKeyValuesToMap());
+        assertEquals(expectedStringCountKeyValues, stringCountOutputTopic.readKeyValuesToMap());
     }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {

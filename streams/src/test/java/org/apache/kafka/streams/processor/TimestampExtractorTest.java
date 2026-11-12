@@ -22,8 +22,7 @@ import org.apache.kafka.common.record.TimestampType;
 
 import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TimestampExtractorTest {
 
@@ -46,7 +45,7 @@ class TimestampExtractorTest {
             0
         );
 
-        assertThat(timestamp, is(metadataTimestamp));
+        assertEquals(metadataTimestamp, timestamp);
     }
 
 }
