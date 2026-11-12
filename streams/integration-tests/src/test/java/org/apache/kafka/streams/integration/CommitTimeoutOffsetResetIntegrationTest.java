@@ -191,6 +191,9 @@ public class CommitTimeoutOffsetResetIntegrationTest {
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        // the rebalance enforced by the corruption has to complete within one poll, before the thread initializes the
+        // revived task; the default poll.ms of 100 ms can be shorter than a rebalance on a slow machine
+        props.put(StreamsConfig.POLL_MS_CONFIG, 1_000L);
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0L);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // a commit that outlives max.block.ms is what TaskExecutor turns into a TaskCorruptedException; it stays below
