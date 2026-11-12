@@ -267,7 +267,7 @@ public class StreamsGroup implements Group {
 
     /**
      * Counts the changes to the inputs of the {@link AssignmentRefiner}: the members, the target assignment, the
-     * configured topology, the members' task offsets and their heartbeat versions.
+     * configured topology, the members' task offsets as far as the refiner reads them, and their heartbeat versions.
      * <p>
      * It is a plain field rather than a timeline container, so a failed write does not take it back. The write's
      * changes moved it, and the rollback restores an intermediate assignment cached before them, which then no longer
@@ -633,12 +633,17 @@ public class StreamsGroup implements Group {
     /**
      * Updates the latest per-task changelog offsets reported by a member. These are transient and not persisted.
      *
-     * @param memberId        The member ID.
-     * @param memberOffsets   The reported task offsets and end-offsets.
+     * @param memberId           The member ID.
+     * @param memberOffsets      The reported task offsets and end-offsets.
+     * @param affectsRefinement  Whether the {@link AssignmentRefiner} can derive a different intermediate assignment
+     *                           from them than from the member's previous ones, see
+     *                           {@link AssignmentRefiner#isAffectedByTaskOffsetsChange}.
      */
-    public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
+    public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets, boolean affectsRefinement) {
         taskOffsets.put(memberId, memberOffsets);
-        refinerInputsVersion++;
+        if (affectsRefinement) {
+            refinerInputsVersion++;
+        }
     }
 
     /**

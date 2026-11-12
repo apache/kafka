@@ -11838,7 +11838,7 @@ public class GroupMetadataManagerTest {
         group.updateTaskOffsets(memberId1, new MemberTaskOffsets(
             Map.of(subtopology1, Map.of(0, 100L)),
             Map.of(subtopology1, Map.of(0, 500L))
-        ));
+        ), true);
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
         assertEquals(1, described.size());
@@ -20006,6 +20006,36 @@ public class GroupMetadataManagerTest {
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
         assertEquals(3, refiner.numRefinements());
+    }
+
+    @Test
+    public void testStreamsGroupDoesNotRefineASettledGroupAgainForTaskOffsetsTheRefinerIgnores() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        refiner.ignoreTaskOffsets();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId, refiner, topic, Map.of(memberId, List.of(0, 1, 2)), Map.of(memberId, DEFAULT_PROCESS_ID));
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+        assertEquals(1, refiner.numRefinements());
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2))
+                .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId("subtopology1")
+                    .setPartition(0)
+                    .setOffset(42L))));
+
+        // The refiner derives the same intermediate assignment whatever is reported, so the cached one is used again,
+        // while the offsets are still stored for the next derivation.
+        assertEquals(1, refiner.numRefinements());
+        assertEquals(
+            Map.of("subtopology1", Map.of(0, 42L)),
+            context.groupMetadataManager.streamsGroup(groupId).taskOffsets(memberId).taskOffsets());
     }
 
     @Test

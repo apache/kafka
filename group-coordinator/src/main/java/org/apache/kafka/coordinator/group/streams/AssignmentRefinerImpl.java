@@ -92,6 +92,46 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
+     * The refiner reads a member's task offsets only through three facts about each task: whether an offset is reported
+     * ({@link #isRestoring}), whether the restore has started ({@link #hasRestoredSomething}) and whether the task is
+     * caught up ({@link #isCaughtUp}). All three are false for a task that a report gives no offset for, so only the
+     * tasks with an offset in either report are compared.
+     */
+    @Override
+    public boolean isAffectedByTaskOffsetsChange(
+        final MemberTaskOffsets previous,
+        final MemberTaskOffsets current,
+        final long acceptableRecoveryLag
+    ) {
+        return changesAnyReportedTask(previous, current, current.taskOffsets(), acceptableRecoveryLag)
+            || changesAnyReportedTask(previous, current, previous.taskOffsets(), acceptableRecoveryLag);
+    }
+
+    /**
+     * Whether the two reports differ, for any of the given tasks, in whether it is restoring, has started restoring or
+     * is caught up.
+     */
+    private static boolean changesAnyReportedTask(
+        final MemberTaskOffsets previous,
+        final MemberTaskOffsets current,
+        final Map<String, Map<Integer, Long>> tasks,
+        final long acceptableRecoveryLag
+    ) {
+        for (final Map.Entry<String, Map<Integer, Long>> partitions : tasks.entrySet()) {
+            for (final Integer partition : partitions.getValue().keySet()) {
+                final TaskId task = new TaskId(partitions.getKey(), partition);
+                if (isRestoring(previous, task) != isRestoring(current, task)
+                    || hasRestoredSomething(previous, task) != hasRestoredSomething(current, task)
+                    || isCaughtUp(previous, task, acceptableRecoveryLag)
+                        != isCaughtUp(current, task, acceptableRecoveryLag)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * The stateful tasks that the target assignment hands to a member as an active task while that member does not
      * hold them as an active task yet, keyed by subtopology ID and then partition, with the member the target
      * assignment names for each. A member the group no longer has holds nothing. These are the only tasks the

@@ -37,9 +37,17 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
     private SortedMap<String, ConfiguredSubtopology> lastPassedSubtopologies = null;
     private int lastPassedNumWarmupReplicas = -1;
     private long lastPassedAcceptableRecoveryLag = -1L;
+    private boolean readsTaskOffsets = true;
 
     public void prepareRefinedAssignment(Map<String, TasksTuple> refinedAssignment) {
         this.preparedRefinedAssignment = refinedAssignment;
+    }
+
+    /**
+     * Makes the refiner declare that it derives the same intermediate assignment whatever task offsets are reported.
+     */
+    public void ignoreTaskOffsets() {
+        this.readsTaskOffsets = false;
     }
 
     public int numRefinements() {
@@ -93,5 +101,15 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         lastPassedNumWarmupReplicas = numWarmupReplicas;
         lastPassedAcceptableRecoveryLag = acceptableRecoveryLag;
         return preparedRefinedAssignment == null ? targetAssignment : preparedRefinedAssignment;
+    }
+
+    @Override
+    public boolean isAffectedByTaskOffsetsChange(
+        MemberTaskOffsets previous,
+        MemberTaskOffsets current,
+        long acceptableRecoveryLag
+    ) {
+        return readsTaskOffsets
+            && AssignmentRefiner.super.isAffectedByTaskOffsetsChange(previous, current, acceptableRecoveryLag);
     }
 }

@@ -269,6 +269,61 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // isAffectedByTaskOffsetsChange
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldNotCountOffsetsThatMoveWithoutCrossingTheAcceptableRecoveryLag() {
+        final AssignmentRefinerImpl refiner = new AssignmentRefinerImpl();
+
+        assertFalse(refiner.isAffectedByTaskOffsetsChange(
+            offsets(1000L, 1500L), offsets(1100L, 1700L), ACCEPTABLE_RECOVERY_LAG));
+        assertFalse(refiner.isAffectedByTaskOffsetsChange(
+            offsets(1000L, 1050L), offsets(1100L, 1150L), ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldNotCountEndOffsetsOfATaskWithoutAnOffset() {
+        assertFalse(new AssignmentRefinerImpl().isAffectedByTaskOffsetsChange(
+            new MemberTaskOffsets(Map.of(), Map.of(STATEFUL, Map.of(0, 1000L))),
+            new MemberTaskOffsets(Map.of(), Map.of(STATEFUL, Map.of(0, 2000L))),
+            ACCEPTABLE_RECOVERY_LAG
+        ));
+    }
+
+    @Test
+    public void shouldCountATaskCatchingUpOrFallingBehind() {
+        final AssignmentRefinerImpl refiner = new AssignmentRefinerImpl();
+
+        assertTrue(refiner.isAffectedByTaskOffsetsChange(
+            offsets(1000L, 1500L), offsets(1450L, 1500L), ACCEPTABLE_RECOVERY_LAG));
+        assertTrue(refiner.isAffectedByTaskOffsetsChange(
+            offsets(1000L, 1050L), offsets(1000L, 1500L), ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldCountATaskStartingToRestore() {
+        assertTrue(new AssignmentRefinerImpl().isAffectedByTaskOffsetsChange(
+            offsets(Long.MAX_VALUE, 1500L), offsets(10L, 1500L), ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldCountATaskReportedForTheFirstOrTheLastTime() {
+        final AssignmentRefinerImpl refiner = new AssignmentRefinerImpl();
+
+        assertTrue(refiner.isAffectedByTaskOffsetsChange(
+            MemberTaskOffsets.EMPTY, offsets(1000L, 1500L), ACCEPTABLE_RECOVERY_LAG));
+        assertTrue(refiner.isAffectedByTaskOffsetsChange(
+            offsets(1000L, 1500L), MemberTaskOffsets.EMPTY, ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldNotCountAnyReportForTheNoOpRefiner() {
+        assertFalse(new NoOpAssignmentRefiner().isAffectedByTaskOffsetsChange(
+            MemberTaskOffsets.EMPTY, offsets(1000L, 1500L), ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // misplacedTasks
     // ---------------------------------------------------------------------------------------------------------------
 

@@ -40,4 +40,14 @@ public class NoOpAssignmentRefiner implements AssignmentRefiner {
     ) {
         return targetAssignment;
     }
+
+    @Override
+    public boolean isAffectedByTaskOffsetsChange(
+        MemberTaskOffsets previous,
+        MemberTaskOffsets current,
+        long acceptableRecoveryLag
+    ) {
+        // The target assignment is handed back whatever the members report.
+        return false;
+    }
 }

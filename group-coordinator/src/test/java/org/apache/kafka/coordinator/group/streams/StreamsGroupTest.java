@@ -125,7 +125,7 @@ public class StreamsGroupTest {
             Map.of("sub-1", Map.of(0, 10L)),
             Map.of("sub-1", Map.of(0, 20L))
         );
-        streamsGroup.updateTaskOffsets("member-id", offsets);
+        streamsGroup.updateTaskOffsets("member-id", offsets, true);
 
         assertEquals(offsets, streamsGroup.taskOffsets("member-id"));
         assertEquals(Map.of("member-id", offsets), streamsGroup.taskOffsets());
@@ -135,7 +135,7 @@ public class StreamsGroupTest {
             Map.of("sub-1", Map.of(0, 15L)),
             Map.of("sub-1", Map.of(0, 25L))
         );
-        streamsGroup.updateTaskOffsets("member-id", newerOffsets);
+        streamsGroup.updateTaskOffsets("member-id", newerOffsets, true);
         assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
     }
 
@@ -297,7 +297,9 @@ public class StreamsGroupTest {
             Arguments.of("topology configured", (Consumer<StreamsGroup>) group -> group.setConfiguredTopology(
                 new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()))),
             Arguments.of("task offsets reported", (Consumer<StreamsGroup>) group -> group.updateTaskOffsets(
-                "member-id", new MemberTaskOffsets(Map.of("sub-1", Map.of(0, 10L)), Map.of("sub-1", Map.of(0, 20L))))),
+                "member-id",
+                new MemberTaskOffsets(Map.of("sub-1", Map.of(0, 10L)), Map.of("sub-1", Map.of(0, 20L))),
+                true)),
             Arguments.of("heartbeat version changed", (Consumer<StreamsGroup>) group ->
                 group.updateHeartbeatVersion("member-id", 2))
         );
@@ -322,6 +324,26 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testRefinedAssignmentIsReusedAfterTaskOffsetsThatDoNotAffectRefinement() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        Map<String, TasksTuple> refinedAssignment = Map.of("member-id", TasksTuple.EMPTY);
+        streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), refinedAssignment);
+
+        MemberTaskOffsets offsets = new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
+        );
+        streamsGroup.updateTaskOffsets("member-id", offsets, false);
+
+        // The offsets are stored for the next derivation, but the refiner would derive the same assignment from them.
+        assertEquals(offsets, streamsGroup.taskOffsets("member-id"));
+        assertEquals(
+            refinedAssignment,
+            streamsGroup.refinedAssignmentIfInputsUnchanged(5, streamsGroup.refinerInputs(2, 10_000L))
+        );
+    }
+
+    @Test
     public void testRefinedAssignmentRestoredByARollbackIsNotReusedForInputsThatStayed() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
         StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
@@ -333,7 +355,7 @@ public class StreamsGroupTest {
         streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
             Map.of("sub-1", Map.of(0, 10L)),
             Map.of("sub-1", Map.of(0, 20L))
-        ));
+        ), true);
         streamsGroup.setRefinedAssignment(5, streamsGroup.refinerInputs(2, 10_000L), Map.of(
             "member-id", new TasksTuple(Map.of(), Map.of(), Map.of("sub-1", Set.of(0)))
         ));
@@ -351,7 +373,7 @@ public class StreamsGroupTest {
         streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
             Map.of("sub-1", Map.of(0, 10L)),
             Map.of("sub-1", Map.of(0, 20L))
-        ));
+        ), true);
 
         streamsGroup.removeMember("member-id");
 
@@ -1443,7 +1465,7 @@ public class StreamsGroupTest {
         group.updateTaskOffsets("member1", new MemberTaskOffsets(
             Map.of("sub-1", Map.of(0, 5L)),
             Map.of("sub-1", Map.of(0, 9L))
-        ));
+        ), true);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");

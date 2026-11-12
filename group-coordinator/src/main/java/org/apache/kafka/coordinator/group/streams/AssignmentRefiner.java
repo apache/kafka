@@ -100,6 +100,34 @@ public interface AssignmentRefiner {
         long acceptableRecoveryLag
     );
 
+    /**
+     * Whether {@link #refine} can derive a different intermediate assignment from a member's new task offsets than
+     * from its previous ones, all other inputs being equal. A stable group reuses its intermediate assignment until an
+     * input of the refiner changes, and a report counts as a change only if this returns {@code true}. By default every
+     * change counts.
+     * <p>
+     * The answer must depend only on what the refiner reads from each of the two reports, so that a run of reports
+     * that each count as no change leaves the refiner reading what it read from the first. Answering {@code false} for
+     * a change that matters keeps the group on an outdated intermediate assignment until another input changes, for
+     * example a caught-up warm-up task that is not promoted.
+     *
+     * @param previous
+     *        The member's task offsets before the report, {@link MemberTaskOffsets#EMPTY} if it reported none.
+     * @param current
+     *        The member's task offsets after the report.
+     * @param acceptableRecoveryLag
+     *        The lag at or below which a warm-up task is considered caught up.
+     *
+     * @return Whether the report can change the intermediate assignment.
+     */
+    default boolean isAffectedByTaskOffsetsChange(
+        MemberTaskOffsets previous,
+        MemberTaskOffsets current,
+        long acceptableRecoveryLag
+    ) {
+        return !previous.equals(current);
+    }
+
     static boolean preservesActiveTaskCount(
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment

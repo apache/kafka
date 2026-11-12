@@ -157,6 +157,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
@@ -2261,8 +2262,19 @@ public class GroupMetadataManager {
         // This must run after the task validation above: it mutates a non-timeline map that the coordinator runtime
         // does not roll back, so updating it before validation could leave an orphaned entry for a member whose
         // (joining) heartbeat is then rejected.
+        // A report moves the group's refiner inputs only if the refiner can derive something else from it.
         if (taskOffsets != null || taskEndOffsets != null) {
-            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
+            final MemberTaskOffsets previousTaskOffsets = group.taskOffsets(memberId);
+            final MemberTaskOffsets updatedTaskOffsets = previousTaskOffsets.update(taskOffsets, taskEndOffsets);
+            group.updateTaskOffsets(
+                memberId,
+                updatedTaskOffsets,
+                streamsGroupAssignmentRefiner.isAffectedByTaskOffsetsChange(
+                    previousTaskOffsets,
+                    updatedTaskOffsets,
+                    streamsGroupAcceptableRecoveryLag(groupId)
+                )
+            );
         }
         group.updateHeartbeatVersion(memberId, requestApiVersion);
 
