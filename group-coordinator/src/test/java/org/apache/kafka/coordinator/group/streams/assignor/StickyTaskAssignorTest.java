@@ -1701,6 +1701,24 @@ public class StickyTaskAssignorTest {
         }
     }
 
+    @Test
+    public void shouldBreakProcessLoadTiesByProcessId() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1")),
+            mkEntry("member2", createMemberMetadata("process2")),
+            mkEntry("member3", createMemberMetadata("process3")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(2, false, List.of("test-subtopology"))
+        );
+
+        // All processes start equally loaded, so the tasks go to the smallest process ids.
+        assertEquals(mkMap(mkEntry("test-subtopology", Set.of(0))), getAllActiveTasks(result, "member1"));
+        assertEquals(mkMap(mkEntry("test-subtopology", Set.of(1))), getAllActiveTasks(result, "member2"));
+        assertEquals(Map.of(), getAllActiveTasks(result, "member3"));
+    }
+
     private int activeTaskCount(GroupAssignment result, String memberId, String subtopologyId) {
         return getAllActiveTasks(result, memberId).getOrDefault(subtopologyId, Set.of()).size();
     }
