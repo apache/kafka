@@ -2532,16 +2532,15 @@ public class GroupMetadataManager {
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
         if (topology != null) {
-            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
                 StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-                return streamsTopologyFromRequest;
+                return StreamsTopology.fromRecord(recordValue);
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
-            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+            } else if (!group.topology().get().matches(topology)) {
                 if (group.topology().get().topologyEpoch() == topology.epoch()) {
                     throw new StreamsInvalidTopologyEpochException(String.format(
                         "The topology sent by the member differs from the group's topology with the same epoch %d. " +
@@ -3144,8 +3143,8 @@ public class GroupMetadataManager {
 
         String groupId = group.groupId();
 
-        if (!shareGroupStatePartitionMetadata.containsKey(groupId) ||
-            shareGroupStatePartitionMetadata.get(groupId).initializedTopics().isEmpty()) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        if (info == null || info.initializedTopics().isEmpty()) {
             // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
@@ -3164,7 +3163,7 @@ public class GroupMetadataManager {
             }
         }
 
-        for (Map.Entry<Uuid, InitMapValue> entry : shareGroupStatePartitionMetadata.get(groupId).initializedTopics().entrySet()) {
+        for (Map.Entry<Uuid, InitMapValue> entry : info.initializedTopics().entrySet()) {
             if (subscribedTopicNames.contains(entry.getValue().name())) {
                 // This topic is currently subscribed, so investigate further.
                 Set<Integer> currentAssignedPartitions = currentAssigned.get(entry.getKey());
@@ -3213,7 +3212,8 @@ public class GroupMetadataManager {
         // topics whose timestamp indicates that they are older than delta elapsed.
         subscriptionTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(topicMetadata -> {
-                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
+                InitMapValue alreadyInitializedValue = alreadyInitialized.get(topicMetadata.id());
+                Set<Integer> alreadyInitializedPartSet = alreadyInitializedValue != null ? alreadyInitializedValue.partitions() : Set.of();
                 if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.partitionCount()) {
                     // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
@@ -3265,8 +3265,8 @@ public class GroupMetadataManager {
         // applies. This is read before the records above are replayed, so a brand-new topic is
         // correctly absent here.
         Set<Uuid> alreadyKnownTopics = null;
-        if (shareGroupStatePartitionMetadata.containsKey(groupId)) {
-            ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        if (info != null) {
             alreadyKnownTopics = new HashSet<>();
             alreadyKnownTopics.addAll(info.initializedTopics().keySet());
             alreadyKnownTopics.addAll(info.initializingTopics().keySet());
@@ -4474,10 +4474,6 @@ public class GroupMetadataManager {
         }
 
         try {
-            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupStatePartitionMetadata.containsKey(group.groupId()) ?
-                stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
-                Map.of();
-
             UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
@@ -4487,13 +4483,18 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
+                group.groupId(),
+                ShareGroupStatePartitionMetadataInfo.EMPTY
+            );
+
             long startTimeMs = time.milliseconds();
             GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                 .withMetadataImage(metadataImage)
+                .withShareGroupStatePartitionMetadata(statePartitionMetadata)
                 .build();
 
             TargetAssignmentBuilder assignmentResultBuilder =
@@ -5900,7 +5901,8 @@ public class GroupMetadataManager {
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
      * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response. The result
+     *         is empty if the group does not exist or is not a share group.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
@@ -5910,7 +5912,13 @@ public class GroupMetadataManager {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
-        ShareGroup group = (ShareGroup) groups.get(groupId);
+        ShareGroup group;
+        try {
+            group = shareGroup(groupId);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
+            return new CoordinatorResult<>(List.of(), null);
+        }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
@@ -5929,10 +5937,11 @@ public class GroupMetadataManager {
         Map<Uuid, InitMapValue> finalInitializingMap = new HashMap<>();
         for (Map.Entry<Uuid, InitMapValue> entry : currentMap.initializingTopics().entrySet()) {
             Uuid topicId = entry.getKey();
-            if (!topicPartitionMap.containsKey(topicId)) {
+            Set<Integer> initializedPartitions = topicPartitionMap.get(topicId);
+            if (initializedPartitions == null) {
                 finalInitializingMap.put(topicId, entry.getValue());
             } else {
-                InitMapValue remaining = entry.getValue().withRemovedPartitions(topicPartitionMap.get(topicId));
+                InitMapValue remaining = entry.getValue().withRemovedPartitions(initializedPartitions);
                 if (!remaining.partitions().isEmpty()) {
                     finalInitializingMap.put(topicId, remaining);
                 }
@@ -5973,10 +5982,11 @@ public class GroupMetadataManager {
         for (Map.Entry<Uuid, InitMapValue> entry : initializingTopics.entrySet()) {
             Uuid topicId = entry.getKey();
             // If topicId to clean is not present in topicPartitionMap map, retain it.
-            if (!topicPartitionMap.containsKey(topicId)) {
+            Set<Integer> partitionsToClean = topicPartitionMap.get(topicId);
+            if (partitionsToClean == null) {
                 finalInitializingTopics.put(entry.getKey(), entry.getValue());
             } else {
-                InitMapValue remaining = entry.getValue().withRemovedPartitions(topicPartitionMap.get(topicId));
+                InitMapValue remaining = entry.getValue().withRemovedPartitions(partitionsToClean);
                 if (!remaining.partitions().isEmpty()) {
                     finalInitializingTopics.put(entry.getKey(), remaining);
                 }
@@ -8770,10 +8780,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a classic group HeartbeatRequest to a consumer group. A response with
-     * REBALANCE_IN_PROGRESS is returned if 1) the member epoch is smaller than the
-     * group epoch, 2) the member is in UNREVOKED_PARTITIONS, or 3) the member is in
-     * UNRELEASED_PARTITIONS and all its partitions pending assignment are free.
+     * Handle a classic group HeartbeatRequest to a consumer group. The target
+     * assignment is updated first if the target assignment lags behind the group
+     * epoch. A response with REBALANCE_IN_PROGRESS is returned if 1) the member
+     * epoch is smaller than the target assignment epoch, 2) the member is in
+     * UNREVOKED_PARTITIONS, or 3) the member is in UNRELEASED_PARTITIONS and all
+     * its partitions pending assignment are free.
      *
      * @param group          The ConsumerGroup.
      * @param context        The request context.
@@ -8789,6 +8801,7 @@ public class GroupMetadataManager {
         String groupId = request.groupId();
         String memberId = request.memberId();
         String instanceId = request.groupInstanceId();
+        List<CoordinatorRecord> records = new ArrayList<>();
         ConsumerGroupMember member = validateConsumerGroupMember(group, memberId, instanceId);
 
         throwIfMemberDoesNotUseClassicProtocol(member);
@@ -8796,12 +8809,40 @@ public class GroupMetadataManager {
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
 
+        int groupEpoch = group.groupEpoch();
+        SubscriptionType subscriptionType = group.subscriptionType();
+
+        if (group.hasMetadataExpired(time.milliseconds())) {
+            // The subscription metadata is updated when the refresh deadline has been reached.
+            UpdateSubscriptionMetadataResult result = updateSubscriptionMetadata(
+                group,
+                false,
+                member,
+                member,
+                records
+            );
+
+            groupEpoch = result.groupEpoch;
+            subscriptionType = result.subscriptionType;
+        }
+
+        // Update the target assignment if the group epoch is larger than the target assignment epoch.
+        // The delta between the existing and the new target assignment is persisted to the partition.
+        UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
+            group,
+            groupEpoch,
+            member,
+            member,
+            subscriptionType,
+            records
+        );
+
         Errors error = Errors.NONE;
         // The member should rejoin if any of the following conditions is met.
         // 1) The target assignment epoch is bumped so the member needs to rejoin to catch up.
         // 2) The member needs to revoke some partitions and rejoin to reconcile with the new epoch.
         // 3) The member's partitions pending assignment are free, so it can rejoin to get the complete assignment.
-        if (member.memberEpoch() < group.assignmentEpoch() ||
+        if (member.memberEpoch() < updateTargetAssignmentResult.targetAssignmentEpoch() ||
             member.state() == MemberState.UNREVOKED_PARTITIONS ||
             (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.waitingOnUnreleasedPartition(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;
@@ -8809,7 +8850,7 @@ public class GroupMetadataManager {
         }
 
         return new CoordinatorResult<>(
-            List.of(),
+            records,
             new HeartbeatResponseData().setErrorCode(error.code())
         );
     }
@@ -9394,13 +9435,14 @@ public class GroupMetadataManager {
      * @return Optional of object representing the share group state delete request.
      */
     public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(String shareGroupId, List<CoordinatorRecord> records) {
-        if (!shareGroupStatePartitionMetadata.containsKey(shareGroupId)) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(shareGroupId);
+        if (info == null) {
             return Optional.empty();
         }
 
         Map<Uuid, InitMapValue> deleteCandidates = combineInitMaps(
-            shareGroupStatePartitionMetadata.get(shareGroupId).initializedTopics(),
-            shareGroupStatePartitionMetadata.get(shareGroupId).initializingTopics()
+            info.initializedTopics(),
+            info.initializingTopics()
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
@@ -9409,7 +9451,7 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-        Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
+        Set<Uuid> currentDeleting = info.deletingTopics();
         Map<Uuid, InitMapValue> deleteRetryCandidates = new HashMap<>();
         Set<Uuid> deletingToIgnore = new HashSet<>();
         if (!currentDeleting.isEmpty()) {
@@ -9509,9 +9551,10 @@ public class GroupMetadataManager {
                 Uuid topicId = topicMetadata.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
-                if (initializedTopics.containsKey(topicId)) {
+                InitMapValue initializedTopic = initializedTopics.get(topicId);
+                if (initializedTopic != null) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    initializedTopics.get(topicId).partitions().forEach(partition ->
+                    initializedTopic.partitions().forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()

@@ -106,7 +106,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
@@ -1371,7 +1371,7 @@ public class EosIntegrationTest {
     private List<KeyValue<Long, Long>> readResult(final String topic,
                                                   final int numberOfRecords,
                                                   final String groupId) throws Exception {
-        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT);
+        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT_MS);
     }
 
     private List<KeyValue<Long, Long>> readResult(final String topic,
@@ -1415,7 +1415,7 @@ public class EosIntegrationTest {
     private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
                                                                final int partition,
                                                                final int numberOfRecords) throws Exception {
-        final long timeoutMs = 2 * DEFAULT_TIMEOUT;
+        final long timeoutMs = 2 * DEFAULT_TIMEOUT_MS;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
         int tries = 0;

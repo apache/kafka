@@ -57,6 +57,10 @@ class Snapshot {
         for (Map.Entry<Revertable, Delta> entry : map.entrySet()) {
             entry.getKey().executeRevert(epoch, entry.getValue());
         }
+        // The current state is now the state at this snapshot, so nothing has changed since it
+        // was taken. Drop the deltas so that they are not applied twice and so that reads at
+        // this snapshot do not see them on top of the current state.
+        map.clear();
     }
 
     void mergeFrom(Snapshot source) {

@@ -131,10 +131,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
                 waitForCondition(() -> !streamsOne.metadataForAllStreamsClients().isEmpty(),
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        IntegrationTestUtils.DEFAULT_TIMEOUT_MS,
                         () -> "Kafka Streams didn't get metadata about the client.");
                 waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 8,
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        IntegrationTestUtils.DEFAULT_TIMEOUT_MS,
                         () -> "Kafka Streams one didn't get 8 tasks");
                 final List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
                 assertEquals(1, streamsMetadataAllClients.size());
@@ -153,7 +153,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                     streamsTwo.start();
                     waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
-                            IntegrationTestUtils.DEFAULT_TIMEOUT,
+                            IntegrationTestUtils.DEFAULT_TIMEOUT_MS,
                             () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
                     waitForCondition(() ->  {
@@ -187,7 +187,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                             final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
                             return metadata.size() == 2 && metadata.stream().allMatch(m -> m.topicPartitions().size() == 4);
                         }, 
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        IntegrationTestUtils.DEFAULT_TIMEOUT_MS,
                         () -> "Kafka Streams clients metadata was not updated to 4 active tasks per client"
                     );
 

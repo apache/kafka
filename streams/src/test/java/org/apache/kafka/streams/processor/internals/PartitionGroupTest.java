@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -60,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
 
 public class PartitionGroupTest {
 
@@ -865,6 +868,40 @@ public class PartitionGroupTest {
                     "\tConfigured max.task.idle.ms: 1.\n" +
                     "\tCurrent wall-clock time: 2."));
         }
+    }
+
+    @Test
+    public void shouldNotFormatNotReadyLogMessageUntilRequested() {
+        // KAFKA-21372: readyToProcess runs per record and the caller rarely logs the message
+        final AtomicInteger formatted = new AtomicInteger();
+        final TopicPartition idlePartition = spy(new TopicPartition(partition2.topic(), partition2.partition()));
+        doAnswer(invocation -> {
+            formatted.incrementAndGet();
+            return invocation.callRealMethod();
+        }).when(idlePartition).toString();
+
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(idlePartition, queue2)
+            ),
+            tp -> OptionalLong.of(0L),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            1L
+        );
+        group.updateLags();
+        group.addRawRecords(partition1, List.of(new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue)));
+
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertEquals(0, formatted.get());
+        assertEquals(
+            "Partition topic-2 has fetched lag of 0\n" +
+                "Partition topic-2 has current lag 0 and current time is 0. " +
+                "Waiting for new data to be produced for configured idle time 1 (deadline is 1).",
+            result.getLogMessage().orElseThrow());
     }
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
