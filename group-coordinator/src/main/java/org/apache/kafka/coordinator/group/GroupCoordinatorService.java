@@ -465,7 +465,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "classic-group-sync",
                     request,
                     exception,
-                    (error, __) -> new SyncGroupResponseData().setErrorCode(error.code()),
+                    (error, __) -> {
+                        if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                            // The coordinator is loading, so the state of the rebalance is lost and
+                            // the group has to start over at JoinGroup. Responding with a rebalance
+                            // in progress makes the member rejoin without looking up the
+                            // coordinator again. Classic clients do not expect
+                            // COORDINATOR_LOAD_IN_PROGRESS in a SyncGroup response.
+                            return new SyncGroupResponseData()
+                                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
+                        } else {
+                            return new SyncGroupResponseData()
+                                .setErrorCode(error.code());
+                        }
+                    },
                     log
                 ));
             }
