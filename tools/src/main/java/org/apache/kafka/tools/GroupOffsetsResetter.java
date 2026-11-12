@@ -457,19 +457,20 @@ public class GroupOffsetsResetter {
     }
 
     public List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
-        // collect all topics
-        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        Map<String, List<TopicPartition>> partitionsByTopic = topicPartitions.stream()
+            .collect(Collectors.groupingBy(TopicPartition::topic));
 
         List<TopicPartition> noneLeaderPartitions = new ArrayList<>();
-        adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
+        adminClient.describeTopics(partitionsByTopic.keySet(), withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
+            List<TopicPartition> partitions = partitionsByTopic.get(topic);
             try {
                 Set<Integer> partitionsWithLeader = future.get().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() != null)
                     .map(TopicPartitionInfo::partition)
                     .collect(Collectors.toSet());
                 // A partition that no longer exists has no leader either
-                topicPartitions.stream()
-                    .filter(tp -> tp.topic().equals(topic) && !partitionsWithLeader.contains(tp.partition()))
+                partitions.stream()
+                    .filter(tp -> !partitionsWithLeader.contains(tp.partition()))
                     .forEach(noneLeaderPartitions::add);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -478,7 +479,7 @@ public class GroupOffsetsResetter {
                 if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
                     throw new RuntimeException(e);
                 // A deleted topic has no leader for any of its partitions
-                topicPartitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(noneLeaderPartitions::add);
+                noneLeaderPartitions.addAll(partitions);
             }
         });
         return noneLeaderPartitions;
