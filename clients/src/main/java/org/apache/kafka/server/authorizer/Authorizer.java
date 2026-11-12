@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
@@ -201,21 +200,19 @@ public interface Authorizer extends Configurable, Closeable {
         // Filter out all the resource pattern corresponding to the RequestContext,
         // AclOperation, and ResourceType
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
-            resourceType, null, PatternType.ANY);
+                resourceType, null, PatternType.ANY);
         AclBindingFilter aclFilter = new AclBindingFilter(
-            resourceTypeFilter, AccessControlEntryFilter.ANY);
+                resourceTypeFilter, AccessControlEntryFilter.ANY);
 
         Set<String> denyPatternsLiteral = new HashSet<>();
-        PatriciaTrie<Boolean> denyPatternsPrefixed = new PatriciaTrie<>();
-
-        Set<String> allowPatternsLiteral = new HashSet<>();
-        PatriciaTrie<Boolean> allowPatternsPrefixed = new PatriciaTrie<>();
+        Set<String> denyPatternsPrefixed = new HashSet<>();
+        PatriciaTrie<PatternType> allowPatterns = new PatriciaTrie<>();
 
         boolean hasWildCardAllow = false;
 
         KafkaPrincipal principal = new KafkaPrincipal(
-            requestContext.principal().getPrincipalType(),
-            requestContext.principal().getName());
+                requestContext.principal().getPrincipalType(),
+                requestContext.principal().getName());
         String hostAddr = requestContext.clientAddress().getHostAddress();
 
         for (AclBinding binding : acls(aclFilter)) {
@@ -240,7 +237,7 @@ public interface Authorizer extends Configurable, Closeable {
                         denyPatternsLiteral.add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        denyPatternsPrefixed.put(binding.pattern().name(), Boolean.TRUE);
+                        denyPatternsPrefixed.add(binding.pattern().name());
                         break;
                     default:
                 }
@@ -256,10 +253,11 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allowPatternsLiteral.add(binding.pattern().name());
+                    // A prefixed allow also covers a literal allow with the same name.
+                    allowPatterns.putIfAbsent(resourceNameForTrie(binding.pattern().name()), PatternType.LITERAL);
                     break;
                 case PREFIXED:
-                    allowPatternsPrefixed.put(binding.pattern().name(), Boolean.TRUE);
+                    allowPatterns.put(resourceNameForTrie(binding.pattern().name()), PatternType.PREFIXED);
                     break;
                 default:
             }
@@ -269,51 +267,34 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
-        for (String allowStr : allowPatternsLiteral) {
-            if (denyPatternsLiteral.contains(allowStr)) {
-                continue;
-            }
-
-            boolean hasDominatedDeny = false;
-
-            if (!denyPatternsPrefixed.isEmpty()) {
-                if (hasTail(denyPatternsPrefixed, allowStr) || hasHead(denyPatternsPrefixed, allowStr)) {
-                    hasDominatedDeny = true;
-                }
-            }
-
-            if (!hasDominatedDeny)
-                return AuthorizationResult.ALLOWED;
+        // A literal deny only dominates a literal allow, leaving prefixed allows intact.
+        for (String denyStr : denyPatternsLiteral) {
+            allowPatterns.remove(resourceNameForTrie(denyStr), PatternType.LITERAL);
         }
 
-        // For any prefix allowed, if there's no dominant prefix denied, return allow.
-        for (String allowStr : allowPatternsPrefixed.keySet()) {
-            boolean hasDominatedDeny = false;
-
-            if (!denyPatternsPrefixed.isEmpty()) {
-                if (hasTail(denyPatternsPrefixed, allowStr) || hasHead(denyPatternsPrefixed, allowStr)) {
-                    hasDominatedDeny = true;
-                }
-            }
-
-            if (!hasDominatedDeny)
-                return AuthorizationResult.ALLOWED;
+        // A prefixed deny dominates every literal or prefixed allow starting with it.
+        // Querying the allowed names by prefix also handles nested and sibling deny prefixes.
+        for (String denyStr : denyPatternsPrefixed) {
+            if (allowPatterns.isEmpty())
+                return AuthorizationResult.DENIED;
+            allowPatterns.prefixMap(resourceNameForTrie(denyStr)).clear();
         }
-        return AuthorizationResult.DENIED;
+        return allowPatterns.isEmpty() ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
     }
 
-    private boolean hasTail(PatriciaTrie<Boolean> denyPatternsPrefixed, String allowStr) {
-        var t = denyPatternsPrefixed.tailMap(allowStr).entrySet().iterator();
-        return t.hasNext() && t.next().getKey().equals(allowStr);
-    }
-
-    private boolean hasHead(PatriciaTrie<Boolean> denyPatternsPrefixed, String allowStr) {
-        try {
-            String lastKey = denyPatternsPrefixed.headMap(allowStr).lastKey();
-            return allowStr.startsWith(lastKey);
-        } catch (NoSuchElementException e) {
-            return false;
+    private String resourceNameForTrie(String name) {
+        // PatriciaTrie treats trailing zero characters as padding. Escape zero characters
+        // and the escape character itself while preserving startsWith relationships.
+        if (name.indexOf('\0') < 0 && name.indexOf('\1') < 0)
+            return name;
+        StringBuilder escaped = new StringBuilder(name.length());
+        for (int i = 0; i < name.length(); i++) {
+            char ch = name.charAt(i);
+            if (ch <= '\1')
+                escaped.append('\1').append((char) (ch + 1));
+            else
+                escaped.append(ch);
         }
+        return escaped.toString();
     }
 }

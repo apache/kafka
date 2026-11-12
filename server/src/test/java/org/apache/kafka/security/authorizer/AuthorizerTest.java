@@ -53,6 +53,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -255,6 +257,70 @@ public class AuthorizerTest {
         addAcls(authorizer, Set.of(denyAce), abcd);
         assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
                 "User1 from host1 now should not have READ access to any group");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PatternType.class, names = {"LITERAL", "PREFIXED"})
+    public void testAuthorizeByResourceTypeShorterPrefixDenyWithLargerSiblingPrefix(PatternType allowPatternType) throws Exception {
+        KafkaPrincipal user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1");
+        InetAddress host1 = InetAddress.getByName("192.168.1.1");
+        RequestContext ctx = newRequestContext(user1, host1);
+        AccessControlEntry allowAce = new AccessControlEntry(user1.toString(), host1.getHostAddress(), READ, ALLOW);
+        AccessControlEntry denyAce = new AccessControlEntry(user1.toString(), host1.getHostAddress(), READ, DENY);
+
+        addAcls(authorizer, Set.of(denyAce), new ResourcePattern(GROUP, "a", PREFIXED));
+        addAcls(authorizer, Set.of(denyAce), new ResourcePattern(GROUP, "abb", PREFIXED));
+        addAcls(authorizer, Set.of(allowAce), new ResourcePattern(GROUP, "abc", allowPatternType));
+
+        assertFalse(authorizeByResourceType(authorizer, ctx, READ, GROUP),
+                "The shorter deny prefix must dominate the allow despite the sibling prefix");
+
+        removeAcls(authorizer, Set.of(denyAce), new ResourcePattern(GROUP, "a", PREFIXED));
+        assertTrue(authorizeByResourceType(authorizer, ctx, READ, GROUP),
+                "The sibling deny prefix must not dominate the allow");
+
+        addAcls(authorizer, Set.of(denyAce), new ResourcePattern(GROUP, "ab", PREFIXED));
+        assertFalse(authorizeByResourceType(authorizer, ctx, READ, GROUP),
+                "A longer matching deny prefix must also dominate the allow despite the sibling prefix");
+    }
+
+    @Test
+    public void testAuthorizeByResourceTypeLiteralDenyDoesNotDominatePrefixedAllow() throws Exception {
+        ResourcePattern literal = new ResourcePattern(GROUP, "abc", LITERAL);
+        ResourcePattern prefixed = new ResourcePattern(GROUP, "abc", PREFIXED);
+
+        addAcls(authorizer, Set.of(allowReadAcl, denyReadAcl), literal);
+        assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+
+        addAcls(authorizer, Set.of(allowReadAcl), prefixed);
+        assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP),
+                "The literal deny must leave other names covered by the prefixed allow accessible");
+
+        addAcls(authorizer, Set.of(denyReadAcl), prefixed);
+        assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+
+        removeAcls(authorizer, Set.of(denyReadAcl), prefixed);
+        assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PatternType.class, names = {"LITERAL", "PREFIXED"})
+    public void testAuthorizeByResourceTypeDenyPrefixLeavesUnrelatedAllows(PatternType allowPatternType) throws Exception {
+        ResourcePattern first = new ResourcePattern(GROUP, "abc", allowPatternType);
+        ResourcePattern second = new ResourcePattern(GROUP, "def", allowPatternType);
+        ResourcePattern firstDeny = new ResourcePattern(GROUP, "a", PREFIXED);
+        ResourcePattern secondDeny = new ResourcePattern(GROUP, "d", PREFIXED);
+
+        addAcls(authorizer, Set.of(allowReadAcl), first);
+        addAcls(authorizer, Set.of(allowReadAcl), second);
+        addAcls(authorizer, Set.of(denyReadAcl), firstDeny);
+        assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+
+        addAcls(authorizer, Set.of(denyReadAcl), secondDeny);
+        assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+
+        removeAcls(authorizer, Set.of(denyReadAcl), firstDeny);
+        assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
     }
 
     @Test
