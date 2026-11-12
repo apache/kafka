@@ -632,8 +632,10 @@ org.apache.kafka.storage.internals.log.LogValidatorTest:
 - checkRecompression
 - testAbsoluteOffsetAssignmentCompressed
 - testAbsoluteOffsetAssignmentNonCompressed
+- testAcceptsRecordsWithSequentialOffsetDeltas
 - testBatchWithInvalidRecordsAndInvalidTimestamp
 - testBatchWithoutRecordsNotAllowed
+- testCodecChangeRejectsMismatchedOffsetDelta
 - testCompressedRecordExceedingMaxRecordBodySizeIsRejected
 - testControlRecordsNotAllowedFromClients
 - testControlRecordsNotCompressed
@@ -642,6 +644,7 @@ org.apache.kafka.storage.internals.log.LogValidatorTest:
 - testDifferentLevelDoesNotCauseRecompression
 - testDownConversionOfIdempotentRecordsNotPermitted
 - testDownConversionOfTransactionalRecordsNotPermitted
+- testInPlaceAssignmentWithNonZeroBaseOffset
 - testInconsistentCountAndOffset
 - testInvalidCreateTimeCompressedV1
 - testInvalidCreateTimeCompressedV2
@@ -662,13 +665,17 @@ org.apache.kafka.storage.internals.log.LogValidatorTest:
 - testOffsetAssignmentAfterUpConversionV0ToV2NonCompressed
 - testOffsetAssignmentAfterUpConversionV1ToV2Compressed
 - testOffsetAssignmentAfterUpConversionV1ToV2NonCompressed
+- testOffsetDeltaRecordErrorsAreCapped
+- testOffsetDeltaRecordErrorsAreCappedWhenConvertingMagic
 - testRecordBatchWithCountOverrides
 - testRecordWithFutureTimestampIsRejected
 - testRecordWithPastTimestampIsRejected
+- testRejectsRecordWithMismatchedOffsetDelta
 - testRelativeOffsetAssignmentCompressedV1
 - testRelativeOffsetAssignmentCompressedV2
 - testRelativeOffsetAssignmentNonCompressedV1
 - testRelativeOffsetAssignmentNonCompressedV2
+- testTimestampRecordErrorsAreCapped
 - testUnmatchedNumberOfRecords
 - testValidationOfBatchesWithNonSequentialInnerOffsets
 org.apache.kafka.storage.internals.log.OffsetIndexTest:
