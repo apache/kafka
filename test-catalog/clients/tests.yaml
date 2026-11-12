@@ -5359,6 +5359,7 @@ org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialR
 - testBuildServerResponseToBytes
 - testCharSupportForRfc6750Token
 - testExtensions
+- testLongAuthorizationIdAndExtensions
 - testNoExtensionsFromByteArray
 - testNoExtensionsFromTokenAndNullExtensions
 - testRfc7688Example
@@ -5583,6 +5584,7 @@ org.apache.kafka.common.security.scram.internals.ScramMessagesTest:
 - serverFirstMessageUsesAsciiDigitsRegardlessOfDefaultLocale
 - validClientFinalMessage
 - validClientFirstMessage
+- validClientMessagesWithLongFields
 - validServerFinalMessage
 - validServerFirstMessage
 org.apache.kafka.common.security.scram.internals.ScramSaslServerTest:
