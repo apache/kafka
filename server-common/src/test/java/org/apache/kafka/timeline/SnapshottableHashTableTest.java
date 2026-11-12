@@ -24,9 +24,14 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -254,6 +259,139 @@ public class SnapshottableHashTableTest {
         assertEquals(3, table.snapshottableSize(1));
         registry.revertToSnapshot(0);
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_1A, E_2A, E_3A);
+    }
+
+    @Test
+    public void testIterateOverSnapshotAfterRevert() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+            new SnapshottableHashTable<>(registry, 1);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        registry.getOrCreateSnapshot(0);
+        assertNull(table.snapshottableAddOrReplace(E_3A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        assertEquals(E_2A, table.snapshottableRemove(E_2A));
+        registry.revertToSnapshot(1);
+        assertIteratorYields(table.snapshottableIterator(0), E_1A, E_2A);
+        assertIteratorYields(table.snapshottableIterator(1), E_1A, E_2A, E_3A);
+        registry.getOrCreateSnapshot(2);
+        assertEquals(E_1A, table.snapshottableRemove(E_1A));
+        assertIteratorYields(table.snapshottableIterator(1), E_1A, E_2A, E_3A);
+    }
+
+    @Test
+    public void testIterateOverSnapshotAfterRevertAndRemove() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+            new SnapshottableHashTable<>(registry, 1);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        registry.getOrCreateSnapshot(0);
+        assertEquals(E_1A, table.snapshottableRemove(E_1A));
+        assertEquals(E_2A, table.snapshottableRemove(E_2A));
+        registry.revertToSnapshot(0);
+        assertEquals(E_1A, table.snapshottableRemove(E_1A));
+        assertIteratorYields(table.snapshottableIterator(0), E_1A, E_2A);
+    }
+
+    @Test
+    public void testIterateOverSnapshotAfterDeletingNextSnapshot() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+            new SnapshottableHashTable<>(registry, 1);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        assertNull(table.snapshottableAddOrReplace(E_2A));
+        registry.getOrCreateSnapshot(0);
+        assertEquals(E_1A, table.snapshottableRemove(E_1A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_2A, table.snapshottableRemove(E_2A));
+        registry.deleteSnapshot(1);
+        assertIteratorYields(table.snapshottableIterator(0), E_1A, E_2A);
+    }
+
+    @Test
+    public void testIterateOverSnapshotsAfterRandomOperations() {
+        for (int numKeys : List.of(2, 8)) {
+            for (long seed = 0; seed < 500; seed++) {
+                Random random = new Random(seed);
+                SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+                SnapshottableHashTable<TestElement> table =
+                    new SnapshottableHashTable<>(registry, 1);
+                // The elements of the table at the latest epoch and at each snapshot, by key.
+                Map<Integer, TestElement> latest = new HashMap<>();
+                TreeMap<Long, Map<Integer, TestElement>> snapshots = new TreeMap<>();
+                long nextEpoch = 0;
+                for (int step = 0; step < 50; step++) {
+                    List<Long> epochs = new ArrayList<>(snapshots.keySet());
+                    TestElement element = new TestElement(random.nextInt(numKeys), 'A');
+                    int op = random.nextInt(16);
+                    if (op < 1) {
+                        table.snapshottableAddOrReplace(element);
+                        latest.put(element.i, element);
+                    } else if (op < 4) {
+                        table.snapshottableAddUnlessPresent(element);
+                        latest.putIfAbsent(element.i, element);
+                    } else if (op < 7) {
+                        table.snapshottableRemove(element);
+                        latest.remove(element.i);
+                    } else if (op < 10 || epochs.isEmpty()) {
+                        registry.getOrCreateSnapshot(nextEpoch);
+                        snapshots.put(nextEpoch, new HashMap<>(latest));
+                        nextEpoch++;
+                    } else {
+                        long epoch = epochs.get(random.nextInt(epochs.size()));
+                        if (op < 11) {
+                            registry.revertToSnapshot(epoch);
+                            snapshots.tailMap(epoch, false).clear();
+                            latest = new HashMap<>(snapshots.get(epoch));
+                            nextEpoch = epoch + 1;
+                        } else if (op < 15) {
+                            registry.deleteSnapshot(epoch);
+                            snapshots.remove(epoch);
+                        } else {
+                            registry.deleteSnapshotsUpTo(epoch);
+                            snapshots.headMap(epoch, false).clear();
+                        }
+                    }
+                    String context = "numKeys " + numKeys + ", seed " + seed + ", step " + step;
+                    assertEquals(new ArrayList<>(snapshots.keySet()), registry.epochsList(), context);
+                    for (Map.Entry<Long, Map<Integer, TestElement>> snapshot : snapshots.entrySet()) {
+                        assertTableAtEpoch(table, numKeys, snapshot.getKey(), snapshot.getValue(), context);
+                    }
+                    assertTableAtEpoch(table, numKeys, Long.MAX_VALUE, latest, context);
+                }
+            }
+        }
+    }
+
+    /**
+     * Assert that looking up each key, iterating and getting the size at the given epoch all
+     * return the expected elements.
+     */
+    private static void assertTableAtEpoch(
+        SnapshottableHashTable<TestElement> table,
+        int numKeys,
+        long epoch,
+        Map<Integer, TestElement> expected,
+        String context
+    ) {
+        String message = context + ", epoch " + epoch;
+        List<TestElement> lookedUp = new ArrayList<>();
+        for (int i = 0; i < numKeys; i++) {
+            TestElement element = table.snapshottableGet(new TestElement(i, 'Z'), epoch);
+            if (element != null) {
+                lookedUp.add(element);
+            }
+        }
+        List<TestElement> iterated = new ArrayList<>();
+        table.snapshottableIterator(epoch).forEachRemaining(iterated::add);
+        iterated.sort(Comparator.comparingInt(element -> element.i));
+        String expectedElements = new TreeMap<>(expected).values().toString();
+        assertEquals(expectedElements, lookedUp.toString(), message);
+        assertEquals(expectedElements, iterated.toString(), message);
+        assertEquals(expected.size(), table.snapshottableSize(epoch), message);
     }
 
     @Test
