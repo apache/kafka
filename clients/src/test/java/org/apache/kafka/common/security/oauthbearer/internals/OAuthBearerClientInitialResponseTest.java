@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -79,6 +80,16 @@ public class OAuthBearerClientInitialResponseTest {
         OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
         assertEquals("345", response.tokenValue());
         assertEquals("myuser", response.authorizationId());
+    }
+
+    @Test
+    public void testLongAuthorizationIdAndExtensions() throws Exception {
+        String authorizationId = String.join("", Collections.nCopies(200_000, "u"));
+        String message = "n,a=" + authorizationId + ",\u0001" + String.join("", Collections.nCopies(30_000, "ext=val\u0001")) + "auth=Bearer 345\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
+        assertEquals("345", response.tokenValue());
+        assertEquals(authorizationId, response.authorizationId());
+        assertEquals("val", response.extensions().map().get("ext"));
     }
 
     @Test
