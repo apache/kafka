@@ -423,6 +423,11 @@ public class StoreChangelogReaderTest {
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        } else {
+            // initializing the changelog starts the update, which the reader does not run while restoring actives
+            assertEquals(storeName, standbyListener.capturedStore(UPDATE_START));
+            assertNull(standbyListener.capturedStore(UPDATE_BATCH));
+            assertNull(standbyListener.capturedStore(UPDATE_SUSPENDED));
         }
     }
 

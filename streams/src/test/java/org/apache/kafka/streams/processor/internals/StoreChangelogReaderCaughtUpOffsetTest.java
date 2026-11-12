@@ -250,6 +250,43 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
     }
 
     @Test
+    public void shouldReportEndOffsetOfStandbyCheckpointedAtChangelogEnd() throws IOException {
+        final long changelogEndOffset = 20_000L;
+        final File stateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
+        final OffsetTrackingStore kvStore = new OffsetTrackingStore(storeName);
+        kvStore.commit(Collections.singletonMap(tp, changelogEndOffset - 1L));
+        try {
+            stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
+            stateManager.initializeStoreOffsets(false);
+
+            consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+            consumer.updateEndOffsets(Collections.singletonMap(tp, changelogEndOffset));
+
+            final StoreChangelogReader reader = new StoreChangelogReader(
+                time,
+                config,
+                logContext,
+                adminClient,
+                consumer,
+                callback,
+                standbyListener
+            );
+            reader.register(tp, stateManager);
+            reader.transitToUpdateStandby();
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
+
+            assertEquals(changelogEndOffset, consumer.position(tp));
+            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(Collections.singletonMap(tp, changelogEndOffset), reader.logicalChangelogEndOffsets());
+            assertEquals(Collections.singletonMap(tp, changelogEndOffset), stateManager.changelogOffsets());
+        } finally {
+            stateManager.close();
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
     public void shouldReportEndOffsetOfStandbyOnEmptyChangelog() throws IOException {
         final File stateDir = TestUtils.tempDirectory();
         final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
