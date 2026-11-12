@@ -1701,6 +1701,17 @@ public class StreamsGroupTest {
 
         // Once subtopologies are configured, every member with an endpoint is reported.
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
-        assertEquals(2, group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null).size());
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitions =
+            group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null);
+        assertEquals(
+            Set.of("host1:9092", "host2:9093"),
+            endpointToPartitions.stream()
+                .map(e -> e.userEndpoint().host() + ":" + e.userEndpoint().port())
+                .collect(Collectors.toSet())
+        );
+        endpointToPartitions.forEach(e -> {
+            assertEquals(List.of(), e.activePartitions());
+            assertEquals(List.of(), e.standbyPartitions());
+        });
     }
 }

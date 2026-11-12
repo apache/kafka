@@ -24715,6 +24715,16 @@ public class GroupMetadataManagerTest {
                 .setAcceptableRecoveryLag(10_000),
             result.response().data()
         );
+
+        // The client now knows the group's endpoint information epoch, so no mapping is sent again.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        assertNull(result.response().data().partitionsByUserEndpoint());
     }
 
     @Test
