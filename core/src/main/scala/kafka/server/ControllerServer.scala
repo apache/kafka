@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
@@ -25,7 +26,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import scala.collection.immutable
 import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
-import kafka.zk.{KafkaZkClient, ZkMigrationClient}
+import kafka.zk.{ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient, ZkAclChangeStore, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -64,9 +65,11 @@ import scala.jdk.CollectionConverters._
 case class ControllerMigrationSupport(
   zkClient: KafkaZkClient,
   migrationDriver: KRaftMigrationDriver,
-  brokersRpcClient: LegacyPropagator
+  brokersRpcClient: LegacyPropagator,
+  notificationCleaners: Seq[ZkNodeChangeNotificationListener]
 ) {
   def shutdown(logging: Logging): Unit = {
+    notificationCleaners.foreach(cleaner => CoreUtils.swallow(cleaner.close(), logging))
     if (zkClient != null) {
       CoreUtils.swallow(zkClient.close(), logging)
     }
@@ -75,6 +78,21 @@ case class ControllerMigrationSupport(
     }
     if (migrationDriver != null) {
       CoreUtils.swallow(migrationDriver.close(), logging)
+    }
+  }
+}
+
+object ControllerMigrationSupport {
+  private[server] val NoOpNotificationHandler: NotificationHandler = _ => ()
+
+  private[server] def notificationCleaners(
+    zkClient: KafkaZkClient,
+    handler: NotificationHandler = NoOpNotificationHandler
+  ): Seq[ZkNodeChangeNotificationListener] = {
+    val paths = (ConfigEntityChangeNotificationZNode.path -> ConfigEntityChangeNotificationSequenceZNode.SequenceNumberPrefix) +:
+      ZkAclChangeStore.stores.map(_.aclChangePath -> ZkAclChangeStore.SequenceNumberPrefix).toSeq
+    paths.map { case (root, prefix) =>
+      new ZkNodeChangeNotificationListener(zkClient, root, prefix, handler)
     }
   }
 }
@@ -310,8 +328,10 @@ class ControllerServer(
           .setMinMigrationBatchSize(config.migrationMetadataMinBatchSize)
           .setTime(time)
           .build()
+        val notificationCleaners = ControllerMigrationSupport.notificationCleaners(zkClient)
+        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator, notificationCleaners))
+        notificationCleaners.foreach(_.init())
         migrationDriver.start()
-        migrationSupport = Some(ControllerMigrationSupport(zkClient, migrationDriver, propagator))
       }
 
       quotaManagers = QuotaFactory.instantiate(config,
