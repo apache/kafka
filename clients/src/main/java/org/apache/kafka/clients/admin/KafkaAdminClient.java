@@ -752,7 +752,7 @@ public class KafkaAdminClient extends AdminClient {
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
         // Ask the telemetry reporter to make its final, terminating metrics push. The push is sent by the
-        // I/O thread, which waits for it to compelte, bounded by the request timeout, before exiting. The
+        // I/O thread, which waits for it to complete, bounded by the request timeout, before exiting. The
         // metrics and their reporters and closed by the I/O thread as it exits, so that the reporter is
         // not closed before the push has been made.
         clientTelemetryReporter.ifPresent(reporter -> {
@@ -786,6 +786,9 @@ public class KafkaAdminClient extends AdminClient {
             if (Thread.currentThread() != thread) {
                 // Wait for the thread to be joined.
                 thread.join(waitTimeMs);
+                // If the wait timed out, the I/O thread is still exiting. Close the metrics here so that
+                // the reporters are always unregistered by the time this method returns.
+                metrics.close();
             }
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
@@ -1535,17 +1538,19 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Whether the I/O thread should keep running during close so that the telemetry reporter's
          * terminating metrics push can be sent and its response received. The wait is bounded by the
-         * request timeout from the time the close was initiated.
+         * request timeout from the time the close was initiated, and is abandoned if there is no node
+         * which the push could be sent to.
          */
         private boolean isTerminatingTelemetryPushPending(long now) {
             long deadlineMs = terminatingTelemetryPushDeadlineMs.get();
             if (deadlineMs == INVALID_SHUTDOWN_TIME || now >= deadlineMs) {
                 return false;
             }
-            return clientTelemetryReporter
+            boolean pending = clientTelemetryReporter
                 .map(ClientTelemetryReporter::telemetrySender)
                 .map(ClientTelemetrySender::isTerminatingPushPending)
                 .orElse(false);
+            return pending && client.leastLoadedNode(now).node() != null;
         }
 
         /**
@@ -1565,7 +1570,7 @@ public class KafkaAdminClient extends AdminClient {
 
         private boolean threadShouldExit(long now, long curHardShutdownTimeMs) {
             if (!hasActiveExternalCalls()) {
-                if (isTerminatingTelemetryPushPending(now)) {
+                if (now < curHardShutdownTimeMs && isTerminatingTelemetryPushPending(now)) {
                     log.trace("All work has been completed, but the I/O thread is waiting for the terminating telemetry push.");
                     return false;
                 }

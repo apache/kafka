@@ -291,12 +291,19 @@ public class Sender implements Runnable {
         }
 
         // Give the client telemetry sender the chance to make its final, terminating metrics push now that
-        // all other work is done. The wait is bounded by the request timeout so that an unreachable cluster
-        // cannot delay closing indefinitely.
+        // all other work is done. Only the network client is polled, because the produce and transactional
+        // work has finished. The wait is bounded by the request timeout, ends early on a forced close, and
+        // is abandoned as soon as there is no node which the push could be sent to, so that an unreachable
+        // cluster does not delay closing.
         long terminatingPushDeadlineMs = time.milliseconds() + requestTimeoutMs;
         while (!forceClose && isTerminatingTelemetryPushPending(terminatingPushDeadlineMs)) {
             try {
-                runOnce();
+                long now = time.milliseconds();
+                client.poll(Math.max(0, terminatingPushDeadlineMs - now), now);
+                if (client.leastLoadedNode(time.milliseconds()).node() == null) {
+                    log.debug("Abandoning the terminating telemetry push because no node is available.");
+                    break;
+                }
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
@@ -323,7 +330,7 @@ public class Sender implements Runnable {
 
     /**
      * Whether the I/O thread should keep running at close so that the telemetry reporter's terminating
-     * metrics push can be sent and its reponse received, until the given deadline.
+     * metrics push can be sent and its response received, until the given deadline.
      */
     private boolean isTerminatingTelemetryPushPending(long deadlineMs) {
         return clientTelemetrySender != null

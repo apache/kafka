@@ -306,9 +306,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
         /*
          Whether the terminating push requested by initiateClose() has completed, meaning the response
          to it has been handled, it has failed, or it could not be built. The state stays in
-         TERMINATING_PUSH_IN_PROGRESS until close() so this is tracked separately.
+         TERMINATING_PUSH_IN_PROGRESS until close() so this is tracked separately. It is only ever
+         set by completeTerminatingPush().
         */
         private boolean terminatingPushCompleted;
+        /*
+         Whether a regular push was in flight when initiateClose() was called. Its response or failure
+         can arrive after the terminating push has been sent, and must not be mistaken for the
+         outcome of the terminating push.
+        */
+        private boolean earlierPushInFlight;
 
         private DefaultClientTelemetrySender() {
             enabled = true;
@@ -506,9 +513,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  push itself has been issued, this response completes it.
                 */
                 if (isTerminatingState()) {
-                    if (state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
-                        terminatingPushCompleted = true;
-                    }
+                    handlePushResolvedWhileTerminating();
                     return;
                 }
 
@@ -546,8 +551,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
-            // A failed terminating push is not retried, so there is nothing left to wait for.
-            markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS);
+            lock.writeLock().lock();
+            try {
+                if (isTerminatingState()) {
+                    // A failed terminating push is not retried, so there is nothing left to wait for.
+                    handlePushResolvedWhileTerminating();
+                    return;
+                }
+            } finally {
+                lock.writeLock().unlock();
+            }
             handleFailedRequest(maybeFatalException);
         }
 
@@ -620,15 +633,22 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     return;
                 }
 
-                if (state == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
+                if (state == ClientTelemetryState.SUBSCRIPTION_NEEDED || subscription == null) {
                     log.debug("Subscription not yet loaded, ignoring terminal push");
                     return;
                 }
 
+                if (!enabled) {
+                    log.debug("Telemetry is disabled, not attempting terminating push");
+                    return;
+                }
+
+                boolean pushInFlight = state == ClientTelemetryState.PUSH_IN_PROGRESS;
                 if (isTerminatingState() || !maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED)) {
                     log.debug("Ignoring subsequent initiateClose");
                     return;
                 }
+                earlierPushInFlight = pushInFlight;
 
                 log.debug("Updated state to send terminal telemetry push request");
             } finally {
@@ -640,25 +660,43 @@ public class ClientTelemetryReporter implements MetricsReporter {
         public boolean isTerminatingPushPending() {
             lock.readLock().lock();
             try {
-                return (state == ClientTelemetryState.TERMINATING_PUSH_NEEDED || state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) &&
-                    !terminatingPushCompleted;
+                return enabled && isTerminatingPushState() && !terminatingPushCompleted;
             } finally {
                 lock.readLock().unlock();
             }
         }
 
+        private boolean isTerminatingPushState() {
+            return state == ClientTelemetryState.TERMINATING_PUSH_NEEDED || state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS;
+        }
+
         /**
          * Records that the terminating push has completed, meaning there is nothing left for the enclosing
-         * client to wait for at close, provided the sender is in the given terminating state.
+         * client to wait for at close. This is the only place the completion is recorded, and it has no
+         * effect unless a terminating push is needed or in progress.
          */
-        private void markTerminatingPushCompletedIfInState(ClientTelemetryState expectedState) {
+        private void completeTerminatingPush() {
             lock.writeLock().lock();
             try {
-                if (state == expectedState) {
+                if (isTerminatingPushState()) {
                     terminatingPushCompleted = true;
                 }
             } finally {
                 lock.writeLock().unlock();
+            }
+        }
+
+        /**
+         * Handles the response to, or failure of, a push request while terminating, If a regular push
+         * was in flight when the close was initiated, the first outcome belongs to that push and is
+         * ignored. Otherwise, the outcome is that of the terminating push, which completes it.
+         * The caller must hold the write lock.
+         */
+        private void handlePushResolvedWhileTerminating() {
+            if (earlierPushInFlight) {
+                earlierPushInFlight = false;
+            } else if (state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
+                completeTerminatingPush();
             }
         }
 
@@ -696,10 +734,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription) {
             if (localSubscription == null) {
-                log.warn("Telemetry state is {} but subscription is null; not sending telemetry", state);
-                if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                    log.warn("Unable to transition state after failed create push telemetry from state {}", state);
-                }
+                handleMissingSubscriptionForPush();
                 return Optional.empty();
             }
 
@@ -713,7 +748,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 // Update last accessed time for push request to be retried on next interval.
                 updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
                 // Without a collector, the terminating push can never be made, so there is nothing to wait for.
-                markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_NEEDED);
+                completeTerminatingPush();
                 return Optional.empty();
             }
 
@@ -741,11 +776,26 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             Optional<Builder<?>> request = createPushRequest(localSubscription, terminating);
-            if (request.isEmpty()) {
+            if (terminating && request.isEmpty()) {
                 // A terminating push which could not be built is not retried, so there is nothing left to wait for.
-                markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS);
+                completeTerminatingPush();
             }
             return request;
+        }
+
+        private void handleMissingSubscriptionForPush() {
+            lock.writeLock().lock();
+            try {
+                log.warn("Telemetry state is {} but subscription is null; not sending telemetry", state);
+                if (isTerminatingState()) {
+                    // Without a subscription, the terminating push can never be made, so there is nothing to wait for.
+                    completeTerminatingPush();
+                } else if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
+                    log.warn("Unable to transition state after failed create push telemetry from state {}", state);
+                }
+            } finally {
+                lock.writeLock().unlock();
+            }
         }
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {

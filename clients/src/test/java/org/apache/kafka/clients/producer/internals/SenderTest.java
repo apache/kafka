@@ -1848,6 +1848,24 @@ public class SenderTest {
     }
 
     @Test
+    public void testCloseAbandonsTerminatingPushWhenNoNodeIsAvailable() {
+        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+        // The terminating push never completes, and every node is awaiting its reconnect backoff.
+        when(clientTelemetrySender.isTerminatingPushPending()).thenReturn(true);
+        metadata.fetch().nodes().forEach(node -> client.backoff(node, 10 * REQUEST_TIMEOUT));
+        Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
+            new SenderMetricsRegistry(new Metrics()), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, clientTelemetrySender);
+
+        long startMs = time.milliseconds();
+        sender.initiateClose();
+        sender.run();
+
+        verify(clientTelemetrySender, times(1)).isTerminatingPushPending();
+        assertTrue(time.milliseconds() - startMs < REQUEST_TIMEOUT);
+        assertFalse(client.active());
+    }
+
+    @Test
     public void testForceCloseDoesNotWaitForTerminatingTelemetryPush() {
         ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
         when(clientTelemetrySender.isTerminatingPushPending()).thenReturn(true);

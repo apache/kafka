@@ -45,8 +45,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
-import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric;
-import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
@@ -63,6 +61,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
+import io.opentelemetry.proto.metrics.v1.Metric;
+import io.opentelemetry.proto.metrics.v1.MetricsData;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -92,7 +93,7 @@ public class ClientTelemetryTest {
         configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
-            admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
+            admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
             Map<String, Object> producerConfigs = new HashMap<>();
