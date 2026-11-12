@@ -160,7 +160,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       val topicPartition = new TopicPartition(topicName, partitionId)
       Seq(
         createTopicPartition(topicPartition),
-        createTopicPartitionState(topicPartition, partition, state.kraftControllerEpoch())
+        createTopicPartitionState(topicPartition, partition, state.zkControllerEpoch())
       )
     }
 
@@ -250,7 +250,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     val requests = topicPartitions.asScala.flatMap { case (topicName, partitionRegistrations) =>
       partitionRegistrations.asScala.flatMap { case (partitionId, partitionRegistration) =>
         val topicPartition = new TopicPartition(topicName, partitionId)
-        Seq(updateTopicPartitionState(topicPartition, partitionRegistration, state.kraftControllerEpoch()))
+        Seq(updateTopicPartitionState(topicPartition, partitionRegistration, state.zkControllerEpoch()))
       }
     }
     if (requests.isEmpty) {

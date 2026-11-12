@@ -158,6 +158,52 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(List(1, 2, 3), partition1.isr)
   }
 
+  /**
+   * The controller_epoch stored in a partition state znode is compared against the epoch of the ZK
+   * controller (see KAFKA-20488), so the migration client must write the ZK controller epoch and
+   * not the KRaft controller epoch.
+   */
+  @Test
+  def testPartitionStateUsesZkControllerEpoch(): Unit = {
+    // The harness starts with ZK controller epoch 1. Claiming leadership makes it 2,
+    // so it differs from the KRaft epoch (42) and from the starting value.
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
+    assertEquals(2, migrationState.zkControllerEpoch())
+    assertEquals(InitialControllerEpoch, migrationState.kraftControllerEpoch())
+
+    def partitionRegistration(leader: Int): PartitionRegistration = new PartitionRegistration.Builder()
+      .setReplicas(Array(0, 1, 2))
+      .setDirectories(DirectoryId.unassignedArray(3))
+      .setIsr(Array(0, 1, 2))
+      .setLeader(leader)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(-1)
+      .build()
+
+    def assertControllerEpoch(partition: Int): Unit = {
+      val state = zkClient.getTopicPartitionState(new TopicPartition("test", partition))
+      assertTrue(state.isDefined)
+      assertEquals(migrationState.zkControllerEpoch(), state.get.controllerEpoch)
+    }
+
+    // createTopic
+    val partitions = Map(Integer.valueOf(0) -> partitionRegistration(0)).asJava
+    migrationState = migrationClient.topicClient().createTopic("test", Uuid.randomUuid(), partitions, migrationState)
+    assertControllerEpoch(0)
+
+    // updateTopicPartitions
+    val changedPartitions = Map(Integer.valueOf(0) -> partitionRegistration(1)).asJava
+    migrationState = migrationClient.topicClient().updateTopicPartitions(Map("test" -> changedPartitions).asJava, migrationState)
+    assertEquals(1, zkClient.getTopicPartitionState(new TopicPartition("test", 0)).get.leaderAndIsr.leader)
+    assertControllerEpoch(0)
+
+    // createTopicPartitions
+    val newPartitions = Map(Integer.valueOf(1) -> partitionRegistration(0)).asJava
+    migrationState = migrationClient.topicClient().createTopicPartitions(Map("test" -> newPartitions).asJava, migrationState)
+    assertControllerEpoch(1)
+  }
+
   @Test
   def testIdempotentCreateTopics(): Unit = {
     assertEquals(0, migrationState.migrationZkVersion())
