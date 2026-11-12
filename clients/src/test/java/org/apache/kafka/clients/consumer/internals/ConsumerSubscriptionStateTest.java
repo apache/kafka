@@ -50,6 +50,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -58,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class ConsumerSubscriptionStateTest {
 
@@ -1202,6 +1204,84 @@ public class ConsumerSubscriptionStateTest {
         state.onPartitionsRevoked(partitions);
 
         assertEquals(List.of("assigned-1arg", "revoked-1arg", "revoked-1arg"), calls);
+    }
+
+    @Test
+    public void testSetRebalanceListenerNullRemovesListener() {
+        RebalanceListener listener = mock(RebalanceListener.class);
+        state.setRebalanceListener(listener, consumer);
+        state.subscribe(Set.of(topic));
+        assertTrue(state.hasRebalanceListener());
+        assertEquals(Optional.of(listener.getClass().getName()), state.listenerName());
+
+        // the consumer argument is irrelevant once the listener is null
+        state.setRebalanceListener(null, consumer);
+
+        assertFalse(state.hasRebalanceListener());
+        assertEquals(Optional.empty(), state.listenerName());
+    }
+
+    @Test
+    public void testNullRebalanceListenerSkipsAllCallbacks() {
+        RebalanceListener listener = mock(RebalanceListener.class);
+        state.setRebalanceListener(listener, consumer);
+        state.setRebalanceListener(null, consumer);
+
+        // the null listener context carries no consumer either, so the dispatch must
+        // return on the null listener before it ever looks for one
+        assertDoesNotThrow(() -> state.onPartitionsAssigned(partitions));
+        assertDoesNotThrow(() -> state.onPartitionsRevoked(partitions));
+        assertDoesNotThrow(() -> state.onPartitionsLost(partitions));
+
+        verifyNoInteractions(listener);
+    }
+
+    @Test
+    public void testNullRebalanceListenerFromInitialState() {
+        // never registering a listener behaves the same as setting one and removing it
+        state.setRebalanceListener(null, consumer);
+
+        assertFalse(state.hasRebalanceListener());
+        assertEquals(Optional.empty(), state.listenerName());
+        assertDoesNotThrow(() -> state.onPartitionsAssigned(partitions));
+        assertDoesNotThrow(() -> state.onPartitionsRevoked(partitions));
+        assertDoesNotThrow(() -> state.onPartitionsLost(partitions));
+    }
+
+    @Test
+    public void testSingleArgSetRebalanceListenerRejectsNull() {
+        // unlike setRebalanceListener(listener, consumer), the test-only overload rejects null
+        assertThrows(NullPointerException.class, () -> state.setRebalanceListener(null));
+    }
+
+    @Test
+    public void testRebalanceListenerCanBeRestoredAfterNull() {
+        List<String> calls = new ArrayList<>();
+        RebalanceListener first = new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                calls.add("first");
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
+        };
+        RebalanceListener second = new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                calls.add("second");
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
+        };
+
+        state.setRebalanceListener(first, consumer);
+        state.setRebalanceListener(null, consumer);
+        state.setRebalanceListener(second, consumer);
+        state.onPartitionsAssigned(partitions);
+
+        assertTrue(state.hasRebalanceListener());
+        assertEquals(Optional.of(second.getClass().getName()), state.listenerName());
+        assertEquals(List.of("second"), calls);
     }
 
     @Test

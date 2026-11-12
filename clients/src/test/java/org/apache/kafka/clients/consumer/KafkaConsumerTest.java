@@ -3305,6 +3305,18 @@ public class KafkaConsumerTest {
         };
     }
 
+    private MockRebalanceListener getCountingRebalanceListener() {
+        return new MockRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsAssigned(partitions, rebalanceConsumer);
+                // set initial position so we don't need a lookup
+                for (TopicPartition partition : partitions)
+                    rebalanceConsumer.seek(partition, 0);
+            }
+        };
+    }
+
     private RebalanceListener getExceptionRebalanceListener() {
         return new RebalanceListener() {
             @Override
@@ -3907,6 +3919,97 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         consumer.poll(Duration.ZERO);
 
         assertEquals(1, countingRebalanceListener.revokedCount);
+    }
+
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testSetRebalanceListenerNullSkipsCallbacksOnRebalance(GroupProtocol groupProtocol) {
+        Time time = new MockTime(1L);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
+        MockRebalanceListener countingRebalanceListener = getCountingRebalanceListener();
+        initMetadata(client, Map.of(topic, 1, topic2, 1));
+
+        consumer.setRebalanceListener(countingRebalanceListener);
+        consumer.subscribe(Arrays.asList(topic, topic2));
+        Node node = metadata.fetch().nodes().get(0);
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // two poll calls, since the first rebalance needs two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
+        assertEquals(1, countingRebalanceListener.assignedCount);
+        assertEquals(0, countingRebalanceListener.revokedCount);
+
+        // removing the listener stops the callbacks, not the rebalance itself
+        consumer.setRebalanceListener(null);
+        prepareRebalance(client, node, assignor, List.of(tp0), coordinator);
+        consumer.enforceRebalance();
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        // the narrowed assignment proves the second rebalance really completed
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(1, countingRebalanceListener.assignedCount);
+        assertEquals(0, countingRebalanceListener.revokedCount);
+    }
+
+    // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testUnsubscribeAfterNullRebalanceListenerSkipsRevoked(GroupProtocol groupProtocol) {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        MockRebalanceListener countingRebalanceListener = getCountingRebalanceListener();
+        initializeSubscriptionWithSingleTopic(consumer, countingRebalanceListener);
+        prepareRebalance(client, node, assignor, List.of(tp0), null);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(1, countingRebalanceListener.assignedCount);
+
+        consumer.setRebalanceListener(null);
+        consumer.unsubscribe();
+
+        // unsubscribe() still gives up the assignment, it just does so silently
+        assertEquals(Collections.emptySet(), consumer.assignment());
+        assertEquals(0, countingRebalanceListener.revokedCount);
+        assertEquals(0, countingRebalanceListener.lostCount);
+    }
+
+    // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testCloseAfterNullRebalanceListenerSkipsCallbacks(GroupProtocol groupProtocol) {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+        final KafkaConsumer<String, String> consumer = newConsumer(
+            groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
+
+        MockRebalanceListener countingRebalanceListener = getCountingRebalanceListener();
+        initializeSubscriptionWithSingleTopic(consumer, countingRebalanceListener);
+        prepareRebalance(client, node, assignor, List.of(tp0), null);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+
+        // owning a partition is what makes close() revoke it, see
+        // testClassicConsumerCloseRunsRevocationCallbackAndAttemptsLeaveGroupWhenInterrupted
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(1, countingRebalanceListener.assignedCount);
+
+        consumer.setRebalanceListener(null);
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+
+        assertEquals(0, countingRebalanceListener.revokedCount);
+        assertEquals(0, countingRebalanceListener.lostCount);
     }
 
     // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
