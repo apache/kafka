@@ -50,6 +50,21 @@ public class GroupOffsetsResetterTest {
         }
     }
 
+    @Test
+    public void testFilterNoneLeaderPartitionsWithMissingPartition() {
+        try (MockAdminClient adminClient = new MockAdminClient(List.of(NODE), NODE)) {
+            // The topic was recreated with only one partition, but the group still has partition 1.
+            adminClient.addTopic(false, "recreated",
+                List.of(new TopicPartitionInfo(0, NODE, List.of(NODE), List.of(NODE))), Map.of());
+            GroupOffsetsResetter resetter = newResetter(adminClient);
+            TopicPartition stillExists = new TopicPartition("recreated", 0);
+            TopicPartition missing = new TopicPartition("recreated", 1);
+
+            List<TopicPartition> result = resetter.filterNoneLeaderPartitions(List.of(stillExists, missing));
+            assertEquals(List.of(missing), result);
+        }
+    }
+
     private static GroupOffsetsResetter newResetter(MockAdminClient adminClient) {
         return new GroupOffsetsResetter(adminClient, new OptionParser(),
             new GroupOffsetsResetter.GroupOffsetsResetterOptions(List.of(), List.of(), List.of(), List.of(), 5000L));

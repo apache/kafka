@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -462,10 +463,13 @@ public class GroupOffsetsResetter {
         List<TopicPartition> noneLeaderPartitions = new ArrayList<>();
         adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
             try {
-                future.get().partitions().stream()
-                    .filter(partitionInfo -> partitionInfo.leader() == null)
-                    .map(partitionInfo -> new TopicPartition(topic, partitionInfo.partition()))
-                    .filter(topicPartitions::contains)
+                Set<Integer> partitionsWithLeader = future.get().partitions().stream()
+                    .filter(partitionInfo -> partitionInfo.leader() != null)
+                    .map(TopicPartitionInfo::partition)
+                    .collect(Collectors.toSet());
+                // A partition that no longer exists has no leader either
+                topicPartitions.stream()
+                    .filter(tp -> tp.topic().equals(topic) && !partitionsWithLeader.contains(tp.partition()))
                     .forEach(noneLeaderPartitions::add);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
