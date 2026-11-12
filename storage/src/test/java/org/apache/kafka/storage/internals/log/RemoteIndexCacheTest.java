@@ -233,8 +233,8 @@ public class RemoteIndexCacheTest {
     @Test
     public void testCacheEntryExpiry() throws IOException, RemoteStorageException, InterruptedException {
         long estimateEntryBytesSize = estimateOneEntryBytesSize();
-        // close existing cache created in test setup before creating a new one
-        Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
+        // close existing cache created in test setup before creating a new one. The new cache is closed in cleanup().
+        cache.close();
         cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
@@ -498,8 +498,8 @@ public class RemoteIndexCacheTest {
     @Test
     public void testReloadCacheAfterClose() throws IOException, RemoteStorageException, InterruptedException {
         long estimateEntryBytesSize = estimateOneEntryBytesSize();
-        // close existing cache created in test setup before creating a new one
-        Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
+        // close existing cache created in test setup before creating a new one. The new cache is closed in cleanup().
+        cache.close();
         cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
@@ -535,9 +535,9 @@ public class RemoteIndexCacheTest {
         cache.close();
 
         // Reload the cache from the disk and check the cache size is same as earlier
-        RemoteIndexCache reloadedCache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
-        assertEquals(2, reloadedCache.internalCache().asMap().size());
-        reloadedCache.close();
+        try (RemoteIndexCache reloadedCache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString())) {
+            assertEquals(2, reloadedCache.internalCache().asMap().size());
+        }
 
         verifyNoMoreInteractions(rsm);
     }
@@ -1253,14 +1253,14 @@ public class RemoteIndexCacheTest {
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
         RemoteStorageManager rsm = mock(RemoteStorageManager.class);
         mockRsmFetchIndex(rsm);
-        RemoteIndexCache cache = new RemoteIndexCache(2L, rsm, logDir.toString());
-        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(1, tpId);
-        RemoteIndexCache.Entry entry = cache.getIndexEntry(metadataList.get(0));
-        long entrySizeInBytes = entry.entrySizeBytes();
-        entry.markForCleanup();
-        entry.cleanup();
-        Utils.closeQuietly(cache, "RemoteIndexCache created for estimating entry size");
-        return entrySizeInBytes;
+        try (RemoteIndexCache estimationCache = new RemoteIndexCache(2L, rsm, logDir.toString())) {
+            List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(1, tpId);
+            RemoteIndexCache.Entry entry = estimationCache.getIndexEntry(metadataList.get(0));
+            long entrySizeInBytes = entry.entrySizeBytes();
+            entry.markForCleanup();
+            entry.cleanup();
+            return entrySizeInBytes;
+        }
     }
 
     private void mockRsmFetchIndex(RemoteStorageManager rsm) throws RemoteStorageException {
@@ -1330,8 +1330,7 @@ public class RemoteIndexCacheTest {
         // Test that TTL can be disabled by setting it to -1
         long ttlMs = -1L;
         FakeTicker fakeTicker = new FakeTicker();
-        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
-        try {
+        try (RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker)) {
             RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
             assertNotNull(entry);
 
@@ -1340,8 +1339,6 @@ public class RemoteIndexCacheTest {
 
             RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
             assertNotNull(cachedEntry, "Entry should remain cached when TTL disabled");
-        } finally {
-            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
         }
     }
 
@@ -1349,8 +1346,7 @@ public class RemoteIndexCacheTest {
     public void testCacheTtlEviction() throws IOException {
         long ttlMs = TimeUnit.SECONDS.toMillis(10);
         FakeTicker fakeTicker = new FakeTicker();
-        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
-        try {
+        try (RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker)) {
             RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
             assertNotNull(entry);
 
@@ -1361,8 +1357,6 @@ public class RemoteIndexCacheTest {
             fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(2000));
             ttlCache.internalCache().cleanUp();
             assertEquals(0, ttlCache.internalCache().estimatedSize());
-        } finally {
-            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
         }
     }
 
@@ -1370,8 +1364,7 @@ public class RemoteIndexCacheTest {
     public void testCacheTtlRefreshOnAccess() throws IOException {
         long ttlMs = TimeUnit.SECONDS.toMillis(10);
         FakeTicker fakeTicker = new FakeTicker();
-        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
-        try {
+        try (RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker)) {
             ttlCache.getIndexEntry(rlsMetadata);
 
             fakeTicker.advance(TimeUnit.SECONDS.toNanos(8));
@@ -1382,8 +1375,6 @@ public class RemoteIndexCacheTest {
 
             RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
             assertNotNull(cachedEntry, "Entry should remain after access refreshes TTL");
-        } finally {
-            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
         }
     }
 
@@ -1391,8 +1382,7 @@ public class RemoteIndexCacheTest {
     public void testCacheTtlWithMultipleEntries() throws IOException, RemoteStorageException {
         long ttlMs = TimeUnit.SECONDS.toMillis(10);
         FakeTicker fakeTicker = new FakeTicker();
-        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
-        try {
+        try (RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker)) {
             RemoteLogSegmentId remoteLogSegmentId2 = RemoteLogSegmentId.generateNew(idPartition);
             RemoteLogSegmentMetadata rlsMetadata2 = new RemoteLogSegmentMetadata(remoteLogSegmentId2, baseOffset + 100, lastOffset + 100,
                     time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
@@ -1406,8 +1396,6 @@ public class RemoteIndexCacheTest {
 
             assertNull(ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()));
             assertNotNull(ttlCache.internalCache().getIfPresent(rlsMetadata2.remoteLogSegmentId().id()));
-        } finally {
-            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
         }
     }
 
@@ -1416,9 +1404,7 @@ public class RemoteIndexCacheTest {
         long estimateEntryBytesSize = estimateOneEntryBytesSize();
         long ttlMs = TimeUnit.SECONDS.toMillis(10);
         FakeTicker fakeTicker = new FakeTicker();
-        RemoteIndexCache ttlCache = new RemoteIndexCache(2 * estimateEntryBytesSize, ttlMs, false, rsm, logDir.toString(), fakeTicker);
-
-        try {
+        try (RemoteIndexCache ttlCache = new RemoteIndexCache(2 * estimateEntryBytesSize, ttlMs, false, rsm, logDir.toString(), fakeTicker)) {
             TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
             List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
 
@@ -1435,8 +1421,6 @@ public class RemoteIndexCacheTest {
             ttlCache.internalCache().cleanUp();
             assertEquals(0, ttlCache.internalCache().estimatedSize(),
                     "Time-based eviction should remove all expired entries");
-        } finally {
-            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
         }
     }
 
