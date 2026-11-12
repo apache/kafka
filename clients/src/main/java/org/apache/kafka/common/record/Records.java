@@ -97,7 +97,7 @@ public interface Records extends TransferableRecords {
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
+     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time, int)} for an explanation.
      * @param time instance used for reporting stats
      * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */

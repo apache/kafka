@@ -319,8 +319,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             // also stops an adversarial inner size from triggering an OutOfMemoryError (see the equivalent
             // guard in DefaultRecord for the V2 format).
             if (size > maxRecordBodySize)
-                throw new InvalidRecordException("Invalid record size: " + size +
-                    " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
+                throw RecordSizeLimitExceededException.forSize(size, maxRecordBodySize);
 
             ByteBuffer batchBuffer = ByteBuffer.allocate(size);
             Utils.readFully(stream, batchBuffer);

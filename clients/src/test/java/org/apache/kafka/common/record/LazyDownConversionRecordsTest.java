@@ -43,6 +43,7 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LazyDownConversionRecordsTest {
@@ -86,6 +87,48 @@ public class LazyDownConversionRecordsTest {
      * than the number of bytes we get after conversion. This causes overflow message batch(es) to be appended towards the
      * end of the converted output.
      */
+    /**
+     * The eager conversion of the first batch rejects a compressed record whose decompressed body exceeds the
+     * configured limit with a RecordSizeLimitExceededException, which the broker maps to INVALID_RECORD.
+     */
+    @Test
+    public void testEagerConversionRejectsRecordExceedingMaxRecordBodySize() throws IOException {
+        try (FileRecords inputRecords = FileRecords.open(tempFile())) {
+            inputRecords.append(MemoryRecords.withRecords(0L, Compression.gzip().build(),
+                new SimpleRecord(1L, "key".getBytes(), new byte[1000])));
+            inputRecords.flush();
+
+            assertThrows(RecordSizeLimitExceededException.class, () -> new LazyDownConversionRecords(
+                new TopicPartition("test", 1), inputRecords, RecordBatch.MAGIC_VALUE_V1, 0L, Time.SYSTEM, 100));
+        }
+    }
+
+    /**
+     * A later batch whose record exceeds the configured limit is converted lazily while the response is being
+     * written. As for unsupported compression types, an overflow batch is sent instead of failing the send, so the
+     * consumer receives the records converted so far and re-fetches from the offending batch.
+     */
+    @Test
+    public void testLazyConversionSendsOverflowBatchForRecordExceedingMaxRecordBodySize() throws IOException {
+        MemoryRecords small = MemoryRecords.withRecords(0L, Compression.gzip().build(),
+            new SimpleRecord(1L, "key".getBytes(), new byte[10]));
+        MemoryRecords oversized = MemoryRecords.withRecords(1L, Compression.gzip().build(),
+            new SimpleRecord(2L, "key".getBytes(), new byte[1000]));
+        ByteBuffer buffer = ByteBuffer.allocate(small.sizeInBytes() + oversized.sizeInBytes());
+        buffer.put(small.buffer());
+        buffer.put(oversized.buffer());
+        buffer.flip();
+        MemoryRecords recordsToConvert = MemoryRecords.readableRecords(buffer);
+
+        MemoryRecords convertedRecords = convertRecords(recordsToConvert, RecordBatch.MAGIC_VALUE_V1,
+            recordsToConvert.sizeInBytes(), 100);
+
+        List<Record> records = new ArrayList<>();
+        convertedRecords.records().forEach(records::add);
+        assertEquals(1, records.size(), "only the record before the oversized batch should be returned");
+        assertEquals(0L, records.get(0).offset());
+    }
+
     @ParameterizedTest(name = "compressionType={0}, toMagic={1}, overflow={2}")
     @MethodSource("parameters")
     public void testConversion(CompressionType compressionType, byte toMagic, boolean overflow) throws IOException {
@@ -143,12 +186,17 @@ public class LazyDownConversionRecordsTest {
     }
 
     private static MemoryRecords convertRecords(MemoryRecords recordsToConvert, byte toMagic, int bytesToConvert) throws IOException {
+        return convertRecords(recordsToConvert, toMagic, bytesToConvert, Records.SOFT_MAX_ARRAY_LENGTH);
+    }
+
+    private static MemoryRecords convertRecords(MemoryRecords recordsToConvert, byte toMagic, int bytesToConvert,
+                                                int maxRecordBodySize) throws IOException {
         try (FileRecords inputRecords = FileRecords.open(tempFile())) {
             inputRecords.append(recordsToConvert);
             inputRecords.flush();
 
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
-                    inputRecords, toMagic, 0L, Time.SYSTEM);
+                    inputRecords, toMagic, 0L, Time.SYSTEM, maxRecordBodySize);
             LazyDownConversionRecordsSend lazySend = lazyRecords.toSend();
             File outputFile = tempFile();
             ByteBuffer convertedRecordsBuffer;
