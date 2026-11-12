@@ -197,6 +197,10 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
+        // offsets are kept in the segments: without one there is no offset, but no uncommitted data either
+        if (segments.isEmpty()) {
+            return OffsetCheckpoint.OFFSET_UNKNOWN;
+        }
         for (final S segment : segments.descendingMap().values()) {
             final Long offset = segment.committedOffset(partition);
             if (offset != null) {
