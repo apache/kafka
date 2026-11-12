@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals, fail}
 import org.junit.jupiter.api.Test
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, TimeUnit}
 import java.util.{Optional, OptionalInt}
 import scala.collection.mutable
 
@@ -86,8 +86,12 @@ class ZkMigrationFailoverTest extends Logging {
     }
   }
 
-  def buildMigrationDriver(nodeId: Int, zkMigrationClient: ZkMigrationClient): (KRaftMigrationDriver, CapturingFaultHandler) = {
+  def buildMigrationDriver(
+    nodeId: Int,
+    zkMigrationClient: ZkMigrationClient
+  ): (KRaftMigrationDriver, CapturingFaultHandler, ConcurrentLinkedQueue[Int]) = {
     val faultHandler = new CapturingFaultHandler(nodeId)
+    val conflictEpochs = new ConcurrentLinkedQueue[Int]()
     val driver = KRaftMigrationDriver.newBuilder
       .setNodeId(nodeId)
       .setZkRecordConsumer(new ZkRecordConsumer {
@@ -102,7 +106,7 @@ class ZkMigrationFailoverTest extends Logging {
       .setInitialZkLoadHandler((_: MetadataPublisher) => {})
       .setZkMigrationClient(zkMigrationClient)
       .setFaultHandler(faultHandler)
-      .setMigrationConflictHandler((_: Int) => {})
+      .setMigrationConflictHandler((epoch: Int) => conflictEpochs.add(epoch))
       .setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), util.Arrays.asList(3000, 3001, 3002)))
       .setConfigSchema(KafkaConfigSchema.EMPTY)
       .setControllerMetrics(new QuorumControllerMetrics(Optional.empty(), Time.SYSTEM, true))
@@ -125,7 +129,7 @@ class ZkMigrationFailoverTest extends Logging {
         override def clear(): Unit = ???
       })
       .build()
-    (driver, faultHandler)
+    (driver, faultHandler, conflictEpochs)
   }
 
   def readMigrationZNode(zkMigrationClient: ZkMigrationClient): ZkMigrationLeadershipState = {
@@ -162,8 +166,8 @@ class ZkMigrationFailoverTest extends Logging {
     // Safe to reuse these since they don't keep any state
     val zkMigrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NOOP)
 
-    val (driver1, faultHandler1) = buildMigrationDriver(3000, zkMigrationClient)
-    val (driver2, faultHandler2) = buildMigrationDriver(3001, zkMigrationClient)
+    val (driver1, faultHandler1, _) = buildMigrationDriver(3000, zkMigrationClient)
+    val (driver2, faultHandler2, conflictEpochs2) = buildMigrationDriver(3001, zkMigrationClient)
 
     // Initialize data into /controller and /controller_epoch
     zkClient.registerControllerAndIncrementControllerEpoch(0)
@@ -261,6 +265,7 @@ class ZkMigrationFailoverTest extends Logging {
 
       // Now, 3001 will reload the /migration state and should not see any errors
       faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
+      assertTrue(conflictEpochs2.isEmpty, s"Unexpected conflicts on 3001 at epochs: $conflictEpochs2")
 
       // 3000 should not be able to make any more ZK updates now
       driver1.onMetadataUpdate(delta3, image3, manifest3)
@@ -271,6 +276,7 @@ class ZkMigrationFailoverTest extends Logging {
 
       // 3001 should still not have any errors
       faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
+      assertTrue(conflictEpochs2.isEmpty, s"Unexpected conflicts on 3001 at epochs: $conflictEpochs2")
 
       // Wait until new leader has sync'd to ZK
       TestUtils.waitUntilTrue(
@@ -280,6 +286,7 @@ class ZkMigrationFailoverTest extends Logging {
 
       // Ensure we still dont have errors on the new leader
       faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
+      assertTrue(conflictEpochs2.isEmpty, s"Unexpected conflicts on 3001 at epochs: $conflictEpochs2")
 
     } finally {
       driver1.close()
@@ -324,8 +331,8 @@ class ZkMigrationFailoverTest extends Logging {
     val zkMigrationClient1 = buildZkMigrationClient(topicClient1)
     val zkMigrationClient2 = buildZkMigrationClient(topicClient2)
 
-    val (driver1, faultHandler1) = buildMigrationDriver(3000, zkMigrationClient1)
-    val (driver2, faultHandler2) = buildMigrationDriver(3001, zkMigrationClient2)
+    val (driver1, faultHandler1, _) = buildMigrationDriver(3000, zkMigrationClient1)
+    val (driver2, faultHandler2, _) = buildMigrationDriver(3001, zkMigrationClient2)
 
     // Initialize data into /controller and /controller_epoch
     zkClient.registerControllerAndIncrementControllerEpoch(0)
