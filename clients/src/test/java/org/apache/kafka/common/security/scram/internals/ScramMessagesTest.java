@@ -117,6 +117,28 @@ public class ScramMessagesTest {
     }
 
     @Test
+    public void validClientMessagesWithLongFields() throws SaslException {
+        String nonce = formatter.secureRandomString();
+        String saslName = "u".repeat(500_000);
+        String str = String.format("n,,n=%s,r=%s", saslName, nonce);
+        checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), saslName, nonce, "");
+
+        String authzid = "a".repeat(500_000);
+        str = String.format("n,a=%s,n=testuser,r=%s", authzid, nonce);
+        checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), "testuser", nonce, authzid);
+
+        str = String.format("n,,n=testuser,r=%s%s", nonce, ",tokenauth=true".repeat(50_000));
+        ClientFirstMessage m = createScramMessage(ClientFirstMessage.class, str);
+        checkClientFirstMessage(m, "testuser", nonce, "");
+        assertTrue(m.extensions().tokenAuthenticated());
+
+        String channelBinding = randomBytesAsString();
+        String proof = randomBytesAsString();
+        str = String.format("c=%s,r=%s%s,p=%s", channelBinding, nonce, ",ext=val".repeat(50_000), proof);
+        checkClientFinalMessage(createScramMessage(ClientFinalMessage.class, str), channelBinding, nonce, proof);
+    }
+
+    @Test
     public void invalidClientFirstMessage() {
         String nonce = formatter.secureRandomString();
         // Invalid entry in gs2-header
