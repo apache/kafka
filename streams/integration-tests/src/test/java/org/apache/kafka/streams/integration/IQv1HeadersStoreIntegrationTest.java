@@ -232,33 +232,34 @@ public class IQv1HeadersStoreIntegrationTest {
             keyValueMaterialized(storeName, viaDslConfig)
         );
 
-        try (final KafkaStreams streams = getRunningStreams(streamsProperties(uniqueTestName, viaDslConfig), builder, true)) {
-            final List<KeyValue<String, String>> records = Arrays.asList(
-                new KeyValue<>("alpha", "a1"),
-                new KeyValue<>("beta", "b1")
-            );
-            final long timestamp = System.currentTimeMillis();
+        final List<KeyValue<String, String>> records = Arrays.asList(
+            new KeyValue<>("alpha", "a1"),
+            new KeyValue<>("beta", "b1")
+        );
+        final long timestamp = System.currentTimeMillis();
+        final Properties properties = streamsProperties(uniqueTestName, viaDslConfig);
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             produceSynchronously(records.stream()
                 .map(record -> new ProducerRecord<>(inputTopic, null, timestamp, record.key, record.value, dslInputHeaders()))
                 .collect(Collectors.toList()));
 
-            final List<KeyValue<String, ValueTimestampHeaders<String>>> entries = records.stream()
-                .map(record -> KeyValue.pair(record.key, ValueTimestampHeaders.make(record.value, timestamp, new RecordHeaders())))
-                .collect(Collectors.toList());
+            // the global table processor writes empty headers to the store
+            retryOnExceptionWithTimeout(30_000, () -> verifyGlobalTable(streams, storeName, records, timestamp, new RecordHeaders()));
+        }
 
-            retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                assertEquals(entries, toListAndCloseIterator(store.all()));
-                assertEquals(entries.get(1).value, store.get("beta"));
+        // With an empty state directory, the store is restored from its source topic. Unlike addGlobalStore(),
+        // globalTable() does not reprocess the records on restore, but copies them, together with their headers,
+        // into the store (see RecordConverters.rawValueToHeadersValue()). So, unlike the processor, the restore
+        // keeps the headers of the source records. This pins down the current behavior.
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), properties)) {
+            streams.setGlobalStateRestoreListener(restoreListener);
+            startApplicationAndWaitUntilRunning(streams);
 
-                final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
-                assertEquals(ValueAndTimestamp.make("b1", timestamp), tsStore.get("beta"));
-
-                final ReadOnlyKeyValueStore<String, String> plainStore = streams.store(fromNameAndType(storeName, keyValueStore()));
-                assertEquals(records, toListAndCloseIterator(plainStore.all()));
-            });
+            assertEquals(records.size(), restoreListener.totalNumRestored());
+            retryOnExceptionWithTimeout(30_000, () -> verifyGlobalTable(streams, storeName, records, timestamp, dslInputHeaders()));
         }
     }
 
@@ -548,6 +549,38 @@ public class IQv1HeadersStoreIntegrationTest {
                 assertEquals(
                     session(firstRecord).value,
                     sessionStore.fetchSession("multi", firstRecord.timestamp(), firstRecord.timestamp()));
+
+                // the timestamped and plain query types return the same records without their headers
+                final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsKvStore =
+                    store(streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStore(), null, false);
+                assertEquals(
+                    latestValues.stream()
+                        .map(entry -> KeyValue.pair(entry.key, ValueAndTimestamp.make(entry.value.value(), entry.value.timestamp())))
+                        .collect(Collectors.toList()),
+                    toListAndCloseIterator(tsKvStore.all()));
+                final ReadOnlyKeyValueStore<String, String> plainKvStore = store(streams, HEADERS_KV_STORE, keyValueStore(), null, false);
+                assertEquals(
+                    latestValues.stream().map(entry -> KeyValue.pair(entry.key, entry.value.value())).collect(Collectors.toList()),
+                    toListAndCloseIterator(plainKvStore.all()));
+
+                final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> tsWindowStore =
+                    store(streams, HEADERS_WINDOW_STORE, QueryableStoreTypes.timestampedWindowStore(), null, false);
+                assertSameEntries(
+                    windows.stream()
+                        .map(window -> KeyValue.pair(window.key, ValueAndTimestamp.make(window.value.value(), window.value.timestamp())))
+                        .collect(Collectors.toList()),
+                    toListAndCloseIterator(tsWindowStore.fetchAll(timeFrom, timeTo)));
+                final ReadOnlyWindowStore<String, String> plainWindowStore =
+                    store(streams, HEADERS_WINDOW_STORE, QueryableStoreTypes.windowStore(), null, false);
+                assertEquals(
+                    multiWindows.stream().map(window -> KeyValue.pair(window.key, window.value.value())).collect(Collectors.toList()),
+                    toListAndCloseIterator(plainWindowStore.fetch("multi", timeFrom, timeTo)));
+
+                final ReadOnlySessionStore<String, String> plainSessionStore =
+                    store(streams, HEADERS_SESSION_STORE, sessionStore(), null, false);
+                assertSameEntries(
+                    sessions.stream().map(session -> KeyValue.pair(session.key, session.value.aggregation())).collect(Collectors.toList()),
+                    toListAndCloseIterator(plainSessionStore.fetch("duplicate", "single")));
             });
         }
     }
@@ -637,8 +670,10 @@ public class IQv1HeadersStoreIntegrationTest {
             retryOnExceptionWithTimeout(30_000, () -> verifyGlobalStore(streams, storeName, latestValues));
         }
 
-        // With an empty state directory, the global store is restored from its source topic. The restored records
-        // bypass the processor, so it is the restore path that must keep the headers of the records.
+        // With an empty state directory, the global store is restored from its source topic. addGlobalStore()
+        // reprocesses the restored records through GlobalWriter, so the processor sees their headers again.
+        // The restore that copies the records into the store, without a processor, is covered by
+        // shouldQueryHeadersAwareGlobalStore().
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
         try (final KafkaStreams streams = new KafkaStreams(globalTopology(inputTopic, storeName).build(), properties)) {
@@ -969,6 +1004,31 @@ public class IQv1HeadersStoreIntegrationTest {
             Consumed.with(Serdes.String(), Serdes.String()),
             () -> new GlobalWriter(storeName));
         return builder;
+    }
+
+    /**
+     * Verifies that the headers-aware store of a global table holds {@code records}, with {@code timestamp}
+     * and {@code headers}, through the headers-aware, timestamped, and plain query types.
+     */
+    private static void verifyGlobalTable(final KafkaStreams streams,
+                                          final String storeName,
+                                          final List<KeyValue<String, String>> records,
+                                          final long timestamp,
+                                          final Headers headers) {
+        final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+            store(streams, storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), null, false);
+        final List<KeyValue<String, ValueTimestampHeaders<String>>> entries = records.stream()
+            .map(record -> KeyValue.pair(record.key, ValueTimestampHeaders.make(record.value, timestamp, headers)))
+            .collect(Collectors.toList());
+        assertEquals(entries, toListAndCloseIterator(store.all()));
+        assertEquals(entries.get(1).value, store.get("beta"));
+
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
+            store(streams, storeName, QueryableStoreTypes.timestampedKeyValueStore(), null, false);
+        assertEquals(ValueAndTimestamp.make("b1", timestamp), tsStore.get("beta"));
+
+        final ReadOnlyKeyValueStore<String, String> plainStore = store(streams, storeName, keyValueStore(), null, false);
+        assertEquals(records, toListAndCloseIterator(plainStore.all()));
     }
 
     private static void verifyGlobalStore(final KafkaStreams streams,
