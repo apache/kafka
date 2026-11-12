@@ -247,6 +247,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testStreamsGroupHeartbeatWithException
 - testStreamsHeartbeatRequestValidation
 - testSyncGroup
+- testSyncGroupCoordinatorLoadInProgressException
 - testSyncGroupInvalidGroupId
 - testSyncGroupWhenNotStarted
 - testSyncGroupWithException

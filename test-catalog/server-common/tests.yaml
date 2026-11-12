@@ -553,8 +553,12 @@ org.apache.kafka.timeline.SnapshottableHashTableTest:
 - testDeleteOnEmptyDeltaTable
 - testEmptyTable
 - testIterateOverSnapshot
+- testIterateOverSnapshotAfterDeletingNextSnapshot
+- testIterateOverSnapshotAfterRevert
+- testIterateOverSnapshotAfterRevertAndRemove
 - testIterateOverSnapshotWhileDeletingAndReplacing
 - testIterateOverSnapshotWhileExpandingTable
+- testIterateOverSnapshotsAfterRandomOperations
 - testIteratorAtOlderEpoch
 - testReset
 - testRevert
