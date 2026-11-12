@@ -332,9 +332,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     /**
      * Generate requests to fetch offsets and update positions once a response is received. This will first attempt
      * to use the committed offsets if available. If no committed offsets available, it will use the partition
-     * offsets retrieved from the leader. If the member is no longer part of the group when the committed offsets
-     * are fetched (ex. fenced), the partitions are left without positions, and will be initialized on a following
-     * call if they are still assigned once the member rejoins.
+     * offsets retrieved from the leader. If the OffsetFetch fails because the member was fenced or left the group,
+     * the partitions are left without positions, and will be initialized on a following call if they are still
+     * assigned.
      */
     private CompletableFuture<Void> updatePositionsWithOffsets(long deadlineMs) {
         CompletableFuture<Void> result = new CompletableFuture<>();
@@ -344,13 +344,22 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         CompletableFuture<Void> updatePositions;
         final Set<TopicPartition> initializingPartitions = subscriptionState.initializingPartitions();
         if (commitRequestManager != null) {
-            CompletableFuture<Boolean> refreshWithCommittedOffsets = initWithCommittedOffsetsIfNeeded(initializingPartitions, deadlineMs);
+            CompletableFuture<Void> refreshWithCommittedOffsets = initWithCommittedOffsetsIfNeeded(initializingPartitions, deadlineMs);
 
-            // Reset positions for all partitions that may still require it (or that are awaiting reset), unless
-            // the committed offsets could not be retrieved because the member is no longer in the group
-            updatePositions = refreshWithCommittedOffsets.thenCompose(shouldResetPositions -> shouldResetPositions ?
-                initWithPartitionOffsetsIfNeeded(initializingPartitions) :
-                CompletableFuture.completedFuture(null));
+            updatePositions = refreshWithCommittedOffsets
+                .handle((__, error) -> {
+                    if (error == null) {
+                        // Reset positions for all partitions that may still require it (or that are awaiting reset)
+                        return initWithPartitionOffsetsIfNeeded(initializingPartitions);
+                    }
+                    if (memberFencedOrLeft(error)) {
+                        // Leave the partitions without positions (no reset). They will be initialized on a
+                        // following call if they are still assigned.
+                        return CompletableFuture.<Void>completedFuture(null);
+                    }
+                    return CompletableFuture.<Void>failedFuture(error);
+                })
+                .thenCompose(f -> f);
 
         } else {
             updatePositions = initWithPartitionOffsetsIfNeeded(initializingPartitions);
@@ -421,20 +430,16 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      *                               when resetting positions for partitions that may not have committed offsets).
      * @param deadlineMs             Deadline of the application event that triggered this operation. Used to
      *                               determine how much time to allow for the reused offset fetch to complete.
-     * @return Future that completes with true if the partitions that still have no position should be reset
-     * using the configured offset reset strategy, or false if the fetch failed because the member is no longer
-     * part of the group (ex. fenced). In the latter case, the partitions are left without positions. They will
-     * be initialized on a following call if they are still assigned once the member has a valid epoch again.
      * @throws TimeoutException If offsets could not be retrieved within the timeout
      */
-    private CompletableFuture<Boolean> initWithCommittedOffsetsIfNeeded(Set<TopicPartition> initializingPartitions,
-                                                                        long deadlineMs) {
+    private CompletableFuture<Void> initWithCommittedOffsetsIfNeeded(Set<TopicPartition> initializingPartitions,
+                                                                     long deadlineMs) {
         if (initializingPartitions.isEmpty()) {
-            return CompletableFuture.completedFuture(true);
+            return CompletableFuture.completedFuture(null);
         }
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        CompletableFuture<Void> result = new CompletableFuture<>();
 
         // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
         // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
@@ -457,9 +462,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             // Reuse pending OffsetFetch request that will complete when positions are refreshed with the committed offsets retrieved
             pendingOffsetFetchEvent.result.whenComplete((__, error) -> {
                 if (error == null) {
-                    result.complete(true);
-                } else if (isMemberNotInGroupError(error)) {
-                    result.complete(false);
+                    result.complete(null);
                 } else {
                     result.completeExceptionally(error);
                 }
@@ -475,13 +478,10 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * @param offsets Committed offsets to use to update positions for initializing partitions.
      * @param error   Error received in response to the OffsetFetch request. Will be null if the request was successful.
      * @param result  Future to complete once all positions have been updated with the given committed offsets.
-     *                Completed with true if the partitions still missing a position should be reset, or with
-     *                false if the member was no longer in the group when fetching the committed offsets
-     *                (positions left unchanged, to be initialized on a following call).
      */
     private void refreshOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                 final Throwable error,
-                                final CompletableFuture<Boolean> result) {
+                                final CompletableFuture<Void> result) {
         if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
@@ -490,28 +490,25 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
 
-            result.complete(true);
+            result.complete(null);
 
-        } else if (isMemberNotInGroupError(error)) {
-            // The member stopped being part of the group while the OffsetFetch request was in flight (ex. fenced,
-            // left or failed). The partitions may be reassigned after the member rejoins, so do not fall back to
-            // resetting positions, and do not fail the update. Positions will be refreshed with the committed
-            // offsets on a following call to updateFetchPositions, if the partitions are still assigned.
-            log.info("Skipping position initialization because the OffsetFetch failed with {} (member no longer " +
-                "in the group). Positions will be initialized on a following poll if the partitions are still " +
-                "assigned.", Errors.forException(error));
-            result.complete(false);
         } else {
-            log.error("Error fetching committed offsets to update positions", error);
+            if (memberFencedOrLeft(error)) {
+                log.info("OffsetFetch failed with {}. Positions will be initialized on a following poll " +
+                    "if the partitions are still assigned.", Errors.forException(error));
+            } else {
+                log.error("Error fetching committed offsets to update positions", error);
+            }
             result.completeExceptionally(error);
         }
     }
 
     /**
      * Check if the given error, received in response to an OffsetFetch request, indicates that the member
-     * is no longer a valid member of the group (ex. it was fenced, left the group or failed).
+     * was fenced or left the group: UNKNOWN_MEMBER_ID, or STALE_MEMBER_EPOCH that could not be retried
+     * with a newer member epoch.
      */
-    private static boolean isMemberNotInGroupError(Throwable error) {
+    private static boolean memberFencedOrLeft(Throwable error) {
         Throwable cause = Errors.maybeUnwrapException(error);
         return cause instanceof UnknownMemberIdException || cause instanceof StaleMemberEpochException;
     }
