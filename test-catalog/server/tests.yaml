@@ -121,6 +121,8 @@ org.apache.kafka.server.AssignmentsManagerTest:
 - testMismatchedInputDoesNotTriggerCompletion
 - testNoGlobalResponseError
 - testOneAssignmentFailsOneSucceeds
+- testRequestVersionFallsBackToMinimumMetadataVersion
+- testRequestVersionFollowsRequestHeaderVersion
 - testStartAndShutdown
 - testSuccessfulAssignment
 - testUnSuccessfulRequestCausesRetransmission
@@ -517,6 +519,7 @@ org.apache.kafka.server.partition.AlterPartitionManagerTest:
 - testOneInFlight
 - testOverwriteWithinBatch
 - testPartitionMissingInResponse
+- testRequestVersionFollowsRequestHeaderVersionChange
 - testRetryOnAuthenticationFailure
 - testRetryOnUnsupportedVersionError
 - testSingleBatch

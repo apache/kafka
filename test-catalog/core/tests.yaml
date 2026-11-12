@@ -1316,6 +1316,7 @@ kafka.server.ControllerRegistrationManagerTest:
 - testReRegistrationAfterDifferentIncarnationId
 - testReRegistrationAfterUnregister
 - testRegistration
+- testRequestVersionFollowsRequestHeaderVersion
 - testRetransmitRegistration
 - testRetransmitRegistrationAfterTimeout
 - testWrongIncarnationId

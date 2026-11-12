@@ -133,6 +133,10 @@ org.apache.kafka.server.common.MetadataVersionTest:
 - assertLatestIsNotProduction
 - assertLatestProductionIsLessThanLatest
 - assertLatestProductionIsProduction
+- testAllocateProducerIdsRequestHeaderVersion
+- testAlterPartitionRequestHeaderVersion
+- testAssignReplicasToDirsRequestHeaderVersion
+- testControllerRegistrationRequestHeaderVersion
 - testDirectoryAssignmentSupported
 - testFeatureLevels
 - testFromShortVersionString

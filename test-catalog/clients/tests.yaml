@@ -2712,6 +2712,9 @@ org.apache.kafka.clients.consumer.internals.ShareSubscriptionStateTest:
 - testSubscribeToEmptySetStillMarksSubscribed
 - testUnsubscribeClearsAllState
 org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerTest:
+- testActiveTaskFinishedRestoringTriggersSend
+- testActiveTaskNotInLastSentOffsetsDoesNotTriggerSend
+- testActiveTaskStartedRestoringTriggersSend
 - testBuildingHeartbeatAllOwnedTaskListsSentWhenOnlyOneRoleChanges
 - testBuildingHeartbeatAssignmentSentWhenChanged
 - testBuildingHeartbeatClientTagsSentWhenJoining
@@ -2735,6 +2738,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testFencedInstanceIdErrorResponse
 - testFencedMemberOrUnknownMemberIdErrorResponse
 - testGroupAuthorizationFailedErrorResponse
+- testHotRestoringActiveTaskTriggersSend
 - testHotWarmupTaskDisabledWhenAcceptableRecoveryLagIsNegative
 - testHotWarmupTaskDisabledWhenEndOffsetMissing
 - testHotWarmupTaskDisabledWhenLagAboveThreshold
@@ -5585,6 +5589,9 @@ org.apache.kafka.common.security.scram.internals.ScramSaslServerTest:
 - authorizationIdEqualsAuthenticationId
 - authorizationIdNotEqualsAuthenticationId
 - noAuthorizationIdSpecified
+- tokenWithoutOwnerFailsOnClientFinalMessage
+- unknownUserAuthorizationIdNotEqualsAuthenticationId
+- unknownUserFailsOnClientFinalMessage
 - validateFailedNonceExchange
 - validateFailedNonceExchangeWithPrependingClientNonce
 - validateNonceExchange

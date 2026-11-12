@@ -1,6 +1,7 @@
 org.apache.kafka.coordinator.transaction.ProducerIdManagerTest:
 - testConcurrentGeneratePidRequests
 - testInvalidRanges
+- testRequestVersionFollowsRequestHeaderVersionChange
 - testRetryBackoff
 - testRetryBackoffOnAuthException
 - testRetryBackoffOnNoResponse
