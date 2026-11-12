@@ -2405,7 +2405,7 @@ public class ShareConsumeRequestManagerTest {
 
         // Both partitions are now fetched from node 1. A request is still sent to node 0 to remove tp0 from the share
         // session on the previous leader. The acknowledgements for records fetched from the previous leader cannot be
-        // sent there any more, so they are failed with NOT_LEADER_OR_FOLLOWER without a round trip to the broker.
+        // sent there anymore, so they are failed with NOT_LEADER_OR_FOLLOWER without a round trip to the broker.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(2, pollResult.unsentRequests.size());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -3085,7 +3085,7 @@ public class ShareConsumeRequestManagerTest {
     void testDisconnectWithoutLeadershipChangeRetriesSameNode() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         client.updateMetadata(
@@ -3131,7 +3131,7 @@ public class ShareConsumeRequestManagerTest {
     void testDisconnectFollowsMetadataLeaderChangeWithUnchangedEpoch() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         client.updateMetadata(
@@ -3315,7 +3315,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchFollowsNewerLeaderEpochInMetadata() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         // tp0's leader is node0.
@@ -3373,7 +3373,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchIgnoresMetadataLeaderChangeWithUnchangedEpoch() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -3415,7 +3415,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchPartitionErrorWithoutLeaderInfoRequestsMetadataUpdate(Errors error) {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -3450,7 +3450,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -3492,7 +3492,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchRedirectRefusedByMetadataRequestsMetadataUpdate() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         // A single-node cluster. Node 1 exists but the metadata has not yet seen it.
@@ -3558,7 +3558,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -3815,7 +3815,7 @@ public class ShareConsumeRequestManagerTest {
     public void testLeaderChangeWithUnchangedEpochUpdatesShareSessionLeader(Errors error) {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         // tp0's leader is node0.
