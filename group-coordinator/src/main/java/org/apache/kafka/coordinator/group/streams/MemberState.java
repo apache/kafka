@@ -21,7 +21,7 @@ import java.util.Map;
 
 /**
  * The various states that a member can be in. For their definition, refer to the documentation of
- * {{@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}}.
+ * {@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}.
  */
 public enum MemberState {
 

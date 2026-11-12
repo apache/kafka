@@ -25,7 +25,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -40,6 +39,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -329,26 +329,30 @@ public interface ClusterInstance {
         ), "Failed to soft-delete the data to a delete directory");
     }
 
-    default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+    default void createTopic(String topicName, int partitions, short replicas) {
         createTopic(topicName, partitions, replicas, Map.of());
     }
 
-    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
-        try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
-            waitTopicCreation(topicName, partitions);
-        }
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) {
+        createTopicAndWait(new NewTopic(topicName, partitions, replicas).configs(props), partitions);
     }
 
-    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) {
         createTopicWithAssignment(topicName, replicaAssignment, Map.of());
     }
 
-    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) throws InterruptedException {
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) {
+        createTopicAndWait(new NewTopic(topicName, replicaAssignment).configs(props), replicaAssignment.size());
+    }
+
+    private void createTopicAndWait(NewTopic newTopic, int partitions) {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props)));
-            int partitions = replicaAssignment.size();
-            waitTopicCreation(topicName, partitions);
+            admin.createTopics(List.of(newTopic)).all().get();
+            waitTopicCreation(newTopic.name(), partitions);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Failed to create topic " + newTopic.name(), e.getCause());
         }
     }
 
@@ -356,12 +360,15 @@ public interface ClusterInstance {
      * Deletes a topic and waits for the deletion to complete.
      *
      * @param topicName The name of the topic to delete
-     * @throws InterruptedException If the operation is interrupted
      */
-    default void deleteTopic(String topicName) throws InterruptedException, ExecutionException {
+    default void deleteTopic(String topicName) {
         try (Admin admin = admin()) {
-            admin.deleteTopics(List.of(topicName));
+            admin.deleteTopics(List.of(topicName)).all().get();
             waitTopicDeletion(topicName);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
         }
     }
 
@@ -414,22 +421,6 @@ public interface ClusterInstance {
                 actualEntries.set(accessControlEntrySet);
                 return accessControlEntrySet.containsAll(entries) && entries.containsAll(accessControlEntrySet);
             }, "expected acls: " + entries + ", actual acls: " + actualEntries.get());
-        }
-    }
-
-    /**
-     * Returns the broker id of leader partition.
-     */
-    default int getLeaderBrokerId(TopicPartition topicPartition) throws ExecutionException, InterruptedException {
-        try (var admin = admin()) {
-            String topic = topicPartition.topic();
-            TopicDescription description = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get();
-
-            return description.partitions().stream()
-                    .filter(tp -> tp.partition() == topicPartition.partition())
-                    .mapToInt(tp -> tp.leader().id())
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
 }

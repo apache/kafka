@@ -32,7 +32,6 @@ import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
 import org.apache.kafka.streams.{GroupProtocol => StreamsGroupProtocol}
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.Timeout
 
 import java.time.Duration
 import java.util.Properties
@@ -40,7 +39,6 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionException
 import scala.jdk.OptionConverters.RichOptional
 
-@Timeout(120)
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
   @ClusterTest(

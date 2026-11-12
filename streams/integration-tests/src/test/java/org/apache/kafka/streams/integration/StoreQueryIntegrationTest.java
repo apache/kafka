@@ -601,7 +601,7 @@ public class StoreQueryIntegrationTest {
 
     private static void until(final TestCondition condition) {
         boolean success = false;
-        final long deadline = System.currentTimeMillis() + IntegrationTestUtils.DEFAULT_TIMEOUT;
+        final long deadline = System.currentTimeMillis() + IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
         boolean deadlineExceeded = System.currentTimeMillis() >= deadline;
         while (!success && !deadlineExceeded) {
             try {

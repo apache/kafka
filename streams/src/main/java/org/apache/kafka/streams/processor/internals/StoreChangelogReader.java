@@ -448,6 +448,15 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
+    private Set<TopicPartition> activeRestoringChangelogsOf(final Map<TaskId, Task> tasks) {
+        return changelogs.values().stream()
+            .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
+                metadata.stateManager.taskType() == Task.TaskType.ACTIVE &&
+                tasks.containsKey(metadata.stateManager.taskId()))
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
+            .collect(Collectors.toSet());
+    }
+
     private Set<TopicPartition> standbyRestoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
@@ -494,8 +503,9 @@ public class StoreChangelogReader implements ChangelogReader {
     public long restore(final Map<TaskId, Task> tasks) {
         initializeChangelogs(tasks, registeredChangelogs());
 
-        if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
-            throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
+        if (!activeRestoringChangelogsOf(tasks).isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
+            throw new IllegalStateException("Should not be in standby updating state if there are still un-completed " +
+                "active changelogs of updating tasks");
         }
 
         long totalRestored = 0L;
@@ -520,12 +530,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 final Task task = tasks.get(taskId);
+                if (task == null) {
+                    continue;
+                }
 
                 try {
                     final ChangelogMetadata changelogMetadata = changelogs.get(partition);
                     totalRestored += restoreChangelog(task, changelogMetadata);
                 } catch (final TimeoutException timeoutException) {
-                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                    task.maybeInitTaskTimeoutOrThrow(
                         time.milliseconds(),
                         timeoutException
                     );
@@ -574,9 +587,14 @@ public class StoreChangelogReader implements ChangelogReader {
                                        final Set<TopicPartition> restoringChangelogs) {
         if (state == ChangelogReaderState.ACTIVE_RESTORING) {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
-        }
-        if (state == ChangelogReaderState.STANDBY_UPDATING) {
+        } else {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
+            // Paused active tasks keep their changelogs registered and restoring, so pause them explicitly while
+            // updating standbys.
+            final Set<TopicPartition> activeRestoringChangelogs = activeRestoringChangelogs();
+            if (!activeRestoringChangelogs.isEmpty()) {
+                restoreConsumer.pause(activeRestoringChangelogs);
+            }
         }
     }
 
@@ -664,12 +682,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     entry.getValue().stateManager.changelogAsSource(entry.getKey()))
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
 
-            for (final TopicPartition partition : changelogsWithLimitOffsets) {
-                if (!changelogs.get(partition).bufferedRecords().isEmpty()) {
-                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
-                    lastUpdateOffsetTime = time.milliseconds();
-                    break;
-                }
+            if (changelogsWithLimitOffsets.stream().anyMatch(partition -> !changelogs.get(partition).bufferedRecords().isEmpty())) {
+                updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
+                lastUpdateOffsetTime = time.milliseconds();
             }
         }
     }

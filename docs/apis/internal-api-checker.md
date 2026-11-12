@@ -41,7 +41,7 @@ wildcard-imported types, and references introduced by code generators or compile
 
 ```groovy
 plugins {
-    id 'org.apache.kafka.internal-api-checker' version '{{< param fullDotVersion >}}'
+    id 'org.apache.kafka.internal-api-checker' version '4.4.0'
 }
 ```
 
@@ -82,7 +82,7 @@ check for that Gradle invocation without editing the build script:
 <plugin>
   <groupId>org.apache.kafka</groupId>
   <artifactId>kafka-internal-api-checker-maven-plugin</artifactId>
-  <version>{{< param fullDotVersion >}}</version>
+  <version>4.4.0</version>
   <executions>
     <execution>
       <phase>verify</phase>
@@ -126,7 +126,7 @@ The annotation lives in `kafka-clients`:
 <dependency>
   <groupId>org.apache.kafka</groupId>
   <artifactId>kafka-clients</artifactId>
-  <version>{{< param fullDotVersion >}}</version>
+  <version>4.4.0</version>
 </dependency>
 ```
 
@@ -142,7 +142,7 @@ bytecode as a violation, including references to genuinely-public types like
 
 Make sure each `org.apache.kafka:*` dependency on your compile classpath
 (`kafka-clients`, `kafka-streams`, `connect-api`, `kafka-tools-api`, …) is at least
-`{{< param fullDotVersion >}}` before turning `failOnViolation = true`. For older
+`4.4.0` before turning `failOnViolation = true`. For older
 dependencies, either upgrade them, or temporarily set `failOnViolation = false` so the
 checker only generates reports while you migrate.
 

@@ -140,7 +140,7 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // New version for the Kafka 4.5.0 release.
+    // Add support for request header v3 (KIP-1313)
     IBP_4_5_IV0(34, "4.5", "IV0", false);
 
     // NOTES when adding a new version:
@@ -262,6 +262,26 @@ public enum MetadataVersion {
 
     public boolean isControllerUnregistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
+    }
+
+    public short shareGroupStateRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short alterPartitionRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short assignReplicasToDirsRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short allocateProducerIdsRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short controllerRegistrationRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
     }
 
     public short partitionChangeRecordVersion() {

@@ -1288,6 +1288,39 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testSyncGroupCoordinatorLoadInProgressException() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build(true);
+
+        SyncGroupRequestData request = new SyncGroupRequestData()
+            .setGroupId("foo");
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("classic-group-sync"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.failedFuture(
+            new CoordinatorLoadInProgressException(null)
+        ));
+
+        CompletableFuture<SyncGroupResponseData> future = service.syncGroup(
+            requestContext(ApiKeys.SYNC_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertTrue(future.isDone());
+        assertEquals(
+            new SyncGroupResponseData()
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()),
+            future.get()
+        );
+    }
+
+    @Test
     public void testSyncGroupInvalidGroupId() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()

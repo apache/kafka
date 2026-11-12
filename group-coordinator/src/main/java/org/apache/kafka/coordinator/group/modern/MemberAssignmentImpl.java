@@ -45,6 +45,6 @@ public record MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) implement
 
     @Override
     public String toString() {
-        return "MemberAssignment(partitions=" + partitions + ')';
+        return "MemberAssignmentImpl(partitions=" + partitions + ')';
     }
 }
