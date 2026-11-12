@@ -3237,7 +3237,7 @@ class TransactionCoordinatorTest {
   def shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn(): Unit = {
     // Test that trying to add partitions with the client-facing epoch (after
     // calling InitProducerId with keepPreparedTxn=true) returns
-    // INVALID_TXN_STATE.  A properly implemented client should never try this,
+    // PRODUCER_FENCED.  A properly implemented client should never try this,
     // but the server validates it.
 
     setupPrepared2PcTxnWithBumpedClientEpoch()  // Return value not used - only need the setup and mocks
@@ -3259,14 +3259,14 @@ class TransactionCoordinatorTest {
       TV_2
     )
 
-    // Verify: Returns INVALID_TXN_STATE (cannot add partitions in this state)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
+    // Verify: Returns PRODUCER_FENCED (cannot add partitions in this state)
+    assertEquals(Errors.PRODUCER_FENCED, error)
   }
 
   @Test
   def shouldRejectAddPartitionsWithRotatedClientProducerIdForKeptPreparedTxn(): Unit = {
     // After InitProducerId(keepPreparedTxn=true) rotated the client-facing producer id,
-    // AddPartitions is rejected with INVALID_TXN_STATE for any identity.
+    // AddPartitions is rejected with PRODUCER_FENCED for any identity.
     val (capturedTransitMetadata, rotatedProducerId) = setupPrepared2PcTxnWithRotatedClientProducerId()
     val transitCount = capturedTransitMetadata.getAllValues.size
     val partitionsBefore = new util.HashSet[TopicPartition](currentTxnMetadata().topicPartitions)
@@ -3278,10 +3278,10 @@ class TransactionCoordinatorTest {
       error
     }
 
-    assertEquals(Errors.INVALID_TXN_STATE, addPartitions(rotatedProducerId, 0))
-    assertEquals(Errors.INVALID_TXN_STATE, addPartitions(rotatedProducerId, 1))
-    assertEquals(Errors.INVALID_TXN_STATE, addPartitions(producerId, producerEpoch))
-    assertEquals(Errors.INVALID_TXN_STATE, addPartitions(rotatedProducerId + 100, 0))
+    assertEquals(Errors.PRODUCER_FENCED, addPartitions(rotatedProducerId, 0))
+    assertEquals(Errors.PRODUCER_FENCED, addPartitions(rotatedProducerId, 1))
+    assertEquals(Errors.PRODUCER_FENCED, addPartitions(producerId, producerEpoch))
+    assertEquals(Errors.PRODUCER_FENCED, addPartitions(rotatedProducerId + 100, 0))
 
     assertEquals(partitionsBefore, currentTxnMetadata().topicPartitions)
     assertEquals(transitCount, capturedTransitMetadata.getAllValues.size)
@@ -4042,9 +4042,10 @@ class TransactionCoordinatorTest {
     val ongoingEpoch = producerEpoch  // 1
     val clientEpoch = result.producerEpoch  // 2
 
-    // Scenario 1: AddPartitions with ongoing epoch (1) → INVALID_TXN_STATE
+    // Scenario 1: AddPartitions with ongoing epoch (1) → PRODUCER_FENCED
     // The frozen ongoing identity is only used for the markers, the kept
-    // transaction doesn't accept new partitions with any identity.
+    // transaction doesn't accept new partitions with any identity (e.g. a stale
+    // produce request from the zombie producer that started the transaction).
     val partitionsBefore = new util.HashSet[TopicPartition](currentTxnMetadata().topicPartitions)
     coordinator.handleAddPartitionsToTransaction(
       transactionalId,
@@ -4054,12 +4055,12 @@ class TransactionCoordinatorTest {
       errorsCallback,
       TV_2
     )
-    assertEquals(Errors.INVALID_TXN_STATE, error,
-      "AddPartitions with ongoing epoch should return INVALID_TXN_STATE")
+    assertEquals(Errors.PRODUCER_FENCED, error,
+      "AddPartitions with ongoing epoch should return PRODUCER_FENCED")
     assertEquals(partitionsBefore, currentTxnMetadata().topicPartitions)
     assertEquals(1, capturedTransitMetadata.getAllValues.size)
 
-    // Scenario 2: AddPartitions with client epoch (2) → INVALID_TXN_STATE
+    // Scenario 2: AddPartitions with client epoch (2) → PRODUCER_FENCED
     // This is already tested in shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn
     // but included here for completeness of the validation matrix.
     coordinator.handleAddPartitionsToTransaction(
@@ -4070,10 +4071,10 @@ class TransactionCoordinatorTest {
       errorsCallback,
       TV_2
     )
-    assertEquals(Errors.INVALID_TXN_STATE, error,
-      "AddPartitions with client epoch should return INVALID_TXN_STATE")
+    assertEquals(Errors.PRODUCER_FENCED, error,
+      "AddPartitions with client epoch should return PRODUCER_FENCED")
 
-    // Scenario 3: AddPartitions with future epoch (3) → INVALID_TXN_STATE
+    // Scenario 3: AddPartitions with future epoch (3) → PRODUCER_FENCED
     val futureEpoch = (clientEpoch + 1).toShort
     coordinator.handleAddPartitionsToTransaction(
       transactionalId,
@@ -4083,8 +4084,8 @@ class TransactionCoordinatorTest {
       errorsCallback,
       TV_2
     )
-    assertEquals(Errors.INVALID_TXN_STATE, error,
-      "AddPartitions with future epoch should return INVALID_TXN_STATE")
+    assertEquals(Errors.PRODUCER_FENCED, error,
+      "AddPartitions with future epoch should return PRODUCER_FENCED")
 
     // Scenario 4: EndTransaction with ongoing epoch (1) → PRODUCER_FENCED (TV2)
     // Client should use client epoch for EndTransaction, not ongoing epoch.

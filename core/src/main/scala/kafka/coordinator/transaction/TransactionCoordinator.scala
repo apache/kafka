@@ -278,7 +278,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             try {
               if (txnMetadata.isClientFacingEpochExhausted &&
-                  expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch))
+                  expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.clientProducerEpoch))
                 Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
                   expectedProducerIdAndEpoch.isDefined))
               else
@@ -482,11 +482,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             } else if (txnMetadata.hasNextProducerEpoch) {
               // InitProducerId(keepPreparedTxn=true) kept the ongoing transaction, it can only be committed
               // or aborted, so adding partitions is not allowed regardless of the identity in the request
-              // (including the frozen producerId / producerEpoch used for the markers).  This can only happen
-              // if the client violates the protocol: after InitProducerId(keepPreparedTxn=true) the producer is
-              // in the prepared state and doesn't let the application send records or offsets, only commit or
-              // abort the kept transaction.
-              Left(Errors.INVALID_TXN_STATE)
+              // (including the frozen producerId / producerEpoch used for the markers).  The client that kept
+              // the transaction never does this: it is in the prepared state and doesn't let the application
+              // send records or offsets.  So this is a stale request, e.g. a produce request from the producer
+              // instance that started the transaction (which is a zombie at this point), and we fence it.
+              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
