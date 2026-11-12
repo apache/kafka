@@ -106,6 +106,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -2431,17 +2432,40 @@ public class TaskManagerTest {
         verify(consumer, never()).commitSync(emptyMap());
     }
 
-    @Test
-    public void shouldResetOffsetsInNewTaskIfRevivedTaskIsClosedOnAssignmentBeforeInitialization() {
-        final StreamTask revivedTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+    @ParameterizedTest
+    @EnumSource(ProcessingMode.class)
+    public void shouldResetOffsetsInNewTaskIfRevivedTaskIsClosedOnAssignmentBeforeInitialization(final ProcessingMode processingMode) {
+        final StreamTask revivedTask = runningTaskThatSuspends(taskId00, taskId00ChangelogPartitions, taskId00Partitions);
+        final StreamTask newTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
             .build();
-        final AtomicReference<State> revivedTaskState = new AtomicReference<>(State.RUNNING);
-        when(revivedTask.state()).thenAnswer(invocation -> revivedTaskState.get());
-        doAnswer(invocation -> {
-            revivedTaskState.set(State.SUSPENDED);
-            return null;
-        }).when(revivedTask).suspend();
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        taskRegistry.addTask(revivedTask);
+        if (processingMode == ProcessingMode.EXACTLY_ONCE_V2) {
+            when(activeTaskCreator.streamsProducer()).thenReturn(mock(StreamsProducer.class));
+        }
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(newTask));
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
+        final TaskManager taskManager = setUpTaskManager(processingMode, taskRegistry);
+
+        // the corrupted task is closed dirty, which drops its buffered records, and revived with its input
+        // partitions marked to be reset to the committed offsets once it is initialized again
+        taskManager.handleCorruption(Set.of(taskId00));
+        verify(revivedTask).addPartitionsForOffsetReset(taskId00Partitions);
+        when(revivedTask.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
+
+        // a rebalance completes before the revived task is initialized; under EOS the corruption enforces one
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        verify(revivedTask).closeClean();
+        verify(newTask).addPartitionsForOffsetReset(taskId00Partitions);
+        assertEquals(Set.of(newTask), taskRegistry.drainPendingTasksToInit());
+    }
+
+    @Test
+    public void shouldNotResetOffsetsInNewTaskForPartitionsNotAssignedToTheConsumer() {
+        final StreamTask revivedTask = runningTaskThatSuspends(taskId00, taskId00ChangelogPartitions, taskId00Partitions);
         final StreamTask newTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.CREATED)
@@ -2453,18 +2477,118 @@ public class TaskManagerTest {
         when(consumer.assignment()).thenReturn(taskId00Partitions);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, taskRegistry);
 
-        // the corrupted task is closed dirty, which drops its buffered records, and revived with its input
-        // partitions marked to be reset to the committed offsets once it is initialized again
         taskManager.handleCorruption(Set.of(taskId00));
         verify(revivedTask).addPartitionsForOffsetReset(taskId00Partitions);
         when(revivedTask.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
 
-        // the rebalance triggered by the corruption completes before the revived task is initialized
+        // e.g. with the eager protocol the consumer gives up all its partitions before the assignment, and it fetches
+        // the committed offsets of the partitions it gets back
+        when(consumer.assignment()).thenReturn(emptySet());
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
 
         verify(revivedTask).closeClean();
-        verify(newTask).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(newTask, never()).addPartitionsForOffsetReset(any());
+    }
+
+    @Test
+    public void shouldOnlyResetOffsetsInNewTaskOfTheSameAssignmentThatHasThePartitionsAsInput() {
+        final StreamTask revivedTask = runningTaskThatSuspends(taskId00, taskId00ChangelogPartitions, taskId00Partitions);
+        final StreamTask newTask01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED)
+            .build();
+        final StreamTask newTask00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        taskRegistry.addTask(revivedTask);
+        when(activeTaskCreator.streamsProducer()).thenReturn(mock(StreamsProducer.class));
+        when(activeTaskCreator.createTasks(consumer, taskId01Assignment)).thenReturn(singletonList(newTask01));
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(newTask00));
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, taskRegistry);
+
+        taskManager.handleCorruption(Set.of(taskId00));
+        verify(revivedTask).addPartitionsForOffsetReset(taskId00Partitions);
+        when(revivedTask.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
+
+        // the rebalance moves task 00 to another client before the revived task is initialized
+        taskManager.handleAssignment(taskId01Assignment, emptyMap());
+
+        verify(revivedTask).closeClean();
+        verify(newTask01, never()).addPartitionsForOffsetReset(any());
+
+        // task 00 comes back in a later rebalance; another client owned its partitions in between, so the consumer
+        // fetches their committed offsets anyway
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        verify(newTask00, never()).addPartitionsForOffsetReset(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProcessingMode.class)
+    public void shouldResetOffsetsInNewTaskIfTaskRevivedOnRevocationIsClosedOnAssignment(final ProcessingMode processingMode) {
+        final StreamTask revokedTask = runningTaskThatSuspends(taskId00, taskId00ChangelogPartitions, taskId00Partitions);
+        final StreamTask retainedTask = runningTaskThatSuspends(taskId01, taskId01ChangelogPartitions, taskId01Partitions);
+        when(revokedTask.commitNeeded()).thenReturn(true);
+        when(revokedTask.prepareCommit(true)).thenReturn(singletonMap(t1p0, new OffsetAndMetadata(0L, null)));
+        when(retainedTask.commitNeeded()).thenReturn(true);
+        when(retainedTask.prepareCommit(true)).thenReturn(singletonMap(t1p1, new OffsetAndMetadata(1L, null)));
+        final StreamTask newTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.CREATED)
+            .build();
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        taskRegistry.addTask(revokedTask);
+        taskRegistry.addTask(retainedTask);
+        when(activeTaskCreator.createTasks(consumer, taskId01Assignment)).thenReturn(singletonList(newTask));
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+        if (processingMode == ProcessingMode.EXACTLY_ONCE_V2) {
+            final StreamsProducer producer = mock(StreamsProducer.class);
+            when(activeTaskCreator.streamsProducer()).thenReturn(producer);
+            final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+            when(consumer.groupMetadata()).thenReturn(groupMetadata);
+            doThrow(new TimeoutException()).when(producer).commitTransaction(anyMap(), eq(groupMetadata));
+        } else {
+            doThrow(new TimeoutException()).when(consumer).commitSync(anyMap());
+        }
+        final TaskManager taskManager = setUpTaskManager(processingMode, taskRegistry);
+
+        // the commit times out (under EOS this marks both tasks as corrupted), so the revoked task and the task that
+        // stays are closed dirty, which drops their buffered records, and revived with their input partitions marked
+        // to be reset to the committed offsets
+        taskManager.handleRevocation(taskId00Partitions);
+        verify(revokedTask).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(retainedTask).addPartitionsForOffsetReset(taskId01Partitions);
+        // only the corrupted-task branch taken under EOS wipes the state
+        verify(retainedTask, times(processingMode == ProcessingMode.EXACTLY_ONCE_V2 ? 1 : 0))
+            .markChangelogAsCorrupted(taskId01ChangelogPartitions);
+        when(revokedTask.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
+        when(retainedTask.partitionsForOffsetReset()).thenReturn(taskId01Partitions);
+
+        // with the cooperative protocol the assignment directly follows the revocation, so the revived tasks are
+        // always still pending initialization
+        taskManager.handleAssignment(taskId01Assignment, emptyMap());
+
+        verify(retainedTask).closeClean();
+        verify(newTask).addPartitionsForOffsetReset(taskId01Partitions);
         assertEquals(Set.of(newTask), taskRegistry.drainPendingTasksToInit());
+    }
+
+    private StreamTask runningTaskThatSuspends(final TaskId taskId,
+                                               final Set<TopicPartition> changelogPartitions,
+                                               final Set<TopicPartition> inputPartitions) {
+        final StreamTask task = statefulTask(taskId, changelogPartitions)
+            .withInputPartitions(inputPartitions)
+            .build();
+        final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
+        when(task.state()).thenAnswer(invocation -> state.get());
+        doAnswer(invocation -> {
+            state.set(State.SUSPENDED);
+            return null;
+        }).when(task).suspend();
+        return task;
     }
 
     @Test

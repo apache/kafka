@@ -459,6 +459,8 @@ public class StreamTaskTest {
         consumer.seek(partition1, 10L);
         consumer.seek(partition2, 15L);
 
+        assertEquals(Set.of(partition1), task.partitionsForOffsetReset());
+
         @SuppressWarnings("unchecked")
         final java.util.function.Consumer<Set<TopicPartition>> resetter =
             mock(java.util.function.Consumer.class);
@@ -469,27 +471,6 @@ public class StreamTaskTest {
         assertEquals(5L, consumer.position(partition1));
         assertEquals(15L, consumer.position(partition2));
         verify(resetter).accept(Collections.emptySet());
-    }
-
-    @Test
-    public void shouldReturnPartitionsForOffsetResetUntilOffsetsAreReset() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig("100"));
-        task.addPartitionsForOffsetReset(Collections.singleton(partition1));
-
-        consumer.seek(partition1, 5L);
-        consumer.commitSync();
-
-        assertEquals(Set.of(partition1), task.partitionsForOffsetReset());
-
-        @SuppressWarnings("unchecked")
-        final java.util.function.Consumer<Set<TopicPartition>> resetter =
-            mock(java.util.function.Consumer.class);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(resetter);
-
         assertEquals(Set.of(), task.partitionsForOffsetReset());
     }
 

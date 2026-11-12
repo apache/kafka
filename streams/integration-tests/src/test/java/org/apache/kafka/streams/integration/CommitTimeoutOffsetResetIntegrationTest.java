@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -52,6 +54,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -122,20 +125,24 @@ public class CommitTimeoutOffsetResetIntegrationTest {
         final FaultRule commitTimeout =
             proxy.delayOn(ApiKeys.END_TXN, END_TXN_DELAY).forClient(PRODUCER_CLIENT_ID).once();
 
-        streams = streams();
         final AtomicInteger rebalances = new AtomicInteger();
-        streams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.REBALANCING) {
-                rebalances.incrementAndGet();
-            }
-        });
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        final List<String> taskManagerLog;
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            streams = streams();
+            streams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.REBALANCING) {
+                    rebalances.incrementAndGet();
+                }
+            });
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
-        TestUtils.waitForCondition(
-            () -> committedInputOffset() == NUM_RECORDS,
-            WAIT_MS,
-            "the input offset was never committed up to the end of the " + NUM_RECORDS + " input records"
-        );
+            TestUtils.waitForCondition(
+                () -> committedInputOffset() == NUM_RECORDS,
+                WAIT_MS,
+                "the input offset was never committed up to the end of the " + NUM_RECORDS + " input records"
+            );
+            taskManagerLog = appender.getMessages();
+        }
         final int storedKeys = countStoredKeys();
 
         assertAll(
@@ -147,6 +154,12 @@ public class CommitTimeoutOffsetResetIntegrationTest {
             () -> assertTrue(
                 rebalances.get() >= 2,
                 "the corrupted task should have triggered a rebalance after the initial one, saw " + rebalances.get()
+            ),
+            // if the revived task is initialized before the rebalance completes, it resets the offsets itself and the
+            // store is complete even without the hand-over, so check that the revived task was replaced
+            () -> assertTrue(
+                taskManagerLog.stream().anyMatch(message -> message.contains("replaces a revived task")),
+                "no new task took over the offset reset of a revived task that was closed before it was initialized"
             ),
             () -> assertEquals(
                 NUM_RECORDS,
