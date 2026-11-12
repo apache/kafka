@@ -28,14 +28,22 @@ abstract class AbstractPartitionGroup {
 
     /**
      * Result of readyToProcess check, containing both the readiness status
-     * and an optional diagnostic log message.
+     * and an optional diagnostic log message. Not-ready results that describe normal
+     * idling (waiting on the max.task.idle.ms deadline, or no data buffered at all)
+     * are marked to be logged at DEBUG, while results indicating the task is waiting
+     * to fetch or poll data are logged at INFO.
      */
     static final class ReadyToProcessResult {
         private final boolean ready;
         // KAFKA-21372: built lazily, since readyToProcess runs per record and the caller rarely logs the message
         private final Optional<Supplier<String>> logMessage;
+        private final boolean logAtDebug;
 
         ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage) {
+            this(ready, logMessage, false);
+        }
+
+        ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage, final boolean logAtDebug) {
             if (ready && logMessage.isPresent()) {
                 throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is true but a log message is present.");
             } else if (!ready && logMessage.isEmpty()) {
@@ -43,6 +51,7 @@ abstract class AbstractPartitionGroup {
             }
             this.ready = ready;
             this.logMessage = logMessage;
+            this.logAtDebug = logAtDebug;
         }
 
         boolean isReady() {
@@ -51,6 +60,10 @@ abstract class AbstractPartitionGroup {
 
         Optional<String> getLogMessage() {
             return logMessage.map(Supplier::get);
+        }
+
+        boolean isLogAtDebug() {
+            return logAtDebug;
         }
     }
 

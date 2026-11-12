@@ -1987,6 +1987,44 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldLogIdleNotReadyAtDebugAfterThreshold() throws Exception {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // MockConsumer.currentLag reports zero for partitions without an end offset,
+        // so both input partitions are caught up and empty: the task is idling
+        task.updateLags();
+
+        try (final LogCaptureAppender streamTaskAppender = LogCaptureAppender.createAndRegister(StreamTask.class)) {
+            streamTaskAppender.setClassLogger(StreamTask.class, Level.DEBUG);
+
+            // First call starts the not-ready timer without logging anything
+            final long initialTime = time.milliseconds();
+            assertFalse(task.isProcessable(initialTime));
+
+            // Advance past the 120s log threshold: idling within the idle window
+            // logs at DEBUG. As the check returns at the first partition still
+            // within its idle window, the per-partition deadlines roll forward one
+            // call at a time, so advance again to move every deadline past the
+            // wall clock before the next threshold log
+            long newTime = initialTime + 120_001L;
+            assertFalse(task.isProcessable(newTime));
+            newTime += 120_001L;
+            assertFalse(task.isProcessable(newTime));
+
+            // Normal idling is logged at DEBUG, not INFO
+            final List<String> debugMessages = streamTaskAppender.getMessages(Level.DEBUG);
+            assertTrue(debugMessages.stream()
+                .anyMatch(message -> message.contains("No partitions were buffered locally, so this task is not ready for processing.")));
+            assertTrue(streamTaskAppender.getMessages(Level.INFO).isEmpty());
+        }
+    }
+
+    @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);

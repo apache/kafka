@@ -815,6 +815,47 @@ public class PartitionGroupTest {
     }
 
     @Test
+    public void shouldMarkNormalIdlingAsLogAtDebug() {
+        final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
+        final PartitionGroup group = new PartitionGroup(
+            logContext,
+            mkMap(mkEntry(partition1, queue1)),
+            tp -> lags.getOrDefault(tp, OptionalLong.empty()),
+            getValueSensor(metrics, lastLatenessValue),
+            enforcedProcessingSensor,
+            100L
+        );
+
+        // lag unknown: waiting to fetch is worth an INFO log
+        final AbstractPartitionGroup.ReadyToProcessResult waitingToFetch = group.readyToProcess(0L);
+        assertFalse(waitingToFetch.isReady());
+        assertFalse(waitingToFetch.isLogAtDebug());
+
+        // lag > 0: waiting to buffer known records is worth an INFO log
+        lags.put(partition1, OptionalLong.of(1L));
+        group.updateLags();
+        final AbstractPartitionGroup.ReadyToProcessResult waitingToBuffer = group.readyToProcess(0L);
+        assertFalse(waitingToBuffer.isReady());
+        assertFalse(waitingToBuffer.isLogAtDebug());
+
+        // lag 0 within the idle window: normal idling, log at DEBUG
+        lags.put(partition1, OptionalLong.of(0L));
+        group.updateLags();
+        final AbstractPartitionGroup.ReadyToProcessResult idling = group.readyToProcess(0L);
+        assertFalse(idling.isReady());
+        assertTrue(idling.isLogAtDebug());
+        assertTrue(idling.getLogMessage().isPresent() &&
+            idling.getLogMessage().get().contains("Waiting for new data to be produced for configured idle time"));
+
+        // past the idle window with no data buffered at all: still normal idling, log at DEBUG
+        final AbstractPartitionGroup.ReadyToProcessResult nothingBuffered = group.readyToProcess(101L);
+        assertFalse(nothingBuffered.isReady());
+        assertTrue(nothingBuffered.isLogAtDebug());
+        assertTrue(nothingBuffered.getLogMessage().isPresent() &&
+            nothingBuffered.getLogMessage().get().contains("No partitions were buffered locally, so this task is not ready for processing."));
+    }
+
+    @Test
     public void shouldIdleAsSpecifiedWhenLagIsZero() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
