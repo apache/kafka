@@ -1578,6 +1578,10 @@ public class StreamsGroup implements Group {
                 "This is a bug, please file a JIRA ticket.", groupId);
             return endpointToPartitionsList;
         }
+        // Without configured subtopologies, for example while source topics are missing, there are no partitions to map yet.
+        if (configuredTopology().flatMap(ConfiguredTopology::subtopologies).isEmpty()) {
+            return endpointToPartitionsList;
+        }
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             if (entry.getKey().equals(updatedMember.memberId())) {
                 continue;

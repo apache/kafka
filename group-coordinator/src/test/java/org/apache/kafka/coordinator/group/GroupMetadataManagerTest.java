@@ -24668,6 +24668,56 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointAndMissingSourceTopics() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        // The source topic does not exist, so the configured topology has no subtopologies.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        // A client that has not yet received endpoint information sends -1 as the endpoint information epoch.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
+                .setEndpointInformationEpoch(-1));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setPartitionsByUserEndpoint(List.of())
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                    .setStatusDetail("Source topics foo are missing.")))
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000),
+            result.response().data()
+        );
+    }
+
+    @Test
     public void testStreamsGroupEndpointInformationIncludesNewMember() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
