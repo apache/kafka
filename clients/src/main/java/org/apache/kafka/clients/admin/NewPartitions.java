@@ -40,6 +40,7 @@ public class NewPartitions {
     /**
      * Increase the partition count for a topic to the given {@code totalCount}.
      * The assignment of new replicas to brokers will be decided by the broker.
+     * The new partitions use the same replication factor as partition 0.
      *
      * @param totalCount The total number of partitions after the operation succeeds.
      */
@@ -53,7 +54,7 @@ public class NewPartitions {
      * The length of the given {@code newAssignments} should equal {@code totalCount - oldCount}, since
      * the assignment of existing partitions are not changed.
      * Each inner list of {@code newAssignments} should have a length equal to
-     * the topic's replication factor.
+     * the topic's replication factor, which is the replication factor of partition 0.
      * The first broker id in each inner list is the "preferred replica".</p>
      *
      * <p>For example, suppose a topic currently has a replication factor of 2, and
