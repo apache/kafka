@@ -370,7 +370,7 @@ public class RecordAccumulator {
      */
     protected TopicInfo topicInfoFor(String topic) {
         return topicInfoMap.computeIfAbsent(topic,
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, Math.max(1, batchSize), partitionerRackAware, rack)));
     }
 
     /**
@@ -491,6 +491,11 @@ public class RecordAccumulator {
         ProducerBatch batch = createProducerBatch(tp, recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
+        if (batchSize <= 0) {
+            // batch.size<=0 disables batching: close for appends right after the first record so
+            // isFull()/hasRoomFor() correctly reject any further appends to this batch.
+            batch.closeForRecordAppends();
+        }
 
         dq.addLast(batch);
         incomplete.add(batch);
