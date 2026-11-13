@@ -3770,6 +3770,12 @@ public class ReplicationControlManagerTest {
         } else {
             assertArrayEquals(new int[]{1}, ctx.replicationControl.getPartition(barId, 0).elr);
         }
+
+        // Once foo is deleted, handling the broker which used to be in its ELR must not fail.
+        ctx.replay(ctx.replicationControl.deleteTopics(
+            anonymousContextFor(ApiKeys.DELETE_TOPICS), Set.of(fooId)).records());
+        ctx.handleBrokersShutdown(false, 1);
+        ctx.replay(ctx.replicationControl.unregisterBroker(1).records());
     }
 
     @Test
