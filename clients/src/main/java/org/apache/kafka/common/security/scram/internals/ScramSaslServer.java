@@ -154,9 +154,7 @@ public class ScramSaslServer implements SaslServer {
                         if (!clientFinalMessage.nonce().equals(serverFirstMessage.nonce())) {
                             throw new SaslException("Invalid client nonce in the final client message.");
                         }
-                        verifyClientProof(clientFinalMessage);
-                        if (unknownUser)
-                            throw new SaslException("Authentication failed: Invalid user credentials");
+                        verifyClientFinalMessage(clientFinalMessage);
                         byte[] serverKey = scramCredential.serverKey();
                         byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
                         ServerFinalMessage serverFinalMessage = new ServerFinalMessage(null, serverSignature);
@@ -227,6 +225,17 @@ public class ScramSaslServer implements SaslServer {
     private void setState(State state) {
         log.debug("Setting SASL/{} server state to {}", mechanism, state);
         this.state = state;
+    }
+
+    private void verifyClientFinalMessage(ClientFinalMessage clientFinalMessage) throws SaslException {
+        try {
+            verifyClientProof(clientFinalMessage);
+        } catch (SaslException e) {
+            if (!unknownUser)
+                throw e;
+        }
+        if (unknownUser)
+            throw new SaslException("Authentication failed: Invalid user credentials");
     }
 
     // Visible for testing
