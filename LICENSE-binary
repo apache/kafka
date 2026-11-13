@@ -226,16 +226,16 @@ License Version 2.0:
 - jakarta.inject-api-2.0.1
 - jakarta.validation-api-3.0.2
 - javassist-3.30.2-GA
-- jetty-alpn-client-12.0.39
-- jetty-client-12.0.39
-- jetty-ee10-servlet-12.0.39
-- jetty-ee10-servlets-12.0.39
-- jetty-http-12.0.39
-- jetty-io-12.0.39
-- jetty-security-12.0.39
-- jetty-server-12.0.39
-- jetty-session-12.0.39
-- jetty-util-12.0.39
+- jetty-alpn-client-12.0.40
+- jetty-client-12.0.40
+- jetty-ee10-servlet-12.0.40
+- jetty-ee10-servlets-12.0.40
+- jetty-http-12.0.40
+- jetty-io-12.0.40
+- jetty-security-12.0.40
+- jetty-server-12.0.40
+- jetty-session-12.0.40
+- jetty-util-12.0.40
 - jose4j-0.9.6
 - jspecify-1.0.0
 - log4j-api-2.25.5
@@ -271,12 +271,12 @@ see: licenses/eclipse-public-license-2.0
 - hk2-utils-3.0.6
 - osgi-resource-locator-1.0.3
 - aopalliance-repackaged-3.0.6
-- jersey-client-3.1.10
-- jersey-common-3.1.10
-- jersey-container-servlet-3.1.10
-- jersey-container-servlet-core-3.1.10
-- jersey-hk2-3.1.10
-- jersey-server-3.1.10
+- jersey-client-3.1.12
+- jersey-common-3.1.12
+- jersey-container-servlet-3.1.12
+- jersey-container-servlet-core-3.1.12
+- jersey-hk2-3.1.12
+- jersey-server-3.1.12
 
 ---------------------------------------
 CDDL 1.1 + GPLv2 with classpath exception
@@ -290,7 +290,7 @@ see: licenses/CDDL+GPL-1.1
 MIT License
 
 - argparse4j-0.9.0, see: licenses/argparse-MIT
-- classgraph-4.8.196, see: licenses/classgraph-MIT
+- classgraph-4.8.199, see: licenses/classgraph-MIT
 - jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 - slf4j-api-1.7.36, see: licenses/slf4j-MIT
 - pcollections-4.0.2, see: licenses/pcollections-MIT
@@ -298,7 +298,7 @@ MIT License
 ---------------------------------------
 BSD 2-Clause
 
-- zstd-jni-1.5.7-17, see: licenses/zstd-jni-BSD-2-clause
+- zstd-jni-1.5.7-24, see: licenses/zstd-jni-BSD-2-clause
 - HdrHistogram-2.2.2, see: licenses/hdrHistogram-BSD-2-clause
 
 ---------------------------------------
@@ -307,7 +307,7 @@ BSD 3-Clause
 - jline-native-3.30.17, see: licenses/jline-BSD-3-clause
 - jline-reader-3.30.17, see: licenses/jline-BSD-3-clause
 - jline-terminal-3.30.17, see: licenses/jline-BSD-3-clause
-- protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
+- protobuf-java-3.25.9, see: licenses/protobuf-java-BSD-3-clause
 - jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
 ---------------------------------------
