@@ -772,7 +772,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitOffsetRequestFuture != null) {
             Timer pollTimer = timer.remainingMs() < joinPrepareTimer.remainingMs() ?
                     timer : joinPrepareTimer;
-            client.poll(autoCommitOffsetRequestFuture, pollTimer);
+            try {
+                client.poll(autoCommitOffsetRequestFuture, pollTimer);
+            } catch (WakeupException | InterruptException e) {
+                joinPrepareTimer = null;
+                autoCommitOffsetRequestFuture = null;
+                throw e;
+            }
             joinPrepareTimer.update();
 
             // Keep retrying/waiting the offset commit when:
