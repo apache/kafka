@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -64,8 +65,11 @@ public class OffsetSyncStore implements AutoCloseable {
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
+    // Retained so that stopInitialization() can wake up a start() which is in progress on another thread
+    private final Consumer<byte[], byte[]> consumer;
     protected volatile boolean initializationMustReadToEnd = true;
     protected volatile boolean readToEnd = false;
+    private volatile boolean initializationStopped = false;
 
     // package access to avoid Java 21 "this-escape" warning
     OffsetSyncStore(MirrorCheckpointConfig config) {
@@ -85,6 +89,7 @@ public class OffsetSyncStore implements AutoCloseable {
         }
         this.admin = admin;
         this.backingStore = store;
+        this.consumer = consumer;
     }
 
     private KafkaBasedLog<byte[], byte[]> createBackingStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
@@ -104,6 +109,7 @@ public class OffsetSyncStore implements AutoCloseable {
     OffsetSyncStore() {
         this.admin = null;
         this.backingStore = null;
+        this.consumer = null;
     }
 
     /**
@@ -112,13 +118,48 @@ public class OffsetSyncStore implements AutoCloseable {
     public void start(boolean initializationMustReadToEnd) {
         this.initializationMustReadToEnd = initializationMustReadToEnd;
         log.debug("OffsetSyncStore starting - must read to OffsetSync end = {}", initializationMustReadToEnd);
-        backingStoreStart();
+        if (initializationStopped) {
+            log.debug("OffsetSyncStore not started because it is already stopping");
+            return;
+        }
+        try {
+            backingStoreStart();
+        } catch (WakeupException e) {
+            if (!initializationStopped) {
+                throw e;
+            }
+            // stopInitialization() woke the consumer up, so this is an orderly shutdown rather than a failure
+            log.debug("OffsetSyncStore stopped reading the offset syncs topic because it is stopping");
+            return;
+        }
         readToEnd = true;
+    }
+
+    /**
+     * Stop an initialization which is in progress, and prevent one which has not begun from starting, so that
+     * {@link #close()} does not have to wait for the whole offset syncs topic to be read.
+     * <p>This is the only method of this class which may be called by a thread other than the one which calls
+     * {@link #start(boolean)}. {@link #close()} must not be called until that thread has returned from
+     * {@link #start(boolean)}, because the consumer which backs this store is not safe for multi-threaded access.
+     */
+    void stopInitialization() {
+        initializationStopped = true;
+        wakeupBackingStore();
     }
 
     // overridable for testing
     void backingStoreStart() {
         backingStore.start(false);
+    }
+
+    // overridable for testing
+    void wakeupBackingStore() {
+        if (consumer != null) {
+            // Consumer::wakeup is the only consumer method which is safe to call from a thread other than the
+            // one using the consumer. It makes the read performed by KafkaBasedLog::start give up with a
+            // WakeupException instead of running all the way to the end of the topic.
+            consumer.wakeup();
+        }
     }
 
     public OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {

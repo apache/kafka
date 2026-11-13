@@ -16,19 +16,25 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.util.Callback;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,6 +45,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class MirrorCheckpointTaskTest {
+
+    // Only reached if the code under test hangs, in which case the test must fail rather than block forever.
+    private static final long MAX_WAIT_MS = 60_000L;
 
     @Test
     public void testDownstreamTopicRenaming() {
@@ -370,5 +379,142 @@ public class MirrorCheckpointTaskTest {
         when(checkpointStore.isInitialized()).thenReturn(true);
         List<SourceRecord> polled = task.poll();
         assertEquals(1, polled.size());
+    }
+
+    @Test
+    public void testStopDoesNotCloseOffsetSyncStoreWhileItIsStarting() throws InterruptedException {
+        BlockingOffsetSyncStore offsetSyncStore = new BlockingOffsetSyncStore();
+        Scheduler scheduler = new Scheduler("test scheduler", Duration.ofMillis(MAX_WAIT_MS));
+        MirrorCheckpointTask task = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), offsetSyncStore, Set.of(), Map.of(),
+                emptyCheckpointStore(), scheduler);
+        try {
+            scheduler.executeAsync(task::initializeStores, "starting checkpoint and offset sync stores");
+            assertTrue(offsetSyncStore.startupEntered.await(MAX_WAIT_MS, TimeUnit.MILLISECONDS),
+                    "the offset sync store never started");
+
+            task.stop();
+
+            assertFalse(offsetSyncStore.closedWhileStartingUp.get(),
+                    "stop() closed the offset sync store while the scheduler was still starting it, which uses "
+                            + "the consumer backing that store from two threads at once");
+        } finally {
+            scheduler.close();
+        }
+    }
+
+    @Test
+    public void testStopDoesNotCloseCheckpointStoreWhileItIsStarting() throws InterruptedException {
+        BlockingCheckpointStore checkpointStore = new BlockingCheckpointStore();
+        Scheduler scheduler = new Scheduler("test scheduler", Duration.ofMillis(MAX_WAIT_MS));
+        MirrorCheckpointTask task = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), new OffsetSyncStoreTest.FakeOffsetSyncStore(), Set.of(), Map.of(),
+                checkpointStore, scheduler);
+        try {
+            scheduler.executeAsync(task::initializeStores, "starting checkpoint and offset sync stores");
+            assertTrue(checkpointStore.startupEntered.await(MAX_WAIT_MS, TimeUnit.MILLISECONDS),
+                    "the checkpoint store never started");
+
+            task.stop();
+
+            assertFalse(checkpointStore.closedWhileStartingUp.get(),
+                    "stop() closed the checkpoint store while the scheduler was still starting it, which uses "
+                            + "the consumer backing that store from two threads at once");
+        } finally {
+            scheduler.close();
+        }
+    }
+
+    private static CheckpointStore emptyCheckpointStore() {
+        return new CheckpointStore(mock(MirrorCheckpointTaskConfig.class), Set.of("group1")) {
+            @Override
+            void readCheckpointsImpl(MirrorCheckpointTaskConfig config,
+                                     Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+                // there are no checkpoints to read
+            }
+        };
+    }
+
+    /**
+     * Blocks in the middle of its startup, as a real store does while it reads an internal topic to the end, and
+     * records whether it was closed before that startup finished. Both the wakeup performed by a real
+     * {@code stopInitialization()} and the one performed by a real {@code close()} are modelled by releasing the
+     * startup, so that a store which is closed too early fails the assertion instead of hanging the test.
+     */
+    private static final class BlockingOffsetSyncStore extends OffsetSyncStore {
+        private final CountDownLatch startupEntered = new CountDownLatch(1);
+        private final CountDownLatch startupMayReturn = new CountDownLatch(1);
+        private final AtomicBoolean startingUp = new AtomicBoolean();
+        private final AtomicBoolean closedWhileStartingUp = new AtomicBoolean();
+
+        @Override
+        void backingStoreStart() {
+            startingUp.set(true);
+            startupEntered.countDown();
+            awaitStartupMayReturn(startupMayReturn);
+            startingUp.set(false);
+        }
+
+        @Override
+        void wakeupBackingStore() {
+            startupMayReturn.countDown();
+        }
+
+        @Override
+        public void close() {
+            if (startingUp.get()) {
+                closedWhileStartingUp.set(true);
+            }
+            startupMayReturn.countDown();
+            super.close();
+        }
+    }
+
+    /** The {@link CheckpointStore} equivalent of {@link BlockingOffsetSyncStore}. */
+    private static final class BlockingCheckpointStore extends CheckpointStore {
+        private final CountDownLatch startupEntered = new CountDownLatch(1);
+        private final CountDownLatch startupMayReturn = new CountDownLatch(1);
+        private final AtomicBoolean startingUp = new AtomicBoolean();
+        private final AtomicBoolean closedWhileStartingUp = new AtomicBoolean();
+
+        private BlockingCheckpointStore() {
+            super(mock(MirrorCheckpointTaskConfig.class), Set.of("group1"));
+        }
+
+        @Override
+        void readCheckpointsImpl(MirrorCheckpointTaskConfig config,
+                                 Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+            startingUp.set(true);
+            startupEntered.countDown();
+            awaitStartupMayReturn(startupMayReturn);
+            startingUp.set(false);
+        }
+
+        @Override
+        void stopInitialization() {
+            super.stopInitialization();
+            startupMayReturn.countDown();
+        }
+
+        @Override
+        public void close() {
+            if (startingUp.get()) {
+                closedWhileStartingUp.set(true);
+            }
+            startupMayReturn.countDown();
+            super.close();
+        }
+    }
+
+    /**
+     * The latch is always counted down by either {@code stopInitialization()} or {@code close()}, so the timeout
+     * only matters if the task under test stops doing both, in which case the test must not hang forever.
+     */
+    private static void awaitStartupMayReturn(CountDownLatch startupMayReturn) {
+        try {
+            startupMayReturn.await(MAX_WAIT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
