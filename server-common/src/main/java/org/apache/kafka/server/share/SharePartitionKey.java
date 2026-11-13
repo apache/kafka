@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -133,7 +134,7 @@ public class SharePartitionKey {
     }
 
     public static String asCoordinatorKey(String groupId, Uuid topicId, int partition) {
-        return String.format("%s:%s:%d", groupId, topicId, partition);
+        return String.format(Locale.ROOT, "%s:%s:%d", groupId, topicId, partition);
     }
 
     @Override
