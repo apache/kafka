@@ -51,11 +51,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -278,6 +280,85 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
         verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
+    }
+
+    /**
+     * An unexpected exception thrown while handling a heartbeat response (successful) or a heartbeat
+     * request failure must not be lost (the callback runs on a future stage nobody observes). In both
+     * cases it must be logged, reach the application as an error event and fail the member.
+     */
+    @ParameterizedTest(name = "successfulResponse={0}")
+    @ValueSource(booleans = {true, false})
+    public void testUnexpectedErrorHandlingHeartbeatIsFatal(boolean successfulResponse) {
+        IllegalStateException unexpected = new IllegalStateException("unexpected error handling heartbeat");
+
+        try (LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
+            completeHeartbeatThrowingWhileHandling(successfulResponse, unexpected);
+
+            assertUnexpectedErrorLogged(logAppender);
+        }
+        ensureFatalUnexpectedError(unexpected);
+        assertFalse(heartbeatRequestState.requestInFlight(), "The request must not be left in flight");
+    }
+
+    /**
+     * If failing the member throws too (e.g. the member cannot transition to FATAL from its current
+     * state), the original error must still reach the application, and the second error must be logged.
+     */
+    @Test
+    public void testUnexpectedErrorWhileFailingMemberIsLogged() {
+        IllegalStateException unexpected = new IllegalStateException("unexpected error handling heartbeat");
+        doThrow(new IllegalStateException("Invalid state transition from FENCED to FATAL"))
+            .when(membershipManager).transitionToFatal();
+
+        try (LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
+            completeHeartbeatThrowingWhileHandling(true, unexpected);
+
+            assertUnexpectedErrorLogged(logAppender);
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
+                .anyMatch(m -> m.contains("Unexpected error while failing the member")));
+        }
+        ArgumentCaptor<ErrorEvent> errorEventCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventCaptor.capture());
+        assertSame(unexpected, errorEventCaptor.getValue().error().getCause());
+    }
+
+    /**
+     * Sends a heartbeat and completes it with a successful response, or with a request failure, making
+     * the handling of it throw the given error.
+     */
+    private void completeHeartbeatThrowingWhileHandling(boolean successfulResponse, RuntimeException error) {
+        if (successfulResponse) {
+            doThrow(error).when(membershipManager).onHeartbeatSuccess(any());
+        } else {
+            doThrow(error).when(membershipManager).onHeartbeatFailure(true);
+        }
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
+        if (successfulResponse) {
+            request.handler().onComplete(createHeartbeatResponse(request, Errors.NONE));
+        } else {
+            request.handler().onFailure(time.milliseconds(), new TimeoutException("timeout"));
+        }
+    }
+
+    private void assertUnexpectedErrorLogged(LogCaptureAppender logAppender) {
+        assertTrue(logAppender.getMessages(Level.ERROR).stream()
+            .anyMatch(m -> m.contains("Unexpected error while handling " + heartbeatRequestManager.heartbeatRequestName())),
+                "Unexpected error while handling HB response should be logged");
+    }
+
+    private void ensureFatalUnexpectedError(Throwable expectedCause) {
+        ArgumentCaptor<ErrorEvent> errorEventCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventCaptor.capture());
+        Throwable error = errorEventCaptor.getValue().error();
+        assertInstanceOf(KafkaException.class, error);
+        assertSame(expectedCause, error.getCause());
+        verify(membershipManager).transitionToFatal();
+        verify(membershipManager).onHeartbeatFailure(false);
     }
 
     @ParameterizedTest

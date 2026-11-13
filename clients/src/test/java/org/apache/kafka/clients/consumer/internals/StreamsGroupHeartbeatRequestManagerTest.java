@@ -81,13 +81,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -2382,6 +2385,97 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(heartbeatState).reset();
             verify(membershipManager).onFatalHeartbeatFailure();
             verify(heartbeatRequestState, never()).reset();
+        }
+    }
+
+    /**
+     * An unexpected exception thrown while handling a heartbeat response (successful) or a heartbeat
+     * request failure must not be lost (the callback runs on a future stage nobody observes). In both
+     * cases it must be logged, reach the application as an error event and fail the member.
+     */
+    @ParameterizedTest(name = "successfulResponse={0}")
+    @ValueSource(booleans = {true, false})
+    public void testUnexpectedErrorHandlingHeartbeatIsFatal(final boolean successfulResponse) {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            final IllegalStateException unexpected = new IllegalStateException("unexpected error handling heartbeat");
+
+            completeHeartbeatThrowingWhileHandling(heartbeatRequestManager, successfulResponse, unexpected);
+
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
+                .anyMatch(m -> m.contains("Unexpected error while handling StreamsGroupHeartbeatRequest")));
+            final ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertInstanceOf(KafkaException.class, errorEvent.getValue().error());
+            assertSame(unexpected, errorEvent.getValue().error().getCause());
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            // The unexpected error resets the heartbeat state. On a request failure, onFailure has
+            // already reset it before throwing.
+            verify(heartbeatState, times(successfulResponse ? 1 : 2)).reset();
+        }
+    }
+
+    /**
+     * If failing the member throws too (e.g. the member cannot transition to FATAL from its current
+     * state), the original error must still reach the application, and the second error must be logged.
+     */
+    @Test
+    public void testUnexpectedErrorWhileFailingMemberIsLogged() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final IllegalStateException unexpected = new IllegalStateException("unexpected error handling heartbeat");
+            doThrow(new IllegalStateException("Invalid state transition from FENCED to FATAL"))
+                .when(membershipManager).transitionToFatal();
+
+            completeHeartbeatThrowingWhileHandling(heartbeatRequestManager, true, unexpected);
+
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
+                .anyMatch(m -> m.contains("Unexpected error while handling StreamsGroupHeartbeatRequest")));
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
+                .anyMatch(m -> m.contains("Unexpected error while failing the member")));
+            final ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertSame(unexpected, errorEvent.getValue().error().getCause());
+        }
+    }
+
+    /**
+     * Sends a heartbeat and completes it with a successful response, or with a request failure, making
+     * the handling of it throw the given error.
+     */
+    private void completeHeartbeatThrowingWhileHandling(final StreamsGroupHeartbeatRequestManager heartbeatRequestManager,
+                                                        final boolean successfulResponse,
+                                                        final RuntimeException error) {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        if (successfulResponse) {
+            doThrow(error).when(membershipManager).onHeartbeatSuccess(any());
+        } else {
+            doThrow(error).when(membershipManager).onRetriableHeartbeatFailure();
+        }
+
+        final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        final NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
+        if (successfulResponse) {
+            request.handler().onComplete(buildClientResponse());
+        } else {
+            request.handler().onFailure(time.milliseconds(), DisconnectException.INSTANCE);
         }
     }
 
