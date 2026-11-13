@@ -169,6 +169,36 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
+     * A record that fits in the chunks the batch already holds must be appended without asking the pool
+     * for anything. With {@code batch.size} equal to the chunk size, a second chunk could never be written
+     * to, so acquiring one would only waste memory, or fail the append when the pool has none to give.
+     */
+    @Test
+    public void testRecordFittingInAttachedChunksNeedsNoExtension() throws Exception {
+        int chunkSize = 256;
+        // The pool holds exactly one chunk, so any extension acquire would be refused.
+        ChunkedRecordAccumulator accum = newAccumulator(chunkSize, chunkSize, chunkSize, Compression.NONE);
+        try {
+            // 61 bytes of batch header and a 74 byte record.
+            accum.append(topic, partition1, 0L, key, new byte[64], Record.EMPTY_HEADERS, null,
+                maxBlockTimeMs, time.milliseconds(), cluster);
+            // A 120 byte record, taking the batch to 255 bytes: within the chunk, though the record's
+            // worst-case size estimate (136 bytes) would not be.
+            accum.append(topic, partition1, 0L, key, new byte[110], Record.EMPTY_HEADERS, null,
+                /* maxTimeToBlock */ 0L, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "both records belong in the one batch");
+            assertEquals(2, dq.peekLast().recordCount);
+            assertEquals(255, dq.peekLast().estimatedSizeInBytes());
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+            assertEquals(0.0, (double) exhausted.metricValue());
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
      * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
      * appender racing the same batch.
      */
