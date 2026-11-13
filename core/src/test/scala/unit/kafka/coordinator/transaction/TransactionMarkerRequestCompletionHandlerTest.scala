@@ -191,7 +191,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     def newEntry(txnId: String, pid: Long, tp: TopicPartition): (PendingCompleteTxnAndMarkerEntry, TransactionMetadata) = {
       val metadata = new TransactionMetadata(txnId, pid, pid, RecordBatch.NO_PRODUCER_ID,
-        producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(tp), 0L, 0L, TransactionVersion.TV_2)
+        producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(tp), 0L, 0L, TransactionVersion.TV_2)
       when(txnStateManager.getTransactionState(ArgumentMatchers.eq(txnId)))
         .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
       val entry = new PendingCompleteTxnAndMarkerEntry(
