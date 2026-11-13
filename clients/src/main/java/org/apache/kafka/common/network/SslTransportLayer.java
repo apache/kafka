@@ -721,15 +721,36 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public int write(ByteBuffer src) throws IOException {
+        return (int) write(new ByteBuffer[] {src}, 0, 1);
+    }
+
+    /**
+    * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
+    *
+    * @param srcs The buffers from which bytes are to be retrieved
+    * @param offset The offset within the buffer array of the first buffer from which bytes are to be retrieved; must be non-negative and no larger than srcs.length.
+    * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than srcs.length - offset.
+    * @return returns no.of bytes written , possibly zero.
+    * @throws IOException If some other I/O error occurs
+    */
+    @Override
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
+            throw new IndexOutOfBoundsException();
         if (state == State.CLOSING)
             throw closingException();
         if (!ready())
             return 0;
 
-        int written = 0;
-        while (flush(netWriteBuffer) && src.hasRemaining()) {
+        long remaining = 0;
+        for (int i = offset; i < offset + length; i++)
+            remaining += srcs[i].remaining();
+
+        long written = 0;
+        while (flush(netWriteBuffer) && written < remaining) {
             netWriteBuffer.clear();
-            SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
+            // one TLS record takes the bytes of as many buffers as fit into it
+            SSLEngineResult wrapResult = sslEngine.wrap(srcs, offset, length, netWriteBuffer);
             netWriteBuffer.flip();
 
             // reject renegotiation if TLS < 1.3, key updates for TLS 1.3 are allowed
@@ -752,39 +773,6 @@ public class SslTransportLayer implements TransportLayer {
             }
         }
         return written;
-    }
-
-    /**
-    * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
-    *
-    * @param srcs The buffers from which bytes are to be retrieved
-    * @param offset The offset within the buffer array of the first buffer from which bytes are to be retrieved; must be non-negative and no larger than srcs.length.
-    * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than srcs.length - offset.
-    * @return returns no.of bytes written , possibly zero.
-    * @throws IOException If some other I/O error occurs
-    */
-    @Override
-    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-        if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
-            throw new IndexOutOfBoundsException();
-        int totalWritten = 0;
-        int i = offset;
-        while (i < offset + length) {
-            if (srcs[i].hasRemaining() || hasPendingWrites()) {
-                int written = write(srcs[i]);
-                if (written > 0) {
-                    totalWritten += written;
-                }
-            }
-            if (!srcs[i].hasRemaining() && !hasPendingWrites()) {
-                i++;
-            } else {
-                // if we are unable to write the current buffer to socketChannel we should break,
-                // as we might have reached max socket send buffer size.
-                break;
-            }
-        }
-        return totalWritten;
     }
 
     /**
