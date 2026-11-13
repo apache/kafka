@@ -2297,6 +2297,7 @@ project(':clients:clients-integration-tests') {
   dependencies {
     testImplementation libs.metrics
     testImplementation libs.slf4jApi
+    testImplementation libs.log4j2Core
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':metadata')
