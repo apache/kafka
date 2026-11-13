@@ -14015,16 +14015,38 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = newClassicProtocols(
-            newClassicProtocol("range", List.of(fooTopicName)),
-            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
-        );
+        // The first protocol, "range", subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
 
         // A classic group that has members but has not completed a generation has no selected
         // protocol.
         ClassicGroup group = context.createClassicGroup(groupId);
-        group.add(newClassicMember(memberId1, protocols, new byte[0]));
-        group.add(newClassicMember(memberId2, protocols, new byte[0]));
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
         group.transitionTo(PREPARING_REBALANCE);
         assertEquals(Optional.empty(), group.protocolName());
 
@@ -14038,8 +14060,36 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(List.of())
         );
 
-        ConsumerGroupMember expectedMember1 = newConvertedMember(memberId1, 0, protocols, List.of(fooTopicName), Map.of());
-        ConsumerGroupMember expectedMember2 = newConvertedMember(memberId2, 0, protocols, List.of(fooTopicName), Map.of());
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
@@ -14081,8 +14131,8 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        // A member converted from a group at generation 0 can join the new consumer group with the
-        // classic protocol.
+        // Member 1 was converted before its classic group completed a rebalance. It rejoins with
+        // the classic protocol and is told its first protocol.
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
             new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
@@ -14130,28 +14180,44 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols1 = newClassicProtocols(
-            newClassicProtocol("range", List.of(fooTopicName)),
-            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
-        );
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols2 = newClassicProtocols(
-            newClassicProtocol("cooperative-sticky", List.of(fooTopicName))
-        );
+        // The first protocol of each member subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols1 = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
+        JoinGroupRequestProtocolCollection protocols2 = GroupMetadataManagerTestContext.toProtocols("cooperative-sticky");
 
         // The group is stable on "range" at generation 1, then a member that only supports
         // "cooperative-sticky" joins.
         ClassicGroup group = context.createClassicGroup(groupId);
-        group.add(newClassicMember(
-            memberId1,
-            protocols1,
-            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-                List.of(new TopicPartition(fooTopicName, 0))
-            )))
-        ));
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols1,
+                Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+                    List.of(new TopicPartition(fooTopicName, 0))
+                )))
+            )
+        );
         group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
         group.transitionTo(STABLE);
-        group.add(newClassicMember(memberId2, protocols2, new byte[0]));
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols2,
+                new byte[0]
+            )
+        );
         group.transitionTo(PREPARING_REBALANCE);
         assertEquals(Optional.of("range"), group.protocolName());
         assertEquals(1, group.generationId());
@@ -14167,8 +14233,36 @@ public class GroupMetadataManagerTest {
         );
 
         // The assignment of the first member is kept.
-        ConsumerGroupMember expectedMember1 = newConvertedMember(memberId1, 1, protocols1, List.of(fooTopicName), assignment1);
-        ConsumerGroupMember expectedMember2 = newConvertedMember(memberId2, 1, protocols2, List.of(fooTopicName), Map.of());
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(assignment1, 1))
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
@@ -14209,67 +14303,6 @@ public class GroupMetadataManagerTest {
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
             result.response()
         );
-    }
-
-    private static JoinGroupRequestData.JoinGroupRequestProtocol newClassicProtocol(
-        String name,
-        List<String> topicNames
-    ) {
-        return new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName(name)
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
-                new ConsumerPartitionAssignor.Subscription(topicNames)
-            )));
-    }
-
-    private static JoinGroupRequestData.JoinGroupRequestProtocolCollection newClassicProtocols(
-        JoinGroupRequestData.JoinGroupRequestProtocol... protocols
-    ) {
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection collection =
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(protocols.length);
-        collection.addAll(List.of(protocols));
-        return collection;
-    }
-
-    private static ClassicGroupMember newClassicMember(
-        String memberId,
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols,
-        byte[] assignment
-    ) {
-        return new ClassicGroupMember(
-            memberId,
-            Optional.empty(),
-            "client-id",
-            "client-host",
-            10000,
-            5000,
-            "consumer",
-            protocols,
-            assignment
-        );
-    }
-
-    private static ConsumerGroupMember newConvertedMember(
-        String memberId,
-        int epoch,
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols,
-        List<String> subscribedTopicNames,
-        Map<Uuid, Set<Integer>> assignedPartitions
-    ) {
-        return new ConsumerGroupMember.Builder(memberId)
-            .setMemberEpoch(epoch)
-            .setPreviousMemberEpoch(epoch)
-            .setClientId("client-id")
-            .setClientHost("client-host")
-            .setSubscribedTopicNames(subscribedTopicNames)
-            .setRebalanceTimeoutMs(10000)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                    .setSessionTimeoutMs(5000)
-                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
-            )
-            .setAssignedPartitions(toAssignmentWithEpochs(assignedPartitions, epoch))
-            .build();
     }
 
     @Test
