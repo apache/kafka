@@ -17,6 +17,13 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
-public record InitProducerIdResult(long producerId, short producerEpoch, Errors error) {
+public record InitProducerIdResult(long producerId, short producerEpoch,
+                                   long ongoingTxnProducerId, short ongoingTxnProducerEpoch,
+                                   Errors error) {
+
+    public InitProducerIdResult(long producerId, short producerEpoch, Errors error) {
+        this(producerId, producerEpoch, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error);
+    }
 }
