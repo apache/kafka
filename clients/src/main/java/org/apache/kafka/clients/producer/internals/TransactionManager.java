@@ -853,6 +853,15 @@ public class TransactionManager {
         return txnPartitionMap.getOrCreate(topicPartition).hasInflightBatches();
     }
 
+    /**
+     * Returns true if sending another new batch to the partition could push its oldest in-flight batch out of the
+     * broker's deduplication window. Every batch sent after the oldest in-flight batch may be appended before that
+     * batch is retried, so at most {@code RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1} of them may exist at any time.
+     */
+    synchronized boolean wouldExceedBrokerDeduplicationWindow(TopicPartition topicPartition) {
+        return txnPartitionMap.numBatchesAheadOfOldestInflight(topicPartition) >= RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1;
+    }
+
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
         return !producerIdAndEpoch.equals(txnPartitionMap.getOrCreate(topicPartition).producerIdAndEpoch());
     }
