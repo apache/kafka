@@ -42,7 +42,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnResult = TransactionResult.COMMIT
   private val topicPartition = new TopicPartition("topic1", 0)
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(topicPartition), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(topicPartition), 0L, 0L, TransactionVersion.TV_2)
   private val pendingCompleteTxnAndMarkers = util.List.of(
     new PendingCompleteTxnAndMarkerEntry(
       new PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
@@ -191,7 +191,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     def newEntry(txnId: String, pid: Long, tp: TopicPartition): (PendingCompleteTxnAndMarkerEntry, TransactionMetadata) = {
       val metadata = new TransactionMetadata(txnId, pid, pid, RecordBatch.NO_PRODUCER_ID,
-        producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(tp), 0L, 0L, TransactionVersion.TV_2)
+        producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(tp), 0L, 0L, TransactionVersion.TV_2)
       when(txnStateManager.getTransactionState(ArgumentMatchers.eq(txnId)))
         .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
       val entry = new PendingCompleteTxnAndMarkerEntry(

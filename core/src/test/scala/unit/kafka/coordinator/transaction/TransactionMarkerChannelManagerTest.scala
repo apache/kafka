@@ -73,9 +73,9 @@ class TransactionMarkerChannelManagerTest {
   private val txnTimeoutMs = 0
   private val txnResult = TransactionResult.COMMIT
   private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
   private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerId2, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1), 0L, 0L, TransactionVersion.TV_2)
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
@@ -596,7 +596,7 @@ class TransactionMarkerChannelManagerTest {
       if (result == TransactionResult.COMMIT) (TransactionState.PREPARE_COMMIT, TransactionState.COMPLETE_COMMIT)
       else (TransactionState.PREPARE_ABORT, TransactionState.COMPLETE_ABORT)
     val txnMetadata = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, lastProducerEpoch, txnTimeoutMs, prepareState, util.Set.of, 0L, 0L, TransactionVersion.TV_2)
+      producerEpoch, lastProducerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, prepareState, util.Set.of, 0L, 0L, TransactionVersion.TV_2)
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
