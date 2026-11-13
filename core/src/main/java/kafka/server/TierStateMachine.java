@@ -53,7 +53,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,17 +156,21 @@ public class TierStateMachine {
         }
     }
 
+    private byte[] readProducerSnapshot(RemoteLogManager rlm,
+                                        RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException, RemoteStorageException {
+        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT)) {
+            return inputStream.readAllBytes();
+        }
+    }
+
     private void buildProducerSnapshotFile(UnifiedLog unifiedLog,
                                            long nextOffset,
-                                           RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                           RemoteLogManager rlm) throws IOException, RemoteStorageException {
+                                           byte[] producerSnapshot) throws IOException {
         // Restore producer snapshot
         File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
         Path tmpSnapshotFile = Paths.get(snapshotFile.getAbsolutePath() + ".tmp");
-        // Copy it to snapshot file in atomic manner.
-        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT)) {
-            Files.copy(inputStream, tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
-        }
+        // Write it to the snapshot file in atomic manner.
+        Files.write(tmpSnapshotFile, producerSnapshot);
         Utils.atomicMoveWithFallback(tmpSnapshotFile, snapshotFile.toPath(), false);
 
         // Reload producer snapshots.
@@ -243,7 +246,12 @@ public class TierStateMachine {
         // Assign nextOffset with the offset from which next fetch should happen.
         long nextOffset = remoteLogSegmentMetadata.endOffset() + 1;
 
-        // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
+        // Read everything needed from remote storage before modifying the local log, so that a failed read
+        // leaves the local log and its leader epoch cache untouched and the next fetch retries this state machine.
+        List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
+        byte[] producerSnapshot = readProducerSnapshot(rlm, remoteLogSegmentMetadata);
+
+        // Truncate the existing local log, then restore the leader epoch cache and the producer snapshot.
         Partition partition = replicaMgr.getPartitionOrException(topicPartition);
         partition.truncateFullyAndStartAt(nextOffset, useFutureLog, Optional.of(leaderLogStartOffset));
         // Increment start offsets
@@ -251,12 +259,11 @@ public class TierStateMachine {
         unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
 
         // Build leader epoch cache.
-        List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
         unifiedLog.leaderEpochCache().assign(epochs);
 
         log.info("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 
-        buildProducerSnapshotFile(unifiedLog, nextOffset, remoteLogSegmentMetadata, rlm);
+        buildProducerSnapshotFile(unifiedLog, nextOffset, producerSnapshot);
 
         log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
                         "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
