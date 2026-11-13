@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -42,6 +43,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
 
     private final GlobalStateManager stateManager;
     private final Time time;
+    private final Thread owningThread;
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final GlobalStateManager stateMgr,
@@ -51,6 +53,13 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
         super(new TaskId(-1, -1), config, metrics, cache);
         stateManager = stateMgr;
         this.time = time;
+        owningThread = Thread.currentThread();
+    }
+
+    @Override
+    public Headers headers() {
+        // Global stores are shared with stream threads and interactive queries, which have no global record context.
+        return Thread.currentThread() == owningThread ? super.headers() : new RecordHeaders();
     }
 
     @Override

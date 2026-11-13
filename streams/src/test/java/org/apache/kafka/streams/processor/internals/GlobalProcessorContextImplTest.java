@@ -35,12 +35,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,6 +89,27 @@ public class GlobalProcessorContextImplTest {
         globalContext.setCurrentNode(processorNode);
         recordContext = mock(ProcessorRecordContext.class);
         globalContext.setRecordContext(recordContext);
+    }
+
+    @Test
+    public void shouldReturnRecordHeadersOnOwningThread() {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add("global-record", new byte[]{1});
+        when(recordContext.headers()).thenReturn(headers);
+
+        assertSame(headers, globalContext.headers());
+    }
+
+    @Test
+    public void shouldReturnEmptyHeadersOnOtherThread() throws Exception {
+        final ExecutorService reader = Executors.newSingleThreadExecutor();
+        try {
+            assertEquals(new RecordHeaders(), reader.submit(() -> globalContext.headers()).get(30, TimeUnit.SECONDS));
+            verifyNoInteractions(recordContext);
+        } finally {
+            reader.shutdownNow();
+            assertTrue(reader.awaitTermination(30, TimeUnit.SECONDS));
+        }
     }
 
     @Test
