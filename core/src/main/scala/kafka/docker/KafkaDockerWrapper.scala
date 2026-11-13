@@ -58,8 +58,9 @@ object KafkaDockerWrapper extends Logging {
           StorageTool.main(formatCmd)
         } catch {
           case terseFailure: TerseFailure => if (terseFailure.getMessage.contains(QuorumConfig.QUORUM_VOTERS_CONFIG)) {
-            throw new TerseFailure("To maximize compatibility, the Docker image continues to use static voters, " +
-              "which are supported in 3.7 and later.", terseFailure)
+            throw new TerseFailure("To maximize compatibility, the Docker image uses static voters by default, " +
+              "which are supported in 3.7 and later. To format a controller of a dynamic quorum, set " +
+              s"${Constants.StorageFormatArgsEnv} to --initial-controllers, --standalone or --no-initial-controllers.", terseFailure)
           } else throw terseFailure
           case e: Throwable => throw e
         }
@@ -120,9 +121,10 @@ object KafkaDockerWrapper extends Logging {
       case Some(str) => str
       case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
     }
-    // We maintain static voter configurations in Docker Hub images for better version compatibility and deployment stability,
-    // despite having dynamic voter support in the latest release.
-    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
+    // We maintain static voter configurations in Docker Hub images for better version compatibility and deployment stability.
+    // A dynamic quorum (KIP-853) opts in with STORAGE_FORMAT_ARGS: --initial-controllers, --standalone or --no-initial-controllers.
+    val extraArgs = env.get(StorageFormatArgsEnv).map(_.trim).filter(_.nonEmpty).map(_.split("\\s+").toSeq).getOrElse(Seq.empty)
+    (Seq("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties") ++ extraArgs).toArray
   }
 
   private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {
@@ -325,6 +327,9 @@ private object Constants {
   val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
   val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
+  // Extra arguments for kafka-storage format. Not KAFKA_-prefixed, so it never becomes a server property.
+  val StorageFormatArgsEnv = "STORAGE_FORMAT_ARGS"
+
   val ExcludeServerPropsEnv: Set[String] = Set(
     "KAFKA_VERSION",
     "KAFKA_HEAP_OPTS",
