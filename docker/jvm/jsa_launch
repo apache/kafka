@@ -17,9 +17,18 @@
 KAFKA_CLUSTER_ID="$(opt/kafka/bin/kafka-storage.sh random-uuid)"
 TOPIC="test-topic"
 
-KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c opt/kafka/config/server.properties
+# Before 4.0 (KAFKA-18229) the KRaft sample config lived under config/kraft/ with a static
+# quorum, and 3.7/3.8 have no `format --standalone`, so format those archives as they did.
+CONFIG=opt/kafka/config/server.properties
+FORMAT_ARGS="--standalone"
+if [ -f opt/kafka/config/kraft/server.properties ]; then
+    CONFIG=opt/kafka/config/kraft/server.properties
+    FORMAT_ARGS=""
+fi
 
-KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=kafka.jsa" opt/kafka/bin/kafka-server-start.sh opt/kafka/config/server.properties &
+KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format $FORMAT_ARGS -t $KAFKA_CLUSTER_ID -c $CONFIG
+
+KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=kafka.jsa" opt/kafka/bin/kafka-server-start.sh $CONFIG &
 KAFKA_PID=$!
 
 check_timeout() {
