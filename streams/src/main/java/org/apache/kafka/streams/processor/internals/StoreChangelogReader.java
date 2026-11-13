@@ -479,9 +479,9 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
-    // The end offset of each changelog as the next offset to fetch: the restore end offset if known (for an active task,
-    // or the committed offset of a source topic), and otherwise one past the store's end offset, which is the last
-    // offset of the changelog. Null while neither is known.
+    // the restore end offset if known: for an active task the end offset of the partition, capped at the committed
+    // offset of the source topic for a source-topic changelog, and for a standby task on a source-topic changelog the
+    // committed offset; otherwise one past the store's end offset, which is the last offset of the changelog
     @Override
     public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
         final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
