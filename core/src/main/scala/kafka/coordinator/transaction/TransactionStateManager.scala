@@ -377,17 +377,19 @@ class TransactionStateManager(brokerId: Int,
               throw new InvalidRegularExpression(String.format("Transaction ID pattern `%s` is not a valid regular expression: %s.", filterTransactionalIdPattern, e.getMessage))
           }
         } else null
-        transactionMetadataCache.foreachEntry { (_, cache) =>
-          cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
-            txnMetadata.inLock(() => {
-              if (shouldInclude(txnMetadata, pattern)) {
-                states.add(new ListTransactionsResponseData.TransactionState()
-                  .setTransactionalId(txnMetadata.transactionalId)
-                  .setProducerId(txnMetadata.producerId)
-                  .setTransactionState(txnMetadata.state.stateName)
-                )
-              }
-            })
+        transactionMetadataCache.foreachEntry { (partitionId, cache) =>
+          if (isCoordinatorFor(partitionId, cache.coordinatorEpoch)) {
+            cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
+              txnMetadata.inLock(() => {
+                if (shouldInclude(txnMetadata, pattern)) {
+                  states.add(new ListTransactionsResponseData.TransactionState()
+                    .setTransactionalId(txnMetadata.transactionalId)
+                    .setProducerId(txnMetadata.producerId)
+                    .setTransactionState(txnMetadata.state.stateName)
+                  )
+                }
+              })
+            }
           }
         }
         response.setErrorCode(Errors.NONE.code)
