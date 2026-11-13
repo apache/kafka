@@ -43,6 +43,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -109,9 +111,32 @@ public class ShareGroupTest {
         shareGroup.updateMember(member);
         assertTrue(shareGroup.hasMember("member"));
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        Assignment otherAssignment = new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 2, 3)));
+        shareGroup.updateTargetAssignment("member", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        shareGroup.updateTargetAssignment("other-member", otherAssignment);
+
         shareGroup.removeMember("member");
         assertFalse(shareGroup.hasMember("member"));
 
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), shareGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        ShareGroup shareGroup = createShareGroup("foo");
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        shareGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        shareGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 2, 3))));
+        assertEquals(Set.of("member1", "member2"), shareGroup.targetAssignment().keySet());
+
+        shareGroup.clearTargetAssignment();
+        assertEquals(Map.of(), shareGroup.targetAssignment());
     }
 
     @Test

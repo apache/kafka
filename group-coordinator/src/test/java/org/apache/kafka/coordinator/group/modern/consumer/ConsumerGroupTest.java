@@ -180,9 +180,32 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(member);
         assertTrue(consumerGroup.hasMember("member"));
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        Assignment otherAssignment = new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 2, 3)));
+        consumerGroup.updateTargetAssignment("member", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        consumerGroup.updateTargetAssignment("other-member", otherAssignment);
+
         consumerGroup.removeMember("member");
         assertFalse(consumerGroup.hasMember("member"));
 
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), consumerGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 2, 3))));
+        assertEquals(Set.of("member1", "member2"), consumerGroup.targetAssignment().keySet());
+
+        consumerGroup.clearTargetAssignment();
+        assertEquals(Map.of(), consumerGroup.targetAssignment());
     }
 
     @Test
