@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import org.eclipse.jgit.api.Git
 import org.gradle.api.artifacts.FileCollectionDependency
 import java.nio.charset.StandardCharsets
 
@@ -109,7 +108,8 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
-  repo = file("$rootDir/.git").isDirectory() ? Git.open(project.getRootDir()) : null
+  gitHeadCommit = determineGitHeadCommit()
+  isGitCheckout = gitHeadCommit != null
 
   commitId = determineCommitId()
 
@@ -228,12 +228,42 @@ allprojects {
   }
 }
 
+// Runs git on the root directory's own .git. The explicit paths stop git from using GIT_DIR and GIT_WORK_TREE from the
+// environment, for example when the build is started from a git hook, and from searching parent directories.
+def execGit(boolean ignoreExitValue, String... args) {
+  providers.exec {
+    commandLine(['git', '--git-dir=.git', '--work-tree=.'] + args.toList())
+    workingDir rootDir
+    delegate.ignoreExitValue = ignoreExitValue
+  }
+}
+
+// Returns null if this is not a usable git checkout, which is then handled like a source tarball.
+def determineGitHeadCommit() {
+  // exists() rather than isDirectory(): .git is a file in git worktrees
+  if (!file("$rootDir/.git").exists())
+    return null
+
+  def reason
+  try {
+    def head = execGit(true, 'rev-parse', 'HEAD')
+    if (head.result.get().exitValue == 0)
+      return head.standardOutput.asText.get().trim()
+    reason = head.standardError.asText.get().trim()
+  } catch (Exception e) {
+    reason = e.message
+  }
+  logger.warn("WARNING: .git exists but git cannot read HEAD, so the commit id is 'unknown' and RAT is disabled: $reason")
+  return null
+}
+
 def determineCommitId() {
   def takeFromHash = 16
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
-  } else if (repo != null) {
-    repo.repository.resolve("HEAD").abbreviate(takeFromHash).name()
+  } else if (isGitCheckout) {
+    // Truncate the full hash rather than using --short, which can return more characters.
+    gitHeadCommit.take(takeFromHash)
   } else {
     "unknown"
   }
@@ -259,7 +289,7 @@ static def projectToJUnitXmlPath(project) {
 
 apply from: file('wrapper.gradle')
 
-if (repo != null) {
+if (isGitCheckout) {
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
@@ -273,7 +303,10 @@ if (repo != null) {
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    excludes = new ArrayList<String>(repo.clean().setIgnore(false).setCleanDirectories(true).setDryRun(true).call())
+    // Equivalent of `git clean -ndx`: untracked and ignored files, with untracked directories collapsed.
+    // -z: without it, git quotes and escapes names with non-ASCII characters or quotes, so they would not match.
+    excludes = new ArrayList<String>(
+      execGit(false, 'ls-files', '-z', '--others', '--directory').standardOutput.asText.get().tokenize('\0'))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
         '**/.git/**',
