@@ -139,6 +139,7 @@ public class HttpJwtRetriever implements JwtRetriever {
      *
      * @throws JwtRetrieverException Thrown on errors related to IO, parsing, etc. during retrieval
      */
+    @Override
     public String retrieve() throws JwtRetrieverException {
         String requestBody = requestFormatter.formatBody();
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);

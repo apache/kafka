@@ -662,6 +662,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @return An immutable snapshot of the set of partitions currently assigned to this consumer
      */
+    @Override
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
     }
@@ -675,6 +676,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @return An immutable snapshot of the set of topics currently subscribed to
      */
+    @Override
     public Set<String> subscription() {
         return delegate.subscription();
     }

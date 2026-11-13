@@ -1465,6 +1465,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
      * @param currentTimeMs The current system time at which the method was called; useful for determining if
      *                      time-sensitive operations should be performed
      */
+    @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
@@ -1508,6 +1509,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
             this.partitions = topicIdPartitions.toTopicIdPartitionMap();
         }
 
+        @Override
         public String toString() {
             return "LocalAssignment{" +
                     "localEpoch=" + localEpoch +
@@ -1515,6 +1517,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
                     '}';
         }
 
+        @Override
         public boolean equals(final Object o) {
             if (this == o) {
                 return true;
@@ -1526,6 +1529,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
             return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
         }
 
+        @Override
         public int hashCode() {
             return Objects.hash(localEpoch, partitions);
         }

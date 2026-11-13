@@ -719,6 +719,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         schedulePollTask(() -> { });
     }
 
+    @Override
     public synchronized Set<TopicPartition> paused() {
         return Set.copyOf(paused);
     }

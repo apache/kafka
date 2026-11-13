@@ -40,6 +40,7 @@ public class RecordHeader implements Header {
         this.valueBuffer = valueBuffer;
     }
     
+    @Override
     public String key() {
         if (key == null) {
             synchronized (this) {
@@ -52,6 +53,7 @@ public class RecordHeader implements Header {
         return key;
     }
 
+    @Override
     public byte[] value() {
         if (value == null && valueBuffer != null) {
             synchronized (this) {

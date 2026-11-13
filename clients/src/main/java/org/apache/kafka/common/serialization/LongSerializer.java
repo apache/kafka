@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 @InterfaceAudience.Public
 public class LongSerializer implements Serializer<Long> {
+    @Override
     public byte[] serialize(String topic, Long data) {
         if (data == null)
             return null;
