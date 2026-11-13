@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.LogDeleteRecordsResult
-import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.server.common.{MinInSyncReplicas, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogManager, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
@@ -244,7 +244,7 @@ class Partition(val topicPartition: TopicPartition,
  * is returned here.
  */
   private def effectiveMinIsr(leaderLog: UnifiedLog): Int = {
-      leaderLog.config.minInSyncReplicas.min(remoteReplicasMap.size + 1)
+      MinInSyncReplicas.effectiveMinIsr(leaderLog.config.minInSyncReplicas, remoteReplicasMap.size + 1)
   }
 
   /**

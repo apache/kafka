@@ -46,6 +46,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MinInSyncReplicas;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -300,21 +302,24 @@ public abstract class TopicCommand {
         private final TopicPartitionInfo info;
         private final Config config;
         private final PartitionReassignment reassignment;
+        private final boolean capMinIsr;
 
         PartitionDescription(String topic,
                              TopicPartitionInfo info,
                              Config config,
-                             PartitionReassignment reassignment) {
+                             PartitionReassignment reassignment,
+                             boolean capMinIsr) {
             this.topic = topic;
             this.info = info;
             this.config = config;
             this.reassignment = reassignment;
+            this.capMinIsr = capMinIsr;
         }
 
         // Effective min ISR, capped at the replica count like Partition#effectiveMinIsr on the broker.
         int minIsrCount() {
             int configuredMinIsr = Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
-            return Math.min(configuredMinIsr, info.replicas().size());
+            return capMinIsr ? MinInSyncReplicas.effectiveMinIsr(configuredMinIsr, info.replicas().size()) : configuredMinIsr;
         }
 
         boolean isUnderReplicated() {
@@ -526,6 +531,23 @@ public abstract class TopicCommand {
             }
         }
 
+        /**
+         * Brokers cap min.insync.replicas at the replica count from 3.7 (Partition#effectiveMinIsr), but only 4.0+
+         * brokers advertise eligible.leader.replicas.version as supported, whether or not ELR is enabled. That is
+         * the signal used here; 3.7-3.9 brokers, and any failure to describe features, keep the configured value.
+         */
+        boolean brokerCapsMinIsr() {
+            try {
+                return adminClient.describeFeatures().featureMetadata().get()
+                    .supportedFeatures().containsKey(EligibleLeaderReplicasVersion.FEATURE_NAME);
+            } catch (ExecutionException e) {
+                LOG.debug("Couldn't describe features, using the configured min.insync.replicas: " + e.getCause().getMessage(), e.getCause());
+                return false;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
@@ -582,25 +604,26 @@ public abstract class TopicCommand {
                     .map(p -> new TopicPartition(td.name(), p.partition())))
                 .collect(Collectors.toSet());
             Map<TopicPartition, PartitionReassignment> reassignments = listAllReassignments(topicPartitions);
+            boolean capMinIsr = (opts.reportUnderMinIsrPartitions() || opts.reportAtMinIsrPartitions()) && brokerCapsMinIsr();
             for (org.apache.kafka.clients.admin.TopicDescription td : topicDescriptions) {
                 String topicName = td.name();
                 Config config = allConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, topicName)).get();
                 ArrayList<TopicPartitionInfo> sortedPartitions = new ArrayList<>(td.partitions());
                 sortedPartitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
                 printDescribeConfig(opts, describeOptions, reassignments, td, topicName, td.topicId(), config, sortedPartitions);
-                printPartitionDescription(describeOptions, reassignments, td, topicName, config, sortedPartitions);
+                printPartitionDescription(describeOptions, reassignments, td, topicName, config, sortedPartitions, capMinIsr);
             }
         }
 
         private void printPartitionDescription(DescribeOptions describeOptions, Map<TopicPartition, PartitionReassignment> reassignments,
                                                org.apache.kafka.clients.admin.TopicDescription td, String topicName, Config config,
-                                               ArrayList<TopicPartitionInfo> sortedPartitions) {
+                                               ArrayList<TopicPartitionInfo> sortedPartitions, boolean capMinIsr) {
             if (describeOptions.describePartitions) {
                 for (TopicPartitionInfo partition : sortedPartitions) {
                     PartitionReassignment reassignment =
                         reassignments.get(new TopicPartition(td.name(), partition.partition()));
                     PartitionDescription partitionDesc = new PartitionDescription(topicName,
-                        partition, config, reassignment);
+                        partition, config, reassignment, capMinIsr);
                     describeOptions.maybePrintPartitionDescription(partitionDesc);
                 }
             }
@@ -779,10 +802,10 @@ public abstract class TopicCommand {
                 "If set when describing topics, only show partitions whose leader is not available.");
             reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
                 "If set when describing topics, only show partitions whose isr count is less than the effective minimum " +
-                "(the lesser of min.insync.replicas and the replica count).");
+                "(the lesser of min.insync.replicas and the replica count; min.insync.replicas for brokers older than 4.0).");
             reportAtMinIsrPartitionsOpt = parser.accepts("at-min-isr-partitions",
                 "If set when describing topics, only show partitions whose isr count is equal to the effective minimum " +
-                "(the lesser of min.insync.replicas and the replica count).");
+                "(the lesser of min.insync.replicas and the replica count; min.insync.replicas for brokers older than 4.0).");
             topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                 "If set when describing topics, only show topics that have overridden configs.");
             ifExistsOpt = parser.accepts("if-exists",

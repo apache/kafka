@@ -94,6 +94,7 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MinInSyncReplicas;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -2508,7 +2509,7 @@ public class ReplicationControlManager {
         int currentMinIsr = Integer.parseInt(minIsrConfig);
         Uuid topicId = topicsByName.get(topicName);
         int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        return Math.min(currentMinIsr, replicationFactor);
+        return MinInSyncReplicas.effectiveMinIsr(currentMinIsr, replicationFactor);
     }
 
     /**
