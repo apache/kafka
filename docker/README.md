@@ -130,7 +130,7 @@ python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafk
 ```
 python docker_build_test.py kafka/test --image-tag=3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
-- Example(jvm, custom base image) :- The jvm image is built on `eclipse-temurin:25-jre-alpine` by default. Any Alpine-based image carrying a JRE can be used instead, e.g. to build on a different JDK version, by passing `--base-image`
+- Example(jvm, custom base image) :- The jvm image is built on `eclipse-temurin:25-jre-alpine` by default. Another image can be used instead, e.g. to build on a different JDK version, by passing `--base-image`. Packages are installed only on Alpine (with `apk`), so any other image must already provide `java`, `bash`, `hostname`, `tar`, `gzip` and `useradd` or `adduser` (plus `wget` and `gpg` with `--kafka-url`); the build stops with an error naming any missing tool
 ```
 python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --base-image=docker.io/library/eclipse-temurin:21-jre-alpine --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
