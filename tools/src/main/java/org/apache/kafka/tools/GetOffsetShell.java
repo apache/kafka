@@ -237,7 +237,7 @@ public class GetOffsetShell {
 
             ListOffsetsResult listOffsetsResult = adminClient.listOffsets(timestampsToSearch);
 
-            TreeMap<TopicPartition, Long> partitionOffsets = new TreeMap<>(Comparator.comparing(TopicPartition::toString));
+            TreeMap<TopicPartition, Long> partitionOffsets = new TreeMap<>(Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition));
 
             for (TopicPartition partition : partitionInfos) {
                 ListOffsetsResultInfo partitionInfo;
