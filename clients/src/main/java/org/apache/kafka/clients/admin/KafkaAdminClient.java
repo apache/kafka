@@ -582,6 +582,7 @@ public class KafkaAdminClient extends AdminClient {
             boolean usingBootstrapControllers = determineBootstrapType(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 usingBootstrapControllers);
 

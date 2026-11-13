@@ -730,14 +730,23 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- AdminMetadataManager's lastMetadataFetchAttemptMs and lastMetadataUpdateMs are only
-             written from the AdminClient I/O thread, so non-atomic 64-bit writes are safe. -->
+        <!-- AdminMetadataManager's lastMetadataFetchAttemptMs, lastMetadataUpdateMs and equivalentResponseCount
+             are only written from the AdminClient I/O thread, so non-atomic 64-bit writes are safe. -->
         <Class name="org.apache.kafka.clients.admin.internals.AdminMetadataManager"/>
         <Or>
+            <Field name="equivalentResponseCount"/>
             <Field name="lastMetadataFetchAttemptMs"/>
             <Field name="lastMetadataUpdateMs"/>
         </Or>
         <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- AdminMetadataManager's equivalentResponseCount is only read and written from the AdminClient
+             I/O thread, so its read-modify-write is thread-confined. -->
+        <Class name="org.apache.kafka.clients.admin.internals.AdminMetadataManager"/>
+        <Field name="equivalentResponseCount"/>
+        <Bug pattern="AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE"/>
     </Match>
 
 </FindBugsFilter>
