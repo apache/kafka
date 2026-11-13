@@ -16,53 +16,43 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+
+import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CredentialCache {
 
-    private final ConcurrentHashMap<String, Cache<?>> cacheMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Cache> cacheMap = new ConcurrentHashMap<>();
 
-    public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
-        Cache<C> cache = new Cache<>(credentialClass);
-        @SuppressWarnings("unchecked")
-        Cache<C> oldCache = (Cache<C>) cacheMap.putIfAbsent(mechanism, cache);
-        return oldCache == null ? cache : oldCache;
-    }
-
-    @SuppressWarnings("unchecked")
-    public <C> Cache<C> cache(String mechanism, Class<C> credentialClass) {
-        Cache<?> cache = cacheMap.get(mechanism);
-        if (cache != null) {
-            if (cache.credentialClass() != credentialClass)
-                throw new IllegalArgumentException("Invalid credential class " + credentialClass + ", expected " + cache.credentialClass());
-            return (Cache<C>) cache;
-        } else
-            return null;
-    }
-
-    public static class Cache<C> {
-        private final Class<C> credentialClass;
-        private final ConcurrentHashMap<String, C> credentials;
-
-        public Cache(Class<C> credentialClass) {
-            this.credentialClass = credentialClass;
-            this.credentials = new ConcurrentHashMap<>();
+    /**
+     * Creates a cache for each SCRAM mechanism in {@code mechanisms}. Other mechanisms are ignored.
+     */
+    public CredentialCache(Collection<String> mechanisms) {
+        for (String mechanism : ScramMechanism.mechanismNames()) {
+            if (mechanisms.contains(mechanism))
+                cacheMap.put(mechanism, new Cache());
         }
+    }
 
-        public C get(String username) {
+    public Cache cache(String mechanism) {
+        return cacheMap.get(mechanism);
+    }
+
+    public static class Cache {
+        private final ConcurrentHashMap<String, ScramCredential> credentials = new ConcurrentHashMap<>();
+
+        public ScramCredential get(String username) {
             return credentials.get(username);
         }
 
-        public C put(String username, C credential) {
+        public ScramCredential put(String username, ScramCredential credential) {
             return credentials.put(username, credential);
         }
 
-        public C remove(String username) {
+        public ScramCredential remove(String username) {
             return credentials.remove(username);
-        }
-
-        public Class<C> credentialClass() {
-            return credentialClass;
         }
     }
 }

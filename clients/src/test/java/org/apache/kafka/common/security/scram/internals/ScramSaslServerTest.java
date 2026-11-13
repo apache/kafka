@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.scram.internals;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
@@ -61,7 +60,7 @@ public class ScramSaslServerTest {
     public void setUp() throws Exception {
         ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
         formatter  = new ScramFormatter(mechanism);
-        CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
+        CredentialCache.Cache credentialCache = new CredentialCache(ScramMechanism.mechanismNames()).cache(mechanism.mechanismName());
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
         callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
@@ -118,7 +117,7 @@ public class ScramSaslServerTest {
         TokenInformation tokenInfo = new TokenInformation("tokenId", new KafkaPrincipal(KafkaPrincipal.USER_TYPE, USER_A), List.of(), 0L, Long.MAX_VALUE, Long.MAX_VALUE);
         tokenCache.updateCache(new DelegationToken(tokenInfo, ScramFormatter.toBytes(tokenHmac)), Map.of(ScramMechanism.SCRAM_SHA_256.mechanismName(), formatter.generateCredential(tokenHmac, 4096)));
         tokenCache.removeToken("tokenId");
-        ScramServerCallbackHandler tokenCallbackHandler = new ScramServerCallbackHandler(new CredentialCache().createCache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class), tokenCache);
+        ScramServerCallbackHandler tokenCallbackHandler = new ScramServerCallbackHandler(new CredentialCache(ScramMechanism.mechanismNames()).cache(ScramMechanism.SCRAM_SHA_256.mechanismName()), tokenCache);
         tokenCallbackHandler.configure(Map.of(), ScramMechanism.SCRAM_SHA_256.mechanismName(), List.of());
         ScramSaslServer tokenSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), tokenCallbackHandler);
 
