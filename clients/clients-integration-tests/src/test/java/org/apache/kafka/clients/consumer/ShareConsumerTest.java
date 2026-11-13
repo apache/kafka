@@ -2163,9 +2163,71 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         }
     }
 
+    /**
+     * A partition added to a topic which the group already subscribes to starts at offset 0, so the records
+     * written to it before its share partition is initialized are delivered. This must hold when the
+     * initialization of the topic is retried more than once after the partition is added.
+     */
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "offsets.commit.timeout.ms", value = "2000"),
+            @ClusterConfigProperty(key = "group.share.initialize.retry.interval.ms", value = "2000")
+        }
+    )
+    @Timeout(240)
+    public void testPartitionAddedWhileInitializationIsRetriedStartsAtZero() throws Exception {
+        String groupId = "retry-added-partition-group";
+        String newTopic = "retry-added-partition-topic";
+        alterShareAutoOffsetReset(groupId, "latest");
+
+        try (Admin admin = createAdminClient();
+             Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> consumer1 = createShareConsumer(groupId);
+             ShareConsumer<byte[], byte[]> consumer2 = createShareConsumer(groupId)) {
+            List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer1, consumer2);
+            Set<String> received = new HashSet<>();
+
+            // The warmup has created the share state topic, which has a single partition on one broker.
+            int shareCoordinator = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0).get(0);
+            List<Integer> replicas = new ArrayList<>(List.of(0, 1, 2));
+            replicas.remove(Integer.valueOf(shareCoordinator));
+            admin.createTopics(List.of(new NewTopic(newTopic, Map.of(0, replicas)))).all().get();
+            cluster.waitTopicCreation(newTopic, 1);
+
+            // The share coordinator cannot be reached, so the initialization of partition 0 fails.
+            cluster.shutdownBroker(shareCoordinator);
+            consumer1.subscribe(Set.of(newTopic));
+            consumer2.subscribe(Set.of(newTopic));
+            pollValues(consumers, 5000, received);
+
+            // Partition 1 is added while the topic is still initializing, and gets records before it is initialized.
+            admin.createPartitions(Map.of(newTopic, NewPartitions.increaseTo(2, List.of(replicas)))).all().get();
+            cluster.waitTopicCreation(newTopic, 2);
+            produceValues(producer, newTopic, 1, "added", 10);
+
+            // The initialization of both partitions is retried and fails more than once.
+            pollValues(consumers, 10000, received);
+            cluster.startBroker(shareCoordinator);
+            pollUntilAssigned(consumers, groupId, new TopicPartition(newTopic, 1), received);
+            pollValues(consumers, 20000, received);
+
+            assertEquals(10, received.stream().filter(v -> v.startsWith("added-")).count(),
+                "records written to the added partition before it was initialized were not all delivered");
+        }
+    }
+
     private void produceValues(Producer<byte[], byte[]> producer, String topic, String prefix, int count) {
+        produceValues(producer, topic, 0, prefix, count);
+    }
+
+    private void produceValues(Producer<byte[], byte[]> producer, String topic, int partition, String prefix, int count) {
         for (int i = 0; i < count; i++) {
-            producer.send(new ProducerRecord<>(topic, 0, null, (prefix + "-" + i).getBytes()));
+            producer.send(new ProducerRecord<>(topic, partition, null, (prefix + "-" + i).getBytes()));
         }
         producer.flush();
     }
