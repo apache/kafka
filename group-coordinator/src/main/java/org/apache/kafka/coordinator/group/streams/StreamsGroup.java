@@ -1579,8 +1579,8 @@ public class StreamsGroup implements Group {
                 "This is a bug, please file a JIRA ticket.", groupId);
             return endpointToPartitionsList;
         }
-        // Until the topology is ready, for example while source or internal topics are missing, no tasks are assigned,
-        // so there are no partitions to report.
+        // While the topology is not ready, for example because source or internal topics are missing, the target assignment
+        // is empty, so there are no partitions to report.
         if (configuredTopology().filter(ConfiguredTopology::isReady).isEmpty()) {
             return endpointToPartitionsList;
         }
