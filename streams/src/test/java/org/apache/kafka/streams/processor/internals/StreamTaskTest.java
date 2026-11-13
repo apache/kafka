@@ -459,6 +459,8 @@ public class StreamTaskTest {
         consumer.seek(partition1, 10L);
         consumer.seek(partition2, 15L);
 
+        assertEquals(Set.of(partition1), task.partitionsForOffsetReset());
+
         @SuppressWarnings("unchecked")
         final java.util.function.Consumer<Set<TopicPartition>> resetter =
             mock(java.util.function.Consumer.class);
@@ -469,6 +471,7 @@ public class StreamTaskTest {
         assertEquals(5L, consumer.position(partition1));
         assertEquals(15L, consumer.position(partition2));
         verify(resetter).accept(Collections.emptySet());
+        assertEquals(Set.of(), task.partitionsForOffsetReset());
     }
 
     @Test
