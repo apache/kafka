@@ -83,7 +83,7 @@ import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.FunctionConverters.enrichAsJavaConsumer
-import scala.jdk.OptionConverters.RichOptional
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
@@ -1952,7 +1952,8 @@ class ReplicaManager(val config: KafkaConfig,
           val remoteStorageFetchInfoOpt = if (adjustedMaxBytes > 0) {
             // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
             // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
-            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation))
+            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation,
+              params.clientMetadata.toScala.map(_.clientId).toJava))
           } else {
             Optional.empty[RemoteStorageFetchInfo]()
           }
