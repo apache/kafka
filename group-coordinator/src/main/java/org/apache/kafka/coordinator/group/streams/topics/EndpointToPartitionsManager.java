@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,12 @@ public class EndpointToPartitionsManager {
         // Warm-up tasks are executed as standby tasks on the client, so they are reported as standby partitions, as in the classic protocol.
         Map<String, Set<Integer>> standbyAndWarmupTasks = streamsGroupMember.assignedTasks().standbyAndWarmupTasks();
         endpointToPartitions.setUserEndpoint(responseEndpoint);
-        Map<String, ConfiguredSubtopology> configuredSubtopologies = streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies).get();
+        // KAFKA-21486: the topology is not configured yet, or its topic configuration failed and it
+        // has no subtopologies. Nothing is mapped to endpoints in that state; an empty mapping keeps
+        // the heartbeat returning the regular missing-source-topics status instead of failing.
+        Map<String, ConfiguredSubtopology> configuredSubtopologies = streamsGroup.configuredTopology()
+            .flatMap(ConfiguredTopology::subtopologies)
+            .orElse(Collections.emptySortedMap());
         List<StreamsGroupHeartbeatResponseData.TopicPartition> activeTopicPartitions = topicPartitions(activeTasks, configuredSubtopologies, metadataImage);
         List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitions = topicPartitions(standbyAndWarmupTasks, configuredSubtopologies, metadataImage);
         endpointToPartitions.setActivePartitions(activeTopicPartitions);

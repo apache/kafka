@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -48,6 +49,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -236,5 +238,33 @@ class EndpointToPartitionsManagerTest {
                 arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
                 arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testEndpointToPartitionsWhenTopologyHasNoSubtopologies(boolean topologyConfigured) {
+        // KAFKA-21486: when the configured topology has no subtopologies, for example because
+        // topic configuration failed, there is nothing to map yet and the endpoint-to-partitions
+        // entry must be computed as empty instead of failing the heartbeat.
+        when(streamsGroupMember.assignedTasks()).thenReturn(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(0),
+                mkTasksPerSubtopology(),
+                Map.of()
+            )
+        );
+        if (topologyConfigured) {
+            when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
+            when(configuredTopology.subtopologies()).thenReturn(Optional.empty());
+        } else {
+            when(streamsGroup.configuredTopology()).thenReturn(Optional.empty());
+        }
+
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
+            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(MetadataImage.EMPTY));
+
+        assertEquals(responseEndpoint, result.userEndpoint());
+        assertTrue(result.activePartitions().isEmpty());
+        assertTrue(result.standbyPartitions().isEmpty());
     }
 }
