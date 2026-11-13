@@ -103,7 +103,8 @@ public class ProcessorStateManager implements StateManager {
         //    records to apply, update to next offset to fetch minus one (last-applied); never moves backwards
         private Long offset;
 
-        // Will be updated on batch restored
+        // the last offset of the changelog, -1 for an empty changelog; set on each restored batch, and for a standby
+        // task once its restore consumer reaches the end of the changelog; null while unknown
         private Long endOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
