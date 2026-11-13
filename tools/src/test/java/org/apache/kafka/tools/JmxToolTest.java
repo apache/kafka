@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.net.ServerSocket;
 import java.rmi.registry.LocateRegistry;
@@ -34,8 +35,11 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
+import javax.management.InstanceAlreadyExistsException;
 import javax.management.MBeanServer;
+import javax.management.MBeanServerFactory;
 import javax.management.ObjectName;
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerFactory;
@@ -44,12 +48,22 @@ import javax.management.remote.JMXServiceURL;
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class JmxToolTest {
     private final ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-    private static JMXConnectorServer jmxAgent;
+    private static JmxFixture jmxFixture;
     private static String jmxUrl;
+    private final MBeanServer server = MBeanServerFactory.newMBeanServer();
+    private final ObjectName metricsName = objectName();
+    private final JMXConnectorServer connector = mock(JMXConnectorServer.class);
+    private final JmxFixture fixture = new JmxFixture(server, metricsName);
 
     @BeforeAll
     public static void beforeAll() throws Exception {
@@ -65,15 +79,16 @@ public class JmxToolTest {
         env.put("com.sun.management.jmxremote.ssl", "false");
         JMXServiceURL url = new JMXServiceURL(jmxUrl);
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        server.registerMBean(new Metrics(),
+        jmxFixture = new JmxFixture(server,
             new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
-        jmxAgent = JMXConnectorServerFactory.newJMXConnectorServer(url, env, server);
-        jmxAgent.start();
+        jmxFixture.start(() -> JMXConnectorServerFactory.newJMXConnectorServer(url, env, server));
     }
 
     @AfterAll
     public static void afterAll() throws Exception {
-        jmxAgent.stop();
+        if (jmxFixture != null) {
+            jmxFixture.close();
+        }
     }
 
     @BeforeEach
@@ -407,6 +422,169 @@ public class JmxToolTest {
             return true;
         } catch (ParseException e) {
             return false;
+        }
+    }
+
+    private static ObjectName objectName() {
+        try {
+            return new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec");
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test
+    void testCloseRemovesMetricsAndAllowsReregistration() throws Exception {
+        fixture.start(() -> connector);
+        assertTrue(server.isRegistered(metricsName));
+        assertEquals(3.0, server.getAttribute(metricsName, "FiveMinuteRate"));
+
+        fixture.close();
+
+        assertFalse(server.isRegistered(metricsName));
+        verify(connector).stop();
+        server.registerMBean(new Metrics(), metricsName);
+        assertTrue(server.isRegistered(metricsName));
+    }
+
+    @Test
+    void testRegistrationFailurePreservesExistingMetrics() throws Exception {
+        Metrics existing = new Metrics() {
+            @Override
+            public double getFiveMinuteRate() {
+                return 7.0;
+            }
+        };
+        server.registerMBean(existing, metricsName);
+
+        assertThrows(InstanceAlreadyExistsException.class, () -> fixture.start(() -> connector));
+        fixture.close();
+
+        assertEquals(7.0, server.getAttribute(metricsName, "FiveMinuteRate"));
+        verifyNoInteractions(connector);
+    }
+
+    @Test
+    void testConnectorCreationFailureRemovesMetrics() {
+        IOException failure = new IOException("creation failed");
+
+        assertSame(failure, assertThrows(IOException.class, () -> fixture.start(() -> {
+            throw failure;
+        })));
+
+        assertFalse(server.isRegistered(metricsName));
+    }
+
+    @Test
+    void testConnectorStartFailureRemovesMetrics() throws Exception {
+        IOException failure = new IOException("start failed");
+        doThrow(failure).when(connector).start();
+
+        assertSame(failure, assertThrows(IOException.class, () -> fixture.start(() -> connector)));
+
+        assertFalse(server.isRegistered(metricsName));
+        verify(connector).stop();
+    }
+
+    @Test
+    void testConnectorStopFailureStillRemovesMetrics() throws Exception {
+        fixture.start(() -> connector);
+        IOException failure = new IOException("stop failed");
+        doThrow(failure).when(connector).stop();
+
+        assertSame(failure, assertThrows(IOException.class, fixture::close));
+
+        assertFalse(server.isRegistered(metricsName));
+    }
+
+    @Test
+    void testStartFailurePreservesCleanupFailure() throws Exception {
+        IOException startFailure = new IOException("start failed");
+        IOException stopFailure = new IOException("stop failed");
+        doThrow(startFailure).when(connector).start();
+        doThrow(stopFailure).when(connector).stop();
+
+        assertSame(startFailure, assertThrows(IOException.class, () -> fixture.start(() -> connector)));
+
+        assertFalse(server.isRegistered(metricsName));
+        assertEquals(1, startFailure.getSuppressed().length);
+        assertSame(stopFailure, startFailure.getSuppressed()[0]);
+    }
+
+    @Test
+    void testRepeatedClosePreservesReplacementMetrics() throws Exception {
+        fixture.start(() -> connector);
+        fixture.close();
+        server.registerMBean(new Metrics(), metricsName);
+
+        fixture.close();
+
+        assertTrue(server.isRegistered(metricsName));
+        verify(connector).stop();
+    }
+
+    @Test
+    void testCloseBeforeStart() throws Exception {
+        fixture.close();
+
+        assertFalse(server.isRegistered(metricsName));
+        verifyNoInteractions(connector);
+    }
+
+    private static class JmxFixture implements AutoCloseable {
+        private final MBeanServer server;
+        private final ObjectName metricsName;
+        private JMXConnectorServer connector;
+        private boolean metricsRegistered;
+
+        JmxFixture(MBeanServer server, ObjectName metricsName) {
+            this.server = server;
+            this.metricsName = metricsName;
+        }
+
+        void start(Callable<JMXConnectorServer> connectorFactory) throws Exception {
+            server.registerMBean(new Metrics(), metricsName);
+            metricsRegistered = true;
+            try {
+                connector = connectorFactory.call();
+                connector.start();
+            } catch (Exception e) {
+                try {
+                    close();
+                } catch (Exception cleanupFailure) {
+                    e.addSuppressed(cleanupFailure);
+                }
+                throw e;
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            Exception failure = null;
+            if (connector != null) {
+                JMXConnectorServer connectorToStop = connector;
+                connector = null;
+                try {
+                    connectorToStop.stop();
+                } catch (Exception e) {
+                    failure = e;
+                }
+            }
+            if (metricsRegistered) {
+                try {
+                    server.unregisterMBean(metricsName);
+                    metricsRegistered = false;
+                } catch (Exception e) {
+                    if (failure == null) {
+                        failure = e;
+                    } else {
+                        failure.addSuppressed(e);
+                    }
+                }
+            }
+            if (failure != null) {
+                throw failure;
+            }
         }
     }
 
