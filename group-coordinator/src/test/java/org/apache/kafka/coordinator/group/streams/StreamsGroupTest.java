@@ -194,8 +194,27 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
         assertTrue(streamsGroup.hasMember("member"));
 
+        TasksTuple otherAssignment = new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of());
+        streamsGroup.updateTargetAssignment("member", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of()));
+        streamsGroup.updateTargetAssignment("other-member", otherAssignment);
+
         streamsGroup.removeMember("member");
         assertFalse(streamsGroup.hasMember("member"));
+
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), streamsGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        streamsGroup.updateTargetAssignment("member1", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of()));
+        streamsGroup.updateTargetAssignment("member2", new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of()));
+        assertEquals(Set.of("member1", "member2"), streamsGroup.targetAssignment().keySet());
+
+        streamsGroup.clearTargetAssignment();
+        assertEquals(Map.of(), streamsGroup.targetAssignment());
     }
 
     @Test
