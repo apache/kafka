@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -456,20 +457,32 @@ public class GroupOffsetsResetter {
     }
 
     public List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
-        // collect all topics
-        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        Map<String, List<TopicPartition>> partitionsByTopic = topicPartitions.stream()
+            .collect(Collectors.groupingBy(TopicPartition::topic));
 
-        try {
-            return adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
-                .stream()
-                .flatMap(entry -> entry.getValue().partitions().stream()
-                    .filter(partitionInfo -> partitionInfo.leader() == null)
-                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                    .filter(topicPartitions::contains)
-                .toList();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        List<TopicPartition> noneLeaderPartitions = new ArrayList<>();
+        adminClient.describeTopics(partitionsByTopic.keySet(), withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
+            List<TopicPartition> partitions = partitionsByTopic.get(topic);
+            try {
+                Set<Integer> partitionsWithLeader = future.get().partitions().stream()
+                    .filter(partitionInfo -> partitionInfo.leader() != null)
+                    .map(TopicPartitionInfo::partition)
+                    .collect(Collectors.toSet());
+                // A partition that no longer exists has no leader either
+                partitions.stream()
+                    .filter(tp -> !partitionsWithLeader.contains(tp.partition()))
+                    .forEach(noneLeaderPartitions::add);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
+                    throw new RuntimeException(e);
+                // A deleted topic has no leader for any of its partitions
+                noneLeaderPartitions.addAll(partitions);
+            }
+        });
+        return noneLeaderPartitions;
     }
 
     public List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
