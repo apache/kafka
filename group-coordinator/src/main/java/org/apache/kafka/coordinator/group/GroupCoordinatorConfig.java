@@ -913,6 +913,11 @@ public class GroupCoordinatorConfig {
 
                 assignors.add(assignor);
 
+                if (!assignor.name().equals(assignor.name().trim())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' must not contain leading or trailing whitespace.");
+                }
+
                 if (!assignorNames.add(assignor.name())) {
                     throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
                         "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
@@ -972,6 +977,11 @@ public class GroupCoordinatorConfig {
 
                 assignors.add(assignor);
 
+                if (!assignor.name().equals(assignor.name().trim())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' must not contain leading or trailing whitespace.");
+                }
+
                 if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
                     throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
                         "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
@@ -1026,6 +1036,11 @@ public class GroupCoordinatorConfig {
                 }
 
                 assignors.add(assignor);
+
+                if (!assignor.name().equals(assignor.name().trim())) {
+                    throw new ConfigException(SHARE_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' must not contain leading or trailing whitespace.");
+                }
 
                 if (assignor instanceof Configurable configurable) {
                     configurable.configure(config.originals());
