@@ -29,7 +29,7 @@ plugins {
   id 'jacoco'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '12.2.2'
-  id 'org.nosphere.apache.rat' version "0.8.1"
+  id 'org.nosphere.apache.rat' version "0.11.0"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
   id "com.github.spotbugs" version '6.5.12' apply false
@@ -260,7 +260,7 @@ static def projectToJUnitXmlPath(project) {
 apply from: file('wrapper.gradle')
 
 if (repo != null) {
-  rat {
+  tasks.rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
         it.name == "processMessages" || it.name == "processTestMessages"
@@ -269,7 +269,6 @@ if (repo != null) {
 
     verbose.set(true)
     reportDir.set(project.file('build/rat'))
-    stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
@@ -300,7 +299,7 @@ if (repo != null) {
     ])
   }
 } else {
-  rat.enabled = false
+  tasks.rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
