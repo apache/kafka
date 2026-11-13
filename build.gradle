@@ -2818,6 +2818,8 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation testLog4j2Libs
+    testImplementation libs.jqwik
+    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2833,6 +2835,12 @@ project(':tools') {
     from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy = 'exclude'
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
+    }
   }
 
   jar {
