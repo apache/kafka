@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.TestUtils;
@@ -40,12 +41,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = 3,
     serverProperties = {
-        @ClusterConfigProperty(key = KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, value = "15000")
+        @ClusterConfigProperty(key = KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, value = "" + ControlledShutdownIntegrationTest.SESSION_TIMEOUT_MS)
     }
 )
 public class ControlledShutdownIntegrationTest {
     private static final String TOPIC = "test-topic";
     private static final int SHUTDOWN_BROKER_ID = 0;
+    static final int SESSION_TIMEOUT_MS = 15_000;
 
     private final ClusterInstance clusterInstance;
 
@@ -75,6 +77,7 @@ public class ControlledShutdownIntegrationTest {
         try (Admin admin = clusterInstance.admin()) {
             createTopicLedByShutdownBroker(admin);
 
+            long shutdownStartMs = Time.SYSTEM.hiResClockMs();
             clusterInstance.shutdownBroker(SHUTDOWN_BROKER_ID);
             clusterInstance.ensureConsistentMetadata();
 
@@ -85,6 +88,10 @@ public class ControlledShutdownIntegrationTest {
 
             TestUtils.waitForCondition(() -> leaderMovedOff(describePartition(admin)),
                 60_000L, "Leadership was not moved after the broker session timed out");
+            long elapsedMs = Time.SYSTEM.hiResClockMs() - shutdownStartMs;
+            long minElapsedMs = SESSION_TIMEOUT_MS - 2L * KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_DEFAULT;
+            assertTrue(elapsedMs >= minElapsedMs,
+                "Leadership moved " + elapsedMs + " ms after shutdown started, expected at least " + minElapsedMs + " ms");
         }
     }
 
