@@ -1,8 +1,6 @@
-Zstd-jni: JNI bindings to Zstd Library
-
 Copyright (c) 2015-present, Luben Karavelov/ All rights reserved.
 
-BSD License
+BSD-2-Clause License https://opensource.org/license/bsd-2-clause
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
