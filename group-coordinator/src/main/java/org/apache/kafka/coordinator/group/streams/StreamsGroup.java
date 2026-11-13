@@ -1565,8 +1565,8 @@ public class StreamsGroup implements Group {
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
      * @param maybeReplacedStaticMember The replaced static member. it can be null.
-     * @return The list of endpoint-to-partitions mappings for all members with endpoints, or an empty list if the group
-     *         has no configured subtopologies, for example because source topics are missing.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints, or an empty list if the group's
+     *         topology is not configured or not ready, for example because source or internal topics are missing.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
@@ -1579,8 +1579,9 @@ public class StreamsGroup implements Group {
                 "This is a bug, please file a JIRA ticket.", groupId);
             return endpointToPartitionsList;
         }
-        // Without configured subtopologies, for example while source topics are missing, there are no partitions to map yet.
-        if (configuredTopology().flatMap(ConfiguredTopology::subtopologies).isEmpty()) {
+        // Until the topology is ready, for example while source or internal topics are missing, no tasks are assigned,
+        // so there are no partitions to report.
+        if (configuredTopology().filter(ConfiguredTopology::isReady).isEmpty()) {
             return endpointToPartitionsList;
         }
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {

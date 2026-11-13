@@ -1678,7 +1678,7 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testBuildEndpointToPartitionsWithoutConfiguredSubtopologies() {
+    public void testBuildEndpointToPartitionsWithoutReadyTopology() {
         StreamsGroup group = createStreamsGroup("foo");
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
@@ -1694,12 +1694,17 @@ public class StreamsGroupTest {
         // No configured topology yet.
         assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
 
-        // Topology configuration failed, so there are no subtopologies.
+        // Topology configuration failed because source topics are missing.
         group.setConfiguredTopology(new ConfiguredTopology(
             1, 0, Optional.empty(), Map.of(), Optional.of(TopicConfigurationException.missingSourceTopics("Source topics foo are missing."))));
         assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
 
-        // Once subtopologies are configured, every member with an endpoint is reported.
+        // Subtopologies are configured, but internal topics are still missing.
+        group.setConfiguredTopology(new ConfiguredTopology(
+            1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.of(TopicConfigurationException.missingInternalTopics("Internal topics are missing."))));
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Once the topology is ready, every member with an endpoint is reported.
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitions =
             group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null);
