@@ -759,6 +759,14 @@ public class TransactionManager {
         return txnPartitionMap.lastAckedSequence(topicPartition);
     }
 
+    /**
+     * Returns true if the partition has in-flight batches and the broker has not acknowledged any batch of the
+     * current producer epoch for it yet, i.e. the first batch of the epoch may still fail and be retried.
+     */
+    synchronized boolean isAwaitingFirstAck(TopicPartition topicPartition) {
+        return hasInflightBatches(topicPartition) && lastAckedSequence(topicPartition).isEmpty();
+    }
+
     synchronized OptionalLong lastAckedOffset(TopicPartition topicPartition) {
         return txnPartitionMap.lastAckedOffset(topicPartition);
     }
