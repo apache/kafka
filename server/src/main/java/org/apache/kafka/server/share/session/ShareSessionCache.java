@@ -26,6 +26,9 @@ import org.apache.kafka.server.share.ShareGroupListener;
 
 import com.yammer.metrics.core.Meter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -40,12 +43,15 @@ import java.util.concurrent.TimeUnit;
  * ShareSessionCache lock.  In order to avoid deadlock, the ShareSessionCache lock
  * must never be acquired while an individual ShareSession lock is already held.
  */
-public class ShareSessionCache {
+public class ShareSessionCache implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(ShareSessionCache.class);
+
     // Visible for testing.
     static final String SHARE_SESSIONS_COUNT = "ShareSessionsCount";
     // Visible for testing.
     static final String SHARE_PARTITIONS_COUNT = "SharePartitionsCount";
-    private static final String SHARE_SESSION_EVICTIONS_PER_SEC = "ShareSessionEvictionsPerSec";
+    // Visible for testing.
+    static final String SHARE_SESSION_EVICTIONS_PER_SEC = "ShareSessionEvictionsPerSec";
 
     /**
      * Metric for the rate of eviction of share sessions.
@@ -76,17 +82,49 @@ public class ShareSessionCache {
 
     private final int maxEntries;
     private long numPartitions = 0;
+    private final KafkaMetricsGroup metricsGroup;
+    private boolean closed;
 
     @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries) {
         this.maxEntries = maxEntries;
         // Register metrics for ShareSessionCache.
-        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
-        metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
-        metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
+        this.metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
+        this.metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
+        this.metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
         this.connectionIdToSessionMap = new HashMap<>();
         this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
-        this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
+        this.evictionsMeter = this.metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
+    }
+
+    /**
+     * Close the cache and deregister its metrics.
+     */
+    @Override
+    public void close() {
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+
+            sessions.clear();
+            numMembersPerGroup.clear();
+            numPartitions = 0;
+            connectionIdToSessionMap.clear();
+        }
+
+        removeMetricQuietly(SHARE_SESSIONS_COUNT);
+        removeMetricQuietly(SHARE_PARTITIONS_COUNT);
+        removeMetricQuietly(SHARE_SESSION_EVICTIONS_PER_SEC);
+    }
+
+    private void removeMetricQuietly(String name) {
+        try {
+            metricsGroup.removeMetric(name);
+        } catch (RuntimeException e) {
+            log.warn("Failed to deregister ShareSessionCache metric {}", name, e);
+        }
     }
 
     /**
@@ -190,6 +228,9 @@ public class ShareSessionCache {
      * @param session  The session.
      */
     public synchronized void updateNumPartitions(ShareSession session) {
+        if (closed) {
+            return;
+        }
         numPartitions += session.updateCachedSize();
     }
 
@@ -207,6 +248,9 @@ public class ShareSessionCache {
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
         String clientConnectionId
     ) {
+        if (closed) {
+            return null;
+        }
         if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH), clientConnectionId);
@@ -224,6 +268,9 @@ public class ShareSessionCache {
     }
 
     public synchronized void registerShareGroupListener(ShareGroupListener shareGroupListener) {
+        if (closed) {
+            return;
+        }
         this.shareGroupListener = shareGroupListener;
     }
 

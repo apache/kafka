@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -135,6 +136,11 @@ public class SharePartitionManager implements AutoCloseable {
      * The timer is used to schedule the records lock timeout.
      */
     private final Timer timer;
+
+    /**
+     * Whether this manager has already been closed. Shutdown is best-effort and is not retried.
+     */
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * The max in flight records is the maximum number of records that can be in flight at any one time per share-partition.
@@ -666,7 +672,31 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        this.timer.close();
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            // Snapshot the keys so a stable snapshot is processed even if the partition
+            // cache is modified while close is running.
+            List<SharePartitionKey> keys = new ArrayList<>(partitionCache.cachedSharePartitionKeys());
+            for (SharePartitionKey key : keys) {
+                try {
+                    removeSharePartitionFromCache(key, partitionCache, metadataProvider, delayedRequestNotifier);
+                } catch (Exception e) {
+                    log.warn("Failed to close share partition {} during shutdown", key, e);
+                }
+            }
+        } finally {
+            try {
+                cache.close();
+            } catch (Exception e) {
+                log.warn("Failed to close share session cache", e);
+            } finally {
+                // Close the timer last: completing delayed fetches may schedule new tasks.
+                timer.close();
+            }
+        }
     }
 
     private ShareSessionKey shareSessionKey(String groupId, String memberId) {
@@ -842,11 +872,14 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         SharePartition sharePartition = partitionCache.remove(sharePartitionKey);
         if (sharePartition != null) {
-            sharePartition.markFenced();
-            metadataProvider.removePartitionListener(sharePartitionKey.topicIdPartition(), sharePartition.listener());
-            delayedRequestNotifier.accept(new DelayedShareFetchGroupKey(sharePartitionKey.groupId(), sharePartitionKey.topicIdPartition()));
-            // Close the share partition to release any resources held by it.
-            sharePartition.close();
+            try {
+                sharePartition.markFenced();
+                metadataProvider.removePartitionListener(sharePartitionKey.topicIdPartition(), sharePartition.listener());
+                delayedRequestNotifier.accept(new DelayedShareFetchGroupKey(sharePartitionKey.groupId(), sharePartitionKey.topicIdPartition()));
+            } finally {
+                // Always deregister metrics, even if fencing or listener removal fails.
+                sharePartition.close();
+            }
         }
     }
 
