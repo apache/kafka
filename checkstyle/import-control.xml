@@ -144,6 +144,7 @@
     </subpackage>
 
     <subpackage name="protocol">
+      <allow class="org.apache.kafka.clients.producer.internals.CompositeMemoryRecords" exact-match="true" />
       <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />

@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchR
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
@@ -668,7 +667,7 @@ public class MemoryRecords extends AbstractRecords {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compression.type(), Arrays.asList(records));
-        ByteBufferOutputStream bufferStream = new SingleByteBufferOutputStream(sizeEstimate);
+        SingleByteBufferOutputStream bufferStream = new SingleByteBufferOutputStream(sizeEstimate);
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();

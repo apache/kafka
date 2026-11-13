@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.AbstractRecordsBuilder;
+import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -68,7 +70,7 @@ public class ProducerBatch {
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
-    protected final MemoryRecordsBuilder recordsBuilder;
+    private final AbstractRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
@@ -89,11 +91,11 @@ public class ProducerBatch {
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
     private int attemptsWhenLeaderLastChanged;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
@@ -147,14 +149,14 @@ public class ProducerBatch {
      * to return its remaining chunks (fully-unused chunks are released earlier, at close).
      */
     protected void deallocateBuffer(BufferPool pool) {
-        pool.deallocate(buffer(), initialCapacity());
+        pool.deallocate(((MemoryRecordsBuilder) recordsBuilder).buffer(), initialCapacity());
     }
 
     /**
      * Credit this batch's memory back to the pool when it is unexpectedly still inflight
      * (KAFKA-19012): the buffer can't be touched (the network may still be reading it), so the
-     * default donates a fresh same-capacity buffer. {@link ChunkedProducerBatch} instead returns
-     * the actual chunks (safe — inflight bytes live in the separate flattened buffer).
+     * default donates a fresh same-capacity buffer. {@link ChunkedProducerBatch} does the same for
+     * each of its chunks.
      */
     protected void deallocateInflightBuffer(BufferPool pool) {
         pool.deallocate(ByteBuffer.allocate(initialCapacity()));
@@ -351,8 +353,21 @@ public class ProducerBatch {
         return batches;
     }
 
+    /**
+     * The built records as {@link MemoryRecords}, so splitting can read them back. A chunked batch builds
+     * a send-only {@link CompositeMemoryRecords}, which is flattened here: an extra copy, but only on this
+     * rare path, and it keeps a multi-buffer read path out of the client.
+     */
+    private MemoryRecords recordsForSplit() {
+        BaseRecords records = recordsBuilder.build();
+        if (records instanceof CompositeMemoryRecords) {
+            return ((CompositeMemoryRecords) records).flatten();
+        }
+        return (MemoryRecords) records;
+    }
+
     private RecordBatch validateAndGetRecordBatch() {
-        MemoryRecords memoryRecords = recordsBuilder.build();
+        MemoryRecords memoryRecords = recordsForSplit();
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
 
         if (!recordBatchIter.hasNext())
@@ -501,7 +516,7 @@ public class ProducerBatch {
         return this.retry;
     }
 
-    public MemoryRecords records() {
+    public BaseRecords records() {
         return recordsBuilder.build();
     }
 
@@ -559,10 +574,6 @@ public class ProducerBatch {
 
     public boolean isClosed() {
         return recordsBuilder.isClosed();
-    }
-
-    public ByteBuffer buffer() {
-        return recordsBuilder.buffer();
     }
 
     public int initialCapacity() {

@@ -26,7 +26,6 @@ import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -50,7 +49,7 @@ import java.util.OptionalInt;
 public class BatchBuilder<T> {
     private final ByteBuffer initialBuffer;
     private final Compression compression;
-    private final ByteBufferOutputStream batchOutput;
+    private final SingleByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
     private final long appendTime;
