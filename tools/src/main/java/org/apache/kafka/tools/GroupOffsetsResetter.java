@@ -462,7 +462,7 @@ public class GroupOffsetsResetter {
 
         List<TopicPartition> noneLeaderPartitions = new ArrayList<>();
         adminClient.describeTopics(partitionsByTopic.keySet(), withTimeoutMs(new DescribeTopicsOptions())).topicNameValues().forEach((topic, future) -> {
-            List<TopicPartition> partitions = partitionsByTopic.getOrDefault(topic, List.of());
+            List<TopicPartition> partitions = partitionsByTopic.get(topic);
             try {
                 Set<Integer> partitionsWithLeader = future.get().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() != null)

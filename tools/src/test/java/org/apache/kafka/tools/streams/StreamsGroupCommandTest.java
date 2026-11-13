@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -75,7 +75,6 @@ import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
-import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -398,7 +397,6 @@ public class StreamsGroupCommandTest {
         List<String> args = List.of("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic1", "--to-latest");
         List<String> topics = List.of(topic);
 
-        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
         Map<String, TopicDescription> descriptions = Map.of(
@@ -406,8 +404,7 @@ public class StreamsGroupCommandTest {
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
-            .thenReturn(describeTopicsResult);
-        when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+            .thenReturn(AdminClientTestUtils.describeTopicsResult(descriptions));
         when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class)))
             .thenReturn(listOffsetsResult());
         ListGroupsResult listGroupsResult = listGroupResult(groupId);
@@ -547,15 +544,13 @@ public class StreamsGroupCommandTest {
         
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
-        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
 
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
-            .thenReturn(describeTopicsResult);
-        when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+            .thenReturn(AdminClientTestUtils.describeTopicsResult(descriptions));
         when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class)))
             .thenReturn(listOffsetsResult());
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
