@@ -519,7 +519,7 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
                                     final String storeName,
-                                    final long batchEndOffset,
+                                    final long lastBatchOffset,
                                     final long numRestored) {
             totalRestored.addAndGet(numRestored);
         }

@@ -980,11 +980,11 @@ public class EosIntegrationTest {
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
                                         final String storeName,
-                                        final long batchEndOffset,
+                                        final long lastBatchOffset,
                                         final long numRestored) {
                 if (topicPartition.partition() == 0) {
-                    restoredOffsetsForPartition0.set(batchEndOffset);
-                    if (batchEndOffset > 100) {
+                    restoredOffsetsForPartition0.set(lastBatchOffset);
+                    if (lastBatchOffset > 100) {
                         latch.countDown();
                     }
                 }

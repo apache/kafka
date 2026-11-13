@@ -489,7 +489,7 @@ public class StoreChangelogReader implements ChangelogReader {
             final ChangelogMetadata metadata = entry.getValue();
             Long endOffset = metadata.restoreEndOffset;
             if (endOffset == null) {
-                endOffset = metadata.storeMetadata.endOffset();
+                endOffset = metadata.storeMetadata.lastChangelogOffset();
             }
             endOffsets.put(entry.getKey(), endOffset);
         }
@@ -721,8 +721,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
-            // where restoration had reached before this batch; null until the first batch is restored
-            final Long offsetBeforeRestore = storeMetadata.offset();
+            // null while unknown
+            final Long storeOffsetBeforeRestore = storeMetadata.offset();
             final OptionalLong optionalLag = restoreConsumer.currentLag(partition);
             stateManager.restore(storeMetadata, records, optionalLag);
 
@@ -735,11 +735,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 changelogMetadata.bufferedRecords.clear();
             }
 
-            final long currentOffset = storeMetadata.offset();
-            recordRestorationProgress(task, changelogMetadata, numRecords, offsetBeforeRestore, currentOffset + 1);
+            final long lastRestoredOffset = storeMetadata.offset();
+            recordRestorationProgress(task, changelogMetadata, numRecords, storeOffsetBeforeRestore, lastRestoredOffset + 1);
 
-            log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
-                numRecords, partition, storeName, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
+            log.trace("Restored {} records from changelog {} to store {}, end offset is {}, last restored offset is {}",
+                numRecords, partition, storeName, recordEndOffset(changelogMetadata.restoreEndOffset), lastRestoredOffset);
 
             changelogMetadata.bufferedLimitIndex = 0;
             changelogMetadata.totalRestored += numRecords;
@@ -747,13 +747,13 @@ public class StoreChangelogReader implements ChangelogReader {
             // do not trigger restore listener if we are processing standby tasks
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
-                    stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
+                    stateRestoreListener.onBatchRestored(partition, storeName, lastRestoredOffset, numRecords);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                 try {
-                    standbyUpdateListener.onBatchLoaded(partition, storeName, stateManager.taskId(), currentOffset, numRecords, storeMetadata.endOffset());
+                    standbyUpdateListener.onBatchLoaded(partition, storeName, stateManager.taskId(), lastRestoredOffset, numRecords, storeMetadata.lastChangelogOffset());
                 } catch (final Exception e) {
                     throw new StreamsException("Standby updater listener failed on batch loaded", e);
                 }
@@ -844,7 +844,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private void recordRestorationProgress(final Task task,
                                            final ChangelogMetadata changelogMetadata,
                                            final long numRecords,
-                                           final Long lastRestoredOffset, // this is not a "position" so we need to correct it below
+                                           final Long lastRestoredOffset,
                                            final long restoredToOffset) {
         // clamp to the position restoration started from: after skipping past a stored offset, the first
         // batch's lastRestoredOffset is the stored offset, which is behind restoreStartOffset; measuring
@@ -1121,26 +1121,26 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
             final TopicPartition partition = storeMetadata.changelogPartition();
-            final Long currentOffset = storeMetadata.offset();
+            final Long storeOffset = storeMetadata.offset();
             final Long endOffset = changelogs.get(partition).restoreEndOffset;
 
-            if (currentOffset != null) {
-                // the current offset is the offset of the last record, so the "next" record to fetch is
+            if (storeOffset != null) {
+                // the store offset is the offset of the last restored record, so the "next" record to fetch is
                 // that offset + 1; it is also the floor the probe may never seek below, since doing so
                 // would re-apply applied records and rewind the stored offset
-                final long floor = currentOffset + 1;
+                final long floor = storeOffset + 1;
                 if (shouldProbePastStoredOffset(changelogMetadata, partition, floor, endOffset)) {
                     newWindowedPartitionsRetention.put(partition, storeMetadata.retentionPeriod());
                     newPartitionsFloor.put(partition, floor);
 
                     log.debug("Start restoring windowed changelog partition {} by probing to skip expired data " +
-                        "past stored offset {} to end offset {}.", partition, currentOffset, recordEndOffset(endOffset));
+                        "past stored offset {} to end offset {}.", partition, storeOffset, recordEndOffset(endOffset));
                 } else {
                     // seek is not a blocking call so there's nothing to capture
                     restoreConsumer.seek(partition, floor);
 
-                    log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
-                        partition, currentOffset, recordEndOffset(endOffset));
+                    log.debug("Start restoring changelog partition {} past stored offset {} to end offset {}.",
+                        partition, storeOffset, recordEndOffset(endOffset));
                 }
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
@@ -1521,11 +1521,11 @@ public class StoreChangelogReader implements ChangelogReader {
                             }
                         } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                             final StateStoreMetadata storeMetadata = changelogMetadata.stateManager.storeMetadata(partition);
-                            // endOffset and storeOffset may be unknown at this point
+                            // storeOffset and lastChangelogOffset may be unknown at this point
                             final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
-                            final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
+                            final long lastChangelogOffset = storeMetadata.lastChangelogOffset() != null ? storeMetadata.lastChangelogOffset() : -1;
                             try {
-                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, reason);
+                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, lastChangelogOffset, reason);
                             } catch (final Exception e) {
                                 throw new StreamsException("Standby updater listener failed on update suspended", e);
                             }

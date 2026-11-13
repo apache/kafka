@@ -53,11 +53,11 @@ public class MockStateRestoreListener implements StateRestoreListener {
     @Override
     public void onBatchRestored(final TopicPartition topicPartition,
                                 final String storeName,
-                                final long batchEndOffset,
+                                final long lastBatchOffset,
                                 final long numRestored) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_BATCH, storeName);
-        restoredBatchOffset = batchEndOffset;
+        restoredBatchOffset = lastBatchOffset;
         numBatchRestored = numRestored;
     }
 

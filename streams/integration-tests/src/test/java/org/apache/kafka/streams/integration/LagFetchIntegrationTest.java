@@ -340,7 +340,7 @@ public class LagFetchIntegrationTest {
                 }
 
                 @Override
-                public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+                public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long lastBatchOffset, final long numRestored) {
                 }
 
                 @Override

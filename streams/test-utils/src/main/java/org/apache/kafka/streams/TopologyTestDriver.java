@@ -261,7 +261,7 @@ public class TopologyTestDriver implements Closeable {
         public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
 
         @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long lastBatchOffset, final long numRestored) {}
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}

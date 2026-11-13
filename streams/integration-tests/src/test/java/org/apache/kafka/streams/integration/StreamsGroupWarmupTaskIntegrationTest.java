@@ -169,7 +169,7 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                 @Override
                 public void onBatchRestored(final TopicPartition topicPartition,
                                             final String storeName,
-                                            final long batchEndOffset,
+                                            final long lastBatchOffset,
                                             final long numRestored) {
                     // expected never to fire: the task taken over from the warm-up has nothing left to restore
                     instance1NumRestored.set(numRestored);
@@ -200,16 +200,16 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                 public void onBatchLoaded(final TopicPartition topicPartition,
                                           final String storeName,
                                           final TaskId taskId,
-                                          final long batchEndOffset,
+                                          final long lastBatchOffset,
                                           final long batchSize,
-                                          final long currentEndOffset) {
+                                          final long lastChangelogOffset) {
                 }
 
                 @Override
                 public void onUpdateSuspended(final TopicPartition topicPartition,
                                               final String storeName,
                                               final long storeOffset,
-                                              final long currentEndOffset,
+                                              final long lastChangelogOffset,
                                               final SuspendReason reason) {
                     if (reason == SuspendReason.PROMOTED) {
                         promotedChangelogs.add(topicPartition);

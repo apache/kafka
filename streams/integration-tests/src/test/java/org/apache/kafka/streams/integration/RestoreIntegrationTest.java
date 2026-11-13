@@ -835,10 +835,10 @@ public class RestoreIntegrationTest {
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
                                     final String storeName,
-                                    final long batchEndOffset,
+                                    final long lastBatchOffset,
                                     final long numRestored) {
-            log.info("[{}] called onBatchRestored. topicPartition={}, storeName={}, batchEndOffset={}, numRestored={}",
-                     instanceName, topicPartition, storeName, batchEndOffset, numRestored);
+            log.info("[{}] called onBatchRestored. topicPartition={}, storeName={}, lastBatchOffset={}, numRestored={}",
+                     instanceName, topicPartition, storeName, lastBatchOffset, numRestored);
             Utils.sleep(onBatchRestoredSleepDuration.toMillis());
             onBatchRestoredLatch.countDown();
         }
