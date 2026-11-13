@@ -728,6 +728,8 @@ Here we see the leader throttle is applied to partition 1 on broker 102 and part
 
 By default kafka-reassign-partitions.sh will apply the leader throttle to all replicas that exist before the rebalance, any one of which might be leader. It will apply the follower throttle to all move destinations. So if there is a partition with replicas on brokers 101,102, being reassigned to 102,103, a leader throttle, for that partition, would be applied to 101,102 and a follower throttle would be applied to 103 only. 
 
+If the throttled replica list of a topic exceeds the maximum config value size (32767 bytes), kafka-reassign-partitions.sh uses the wildcard `*` instead, which throttles all replicas of that topic.
+
 If required, you can also use the --alter switch on kafka-configs.sh to alter the throttle configurations manually. 
 
 ### Safe usage of throttled replication
