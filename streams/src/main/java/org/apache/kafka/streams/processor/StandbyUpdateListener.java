@@ -110,20 +110,20 @@ public interface StandbyUpdateListener {
      *        the name of the store being loaded
      * @param taskId
      *        the {@link TaskId} of the task that owns the store being loaded
-     * @param batchEndOffset
-     *        the changelog end offset (inclusive) of the batch that was just loaded
+     * @param lastBatchOffset
+     *        the offset of the last record of the batch that was just loaded
      * @param batchSize
      *        the total number of records in the batch that was just loaded
-     * @param currentEndOffset
-     *        the current end offset of the changelog topic partition
+     * @param lastChangelogOffset
+     *        the offset of the last record of the changelog topic partition, as known when the batch was loaded
      */
     void onBatchLoaded(
         final TopicPartition topicPartition,
         final String storeName,
         final TaskId taskId,
-        final long batchEndOffset,
+        final long lastBatchOffset,
         final long batchSize,
-        final long currentEndOffset
+        final long lastChangelogOffset
     );
 
     /**
@@ -143,8 +143,9 @@ public interface StandbyUpdateListener {
      *        the name of the store being loaded
      * @param storeOffset
      *        the offset of the last changelog record that was read and put into the store at the time of suspension
-     * @param currentEndOffset
-     *        the current end offset of the changelog topic partition
+     * @param lastChangelogOffset
+     *        the offset of the last record of the changelog topic partition, as known at the time of suspension, or
+     *        {@code -1} if unknown
      * @param reason
      *        the reason why the task stopped being updated
      */
@@ -152,7 +153,7 @@ public interface StandbyUpdateListener {
         final TopicPartition topicPartition,
         final String storeName,
         final long storeOffset,
-        final long currentEndOffset,
+        final long lastChangelogOffset,
         final SuspendReason reason
     );
 }
