@@ -83,11 +83,14 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *                           keyed on the topic id, for the topics whose share group state is
      *                           initialized.
      * @param deletingTopics     Set of topic ids.
+     * @param initializingStartOffsets The start offsets sent to initialize the partitions which are not
+     *                           initialized yet, keyed on the topic id and the partition.
      */
     public record ShareGroupStatePartitionMetadataInfo(
         Map<Uuid, InitMapValue> initializingTopics,
         Map<Uuid, InitMapValue> initializedTopics,
-        Set<Uuid> deletingTopics
+        Set<Uuid> deletingTopics,
+        Map<Uuid, Map<Integer, Long>> initializingStartOffsets
     ) {
         public static final ShareGroupStatePartitionMetadataInfo EMPTY = new ShareGroupStatePartitionMetadataInfo(Map.of(), Map.of(), Set.of());
 
@@ -95,6 +98,15 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             initializingTopics = Collections.unmodifiableMap(initializingTopics);
             initializedTopics = Collections.unmodifiableMap(initializedTopics);
             deletingTopics = Collections.unmodifiableSet(deletingTopics);
+            initializingStartOffsets = Collections.unmodifiableMap(initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo(
+            Map<Uuid, InitMapValue> initializingTopics,
+            Map<Uuid, InitMapValue> initializedTopics,
+            Set<Uuid> deletingTopics
+        ) {
+            this(initializingTopics, initializedTopics, deletingTopics, Map.of());
         }
     }
 

@@ -3256,50 +3256,73 @@ public class GroupMetadataManager {
             return Optional.empty();
         }
 
-        addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap);
-
-        // This is read before the records above are replayed, so it shows the state before this request.
+        // This is read before the records below are replayed, so it shows the state before this request.
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
-        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap, info));
-    }
+        Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
+        topicPartitionChangeMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
+            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, initialStartOffset(info, topicId, partitionId))));
 
-    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(
-        String groupId,
-        int groupEpoch,
-        Map<Uuid, InitMapValue> topicPartitions,
-        ShareGroupStatePartitionMetadataInfo info
-    ) {
-        return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
-            new GroupTopicPartitionData<>(groupId, topicPartitions.entrySet().stream()
-                .map(entry -> new TopicData<>(
-                    entry.getKey(),
-                    entry.getValue().partitions().stream()
-                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch,
-                            initialStartOffset(info, entry.getKey(), partitionId)))
-                        .toList())
-                ).toList()
-            )).build();
+        // The start offsets are stored, so that a retry of the initialization sends the same ones.
+        addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap, startOffsets);
+
+        return Optional.of(buildInitializeShareGroupState(groupId, groupEpoch, startOffsets));
     }
 
     /**
-     * Returns the start offset to initialize a share partition with. A partition added to a topic which the
-     * group already knows starts at 0, so that no records produced before the initialization completes are
-     * lost. Any other partition uses -1, so that the group's share.auto.offset.reset strategy applies. This
-     * includes a retry of a partition which is still initializing, so that the retry uses the same value as
-     * the first attempt.
+     * Returns the start offset to initialize a share partition with. A retry of the initialization of a
+     * partition uses the start offset stored when the initialization was first sent. Otherwise, a partition
+     * added to a topic which the group already knows starts at 0, so that no records produced before the
+     * initialization completes are lost, and any other partition uses -1, so that the group's
+     * share.auto.offset.reset strategy applies.
      */
     private static long initialStartOffset(ShareGroupStatePartitionMetadataInfo info, Uuid topicId, int partitionId) {
         if (info == null) {
             return PartitionFactory.UNINITIALIZED_START_OFFSET;
         }
-        if (info.initializedTopics().containsKey(topicId)) {
+        Map<Integer, Long> storedStartOffsets = info.initializingStartOffsets().get(topicId);
+        if (storedStartOffsets != null && storedStartOffsets.containsKey(partitionId)) {
+            return storedStartOffsets.get(partitionId);
+        }
+        if (storedStartOffsets != null || info.initializedTopics().containsKey(topicId)) {
             return 0L;
         }
+        // A record written by an older version does not have the start offsets. A partition which is still
+        // initializing is then a retry of a topic seen for the first time.
         InitMapValue initializing = info.initializingTopics().get(topicId);
         if (initializing != null && !initializing.partitions().contains(partitionId)) {
             return 0L;
         }
         return PartitionFactory.UNINITIALIZED_START_OFFSET;
+    }
+
+    /**
+     * @return A copy of the start offsets without the given partitions, and without the topics left with no partition.
+     */
+    static Map<Uuid, Map<Integer, Long>> removeStartOffsets(
+        Map<Uuid, Map<Integer, Long>> startOffsets,
+        Map<Uuid, Set<Integer>> partitionsToRemove
+    ) {
+        Map<Uuid, Map<Integer, Long>> result = new HashMap<>();
+        startOffsets.forEach((topicId, offsets) -> {
+            Map<Integer, Long> remaining = new HashMap<>(offsets);
+            remaining.keySet().removeAll(partitionsToRemove.getOrDefault(topicId, Set.of()));
+            if (!remaining.isEmpty()) {
+                result.put(topicId, remaining);
+            }
+        });
+        return result;
+    }
+
+    /**
+     * @return A copy of the start offsets without the given topics.
+     */
+    static Map<Uuid, Map<Integer, Long>> removeStartOffsetsOfTopics(
+        Map<Uuid, Map<Integer, Long>> startOffsets,
+        Set<Uuid> topicsToRemove
+    ) {
+        Map<Uuid, Map<Integer, Long>> result = new HashMap<>(startOffsets);
+        result.keySet().removeAll(topicsToRemove);
+        return result;
     }
 
     private InitializeShareGroupStateParameters buildInitializeShareGroupState(String groupId, int groupEpoch, Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions) {
@@ -3316,15 +3339,30 @@ public class GroupMetadataManager {
 
     // Visibility for tests
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
+        addInitializingTopicsRecords(groupId, records, topicPartitionMap, Map.of());
+    }
+
+    private void addInitializingTopicsRecords(
+        String groupId,
+        List<CoordinatorRecord> records,
+        Map<Uuid, InitMapValue> topicPartitionMap,
+        Map<Uuid, Map<Integer, Long>> startOffsets
+    ) {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
         }
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         if (currentMap == null) {
-            records.add(newShareGroupStatePartitionMetadataRecord(groupId, topicPartitionMap, Map.of(), Map.of()));
+            records.add(newShareGroupStatePartitionMetadataRecord(groupId, topicPartitionMap, Map.of(), Map.of(), startOffsets));
             return;
         }
+
+        // The stored start offsets are kept, as a retry uses them.
+        Map<Uuid, Map<Integer, Long>> finalStartOffsets = new HashMap<>();
+        currentMap.initializingStartOffsets().forEach((topicId, offsets) -> finalStartOffsets.put(topicId, new HashMap<>(offsets)));
+        startOffsets.forEach((topicId, offsets) -> offsets.forEach((partitionId, startOffset) ->
+            finalStartOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).putIfAbsent(partitionId, startOffset)));
 
         // We must combine the existing information in the record with the topicPartitionMap argument.
         Map<Uuid, InitMapValue> finalInitializingMap = combineInitMaps(currentMap.initializingTopics(), topicPartitionMap);
@@ -3346,7 +3384,8 @@ public class GroupMetadataManager {
                 groupId,
                 finalInitializingMap,
                 currentMap.initializedTopics(),
-                attachTopicName(currentDeleting)
+                attachTopicName(currentDeleting),
+                finalStartOffsets
             )
         );
     }
@@ -5959,7 +5998,8 @@ public class GroupMetadataManager {
                 group.groupId(),
                 finalInitializingMap,
                 finalInitializedMap,
-                attachTopicName(currentMap.deletingTopics())
+                attachTopicName(currentMap.deletingTopics()),
+                removeStartOffsets(currentMap.initializingStartOffsets(), topicPartitionMap)
             )),
             null
         );
@@ -6005,7 +6045,9 @@ public class GroupMetadataManager {
                     groupId,
                     finalInitializingTopics,
                     info.initializedTopics(),
-                    attachTopicName(info.deletingTopics())
+                    attachTopicName(info.deletingTopics()),
+                    // The start offsets are kept, so that the next attempt sends the same ones.
+                    info.initializingStartOffsets()
                 )
             ),
             null
@@ -6849,7 +6891,18 @@ public class GroupMetadataManager {
 
                 value.deletingTopics().stream()
                     .map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId)
-                    .collect(Collectors.toSet())
+                    .collect(Collectors.toSet()),
+
+                value.initializingStartOffsets().stream()
+                    .collect(Collectors.toMap(
+                        ShareGroupStatePartitionMetadataValue.TopicStartOffsets::topicId,
+                        topicStartOffsets -> {
+                            Map<Integer, Long> offsets = new HashMap<>();
+                            for (int i = 0; i < topicStartOffsets.partitions().size(); i++) {
+                                offsets.put(topicStartOffsets.partitions().get(i), topicStartOffsets.startOffsets().get(i));
+                            }
+                            return offsets;
+                        }))
             );
 
             // Init java record.
@@ -9572,7 +9625,8 @@ public class GroupMetadataManager {
                 groupId,
                 currentMap.initializingTopics(),
                 initializedTopics,
-                attachTopicName(deletingTopics)
+                attachTopicName(deletingTopics),
+                removeStartOffsetsOfTopics(currentMap.initializingStartOffsets(), deletingTopics)
             )
         );
 
@@ -9732,7 +9786,8 @@ public class GroupMetadataManager {
                 groupId,
                 finalInitializing,
                 finalInitialized,
-                attachTopicName(finalDeleting)
+                attachTopicName(finalDeleting),
+                removeStartOffsetsOfTopics(metadata.initializingStartOffsets(), deletedTopicIds)
             ));
         });
 
@@ -9768,7 +9823,8 @@ public class GroupMetadataManager {
                 groupId,
                 currentMap.initializingTopics(),
                 currentMap.initializedTopics(),
-                attachTopicName(updatedDeletingTopics)
+                attachTopicName(updatedDeletingTopics),
+                currentMap.initializingStartOffsets()
             )
         );
 

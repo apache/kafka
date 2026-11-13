@@ -25,7 +25,18 @@
     { "name": "InitializedTopics", "versions": "0+", "type": "[]TopicPartitionsInfo",
       "about": "The topics with initialized share-group state." },
     { "name": "DeletingTopics", "versions": "0+", "type": "[]TopicInfo",
-      "about": "The topics whose share-group state is being deleted." }
+      "about": "The topics whose share-group state is being deleted." },
+    { "name": "InitializingStartOffsets", "versions": "0+", "taggedVersions": "0+", "tag": 0,
+      "type": "[]TopicStartOffsets",
+      "about": "The start offsets sent to initialize the share-group state of the partitions which are not initialized yet. A retry of the initialization sends the same start offsets.",
+      "fields": [
+        { "name": "TopicId", "type": "uuid", "versions": "0+",
+          "about": "The topic identifier." },
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
+          "about": "The partitions." },
+        { "name": "StartOffsets", "type": "[]int64", "versions": "0+",
+          "about": "The start offset of each partition. Of the same length as Partitions." }
+      ]}
   ],
   "commonStructs": [
     { "name": "TopicPartitionsInfo", "versions": "0+", "fields": [
