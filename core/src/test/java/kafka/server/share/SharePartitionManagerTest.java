@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.quota.ReplicaQuota;
@@ -72,6 +73,7 @@ import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
+import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
@@ -94,20 +96,25 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
+import com.yammer.metrics.core.MetricName;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -141,6 +148,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -165,6 +173,9 @@ public class SharePartitionManagerTest {
         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty(), true);
     private static final String TIMER_NAME_PREFIX = "share-partition-manager";
     private static final String CONNECTION_ID = "id-1";
+    private static final String SHARE_SESSIONS_COUNT = "ShareSessionsCount";
+    private static final String SHARE_PARTITIONS_COUNT = "SharePartitionsCount";
+    private static final String SHARE_SESSION_EVICTIONS_PER_SEC = "ShareSessionEvictionsPerSec";
 
     static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
     static final long REMOTE_FETCH_MAX_WAIT_MS = 6000L;
@@ -1360,20 +1371,381 @@ public class SharePartitionManagerTest {
 
     @Test
     public void testCloseSharePartitionManager() throws Exception {
-        Timer timer = Mockito.mock(SystemTimerReaper.class);
-        ShareGroupMetrics shareGroupMetrics = Mockito.mock(ShareGroupMetrics.class);
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        Timer timer = mock(Timer.class);
+        ShareSessionCache sessionCache = mock(ShareSessionCache.class);
+        ShareGroupMetrics shareGroupMetrics = mock(ShareGroupMetrics.class);
+
+        String group1 = "group1";
+        String group2 = "group2";
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("close-topic", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("close-topic", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(topicId, new TopicPartition("close-topic", 2));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        SharePartitionListener listener0 = mock(SharePartitionListener.class);
+        SharePartitionListener listener1 = mock(SharePartitionListener.class);
+        SharePartitionListener listener2 = mock(SharePartitionListener.class);
+        when(sp0.listener()).thenReturn(listener0);
+        when(sp1.listener()).thenReturn(listener1);
+        when(sp2.listener()).thenReturn(listener2);
+
+        partitionCache.computeIfAbsent(new SharePartitionKey(group1, tp0), k -> sp0);
+        partitionCache.computeIfAbsent(new SharePartitionKey(group1, tp1), k -> sp1);
+        partitionCache.computeIfAbsent(new SharePartitionKey(group2, tp2), k -> sp2);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(sessionCache)
             .withTimer(timer)
             .withShareGroupMetrics(shareGroupMetrics)
             .build();
 
-        // Verify that 0 calls are made to timer.close() and shareGroupMetrics.close().
-        Mockito.verify(timer, times(0)).close();
-        Mockito.verify(shareGroupMetrics, times(0)).close();
-        // Closing the sharePartitionManager closes timer object in sharePartitionManager.
+        verify(timer, times(0)).close();
+        verify(sessionCache, times(0)).close();
+        verify(shareGroupMetrics, times(0)).close();
+
         sharePartitionManager.close();
-        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and shareGroupMetrics.close().
+
+        for (SharePartition sp : List.of(sp0, sp1, sp2)) {
+            verify(sp, times(1)).markFenced();
+            verify(sp, times(1)).close();
+        }
+        verify(mockReplicaManager).removeListener(tp0.topicPartition(), listener0);
+        verify(mockReplicaManager).removeListener(tp1.topicPartition(), listener1);
+        verify(mockReplicaManager).removeListener(tp2.topicPartition(), listener2);
+        verify(mockReplicaManager).completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(group1, tp0));
+        verify(mockReplicaManager).completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(group1, tp1));
+        verify(mockReplicaManager).completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(group2, tp2));
+        verify(sessionCache, times(1)).close();
+
+        InOrder partitionOrder = Mockito.inOrder(sp0);
+        partitionOrder.verify(sp0).markFenced();
+        partitionOrder.verify(sp0).close();
+
+        for (SharePartition sp : List.of(sp0, sp1, sp2)) {
+            InOrder timerOrder = Mockito.inOrder(sp, timer);
+            timerOrder.verify(sp).close();
+            timerOrder.verify(timer).close();
+
+            InOrder cacheOrder = Mockito.inOrder(sp, sessionCache);
+            cacheOrder.verify(sp).close();
+            cacheOrder.verify(sessionCache).close();
+        }
+        InOrder closeOrder = Mockito.inOrder(sessionCache, timer);
+        closeOrder.verify(sessionCache).close();
+        closeOrder.verify(timer).close();
+
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        assertTrue(partitionCache.groups().isEmpty());
+        verify(timer, times(1)).close();
+        verify(shareGroupMetrics, times(0)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerIsIdempotent() throws Exception {
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        Timer timer = mock(Timer.class);
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        SharePartition sp = mock(SharePartition.class);
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("idempotent-topic", 0));
+        partitionCache.computeIfAbsent(new SharePartitionKey("idempotent-group", tp), k -> sp);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(cache)
+            .withTimer(timer)
+            .build();
+
+        sharePartitionManager.close();
+        sharePartitionManager.close();
+
+        verify(sp, times(1)).close();
+        verify(cache, times(1)).close();
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerDeregistersMetrics() throws Exception {
+        String groupId = "metrics-close-group";
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("metrics-close-topic", 0));
+        SharePartitionKey key = new SharePartitionKey(groupId, tp);
+        SharePartitionCache partitionCache = new SharePartitionCache();
+
+        SharePartitionMetrics metrics = new SharePartitionMetrics(groupId, tp.topic(), tp.partition());
+        SharePartition sp = new SharePartition(
+            groupId,
+            tp,
+            0,
+            MAX_IN_FLIGHT_MESSAGES,
+            MAX_DELIVERY_COUNT,
+            DEFAULT_RECORD_LOCK_DURATION_MS,
+            new MockTimer(time),
+            time,
+            new NoOpStatePersister(),
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest,
+            new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
+            SharePartition.SharePartitionState.ACTIVE,
+            mock(SharePartitionListener.class),
+            metrics,
+            () -> false,
+            new NoOpShareGroupDLQManager()
+        );
+        partitionCache.computeIfAbsent(key, k -> sp);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(mock(ShareSessionCache.class))
+            .withTimer(mock(Timer.class))
+            .build();
+
+        assertNotNull(ServerTestUtils.yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertNotNull(ServerTestUtils.yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+
+        sharePartitionManager.close();
+
+        assertThrows(NoSuchElementException.class,
+            () -> ServerTestUtils.yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT));
+        assertThrows(NoSuchElementException.class,
+            () -> ServerTestUtils.yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT));
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerClosesPartitionWhenFencingFails() throws Exception {
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        Timer timer = mock(Timer.class);
+        SharePartition sp = mock(SharePartition.class);
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("fence-failure-topic", 0));
+        partitionCache.computeIfAbsent(new SharePartitionKey("fence-failure-group", tp), k -> sp);
+        doThrow(new RuntimeException("fencing failed")).when(sp).markFenced();
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(mock(ShareSessionCache.class))
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+        verify(sp, times(1)).close();
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        assertTrue(partitionCache.groups().isEmpty());
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerClosesPartitionWhenListenerRemovalFails() throws Exception {
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        Timer timer = mock(Timer.class);
+        SharePartition sp = mock(SharePartition.class);
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("listener-failure-topic", 0));
+        partitionCache.computeIfAbsent(new SharePartitionKey("listener-failure-group", tp), k -> sp);
+        doThrow(new RuntimeException("listener removal failed"))
+            .when(mockReplicaManager).removeListener(any(), any());
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(mock(ShareSessionCache.class))
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+        verify(sp, times(1)).close();
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        assertTrue(partitionCache.groups().isEmpty());
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerClosesPartitionWhenDelayedNotifierFails() throws Exception {
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        Timer timer = mock(Timer.class);
+        SharePartition sp = mock(SharePartition.class);
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("notifier-failure-topic", 0));
+        partitionCache.computeIfAbsent(new SharePartitionKey("notifier-failure-group", tp), k -> sp);
+        doThrow(new RuntimeException("notifier failed"))
+            .when(mockReplicaManager).completeDelayedShareFetchRequest(any());
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(mock(ShareSessionCache.class))
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+        verify(sp, times(1)).close();
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        assertTrue(partitionCache.groups().isEmpty());
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerContinuesAfterPartitionCloseFails() throws Exception {
+        SharePartitionCache partitionCache = spy(new SharePartitionCache());
+        Timer timer = mock(Timer.class);
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("close-failure-topic", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("close-failure-topic", 1));
+        SharePartitionKey key0 = new SharePartitionKey("close-failure-group", tp0);
+        SharePartitionKey key1 = new SharePartitionKey("close-failure-group", tp1);
+        partitionCache.computeIfAbsent(key0, k -> sp0);
+        partitionCache.computeIfAbsent(key1, k -> sp1);
+        // Make iteration order deterministic so sp0 is processed before sp1, then delegate
+        // to the real cache so the post-close assertions observe the drained state.
+        doReturn(new LinkedHashSet<>(List.of(key0, key1)))
+            .doCallRealMethod()
+            .when(partitionCache).cachedSharePartitionKeys();
+        doThrow(new RuntimeException("partition close failed")).when(sp0).close();
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(cache)
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+
+        verify(sp0, times(1)).close();
+        verify(sp1, times(1)).close();
+        verify(cache, times(1)).close();
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        assertTrue(partitionCache.groups().isEmpty());
+
+        InOrder order = Mockito.inOrder(sp1, cache, timer);
+        order.verify(sp1).close();
+        order.verify(cache).close();
+        order.verify(timer).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerDoesNotDoubleCloseRemovedPartition() throws Exception {
+        SharePartitionCache partitionCache = spy(new SharePartitionCache());
+        Timer timer = mock(Timer.class);
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("removed-topic", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("removed-topic", 1));
+        SharePartitionKey key0 = new SharePartitionKey("removed-group", tp0);
+        SharePartitionKey key1 = new SharePartitionKey("removed-group", tp1);
+        partitionCache.computeIfAbsent(key0, k -> sp0);
+        partitionCache.computeIfAbsent(key1, k -> sp1);
+        // Make iteration order deterministic so sp0 is processed before sp1.
+        doReturn(new LinkedHashSet<>(List.of(key0, key1))).when(partitionCache).cachedSharePartitionKeys();
+        doAnswer(invocation -> {
+            partitionCache.remove(key1);
+            return null;
+        }).when(sp0).close();
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(partitionCache)
+            .withCache(mock(ShareSessionCache.class))
+            .withTimer(timer)
+            .build();
+
+        sharePartitionManager.close();
+
+        verify(sp0, times(1)).close();
+        verify(sp1, times(0)).close();
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerEmptyCache() throws Exception {
+        Timer timer = mock(Timer.class);
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(mockReplicaManager)
+            .withPartitionCache(new SharePartitionCache())
+            .withCache(cache)
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+        verify(cache, times(1)).close();
+        verify(timer, times(1)).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerDeregistersSessionCacheMetrics() throws Exception {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(),
+            new ImplicitLinkedHashCollection<>(), CONNECTION_ID);
+
+        assertTrue(hasShareSessionCacheMetric(SHARE_SESSIONS_COUNT));
+        assertTrue(hasShareSessionCacheMetric(SHARE_PARTITIONS_COUNT));
+        assertTrue(hasShareSessionCacheMetric(SHARE_SESSION_EVICTIONS_PER_SEC));
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withTimer(Mockito.mock(Timer.class))
+            .build();
+
+        sharePartitionManager.close();
+
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertFalse(hasShareSessionCacheMetric(SHARE_SESSIONS_COUNT));
+        assertFalse(hasShareSessionCacheMetric(SHARE_PARTITIONS_COUNT));
+        assertFalse(hasShareSessionCacheMetric(SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerClosesSessionCacheBeforeTimer() throws Exception {
+        ShareSessionCache cache = Mockito.mock(ShareSessionCache.class);
+        Timer timer = Mockito.mock(Timer.class);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withTimer(timer)
+            .build();
+
+        sharePartitionManager.close();
+
+        InOrder inOrder = Mockito.inOrder(cache, timer);
+        inOrder.verify(cache).close();
+        inOrder.verify(timer).close();
+    }
+
+    @Test
+    public void testCloseSharePartitionManagerClosesTimerWhenSessionCacheCloseFails() throws Exception {
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        SharePartition partition = mock(SharePartition.class);
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("cache-failure-topic", 0));
+        partitionCache.computeIfAbsent(new SharePartitionKey("cache-failure-group", tp), k -> partition);
+        ShareSessionCache cache = Mockito.mock(ShareSessionCache.class);
+        Timer timer = Mockito.mock(Timer.class);
+        Mockito.doThrow(new RuntimeException("cache close failed")).when(cache).close();
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache)
+            .withCache(cache)
+            .withTimer(timer)
+            .build();
+
+        assertDoesNotThrow(() -> sharePartitionManager.close());
+
+        Mockito.verify(partition, times(1)).markFenced();
+        Mockito.verify(partition, times(1)).close();
+        assertTrue(partitionCache.cachedSharePartitionKeys().isEmpty());
+        Mockito.verify(cache, times(1)).close();
         Mockito.verify(timer, times(1)).close();
+
+        InOrder order = Mockito.inOrder(partition, cache, timer);
+        order.verify(partition).close();
+        order.verify(cache).close();
+        order.verify(timer).close();
     }
 
     @Test
@@ -3106,6 +3478,14 @@ public class SharePartitionManagerTest {
         Mockito.verify(partitionCache, times(1)).topicIdPartitionsForGroup(groupId);
     }
 
+    private static MetricName shareSessionCacheMetricName(String name) {
+        return KafkaYammerMetrics.getMetricName("kafka.server", "ShareSessionCache", name);
+    }
+
+    private static boolean hasShareSessionCacheMetric(String name) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().containsKey(shareSessionCacheMetricName(name));
+    }
+
     private Timer systemTimerReaper() {
         return new SystemTimerReaper(
             TIMER_NAME_PREFIX + "-test-reaper",
@@ -3361,7 +3741,7 @@ public class SharePartitionManagerTest {
         private final Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
-        private ShareSessionCache cache = new ShareSessionCache(10);
+        private ShareSessionCache cache;
         private SharePartitionCache partitionCache = new SharePartitionCache();
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
@@ -3419,6 +3799,9 @@ public class SharePartitionManagerTest {
         }
 
         public SharePartitionManager build() {
+            if (cache == null) {
+                cache = new ShareSessionCache(10);
+            }
             return new SharePartitionManager(replicaManager,
                 new ReplicaManagerLogReader(replicaManager),
                 new ReplicaManagerPartitionMetadataProvider(replicaManager),
