@@ -25,20 +25,16 @@ import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
-import org.apache.kafka.clients.admin.DescribeFeaturesResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.PartitionReassignment;
-import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -48,8 +44,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TopicExistsException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -62,8 +56,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
@@ -127,8 +119,7 @@ public class TopicCommandTest {
                 new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
                         List.of(new Node(1, "localhost", 9091))),
                 null,
-                new PartitionReassignment(replicaIds, List.of(2), List.of()),
-                false
+                new PartitionReassignment(replicaIds, List.of(2), List.of())
         );
 
         assertFalse(partitionDescription.isUnderReplicated());
@@ -185,68 +176,6 @@ public class TopicCommandTest {
         assertTrue(partitionDescription.isUnderMinIsr());
     }
 
-    @Test
-    public void testMinIsrNotCappedForBrokersOlderThan40() {
-        // Pre-4.0 brokers don't advertise eligible.leader.replicas.version, so the configured value is used as is.
-        TopicCommand.PartitionDescription partitionDescription =
-            minIsrPartitionDescription(List.of(1, 2), List.of(1, 2), 1, 3, null, false);
-
-        assertEquals(3, partitionDescription.minIsrCount());
-        assertTrue(partitionDescription.isUnderMinIsr());
-        assertFalse(partitionDescription.isAtMinIsrPartitions());
-    }
-
-    @Test
-    public void testBrokerCapsMinIsrWhenElrFeatureIsSupported() {
-        Admin adminClient = mockDescribeFeatures(KafkaFuture.completedFuture(
-            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1))));
-
-        assertTrue(new TopicCommand.TopicService(adminClient).brokerCapsMinIsr());
-    }
-
-    @Test
-    public void testBrokerDoesNotCapMinIsrWhenElrFeatureIsNotSupported() {
-        Admin adminClient = mockDescribeFeatures(KafkaFuture.completedFuture(
-            Map.of(MetadataVersion.FEATURE_NAME, new SupportedVersionRange((short) 1, (short) 21))));
-
-        assertFalse(new TopicCommand.TopicService(adminClient).brokerCapsMinIsr());
-    }
-
-    @Test
-    public void testBrokerDoesNotCapMinIsrWhenDescribeFeaturesFails() {
-        KafkaFutureImpl<Map<String, SupportedVersionRange>> failed = new KafkaFutureImpl<>();
-        failed.completeExceptionally(new UnsupportedVersionException("describeFeatures is not supported"));
-        Admin adminClient = mockDescribeFeatures(failed);
-
-        assertFalse(new TopicCommand.TopicService(adminClient).brokerCapsMinIsr());
-    }
-
-    /**
-     * Mocks {@link Admin#describeFeatures()}, since {@link FeatureMetadata} has no public constructor. The supported
-     * features are passed as a future so a failed describeFeatures call can be simulated too.
-     */
-    private static Admin mockDescribeFeatures(KafkaFuture<Map<String, SupportedVersionRange>> supportedFeatures) {
-        // Build the future before stubbing: the nested when() must not run inside another when().thenReturn().
-        KafkaFuture<FeatureMetadata> featureMetadata = supportedFeatures.thenApply(features -> {
-            FeatureMetadata metadata = mock(FeatureMetadata.class);
-            when(metadata.supportedFeatures()).thenReturn(features);
-            return metadata;
-        });
-        DescribeFeaturesResult result = mock(DescribeFeaturesResult.class);
-        when(result.featureMetadata()).thenReturn(featureMetadata);
-        Admin adminClient = mock(Admin.class);
-        when(adminClient.describeFeatures()).thenReturn(result);
-        return adminClient;
-    }
-
-    private static TopicCommand.PartitionDescription minIsrPartitionDescription(List<Integer> replicaIds,
-                                                                                List<Integer> isrIds,
-                                                                                Integer leaderId,
-                                                                                int minIsr,
-                                                                                PartitionReassignment reassignment) {
-        return minIsrPartitionDescription(replicaIds, isrIds, leaderId, minIsr, reassignment, true);
-    }
-
     /**
      * Builds a {@link TopicCommand.PartitionDescription} with only the min.insync.replicas config set, so the
      * min-ISR checks can be exercised without a cluster.
@@ -255,14 +184,13 @@ public class TopicCommandTest {
                                                                                 List<Integer> isrIds,
                                                                                 Integer leaderId,
                                                                                 int minIsr,
-                                                                                PartitionReassignment reassignment,
-                                                                                boolean capMinIsr) {
+                                                                                PartitionReassignment reassignment) {
         List<Node> replicas = replicaIds.stream().map(id -> new Node(id, "localhost", 9090 + id)).toList();
         List<Node> isr = isrIds.stream().map(id -> new Node(id, "localhost", 9090 + id)).toList();
         Node leader = leaderId == null ? null : new Node(leaderId, "localhost", 9090 + leaderId);
         Config config = new Config(List.of(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(minIsr))));
         return new TopicCommand.PartitionDescription("test-topic",
-            new TopicPartitionInfo(0, leader, replicas, isr), config, reassignment, capMinIsr);
+            new TopicPartitionInfo(0, leader, replicas, isr), config, reassignment);
     }
 
     @Test
