@@ -92,7 +92,7 @@ public class AssignmentRefinerBenchmark {
     @Param({"2", "100"})
     private int numWarmupReplicas;
 
-    @Param({"0.0", "0.01", "0.5"})
+    @Param({"0.0", "0.01", "0.5", "1.0"})
     private double migratingTaskFraction;
 
     @Param({"ALL_CAUGHT_UP", "ALL_LAGGING", "NOT_REPORTED", "MIXED", "RESTORING_DESTINATIONS"})
