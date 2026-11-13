@@ -281,6 +281,21 @@ public class UtilsTest {
     }
 
     @Test
+    public void toArrayInvalid() {
+        doTestToArrayInvalid(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
+        ByteBuffer direct = ByteBuffer.allocateDirect(5);
+        direct.put(new byte[] {0, 1, 2, 3, 4});
+        direct.rewind();
+        doTestToArrayInvalid(direct);
+    }
+
+    private void doTestToArrayInvalid(ByteBuffer buffer) {
+        assertThrows(IllegalArgumentException.class, () -> Utils.toArray(buffer, 0, -1));
+        assertThrows(BufferUnderflowException.class, () -> Utils.toArray(buffer, 0, 6));
+        assertThrows(BufferUnderflowException.class, () -> Utils.toArray(buffer, 2, 4));
+    }
+
+    @Test
     public void toArrayDirectByteBuffer() {
         byte[] input = {0, 1, 2, 3, 4};
         ByteBuffer buffer = ByteBuffer.allocateDirect(5);
@@ -404,6 +419,21 @@ public class UtilsTest {
         assertEquals('A', results[0]);
         assertEquals('t', results[buffer.limit() - 1]);
         assertEquals(buffer.limit(), results.length);
+    }
+
+    @Test
+    public void readBytesInvalid() {
+        doTestReadBytesInvalid(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
+        ByteBuffer direct = ByteBuffer.allocateDirect(5);
+        direct.put(new byte[] {0, 1, 2, 3, 4});
+        direct.rewind();
+        doTestReadBytesInvalid(direct);
+    }
+
+    private void doTestReadBytesInvalid(ByteBuffer buffer) {
+        assertThrows(IllegalArgumentException.class, () -> Utils.readBytes(buffer, 0, -1));
+        assertThrows(BufferUnderflowException.class, () -> Utils.readBytes(buffer, 0, 6));
+        assertThrows(BufferUnderflowException.class, () -> Utils.readBytes(buffer, 2, 4));
     }
 
     @Test
