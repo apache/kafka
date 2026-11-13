@@ -26,6 +26,9 @@ import java.util.Objects;
 /**
  * {@code DslSessionParams} is a wrapper class for all parameters that function
  * as inputs to {@link DslStoreSuppliers#sessionStore(DslSessionParams)}.
+ *
+ * <p>The store format is exposed via {@link #dslStoreFormat()}, consistent with
+ * {@link DslKeyValueParams} and {@link DslWindowParams}.
  */
 @InterfaceAudience.Public
 public class DslSessionParams {
@@ -33,7 +36,7 @@ public class DslSessionParams {
     private final String name;
     private final Duration retentionPeriod;
     private final EmitStrategy emitStrategy;
-    private final DslStoreFormat storeFormat;
+    private final DslStoreFormat dslStoreFormat;
 
     /**
      * @param name              name of the store (cannot be {@code null})
@@ -54,12 +57,12 @@ public class DslSessionParams {
     public DslSessionParams(final String name,
                             final Duration retentionPeriod,
                             final EmitStrategy emitStrategy,
-                            final DslStoreFormat storeFormat) {
+                            final DslStoreFormat dslStoreFormat) {
         Objects.requireNonNull(name);
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.emitStrategy = emitStrategy;
-        this.storeFormat = storeFormat;
+        this.dslStoreFormat = dslStoreFormat;
     }
 
     public String name() {
@@ -74,8 +77,17 @@ public class DslSessionParams {
         return emitStrategy;
     }
 
+    public DslStoreFormat dslStoreFormat() {
+        return dslStoreFormat;
+    }
+
+    /**
+     * @deprecated Since 4.4. Use {@link #dslStoreFormat()} instead, consistent with
+     *             {@link DslKeyValueParams} and {@link DslWindowParams}.
+     */
+    @Deprecated
     public DslStoreFormat storeFormat() {
-        return storeFormat;
+        return dslStoreFormat();
     }
 
     @Override
@@ -90,12 +102,12 @@ public class DslSessionParams {
         return Objects.equals(name, that.name)
                 && Objects.equals(retentionPeriod, that.retentionPeriod)
                 && Objects.equals(emitStrategy, that.emitStrategy)
-                && Objects.equals(storeFormat, that.storeFormat);
+                && Objects.equals(dslStoreFormat, that.dslStoreFormat);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, retentionPeriod, emitStrategy, storeFormat);
+        return Objects.hash(name, retentionPeriod, emitStrategy, dslStoreFormat);
     }
 
     @Override
@@ -104,7 +116,7 @@ public class DslSessionParams {
                 "name='" + name + '\'' +
                 ", retentionPeriod=" + retentionPeriod +
                 ", emitStrategy=" + emitStrategy +
-                ", storeFormat=" + storeFormat +
+                ", dslStoreFormat=" + dslStoreFormat +
                 '}';
     }
 }
