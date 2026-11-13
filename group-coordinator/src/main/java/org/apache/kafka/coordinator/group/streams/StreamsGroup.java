@@ -1578,7 +1578,8 @@ public class StreamsGroup implements Group {
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
      * @param maybeReplacedStaticMember The replaced static member. it can be null.
-     * @return The list of endpoint-to-partitions mappings for all members with endpoints.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints, or an empty list if the group's
+     *         topology is not configured or not ready, for example because source or internal topics are missing.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
@@ -1589,6 +1590,11 @@ public class StreamsGroup implements Group {
         if (updatedMember == null) {
             log.error("[GroupId {}] updatedMember is unexpectedly null in buildEndpointToPartitions. " +
                 "This is a bug, please file a JIRA ticket.", groupId);
+            return endpointToPartitionsList;
+        }
+        // While the topology is not ready, for example because source or internal topics are missing, the target assignment
+        // is empty, so there are no partitions to report.
+        if (configuredTopology().filter(ConfiguredTopology::isReady).isEmpty()) {
             return endpointToPartitionsList;
         }
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {

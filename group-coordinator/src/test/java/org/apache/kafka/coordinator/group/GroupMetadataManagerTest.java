@@ -24990,6 +24990,310 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointAndMissingSourceTopics() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        // The source topic does not exist, so the configured topology has no subtopologies.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        // A client that has not yet received endpoint information sends -1 as the endpoint information epoch.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
+                .setEndpointInformationEpoch(-1));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setPartitionsByUserEndpoint(List.of())
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                    .setStatusDetail("Source topics foo are missing.")))
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000),
+            result.response().data()
+        );
+
+        // The client now knows the group's endpoint information epoch, so no mapping is sent again.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        assertNull(result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsDeleted() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+
+        // Delete the source topic while the member still owns its tasks.
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        // The tasks are revoked, and clients are told that there is nothing to route to.
+        assertEquals(List.of(), result.response().data().activeTasks());
+        assertEquals(1, result.response().data().endpointInformationEpoch());
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Source topics foo are missing.")),
+            result.response().data().status()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsRecreatedBeforeAssignmentChanges() {
+        String groupId = "fooup";
+        String memberIdA = Uuid.randomUuid().toString();
+        String memberIdB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Assignment updates are delayed, so the tasks of member A stay unchanged throughout the test.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 10_000)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberIdA, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // Member A has an endpoint and owns both tasks.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdA)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+
+        // The source topic is deleted.
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // Member B joins without an endpoint while the topology is not ready.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdB)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setEndpointInformationEpoch(-1));
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+
+        // The source topic is created again before any assignment changes.
+        Uuid newFooTopicId = Uuid.randomUuid();
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(newFooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(newFooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(newFooTopicId).setPartitionId(1));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // The topology is ready again, so member B receives the endpoint of member A.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdB)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenMissingSourceTopicsAreCreated() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .build();
+
+        // The source topic is missing, so the member joins without endpoint information.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+
+        // Create the source topic.
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The member's assignment changes, so it receives the endpoint information it was missing.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+    }
+
+    @Test
     public void testStreamsGroupEndpointInformationIncludesNewMember() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
