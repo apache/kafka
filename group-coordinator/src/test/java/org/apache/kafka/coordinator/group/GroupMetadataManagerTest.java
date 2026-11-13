@@ -19184,7 +19184,8 @@ public class GroupMetadataManagerTest {
                     mkShareGroupStateMetadataEntry(barTopicId, barTopicName, List.of(0, 1, 2))
                 )),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Map.of(fooTopicId, mkStartOffsets(-1L, 0, 1, 2, 3, 4, 5), barTopicId, mkStartOffsets(-1L, 0, 1, 2))
             )
         );
 
@@ -30124,7 +30125,8 @@ public class GroupMetadataManagerTest {
                 mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
             )),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Map.of(t1Uuid, mkStartOffsets(-1L, 0, 1), t2Uuid, mkStartOffsets(-1L, 0, 1))
         );
 
         Optional<CoordinatorRecord> actual = result.records().stream().filter(record -> record.key() instanceof ShareGroupStatePartitionMetadataKey)
@@ -30201,7 +30203,8 @@ public class GroupMetadataManagerTest {
                 mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
                 mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
             )),
-            Map.of()
+            Map.of(),
+            Map.of(t1Uuid, mkStartOffsets(0L, 2, 3))
         );
 
         actual = result.records().stream().filter(record -> record.key() instanceof ShareGroupStatePartitionMetadataKey)
@@ -30510,7 +30513,8 @@ public class GroupMetadataManagerTest {
                     mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1))
                 )),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Map.of(t1Uuid, mkStartOffsets(-1L, 0, 1))
             ))
         );
 
@@ -30691,6 +30695,14 @@ public class GroupMetadataManagerTest {
                 .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(topicName)));
+    }
+
+    private static Map<Integer, Long> mkStartOffsets(long startOffset, Integer... partitions) {
+        Map<Integer, Long> startOffsets = new HashMap<>();
+        for (int partition : partitions) {
+            startOffsets.put(partition, startOffset);
+        }
+        return startOffsets;
     }
 
     private static Map<Integer, Long> initializeStartOffsets(
@@ -32034,7 +32046,8 @@ public class GroupMetadataManagerTest {
                         mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
                     )),
                     Map.of(),
-                    Map.of()
+                    Map.of(),
+                    Map.of(fooTopicId, mkStartOffsets(-1L, 0, 1, 2, 3, 4, 5))
                 )
             ),
             result1.records()

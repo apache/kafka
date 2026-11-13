@@ -817,9 +817,11 @@ public class GroupCoordinatorRecordHelpers {
                 .setTopicName(entry.getValue()))
             .toList();
 
+        // Sorted, so that the same start offsets always give the same record.
         List<ShareGroupStatePartitionMetadataValue.TopicStartOffsets> startOffsetsInfo = initializingStartOffsets.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
             .map(entry -> {
-                List<Integer> partitions = new ArrayList<>(entry.getValue().keySet());
+                List<Integer> partitions = entry.getValue().keySet().stream().sorted().toList();
                 return new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
                     .setTopicId(entry.getKey())
                     .setPartitions(partitions)
