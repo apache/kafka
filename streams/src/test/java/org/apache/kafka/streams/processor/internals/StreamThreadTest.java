@@ -41,6 +41,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -168,6 +169,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -1809,6 +1811,103 @@ public class StreamThreadTest {
         thread.run();
 
         verify(taskManager).shutdown(true);
+    }
+
+    @Test
+    public void shouldClearInterruptStatusDuringShutdownAndRestoreItAfterwards() {
+        final TaskManager taskManager = mockTaskManager();
+        final AtomicBoolean interruptedDuringShutdown = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            interruptedDuringShutdown.set(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(taskManager).shutdown(false);
+        thread = streamThreadFailingOnInit(taskManager, true, (e, b) -> { });
+
+        try {
+            thread.run();
+
+            assertFalse(interruptedDuringShutdown.get());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldClearInterruptStatusBeforeInvokingUncaughtExceptionHandler() {
+        final AtomicBoolean interruptedInHandler = new AtomicBoolean(true);
+        thread = streamThreadFailingOnInit(
+            mockTaskManager(),
+            true,
+            (e, b) -> interruptedInHandler.set(Thread.currentThread().isInterrupted())
+        );
+
+        try {
+            thread.run();
+
+            assertFalse(interruptedInHandler.get());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldClearInterruptStatusSetByUncaughtExceptionHandlerDuringShutdown() {
+        final TaskManager taskManager = mockTaskManager();
+        final AtomicBoolean interruptedDuringShutdown = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            interruptedDuringShutdown.set(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(taskManager).shutdown(false);
+        thread = streamThreadFailingOnInit(taskManager, false, (e, b) -> Thread.currentThread().interrupt());
+
+        try {
+            thread.run();
+
+            assertFalse(interruptedDuringShutdown.get());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldRestoreInterruptStatusWhenShutdownThrows() {
+        thread = streamThreadFailingOnInit(mockTaskManager(), true, (e, b) -> { });
+        thread.setStateListener((t, newState, oldState) -> {
+            if (newState == StreamThread.State.DEAD) {
+                throw new IllegalStateException("state listener failed");
+            }
+        });
+
+        try {
+            assertThrows(IllegalStateException.class, thread::run);
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    /**
+     * Builds a thread that fails in {@code TaskManager#init()}, the first call of its run loop, optionally with the
+     * {@link InterruptException} that an interrupted blocking call throws, which also sets the interrupt status.
+     */
+    private StreamThread streamThreadFailingOnInit(final TaskManager taskManager,
+                                                   final boolean interrupted,
+                                                   final BiConsumer<Throwable, Boolean> handler) {
+        doAnswer(invocation -> {
+            throw interrupted ? new InterruptException("interrupted") : new RuntimeException("run loop failed");
+        }).when(taskManager).init();
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        lenient().when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        lenient().when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread streamThread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
+        streamThread.setStreamsUncaughtExceptionHandler(handler);
+        return streamThread;
     }
 
     @ParameterizedTest
