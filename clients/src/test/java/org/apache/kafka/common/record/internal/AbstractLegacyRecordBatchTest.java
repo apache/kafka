@@ -27,6 +27,8 @@ import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -35,6 +37,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -308,6 +312,120 @@ public class AbstractLegacyRecordBatchTest {
             () -> batch.streamingIterator(BufferSupplier.NO_CACHING, 100));
         assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
             "expected the configured-maximum guard, got: " + ex.getMessage());
+    }
+
+    // the partial read of a compressed legacy batch must agree with the full decode on everything but the bodies
+    @ParameterizedTest
+    @CsvSource({"0, GZIP", "0, SNAPPY", "0, LZ4", "1, GZIP", "1, SNAPPY", "1, LZ4"})
+    public void testSkipKeyValueIteratorMatchesFullDecode(byte magic, CompressionType compressionType) {
+        SimpleRecord[] simpleRecords = new SimpleRecord[] {
+            new SimpleRecord(10L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(20L, null, "22".getBytes()),
+            new SimpleRecord(30L, "ccc".getBytes(), null),
+            new SimpleRecord(40L, new byte[0], new byte[1000])
+        };
+        List<TimestampType> timestampTypes = magic == RecordBatch.MAGIC_VALUE_V0
+            ? List.of(TimestampType.CREATE_TIME)
+            : List.of(TimestampType.CREATE_TIME, TimestampType.LOG_APPEND_TIME);
+
+        for (TimestampType timestampType : timestampTypes) {
+            // a non-zero base offset exercises the relative to absolute offset conversion of v1
+            MemoryRecords records = MemoryRecords.withRecords(magic, 100L,
+                    Compression.of(compressionType).build(), timestampType, simpleRecords);
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+            List<Record> expected = Utils.toList(batch.iterator());
+            assertEquals(simpleRecords.length, expected.size());
+
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+                for (Record full : expected) {
+                    assertTrue(iterator.hasNext());
+                    Record partial = assertInstanceOf(PartialLegacyRecord.class, iterator.next());
+                    assertEquals(full.offset(), partial.offset());
+                    assertEquals(full.timestamp(), partial.timestamp());
+                    assertEquals(full.sequence(), partial.sequence());
+                    assertEquals(full.sizeInBytes(), partial.sizeInBytes());
+                    assertEquals(full.keySize(), partial.keySize());
+                    assertEquals(full.hasKey(), partial.hasKey());
+                    assertEquals(full.valueSize(), partial.valueSize());
+                    assertEquals(full.hasValue(), partial.hasValue());
+                    assertEquals(full.isCompressed(), partial.isCompressed());
+                    assertTrue(partial.hasMagic(magic));
+                    for (TimestampType type : TimestampType.values())
+                        assertEquals(full.hasTimestampType(type), partial.hasTimestampType(type));
+                    assertEquals(0, partial.headers().length);
+                    assertThrows(UnsupportedOperationException.class, partial::key);
+                    assertThrows(UnsupportedOperationException.class, partial::value);
+                    assertThrows(UnsupportedOperationException.class, partial::ensureValid);
+                }
+                assertFalse(iterator.hasNext());
+            }
+        }
+    }
+
+    @Test
+    public void testSkipKeyValueIteratorWithWrapperOffsetZero() {
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+            MemoryRecords records = MemoryRecords.withRecords(magic, 0L,
+                    Compression.gzip().build(), TimestampType.CREATE_TIME,
+                    new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                    new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                    new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+            batch.setLastOffset(0L);
+
+            long offset = 0L;
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+                while (iterator.hasNext())
+                    assertEquals(offset++, iterator.next().offset());
+            }
+            assertEquals(3L, offset);
+        }
+    }
+
+    @Test
+    public void testSkipKeyValueIteratorInvalidWrapperOffsetV1() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                Compression.gzip().build(), TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setLastOffset(1L);
+
+        assertThrows(InvalidRecordException.class,
+            () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING));
+    }
+
+    // an uncompressed legacy batch is its own record, and its key and value are slices of the batch buffer
+    @Test
+    public void testSkipKeyValueIteratorUncompressed() {
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+            MemoryRecords records = MemoryRecords.withRecords(magic, 5L, Compression.NONE, TimestampType.CREATE_TIME,
+                    new SimpleRecord(1L, "a".getBytes(), "1".getBytes()));
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+
+            try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+                Record record = iterator.next();
+                assertEquals(5L, record.offset());
+                assertEquals(ByteBuffer.wrap("a".getBytes()), record.key());
+                assertEquals(ByteBuffer.wrap("1".getBytes()), record.value());
+                assertFalse(iterator.hasNext());
+            }
+        }
+    }
+
+    // The partial read never allocates a buffer sized by the record, so a forged inner size needs no limit:
+    // the stream simply ends before a complete inner record is found.
+    @Test
+    public void testSkipKeyValueIteratorDoesNotAllocateForgedInnerSize() throws IOException {
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+            ByteBufferLegacyRecordBatch batch = poisonedCompressedLegacyBatch(magic, Integer.MAX_VALUE);
+            InvalidRecordException ex = assertThrows(InvalidRecordException.class,
+                () -> batch.skipKeyValueIterator(BufferSupplier.NO_CACHING));
+            assertTrue(ex.getMessage().contains("no inner records"), ex.getMessage());
+        }
     }
 
 }
