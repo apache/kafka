@@ -81,6 +81,8 @@ public class WorkerConnector implements Runnable {
     private final String version;
 
     private State state;
+    private volatile boolean connectorStopRequired;
+    private volatile boolean failureCleanupPerformed;
     private final CloseableOffsetStorageReader offsetStorageReader;
     private final ConnectorOffsetBackingStore offsetStore;
 
@@ -110,6 +112,8 @@ public class WorkerConnector implements Runnable {
         this.externalFailure = null;
         this.stopping = false;
         this.cancelled = false;
+        this.connectorStopRequired = false;
+        this.failureCleanupPerformed = false;
     }
 
     public ClassLoader loader() {
@@ -153,10 +157,16 @@ public class WorkerConnector implements Runnable {
 
     void doRun() {
         initialize();
+        if (state == State.FAILED) {
+            // Initialization failures must release connector-owned resources while preserving FAILED status.
+            cleanupAfterFailure();
+        }
         while (!stopping) {
             Throwable failure = externalFailure;
-            if (failure != null)
+            if (failure != null) {
                 onFailure(failure);
+                cleanupAfterFailure();
+            }
 
             TargetState newTargetState;
             Callback<TargetState> stateChangeCallback;
@@ -166,6 +176,10 @@ public class WorkerConnector implements Runnable {
             }
             if (newTargetState != null && !stopping) {
                 doTransitionTo(newTargetState, stateChangeCallback);
+                if (state == State.FAILED) {
+                    // A failed transition must release connector-owned resources before the run loop waits again.
+                    cleanupAfterFailure();
+                }
             }
             synchronized (this) {
                 if (pendingTargetStateChange.get() != null
@@ -194,11 +208,13 @@ public class WorkerConnector implements Runnable {
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
+                connectorStopRequired = true;
                 connector.initialize(new WorkerSinkConnectorContext());
             } else {
                 Objects.requireNonNull(offsetStore, "Offset store cannot be null for source connectors");
                 Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
                 offsetStore.start();
+                connectorStopRequired = true;
                 connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
@@ -216,6 +232,7 @@ public class WorkerConnector implements Runnable {
                 case INIT:
                 case PAUSED:
                 case STOPPED:
+                    connectorStopRequired = true;
                     connector.start(config);
                     this.state = State.STARTED;
                     return true;
@@ -262,7 +279,7 @@ public class WorkerConnector implements Runnable {
             }
 
             if (state == State.STARTED) {
-                connector.stop();
+                stopConnector();
             }
 
             if (state == State.FAILED && newState != State.STOPPED) {
@@ -301,6 +318,17 @@ public class WorkerConnector implements Runnable {
     }
 
     void doShutdown() {
+        doShutdown(false);
+    }
+
+    private void cleanupAfterFailure() {
+        if (!failureCleanupPerformed) {
+            failureCleanupPerformed = true;
+            doShutdown(true);
+        }
+    }
+
+    private void doShutdown(boolean preserveFailureState) {
         try {
             TargetState preEmptedState = pendingTargetStateChange.getAndSet(null);
             Callback<TargetState> stateChangeCallback = pendingStateChangeCallback.getAndSet(null);
@@ -311,15 +339,17 @@ public class WorkerConnector implements Runnable {
                                     + " as the connector has been scheduled for shutdown"),
                         null);
             }
-            if (state == State.STARTED)
-                connector.stop();
+            if (connectorStopRequired && (state == State.STARTED || (preserveFailureState && state == State.FAILED)))
+                stopConnector();
+            if (preserveFailureState)
+                return;
             this.state = State.STOPPED;
             statusListener.onShutdown(connName);
             log.info("Completed shutdown for {}", this);
         } catch (Throwable t) {
             log.error("{} Error while shutting down connector", this, t);
-            state = State.FAILED;
-            statusListener.onFailure(connName, t);
+            if (!preserveFailureState)
+                onFailure(t);
         } finally {
             Utils.closeQuietly(ctx, "connector context for " + connName);
             Utils.closeQuietly(metrics, "connector metrics for " + connName);
@@ -328,6 +358,11 @@ public class WorkerConnector implements Runnable {
                 Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
             }
         }
+    }
+
+    private void stopConnector() {
+        connectorStopRequired = false;
+        connector.stop();
     }
 
     public synchronized void cancel() {
