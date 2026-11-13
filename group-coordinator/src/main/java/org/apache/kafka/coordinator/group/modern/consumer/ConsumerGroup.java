@@ -1238,10 +1238,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
             }
 
-            // Every member is guaranteed to have metadata set when it joins,
-            // so we don't check for empty subscription here.
+            // Every member is guaranteed to have metadata set when it joins, so we don't check for
+            // empty subscription here. All the protocols of a member have the same subscription,
+            // so the first one is used.
             ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
-                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
+                ByteBuffer.wrap(classicGroupMember.supportedProtocols().iterator().next().metadata())
             );
 
             // The target assignment and the assigned partitions of each member are set based on the last
