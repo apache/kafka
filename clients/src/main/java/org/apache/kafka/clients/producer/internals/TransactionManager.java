@@ -543,6 +543,10 @@ public class TransactionManager {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
+    int transactionTimeoutMs() {
+        return transactionTimeoutMs;
+    }
+
     synchronized boolean isCompleting() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }

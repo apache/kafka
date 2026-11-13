@@ -1762,16 +1762,7 @@ public class KafkaProducerTest {
         ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
-        NodeApiVersions nodeApiVersions = new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
-            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersion((short) 2)
-                .setMinVersion((short) 0)),
-            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersionLevel((short) 2)
-                .setMinVersionLevel((short) 2)),
-            0);
+        NodeApiVersions nodeApiVersions = transactionV2NodeApiVersions();
         client.setNodeApiVersions(nodeApiVersions);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
@@ -2025,16 +2016,7 @@ public class KafkaProducerTest {
         client.updateMetadata(initialUpdateResponse);
 
         client.setNodeApiVersions(NodeApiVersions.create());
-        NodeApiVersions nodeApiVersions = new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
-            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersion((short) 2)
-                .setMinVersion((short) 0)),
-            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersionLevel((short) 2)
-                .setMinVersionLevel((short) 2)),
-            0);
+        NodeApiVersions nodeApiVersions = transactionV2NodeApiVersions();
         client.setNodeApiVersions(nodeApiVersions);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
@@ -2088,18 +2070,7 @@ public class KafkaProducerTest {
             Map.of(topic, topicId)
         ));
 
-        var nodeApiVersions = new NodeApiVersions(
-            NodeApiVersions.create().allSupportedApiVersions().values(),
-            List.of(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersion((short) 2)
-                .setMinVersion((short) 0)),
-            List.of(new ApiVersionsResponseData.FinalizedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersionLevel((short) 2)
-                .setMinVersionLevel((short) 2)),
-            0
-        );
+        var nodeApiVersions = transactionV2NodeApiVersions();
         client.setNodeApiVersions(nodeApiVersions);
         var apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
@@ -2167,18 +2138,7 @@ public class KafkaProducerTest {
             Map.of(topic, topicId)
         ));
 
-        var nodeApiVersions = new NodeApiVersions(
-            NodeApiVersions.create().allSupportedApiVersions().values(),
-            List.of(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersion((short) 2)
-                .setMinVersion((short) 0)),
-            List.of(new ApiVersionsResponseData.FinalizedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersionLevel((short) 2)
-                .setMinVersionLevel((short) 2)),
-            0
-        );
+        var nodeApiVersions = transactionV2NodeApiVersions();
         client.setNodeApiVersions(nodeApiVersions);
         var apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
@@ -2249,16 +2209,7 @@ public class KafkaProducerTest {
         ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
-        NodeApiVersions nodeApiVersions = new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
-            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersion((short) 2)
-                .setMinVersion((short) 0)),
-            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
-                .setName("transaction.version")
-                .setMaxVersionLevel((short) 2)
-                .setMinVersionLevel((short) 2)),
-            0);
+        NodeApiVersions nodeApiVersions = transactionV2NodeApiVersions();
         client.setNodeApiVersions(nodeApiVersions);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
@@ -2482,7 +2433,7 @@ public class KafkaProducerTest {
         }
     }
 
-    private InitProducerIdResponse initProducerIdResponse(long producerId, short producerEpoch, Errors error) {
+    private static InitProducerIdResponse initProducerIdResponse(long producerId, short producerEpoch, Errors error) {
         InitProducerIdResponseData responseData = new InitProducerIdResponseData()
                 .setErrorCode(error.code())
                 .setProducerEpoch(producerEpoch)
@@ -2501,10 +2452,73 @@ public class KafkaProducerTest {
         return new TxnOffsetCommitResponse(10, errorMap);
     }
 
-    private EndTxnResponse endTxnResponse(Errors error) {
+    private static EndTxnResponse endTxnResponse(Errors error) {
         return new EndTxnResponse(new EndTxnResponseData()
                                       .setErrorCode(error.code())
                                       .setThrottleTimeMs(0));
+    }
+
+    @Test
+    public void testCloseDoesNotBlockPastTransactionTimeoutWhenCoordinatorUnreachable() throws Exception {
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        try (KafkaProducer<String, String> producer = TxAbortOnCloseTestUtils.producerWithOpenTransaction(client, metadata)) {
+            TxAbortOnCloseTestUtils.breakEndTxn(client, TxAbortOnCloseTestUtils.COORDINATOR_UNREACHABLE);
+
+            TxAbortOnCloseTestUtils.assertCloseReturnsWithin(producer::close, TxAbortOnCloseTestUtils.CLOSE_DEADLINE_MS);
+        }
+    }
+
+    @Test
+    public void testCloseDoesNotBlockPastTransactionTimeoutWhenCoordinatorReturnsRetriableErrors() throws Exception {
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        try (KafkaProducer<String, String> producer = TxAbortOnCloseTestUtils.producerWithOpenTransaction(client, metadata)) {
+            TxAbortOnCloseTestUtils.breakEndTxn(client, TxAbortOnCloseTestUtils.COORDINATOR_RETRIABLE_ERRORS);
+
+            TxAbortOnCloseTestUtils.assertCloseReturnsWithin(producer::close, TxAbortOnCloseTestUtils.CLOSE_DEADLINE_MS);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {TxAbortOnCloseTestUtils.COORDINATOR_UNREACHABLE, TxAbortOnCloseTestUtils.COORDINATOR_RETRIABLE_ERRORS})
+    public void testCloseWithShorterTimeoutReturnsAtCloseTimeout(String coordinatorFailure) throws Exception {
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        try (KafkaProducer<String, String> producer = TxAbortOnCloseTestUtils.producerWithOpenTransaction(client, metadata)) {
+            TxAbortOnCloseTestUtils.breakEndTxn(client, coordinatorFailure);
+
+            // The close timeout is what ends the wait, well before transaction.timeout.ms would.
+            TxAbortOnCloseTestUtils.assertCloseReturnsWithin(() -> producer.close(Duration.ofMillis(TxAbortOnCloseTestUtils.SHORT_CLOSE_TIMEOUT_MS)), TxAbortOnCloseTestUtils.SHORT_CLOSE_TIMEOUT_MS + 1000);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {TxAbortOnCloseTestUtils.COORDINATOR_UNREACHABLE, TxAbortOnCloseTestUtils.COORDINATOR_RETRIABLE_ERRORS})
+    public void testCloseWithLongerTimeoutReturnsAtTransactionTimeout(String coordinatorFailure) throws Exception {
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(Time.SYSTEM, metadata);
+        try (KafkaProducer<String, String> producer = TxAbortOnCloseTestUtils.producerWithOpenTransaction(client, metadata)) {
+            TxAbortOnCloseTestUtils.breakEndTxn(client, coordinatorFailure);
+
+            TxAbortOnCloseTestUtils.assertCloseReturnsWithin(() -> producer.close(Duration.ofSeconds(10)), TxAbortOnCloseTestUtils.CLOSE_DEADLINE_MS);
+        }
+    }
+
+    // With transaction V2 a send() does not need a separate AddPartitionsToTxn round trip.
+    private static NodeApiVersions transactionV2NodeApiVersions() {
+        return new NodeApiVersions(
+            NodeApiVersions.create().allSupportedApiVersions().values(),
+            List.of(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 2)
+                .setMinVersion((short) 0)),
+            List.of(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 2)
+                .setMinVersionLevel((short) 2)),
+            0
+        );
     }
 
     @Test
@@ -3041,6 +3055,100 @@ public class KafkaProducerTest {
 
         @Override
         public void configure(Map<String, ?> configs) {
+        }
+    }
+
+    /**
+     * Constants and helpers for the tests that close a producer while the abort of its open transaction keeps failing.
+     */
+    private static class TxAbortOnCloseTestUtils {
+        private static final int CLOSE_TRANSACTION_TIMEOUT_MS = 2000;
+        private static final int CLOSE_RETRY_BACKOFF_MS = 100;
+        // close() should give up aborting after transaction.timeout.ms; the rest is slack for the sender thread.
+        private static final long CLOSE_DEADLINE_MS = CLOSE_TRANSACTION_TIMEOUT_MS + 1000;
+        // Well above transaction.timeout.ms, so that giving up on time depends on not waiting out request.timeout.ms.
+        private static final int CLOSE_REQUEST_TIMEOUT_MS = 30000;
+        private static final long SHORT_CLOSE_TIMEOUT_MS = 500;
+        private static final String COORDINATOR_UNREACHABLE = "unreachable";
+        private static final String COORDINATOR_RETRIABLE_ERRORS = "retriableErrors";
+
+        // Makes the abort of the open transaction fail after the transaction has started.
+        static void breakEndTxn(MockClient client, String coordinatorFailure) {
+            if (COORDINATOR_UNREACHABLE.equals(coordinatorFailure)) {
+                // The coordinator goes away, so EndTxn can never be sent.
+                client.setUnreachable(NODE, 10 * CLOSE_DEADLINE_MS);
+            } else {
+                // Enough failures to outlast the deadline: each attempt is separated by retry.backoff.ms.
+                for (int i = 0; i < 10 * CLOSE_DEADLINE_MS / CLOSE_RETRY_BACKOFF_MS; i++)
+                    client.prepareResponse(endTxnResponse(Errors.CONCURRENT_TRANSACTIONS));
+            }
+        }
+
+        /**
+         * Runs the close on a separate thread so that a hung close does not hang the test, and asserts
+         * that it returns within the deadline.
+         */
+        static void assertCloseReturnsWithin(Runnable close, long deadlineMs) throws Exception {
+            CountDownLatch closed = new CountDownLatch(1);
+            Thread closer = new Thread(() -> {
+                try {
+                    close.run();
+                } catch (InterruptException e) {
+                    // Expected during cleanup if close() was still blocked when the test interrupted it.
+                } finally {
+                    closed.countDown();
+                }
+            }, "producer-closer");
+            closer.setDaemon(true);
+
+            long startMs = Time.SYSTEM.milliseconds();
+            closer.start();
+            boolean returned = closed.await(deadlineMs, TimeUnit.MILLISECONDS);
+            long elapsedMs = Time.SYSTEM.milliseconds() - startMs;
+
+            if (!returned) {
+                // Force the sender down so that the thread and the producer do not leak out of the test.
+                closer.interrupt();
+                closer.join(TimeUnit.SECONDS.toMillis(2));
+            }
+            assertTrue(returned, "close() was still blocked after " + elapsedMs + " ms; it should have returned within " +
+                    deadlineMs + " ms (transaction.timeout.ms=" + CLOSE_TRANSACTION_TIMEOUT_MS + " ms)");
+        }
+
+        /**
+         * Returns a transactional producer that has produced one record inside an open transaction. Without a
+         * produced record the abort completes locally and no EndTxn request is ever sent.
+         */
+        static KafkaProducer<String, String> producerWithOpenTransaction(MockClient client, ProducerMetadata metadata) throws Exception {
+            Properties properties = new Properties();
+            properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+            properties.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, CLOSE_TRANSACTION_TIMEOUT_MS);
+            properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, CLOSE_REQUEST_TIMEOUT_MS);
+            properties.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, CLOSE_RETRY_BACKOFF_MS);
+            properties.put(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, CLOSE_RETRY_BACKOFF_MS);
+            properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+            properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+            properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+            String topic = "topic";
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of(topic, 1)));
+            NodeApiVersions nodeApiVersions = transactionV2NodeApiVersions();
+            ApiVersions apiVersions = new ApiVersions();
+            apiVersions.update(NODE.idString(), nodeApiVersions);
+
+            client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+            client.prepareResponse(initProducerIdResponse(1L, (short) 0, Errors.NONE));
+            TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topic);
+            client.prepareResponse(new ProduceResponse(Map.of(tip,
+                    new ProduceResponse.PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0)), 0));
+
+            KafkaProducer<String, String> producer = new KafkaProducer<>(new ProducerConfig(properties),
+                    new StringSerializer(), new StringSerializer(), metadata, client, client.clientInstanceId(),
+                    new ProducerInterceptors<>(List.of(), null), apiVersions, Time.SYSTEM);
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.send(new ProducerRecord<>(topic, 0, "key", "value")).get(10, TimeUnit.SECONDS);
+            return producer;
         }
     }
 
