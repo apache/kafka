@@ -3290,7 +3290,7 @@ class TransactionCoordinatorTest {
   @Test
   def shouldRejectEndTxnWithTV1ForKeptPreparedTxn(): Unit = {
     // A transaction kept with InitProducerId(keepPreparedTxn=true) can only be completed with TV2.
-    // An EndTxn using TV1 (e.g. from an old client still holding the frozen identity) is rejected.
+    // An EndTxn using TV1 (e.g. from an old client still holding the frozen identity) is fenced.
     val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
     val transitCount = capturedTransitMetadata.getAllValues.size
 
@@ -3299,7 +3299,7 @@ class TransactionCoordinatorTest {
       (producerEpoch, TransactionResult.ABORT),
       ((producerEpoch + 1).toShort, TransactionResult.COMMIT))) {
       coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch, txnResult, TV_0, endTxnCallback)
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      assertEquals(Errors.PRODUCER_FENCED, error)
     }
 
     val txnMetadata = currentTxnMetadata()

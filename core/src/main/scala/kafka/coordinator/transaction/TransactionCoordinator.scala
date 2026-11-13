@@ -606,9 +606,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock(() => {
-            // A transaction kept with InitProducerId(keepPreparedTxn=true) can only be completed with TV2.
+            // A transaction kept with InitProducerId(keepPreparedTxn=true) can only be completed with TV2.  The client
+            // that kept the transaction uses TV2, so this is a stale request (e.g. from a zombie producer instance
+            // that uses TV1) and we fence it.
             if (txnMetadata.hasNextProducerEpoch)
-              Left(Errors.INVALID_TXN_STATE)
+              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
