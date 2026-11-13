@@ -26,18 +26,21 @@ import org.junit.jupiter.api.Test;
 
 import java.security.KeyFactory;
 import java.security.KeyStore;
+import java.security.Security;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -334,8 +337,14 @@ public class DefaultSslEngineFactoryTest {
 
     @Test
     public void testUnavailableKeyFactoryAlgorithmDoesNotThrow() {
-        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(List.of("RSA", "DSA", "EC", "BOGUS_FACTORY"));
-        assertFalse(factories.stream().anyMatch(f -> f.getAlgorithm().equals("BOGUS_FACTORY")));
+        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Set.of("BOGUS_FACTORY"));
+        assertTrue(factories.isEmpty());
+    }
+
+    @Test
+    public void testAllJvmKeyFactoryAlgorithmsLoaded() {
+        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Security.getAlgorithms("KeyFactory"));
+        assertFalse(factories.isEmpty());
     }
 
     @Test
