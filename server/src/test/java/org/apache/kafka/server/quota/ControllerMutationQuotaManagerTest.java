@@ -30,6 +30,7 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -197,6 +198,24 @@ public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTe
             // Current tokens in the bucket = 0
             throttleTime = maybeRecord(quotaManager, USER, CLIENT_ID, 110);
             assertEquals(0, throttleTime, "Should not be throttled");
+        });
+    }
+
+    @Test
+    public void testControllerMutationDoesNotExposeQuotaUtilization() {
+        withQuotaManager(quotaManager -> {
+            quotaManager.updateQuota(
+                    Optional.of(new ClientQuotaManager.UserEntity(USER)),
+                    Optional.of(new ClientQuotaManager.ClientIdEntity(CLIENT_ID)),
+                    Optional.of(Quota.upperBound(10))
+            );
+
+            maybeRecord(quotaManager, USER, CLIENT_ID, 10);
+            List<MetricName> utilizationMetrics = metrics.metrics().keySet().stream()
+                    .filter(metricName -> metricName.group().equals(QuotaType.CONTROLLER_MUTATION.toString())
+                            && metricName.name().equals("quota-utilization"))
+                    .toList();
+            assertTrue(utilizationMetrics.isEmpty(), "ControllerMutation should not expose quota-utilization: " + utilizationMetrics);
         });
     }
 

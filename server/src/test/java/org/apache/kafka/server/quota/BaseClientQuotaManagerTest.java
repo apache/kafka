@@ -80,6 +80,10 @@ public class BaseClientQuotaManagerTest {
         return quotaManager.maybeRecordAndGetThrottleTimeMs(buildSession(user), clientId, value, time.milliseconds());
     }
 
+    protected void unrecord(ClientQuotaManager quotaManager, String user, String clientId, double value) {
+        quotaManager.unrecordQuotaSensor(buildSession(user), clientId, value, time.milliseconds());
+    }
+
     protected void throttle(ClientQuotaManager quotaManager, int throttleTimeMs, ThrottleCallback channelThrottlingCallback) {
         AbstractRequest.Builder<FetchRequest> builder = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 1000, Map.of());
         FetchRequest fetchRequest = builder.build();
