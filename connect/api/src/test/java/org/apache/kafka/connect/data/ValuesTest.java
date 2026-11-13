@@ -37,12 +37,12 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -212,17 +212,15 @@ public class ValuesTest {
     }
 
     @Test
-    public void shouldParseEmptyMap() {
+    public void shouldReturnOriginalStringForEmptyMap() {
         SchemaAndValue schemaAndValue = Values.parseString("{}");
-        assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Map.of(), schemaAndValue.value());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{}"), schemaAndValue);
     }
 
     @Test
-    public void shouldParseEmptyArray() {
+    public void shouldReturnOriginalStringForEmptyArray() {
         SchemaAndValue schemaAndValue = Values.parseString("[]");
-        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(List.of(), schemaAndValue.value());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[]"), schemaAndValue);
     }
 
     @Test
@@ -244,18 +242,15 @@ public class ValuesTest {
     }
 
     @Test
-    public void shouldParseNullMapValues() {
+    public void shouldReturnOriginalStringForNullMapValues() {
         SchemaAndValue schemaAndValue = Values.parseString("{3: null}");
-        assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Type.INT8, schemaAndValue.schema().keySchema().type());
-        assertEquals(Collections.singletonMap((byte) 3, null), schemaAndValue.value());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{3: null}"), schemaAndValue);
     }
 
     @Test
-    public void shouldParseNullArrayElements() {
+    public void shouldReturnOriginalStringForNullArrayElements() {
         SchemaAndValue schemaAndValue = Values.parseString("[null]");
-        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(Collections.singletonList(null), schemaAndValue.value());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[null]"), schemaAndValue);
     }
 
     @Test
@@ -460,101 +455,110 @@ public class ValuesTest {
     }
 
     /**
-     * We parse into different element types, but cannot infer a common element schema.
-     * This behavior should be independent of the order that the elements appear in the string
+     * A Connect array schema must describe all elements with one element schema. If the elements do not
+     * have a common schema, preserve the original literal regardless of element order.
      */
     @Test
-    public void shouldParseStringListWithMultipleElementTypes() {
-        assertParseStringArrayWithNoSchema(
-                List.of((byte) 1, (byte) 2, (short) 300, "four"),
-                "[1, 2, 300, \"four\"]");
-        assertParseStringArrayWithNoSchema(
-                List.of((byte) 2, (short) 300, "four", (byte) 1),
-                "[2, 300, \"four\", 1]");
-        assertParseStringArrayWithNoSchema(
-                List.of((short) 300, "four", (byte) 1, (byte) 2),
-                "[300, \"four\", 1, 2]");
-        assertParseStringArrayWithNoSchema(
-                List.of("four", (byte) 1, (byte) 2, (short) 300),
-                "[\"four\", 1, 2, 300]");
+    public void shouldReturnOriginalStringForStringListWithMultipleElementTypes() {
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[1, 2, 300, \"four\"]"),
+                Values.parseString("[1, 2, 300, \"four\"]"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[2, 300, \"four\", 1]"),
+                Values.parseString("[2, 300, \"four\", 1]"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[300, \"four\", 1, 2]"),
+                Values.parseString("[300, \"four\", 1, 2]"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[\"four\", 1, 2, 300]"),
+                Values.parseString("[\"four\", 1, 2, 300]"));
     }
 
-    private void assertParseStringArrayWithNoSchema(List<Object> expected, String str) {
-        SchemaAndValue result = Values.parseString(str);
-        assertEquals(Type.ARRAY, result.schema().type());
-        assertNull(result.schema().valueSchema());
-        List<?> list = (List<?>) result.value();
-        assertEquals(expected, list);
+    @Test
+    public void shouldReturnOriginalStringWhenArrayElementSchemasAreNotCompatible() {
+        String input = "[1, \"four\"]";
+
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, input), Values.parseString(input));
+    }
+
+    @Test
+    public void shouldReturnSchemaAndValueAcceptedByConnectSchemaForIncompatibleArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[1, \"four\"]");
+
+        assertDoesNotThrow(() -> ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value()));
+    }
+
+    @Test
+    public void shouldReturnSchemaAndValueAcceptedByConnectSchemaForIncompatibleMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{1:1, 2:\"two\"}");
+
+        assertDoesNotThrow(() -> ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value()));
+    }
+
+    @Test
+    public void shouldReturnOriginalStringWhenNestedArrayHasNoCommonElementSchema() {
+        String input = "[[1, \"four\"]]";
+
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, input), Values.parseString(input));
     }
 
     /**
-     * Maps with an inconsistent key type don't find a common type for the keys or the values
-     * This behavior should be independent of the order that the pairs appear in the string
+     * A Connect map schema must describe all keys with one key schema. If the keys do not have a common
+     * schema, preserve the original literal regardless of entry order.
      */
     @Test
-    public void shouldParseStringMapWithMultipleKeyTypes() {
-        Map<Object, Object> expected = new HashMap<>();
-        expected.put((byte) 1, (byte) 1);
-        expected.put((byte) 2, (byte) 1);
-        expected.put((short) 300, (short) 300);
-        expected.put("four", (byte) 1);
-        assertParseStringMapWithNoSchema(expected, "{1:1, 2:1, 300:300, \"four\":1}");
-        assertParseStringMapWithNoSchema(expected, "{2:1, 300:300, \"four\":1, 1:1}");
-        assertParseStringMapWithNoSchema(expected, "{300:300, \"four\":1, 1:1, 2:1}");
-        assertParseStringMapWithNoSchema(expected, "{\"four\":1, 1:1, 2:1, 300:300}");
+    public void shouldReturnOriginalStringForStringMapWithMultipleKeyTypes() {
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{1:1, 2:1, 300:300, \"four\":1}"),
+                Values.parseString("{1:1, 2:1, 300:300, \"four\":1}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{2:1, 300:300, \"four\":1, 1:1}"),
+                Values.parseString("{2:1, 300:300, \"four\":1, 1:1}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{300:300, \"four\":1, 1:1, 2:1}"),
+                Values.parseString("{300:300, \"four\":1, 1:1, 2:1}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{\"four\":1, 1:1, 2:1, 300:300}"),
+                Values.parseString("{\"four\":1, 1:1, 2:1, 300:300}"));
     }
 
     /**
-     * Maps with a consistent key type may still not have a common type for the values
-     * This behavior should be independent of the order that the pairs appear in the string
+     * A Connect map schema must describe all values with one value schema. If the values do not have a
+     * common schema, preserve the original literal regardless of entry order.
      */
     @Test
-    public void shouldParseStringMapWithMultipleValueTypes() {
-        Map<Object, Object> expected = new HashMap<>();
-        expected.put((short) 1, (byte) 1);
-        expected.put((short) 2, (byte) 1);
-        expected.put((short) 300, (short) 300);
-        expected.put((short) 4, "four");
-        assertParseStringMapWithNoSchema(expected, "{1:1, 2:1, 300:300, 4:\"four\"}");
-        assertParseStringMapWithNoSchema(expected, "{2:1, 300:300, 4:\"four\", 1:1}");
-        assertParseStringMapWithNoSchema(expected, "{300:300, 4:\"four\", 1:1, 2:1}");
-        assertParseStringMapWithNoSchema(expected, "{4:\"four\", 1:1, 2:1, 300:300}");
-    }
-
-    private void assertParseStringMapWithNoSchema(Map<Object, Object> expected, String str) {
-        SchemaAndValue result = Values.parseString(str);
-        assertEquals(Type.MAP, result.schema().type());
-        assertNull(result.schema().valueSchema());
-        Map<?, ?> list = (Map<?, ?>) result.value();
-        assertEquals(expected, list);
+    public void shouldReturnOriginalStringForStringMapWithMultipleValueTypes() {
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{1:1, 2:1, 300:300, 4:\"four\"}"),
+                Values.parseString("{1:1, 2:1, 300:300, 4:\"four\"}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{2:1, 300:300, 4:\"four\", 1:1}"),
+                Values.parseString("{2:1, 300:300, 4:\"four\", 1:1}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{300:300, 4:\"four\", 1:1, 2:1}"),
+                Values.parseString("{300:300, 4:\"four\", 1:1, 2:1}"));
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{4:\"four\", 1:1, 2:1, 300:300}"),
+                Values.parseString("{4:\"four\", 1:1, 2:1, 300:300}"));
     }
 
     @Test
-    public void shouldParseNestedArray() {
+    public void shouldReturnOriginalStringWhenMapValueSchemasAreNotCompatible() {
+        String input = "{1:1, 2:\"two\"}";
+
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, input), Values.parseString(input));
+    }
+
+    @Test
+    public void shouldReturnOriginalStringForNestedArrayWithoutElementSchema() {
         SchemaAndValue schemaAndValue = Values.parseString("[[]]");
-        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(Type.ARRAY, schemaAndValue.schema().valueSchema().type());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[[]]"), schemaAndValue);
     }
 
     @Test
-    public void shouldParseArrayContainingMap() {
+    public void shouldReturnOriginalStringForArrayContainingMapWithoutInnerSchema() {
         SchemaAndValue schemaAndValue = Values.parseString("[{}]");
-        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(Type.MAP, schemaAndValue.schema().valueSchema().type());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "[{}]"), schemaAndValue);
     }
 
     @Test
-    public void shouldParseNestedMap() {
+    public void shouldReturnOriginalStringForNestedMapWithoutInnerSchema() {
         SchemaAndValue schemaAndValue = Values.parseString("{\"a\":{}}");
-        assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Type.MAP, schemaAndValue.schema().valueSchema().type());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{\"a\":{}}"), schemaAndValue);
     }
 
     @Test
-    public void shouldParseMapContainingArray() {
+    public void shouldReturnOriginalStringForMapContainingArrayWithoutInnerSchema() {
         SchemaAndValue schemaAndValue = Values.parseString("{\"a\":[]}");
-        assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Type.ARRAY, schemaAndValue.schema().valueSchema().type());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "{\"a\":[]}"), schemaAndValue);
     }
 
     /**
@@ -1016,16 +1020,11 @@ public class ValuesTest {
      * The parser does not convert Numbers to Decimals, or Strings containing numbers to Numbers automatically.
      */
     @Test
-    public void shouldNotConvertArrayValuesToDecimal() {
+    public void shouldReturnOriginalStringForArrayValuesWithoutACommonSchema() {
         List<Object> decimals = List.of("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
                 BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), (byte) 1, (byte) 1);
-        List<Object> expected = new ArrayList<>(decimals); // most values are directly reproduced with the same type
-        expected.set(0, "1.0"); // The quotes are parsed away, but the value remains a string
         SchemaAndValue schemaAndValue = Values.parseString(decimals.toString());
-        Schema schema = schemaAndValue.schema();
-        assertEquals(Type.ARRAY, schema.type());
-        assertNull(schema.valueSchema());
-        assertEquals(expected, schemaAndValue.value());
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, decimals.toString()), schemaAndValue);
     }
 
     @Test
