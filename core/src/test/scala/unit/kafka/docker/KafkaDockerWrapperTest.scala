@@ -320,6 +320,109 @@ class KafkaDockerWrapperTest {
   }
 
   @Test
+  def testPrepareLog4jConfigsPreservesRootSettings(): Unit = {
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
+
+    val envVars = Map("KAFKA_LOG4J_ROOT_LOGLEVEL" -> "DEBUG")
+
+    val mounted =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "INFO"
+        |      includeLocation: true
+        |      AppenderRef:
+        |      - ref: "STDOUT"
+        |      - ref: "KafkaAppender"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
+
+    Files.write(mountedConfigsPath.resolve("log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "DEBUG"
+        |      includeLocation: true
+        |      AppenderRef:
+        |      - ref: "STDOUT"
+        |      - ref: "KafkaAppender"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testPrepareLog4jConfigsWithoutRootInExistingConfig(): Unit = {
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
+
+    val envVars = Map("KAFKA_LOG4J_ROOT_LOGLEVEL" -> "DEBUG")
+
+    val mounted =
+      """Configuration:
+        |  Loggers:
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
+
+    Files.write(mountedConfigsPath.resolve("log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "DEBUG"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testPrepareLog4jConfigsWithEmptyRootLogLevel(): Unit = {
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
+
+    val envVars = Map("KAFKA_LOG4J_ROOT_LOGLEVEL" -> "")
+
+    val mounted =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "INFO"
+        |      AppenderRef:
+        |      - ref: "STDOUT"
+        |      - ref: "KafkaAppender"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
+
+    Files.write(mountedConfigsPath.resolve("log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+
+    assertEquals(mounted, actual)
+  }
+
+  @Test
   def testGetToolsLog4jConfigsFromEnv(): Unit = {
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE", "SOME_VARIABLE" -> "Some Value")
     val actual = KafkaDockerWrapper.getToolsLog4j2ConfigsFromEnv(envVars)
@@ -471,6 +574,63 @@ class KafkaDockerWrapperTest {
     val actual = try source.mkString.trim finally source.close()
 
     assertEquals(mounted, actual)
+  }
+
+  @Test
+  def testPrepareToolsLog4jConfigsPreservesRootSettings(): Unit = {
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
+
+    val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "DEBUG")
+
+    val default =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "WARN"
+        |      AppenderRef:
+        |      - ref: "STDERR"""".stripMargin
+
+    Files.write(defaultConfigsPath.resolve("tools-log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+
+    KafkaDockerWrapper.prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "DEBUG"
+        |      AppenderRef:
+        |      - ref: "STDERR"""".stripMargin
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testPrepareToolsLog4jConfigsWithEmptyLogLevel(): Unit = {
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
+
+    val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "")
+
+    val default =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "WARN"
+        |      AppenderRef:
+        |      - ref: "STDERR"""".stripMargin
+
+    Files.write(defaultConfigsPath.resolve("tools-log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+
+    KafkaDockerWrapper.prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+
+    assertEquals(default, actual)
   }
 
   private def createDirs(): (Path, Path, Path) = {
