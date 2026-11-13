@@ -95,9 +95,9 @@ public class StreamsAssignorBenchmark {
      * The rack.aware.assignment.tags of the streams group, highest priority first. Each process takes the values of every key
      * round-robin; the value counts are pairwise coprime, so every combination occurs once there are enough processes.
      * CLUSTER_ZONE_AND_HOST and REGION_CLUSTER_ZONE_RACK_AND_HOST give every process its own host, so each process has a
-     * combination of its own; the latter has the five keys a streams client allows at most. Only the sticky assignor
-     * reads the tags, and only when it places standby replicas, so the default is NONE; to measure the rack-aware path,
-     * run with {@code -p assignorType=STICKY -p standbyReplicas=1,2} and the other values in {@code -p rackAwareTags}.
+     * combination of its own; the latter has the five keys a streams client allows at most. The assignors read the tags
+     * only when they place standby replicas, so the default is NONE; to measure the rack-aware path, run with
+     * {@code -p standbyReplicas=1,2} and the other values in {@code -p rackAwareTags}.
      */
     public enum RackAwareTags {
         NONE(List.of(), Map.of()),
