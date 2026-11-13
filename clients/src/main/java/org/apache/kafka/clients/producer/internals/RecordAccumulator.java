@@ -351,7 +351,7 @@ public class RecordAccumulator {
 
                     final ByteBuffer batchBuffer = buffer;
                     RecordAppendResult appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
-                            () -> MemoryRecords.builder(batchBuffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L),
+                            () -> MemoryRecords.builder(batchBuffer, compression, TimestampType.CREATE_TIME, 0L, this.batchSize),
                             nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
