@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -61,19 +62,21 @@ public final class ClientUtils {
      * @param host the hostname extracted from the URL
      * @param port the port extracted from the URL
      * @param clientDnsLookup the DNS lookup strategy
+     * @param hostResolver the resolver used to look up {@code host}
      * @return list of resolved addresses (may be empty if addresses are unresolved)
-     * @throws UnknownHostException if DNS resolution fails
+     * @throws UnknownHostException if DNS resolution fails for the canonical-name lookup strategy
      */
     private static List<InetSocketAddress> resolveAddress(
         String url,
         String host,
         Integer port,
-        ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+        ClientDnsLookup clientDnsLookup,
+        HostResolver hostResolver) throws UnknownHostException {
 
         List<InetSocketAddress> addresses = new ArrayList<>();
 
         if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-            InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+            InetAddress[] inetAddresses = hostResolver.resolve(host);
             for (InetAddress inetAddress : inetAddresses) {
                 String resolvedCanonicalName = inetAddress.getCanonicalHostName();
                 InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
@@ -85,19 +88,51 @@ public final class ClientUtils {
                 }
             }
         } else {
-            InetSocketAddress address = new InetSocketAddress(host, port);
-            if (address.isUnresolved()) {
+            // Validate the port before attempting resolution (matching InetSocketAddress(host, port)'s
+            // own behavior, which checks the port range unconditionally): otherwise a malformed port on
+            // an unresolvable host would be silently skipped below instead of failing validation.
+            if (port < 0 || port > 0xFFFF) {
+                throw new IllegalArgumentException("port out of range:" + port);
+            }
+            // Preserve the pre-existing single-address-per-host contract of this lookup mode
+            // (equivalent to InetSocketAddress(host, port)'s implicit resolution): take only the
+            // first address the resolver returns, rather than all of them like the branch above.
+            try {
+                InetAddress[] resolved = hostResolver.resolve(host);
+                // Re-attach the originally configured hostname to the resolved address (no extra
+                // DNS lookup) instead of using the resolver's InetAddress as-is: Cluster.bootstrap()
+                // reads getHostString() into Node.host(), and later reconnection logic re-resolves
+                // that value through this same HostResolver, so losing the configured hostname here
+                // (e.g. an unnamed/IP-literal InetAddress) would key that later lookup differently.
+                addresses.add(new InetSocketAddress(withConfiguredHostname(host, resolved[0]), port));
+            } catch (UnknownHostException e) {
                 log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}",
                         url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
-            } else {
-                addresses.add(address);
             }
         }
 
         return addresses;
     }
 
+    /**
+     * Returns an InetAddress with the same IP as {@code resolved} but with {@code host} as its
+     * hostname, without performing any additional DNS lookup. Preserves the IPv6 scope ID, if any.
+     */
+    private static InetAddress withConfiguredHostname(String host, InetAddress resolved) throws UnknownHostException {
+        if (resolved instanceof Inet6Address) {
+            Inet6Address v6 = (Inet6Address) resolved;
+            if (v6.getScopeId() != 0) {
+                return Inet6Address.getByAddress(host, v6.getAddress(), v6.getScopeId());
+            }
+        }
+        return InetAddress.getByAddress(host, resolved.getAddress());
+    }
+
     public static List<InetSocketAddress> parseAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        return parseAddresses(urls, clientDnsLookup, new DefaultHostResolver());
+    }
+
+    public static List<InetSocketAddress> parseAddresses(List<String> urls, ClientDnsLookup clientDnsLookup, HostResolver hostResolver) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         if (urls == null) {
             return addresses;
@@ -107,7 +142,7 @@ public final class ClientUtils {
                 break;
             }
             try {
-                addresses.addAll(resolveAddress(url, getHost(url), getPort(url), clientDnsLookup));
+                addresses.addAll(resolveAddress(url, getHost(url), getPort(url), clientDnsLookup, hostResolver));
             } catch (UnknownHostException e) {
                 // Silently ignore - this matches the original behavior
             }
@@ -161,6 +196,10 @@ public final class ClientUtils {
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        return parseAndValidateAddresses(urls, clientDnsLookup, new DefaultHostResolver());
+    }
+
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup, HostResolver hostResolver) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
@@ -170,7 +209,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
+                    addresses.addAll(resolveAddress(url, host, port, clientDnsLookup, hostResolver));
 
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
