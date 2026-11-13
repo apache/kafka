@@ -32,6 +32,7 @@ type: docs
 
 ### Notable changes in 4.5.0
 
+  * The broker-side OAUTHBEARER JWT validator now fails at startup when `sasl.oauthbearer.jwt.validator.class` is set to `org.apache.kafka.common.security.oauthbearer.ClientJwtValidator`, because that validator does not verify JWT signatures. Use `org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator` or another signature-verifying validator on brokers instead.
   * `ssl.principal.mapping.rules` now builds the principal name from the same full match that is used to check the rule. Previously, a rule that is not anchored with both `^` and `$`, or that uses alternation, could build the name from a shorter match or apply the replacement twice. For example, `RULE:CN=(.*?),OU=(.*?)/$1/` mapped `CN=bob,OU=eng` to `bobeng` instead of `bob`. Rules anchored with `^` and `$`, such as the documented examples, are not affected. If you use such rules, check that ACLs, quotas and `super.users` refer to the corrected principal names before upgrading.
 
 ## Upgrading to 4.4.0
