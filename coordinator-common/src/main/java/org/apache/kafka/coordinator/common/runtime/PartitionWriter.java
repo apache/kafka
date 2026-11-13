@@ -91,22 +91,24 @@ public interface PartitionWriter {
     /**
      * Return the LogConfig of the partition.
      *
-     * @param tp    The partition.
+     * @param tp The partition.
      * @return The LogConfig.
+     * @throws KafkaException If the log of the partition is not available.
      */
     LogConfig config(
         TopicPartition tp
     );
 
     /**
-     * Write records to the partitions.
+     * Write records to the partition.
      *
-     * @param tp                The partition to write records to.
-     * @param verificationGuard The verification guard.
-     * @param records           The MemoryRecords.
+     * @param tp                  The partition to write records to.
+     * @param verificationGuard   The verification guard.
+     * @param records             The MemoryRecords.
      * @param transactionVersion  The transaction version (1 = TV1, 2 = TV2 etc.).
      *                            Use TV_UNKNOWN (-1) for non-transaction writes.
      * @return The log end offset right after the written records.
+     * @throws KafkaException Any KafkaException caught during the operation.
      */
     long append(
         TopicPartition tp,
@@ -137,9 +139,12 @@ public interface PartitionWriter {
     ) throws KafkaException;
 
     /**
-     * Delete records from a topic partition until specified offset
-     * @param tp                    The partition to delete records from
-     * @param deleteBeforeOffset    Offset to delete until, starting from the beginning
+     * Delete records from a topic partition until the specified offset.
+     *
+     * @param tp                    The partition to delete records from.
+     * @param deleteBeforeOffset    The offset to delete until, starting from the beginning.
+     * @return A future completed once the records are deleted, or failed with any error
+     *         encountered.
      * @throws KafkaException       Any KafkaException caught during the operation.
      */
     CompletableFuture<Void> deleteRecords(

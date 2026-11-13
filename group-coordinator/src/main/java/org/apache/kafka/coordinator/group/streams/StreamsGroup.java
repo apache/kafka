@@ -168,6 +168,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, StreamsGroupMember> members;
 
     /**
+     * The number of stable members at each member epoch.
+     */
+    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
      * The static group members.
      */
     private final TimelineHashMap<String, String> staticMembers;
@@ -322,6 +327,7 @@ public class StreamsGroup implements Group {
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         // Match the schema default (-1) so a freshly-created in-memory group is indistinguishable
@@ -569,6 +575,7 @@ public class StreamsGroup implements Group {
         StreamsGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(oldMember, newMember);
+        maybeUpdateNumStableMembers(oldMember, newMember);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(newMember.memberId());
     }
@@ -598,6 +605,7 @@ public class StreamsGroup implements Group {
         StreamsGroupMember oldMember = members.remove(memberId);
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
+        maybeUpdateNumStableMembers(oldMember, null);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
@@ -1246,15 +1254,44 @@ public class StreamsGroup implements Group {
         } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
-            for (StreamsGroupMember member : members.values()) {
-                if (!member.isReconciledTo(assignmentEpoch())) {
-                    newState = RECONCILING;
-                    break;
-                }
+            Integer numStableMembers = numStableMembersByEpoch.get(assignmentEpoch());
+            if (numStableMembers == null || numStableMembers < members.size()) {
+                newState = RECONCILING;
             }
         }
 
         state.set(newState);
+    }
+
+    /**
+     * Updates the number of stable members at each member epoch.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateNumStableMembers(
+        StreamsGroupMember oldMember,
+        StreamsGroupMember newMember
+    ) {
+        boolean oldStable = oldMember != null && oldMember.state() == MemberState.STABLE;
+        boolean newStable = newMember != null && newMember.state() == MemberState.STABLE;
+
+        if (oldStable && newStable && oldMember.memberEpoch().equals(newMember.memberEpoch())) {
+            // The member is stable at the same member epoch before and after
+            // the update, so the counts do not change.
+            return;
+        }
+
+        if (oldStable) {
+            // The old member is no longer counted at its member epoch. The
+            // entry is removed when its count drops to zero.
+            numStableMembersByEpoch.compute(oldMember.memberEpoch(), Utils::decValue);
+        }
+
+        if (newStable) {
+            // The new member is counted at its member epoch.
+            numStableMembersByEpoch.compute(newMember.memberEpoch(), Utils::incValue);
+        }
     }
 
     /**
@@ -1453,8 +1490,8 @@ public class StreamsGroup implements Group {
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)
                     .map(ConfiguredTopology::asStreamsGroupDescribeTopology)
-                    .orElse(
-                        topology.get(committedOffset)
+                    .orElseGet(
+                        () -> topology.get(committedOffset)
                             .map(StreamsTopology::asStreamsGroupDescribeTopology)
                             .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
                     )

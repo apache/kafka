@@ -189,7 +189,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
 
         kafkaStreams.start();
 
-        latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
         return kafkaStreams;
     }
@@ -199,7 +199,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
                                                                  .topicNameValues()
                                                                  .get(topic)
-                                                                 .get(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                                                                 .get(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
             return topicDescription.partitions().size();
         }

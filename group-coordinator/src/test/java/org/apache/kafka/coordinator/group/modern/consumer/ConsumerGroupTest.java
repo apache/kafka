@@ -98,6 +98,14 @@ public class ConsumerGroupTest {
         );
     }
 
+    private static ConsumerGroupMember member(String memberId, MemberState state, int memberEpoch) {
+        return new ConsumerGroupMember.Builder(memberId)
+            .setState(state)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
+            .build();
+    }
+
     @Test
     public void testGetOrCreateMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
@@ -456,72 +464,112 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
-        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
         consumerGroup.setGroupEpoch(2);
 
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
-        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member2);
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
         consumerGroup.setGroupEpoch(3);
 
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         consumerGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
-        member1 = new ConsumerGroupMember.Builder(member1)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
 
-        consumerGroup.updateMember(member1);
-
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         // Member 2 is not stable so the group stays in reconciling state.
-        member2 = new ConsumerGroupMember.Builder(member2)
-            .setState(MemberState.UNREVOKED_PARTITIONS)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member2", MemberState.UNREVOKED_PARTITIONS, 3));
 
-        consumerGroup.updateMember(member2);
-
-        assertEquals(MemberState.UNREVOKED_PARTITIONS, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
-        member2 = new ConsumerGroupMember.Builder(member2)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
 
-        consumerGroup.updateMember(member2);
-
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
 
         consumerGroup.removeMember("member1");
         consumerGroup.removeMember("member2");
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+    }
+
+    @Test
+    public void testUpdateMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+
+        // Member 2 is counted once although it was updated twice, so the group
+        // reconciles when member 1 is no longer stable.
+        consumerGroup.updateMember(member("member1", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+    }
+
+    @Test
+    public void testSetTargetAssignmentMetadataGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(3);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
+
+        consumerGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+    }
+
+    @Test
+    public void testRemoveMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member3", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        // Member 3 is not stable so the group stays in reconciling state.
+        consumerGroup.removeMember("member1");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        consumerGroup.removeMember("member3");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+    }
+
+    @Test
+    public void testGroupStateRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        consumerGroup.updateMember(member("member1", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        // The group state is reverted with the snapshot too. Updating member 2
+        // computes it again from the number of stable members at the snapshot.
+        snapshotRegistry.revertToSnapshot(0);
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
     }
 
     @Test

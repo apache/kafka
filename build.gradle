@@ -1991,7 +1991,6 @@ project(':mirror-coordinator') {
     implementation project(':server-common')
     implementation project(':coordinator-common')
 
-    testImplementation project(':server-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
