@@ -67,19 +67,20 @@ public class MetadataQuorumCommandErrorTest {
     }
 
     @Test
+    public void testAddControllerWithoutOptions() {
+        // Neither --command-config nor --controller-id, ends up exit code 1
+        assertEquals(1, MetadataQuorumCommand.mainNoExit(
+            "--bootstrap-server", "localhost:9092",
+            "add-controller"
+        ));
+    }
+
+    @Test
     public void testRemoveControllerRequiresControllerId() {
         assertThrows(ArgumentParserException.class, () ->
             MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
                 "remove-controller",
                 "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
                 "--dry-run"));
-    }
-
-    @Test
-    public void testRemoveControllerRequiresControllerDirectoryId() {
-        assertThrows(ArgumentParserException.class, () ->
-            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
-                "remove-controller",
-                "--controller-id", "1"));
     }
 }

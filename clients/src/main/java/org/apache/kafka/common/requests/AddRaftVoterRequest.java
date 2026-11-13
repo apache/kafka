@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -34,6 +36,12 @@ public class AddRaftVoterRequest extends AbstractRequest {
 
         @Override
         public AddRaftVoterRequest build(short version) {
+            if (version < 2 && data.voterDirectoryId().equals(Uuid.ZERO_UUID)) {
+                throw new UnsupportedVersionException("Version 2 or later is required to omit voterDirectoryId");
+            }
+            if (version < 2 && data.listeners().isEmpty()) {
+                throw new UnsupportedVersionException("Version 2 or later is required to omit listeners");
+            }
             return new AddRaftVoterRequest(data, version);
         }
 
