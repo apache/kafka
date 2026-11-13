@@ -111,6 +111,23 @@ public class ProducerPerformanceTest {
         Utils.delete(producerConfig);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"a=b", "a=b=c", "a=", "a==", "=", "=="})
+    public void testReadPropsWithEqualsInValue(String value) throws IOException {
+        Properties props = ProducerPerformance.readProps(List.of("client.id=" + value), null);
+
+        assertEquals(value, props.getProperty(ProducerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"client.id", "client.id=", "", "="})
+    public void testReadPropsWithMissingValue(String prop) {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> ProducerPerformance.readProps(List.of(prop), null));
+
+        assertEquals("Invalid property: " + prop, exception.getMessage());
+    }
+
     @Test
     public void testReadPayloadFileWithAlternateDelimiters() throws Exception {
         List<byte[]> payloadByteList;
@@ -797,6 +814,24 @@ public class ProducerPerformanceTest {
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
         assertEquals("10", configs.producerProps.get(ProducerConfig.LINGER_MS_CONFIG));
         assertEquals("32768", configs.producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"--command-property", "--producer-props"})
+    public void testProducerPropertyWithEqualsInValue(String configKey) throws IOException, ArgumentParserException {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String jaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required " +
+            "username=\"test-user\" password=\"test-password=\";";
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            configKey, "client.id=a=b=", "sasl.jaas.config=" + jaasConfig};
+        ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
+        assertEquals("a=b=", configs.producerProps.getProperty(ProducerConfig.CLIENT_ID_CONFIG));
+        assertEquals(jaasConfig, configs.producerProps.getProperty("sasl.jaas.config"));
     }
 
     @Test
