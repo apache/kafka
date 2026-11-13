@@ -3475,6 +3475,85 @@ public class ReplicationControlManagerTest {
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
     }
 
+    @Test
+    public void testReassignPartitionsHandlesNewReassignmentThatKeepsPreviouslyAddingReplicas() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+
+        String topic = "topic-1";
+        // Create topic with assignment [0, 1, 2]
+        Uuid topicId = ctx.createTestTopic(topic, new int[][] {new int[] {0, 1, 2}}).topicId();
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, 0);
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        // Reassign to [0, 1, 3]. Replica 3 is added and never catches up.
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterResultOne =
+            replication.alterPartitionReassignments(
+                new AlterPartitionReassignmentsRequestData().setTopics(List.of(
+                    new ReassignableTopic().setName(topic).setPartitions(List.of(
+                        new ReassignablePartition().setPartitionIndex(0).
+                            setReplicas(List.of(0, 1, 3)))))));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+            setErrorMessage(null).setResponses(List.of(
+                new ReassignableTopicResponse().setName(topic).setPartitions(List.of(
+                    new ReassignablePartitionResponse().setPartitionIndex(0).
+                        setErrorMessage(null))))), alterResultOne.response());
+        ctx.replay(alterResultOne.records());
+        assertEquals(new ListPartitionReassignmentsResponseData().setErrorMessage(null).
+            setTopics(List.of(new OngoingTopicReassignment().
+                setName(topic).setPartitions(List.of(
+                    new OngoingPartitionReassignment().setPartitionIndex(0).
+                        setRemovingReplicas(List.of(2)).
+                        setAddingReplicas(List.of(3)).
+                        setReplicas(List.of(0, 1, 3, 2)))))),
+            replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        // While 3 is still catching up, reassign to [0, 1, 3, 4]. Replica 3 must stay an
+        // adding replica: the previous reassignment never confirmed that it is in sync.
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterResultTwo =
+            replication.alterPartitionReassignments(
+                new AlterPartitionReassignmentsRequestData().setTopics(List.of(
+                    new ReassignableTopic().setName(topic).setPartitions(List.of(
+                        new ReassignablePartition().setPartitionIndex(0).
+                            setReplicas(List.of(0, 1, 3, 4)))))));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+            setErrorMessage(null).setResponses(List.of(
+                new ReassignableTopicResponse().setName(topic).setPartitions(List.of(
+                    new ReassignablePartitionResponse().setPartitionIndex(0).
+                        setErrorMessage(null))))), alterResultTwo.response());
+        ctx.replay(alterResultTwo.records());
+        ListPartitionReassignmentsResponseData currentReassigning =
+            new ListPartitionReassignmentsResponseData().setErrorMessage(null).
+                setTopics(List.of(new OngoingTopicReassignment().
+                    setName(topic).setPartitions(List.of(
+                        new OngoingPartitionReassignment().setPartitionIndex(0).
+                            setRemovingReplicas(List.of(2)).
+                            setAddingReplicas(List.of(3, 4)).
+                            setReplicas(List.of(0, 1, 3, 4, 2))))));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        // Replica 4 joins the ISR, replica 3 is still lagging. The reassignment must not
+        // complete yet: completing it would leave 3 in the replica list while out of sync.
+        PartitionRegistration partition = replication.getPartition(topicId, 0);
+        ctx.alterPartition(topicIdPartition, partition.leader, isrWithDefaultEpoch(0, 1, 2, 4),
+            LeaderRecoveryState.RECOVERED);
+        assertEquals(currentReassigning, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        partition = replication.getPartition(topicId, 0);
+        assertArrayEquals(new int[] {0, 1, 3, 4, 2}, partition.replicas);
+        assertArrayEquals(new int[] {0, 1, 2, 4}, partition.isr);
+
+        // Once replica 3 joins the ISR as well, the reassignment completes with exactly the
+        // requested replicas, all of them in sync.
+        ctx.alterPartition(topicIdPartition, partition.leader, isrWithDefaultEpoch(0, 1, 2, 3, 4),
+            LeaderRecoveryState.RECOVERED);
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        partition = replication.getPartition(topicId, 0);
+        assertArrayEquals(new int[] {0, 1, 3, 4}, partition.replicas);
+        assertArrayEquals(new int[] {0, 1, 3, 4}, partition.isr);
+    }
+
     private static BrokerState brokerState(int brokerId, Long brokerEpoch) {
         return new BrokerState().setBrokerId(brokerId).setBrokerEpoch(brokerEpoch);
     }
