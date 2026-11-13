@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
@@ -67,6 +68,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -584,6 +586,75 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testExplicitModeCommitSyncRenewsSparseRecordsAcrossPartitions() {
+        String topic = "test-topic";
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition firstPartition = new TopicIdPartition(topicId, 0, topic);
+        TopicIdPartition secondPartition = new TopicIdPartition(topicId, 1, topic);
+        Map<TopicIdPartition, List<ConsumerRecord<String, String>>> expectedRecords = Map.of(
+            firstPartition, List.of(new ConsumerRecord<>(topic, 0, 10, "key1", "value1"),
+                new ConsumerRecord<>(topic, 0, 14, "key2", "value2")),
+            secondPartition, List.of(new ConsumerRecord<>(topic, 1, 4, "key3", "value3"),
+                new ConsumerRecord<>(topic, 1, 11, "key4", "value4")));
+        subscribeExplicitConsumerWithRecords(expectedRecords);
+        AtomicReference<Map<TopicIdPartition, NodeAcknowledgements>> sentAcknowledgements =
+            completeShareAcknowledgeSyncApplicationEvent(Map.of());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        assertEquals(4, records.count());
+        records.forEach(record -> consumer.acknowledge(record, AcknowledgeType.RENEW));
+
+        assertEquals(Map.of(firstPartition, Optional.empty(), secondPartition, Optional.empty()), consumer.commitSync());
+        assertEquals(Map.of(10L, AcknowledgeType.RENEW, 14L, AcknowledgeType.RENEW),
+            sentAcknowledgements.get().get(firstPartition).acknowledgements().getAcknowledgementsTypeMap());
+        assertEquals(Map.of(4L, AcknowledgeType.RENEW, 11L, AcknowledgeType.RENEW),
+            sentAcknowledgements.get().get(secondPartition).acknowledgements().getAcknowledgementsTypeMap());
+        expectedRecords.values().forEach(partitionRecords -> partitionRecords.forEach(record ->
+            assertThrows(IllegalStateException.class, () -> consumer.acknowledge(record, AcknowledgeType.ACCEPT))));
+
+        ConsumerRecords<String, String> renewedRecords = consumer.poll(Duration.ofMillis(100));
+        assertEquals(4, renewedRecords.count());
+        expectedRecords.forEach((partition, partitionRecords) ->
+            assertEquals(partitionRecords, renewedRecords.records(partition.topicPartition())));
+        verify(fetchCollector).collect(any(ShareFetchBuffer.class));
+        renewedRecords.forEach(record -> consumer.acknowledge(record, AcknowledgeType.ACCEPT));
+
+        assertEquals(Map.of(firstPartition, Optional.empty(), secondPartition, Optional.empty()), consumer.commitSync());
+        assertEquals(Map.of(10L, AcknowledgeType.ACCEPT, 14L, AcknowledgeType.ACCEPT),
+            sentAcknowledgements.get().get(firstPartition).acknowledgements().getAcknowledgementsTypeMap());
+        assertEquals(Map.of(4L, AcknowledgeType.ACCEPT, 11L, AcknowledgeType.ACCEPT),
+            sentAcknowledgements.get().get(secondPartition).acknowledgements().getAcknowledgementsTypeMap());
+    }
+
+    @Test
+    public void testCloseAfterPartialRenewalFailureDoesNotAcceptRecordsOrFetchAgain() {
+        String topic = "test-topic";
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition successfulPartition = new TopicIdPartition(topicId, 0, topic);
+        TopicIdPartition failedPartition = new TopicIdPartition(topicId, 1, topic);
+        ConsumerRecord<String, String> successfulRecord = new ConsumerRecord<>(topic, 0, 10, "key1", "value1");
+        ConsumerRecord<String, String> failedRecord = new ConsumerRecord<>(topic, 1, 14, "key2", "value2");
+        subscribeExplicitConsumerWithRecords(Map.of(
+            successfulPartition, List.of(successfulRecord), failedPartition, List.of(failedRecord)));
+        InvalidRecordStateException failure = new InvalidRecordStateException("Acquisition lock expired");
+        completeShareAcknowledgeSyncApplicationEvent(Map.of(failedPartition, failure));
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        records.forEach(record -> consumer.acknowledge(record, AcknowledgeType.RENEW));
+        assertEquals(Map.of(successfulPartition, Optional.empty(), failedPartition, Optional.of(failure)), consumer.commitSync());
+        assertThrows(IllegalStateException.class, () -> consumer.acknowledge(failedRecord, AcknowledgeType.ACCEPT));
+
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        consumer.close(Duration.ZERO);
+
+        verify(fetchCollector).collect(any(ShareFetchBuffer.class));
+        ArgumentCaptor<ShareAcknowledgeOnCloseEvent> closeEvent = ArgumentCaptor.forClass(ShareAcknowledgeOnCloseEvent.class);
+        verify(applicationEventHandler).addAndGet(closeEvent.capture());
+        assertTrue(closeEvent.getValue().acknowledgementsMap().isEmpty());
+        verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+    }
+
+    @Test
     public void testCloseWithTopicAuthorizationException() {
         ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
         consumer = newConsumer(subscriptions);
@@ -1092,6 +1163,45 @@ public class ShareConsumerImplTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));
+    }
+
+    private void subscribeExplicitConsumerWithRecords(Map<TopicIdPartition, List<ConsumerRecord<String, String>>> records) {
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
+        consumer = newConsumer(mock(ShareFetchBuffer.class), subscriptions, "group-id", "client-id", "explicit");
+        ShareFetch<String, String> fetch = ShareFetch.empty();
+        records.forEach((partition, partitionRecords) -> {
+            ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, partition, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
+            partitionRecords.forEach(batch::addRecord);
+            fetch.add(partition, batch);
+        });
+        doReturn(fetch).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+        List<String> topics = records.keySet().stream().map(TopicIdPartition::topic).distinct().collect(Collectors.toList());
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+    }
+
+    private AtomicReference<Map<TopicIdPartition, NodeAcknowledgements>> completeShareAcknowledgeSyncApplicationEvent(
+        Map<TopicIdPartition, KafkaException> failures
+    ) {
+        AtomicReference<Map<TopicIdPartition, NodeAcknowledgements>> sentAcknowledgements = new AtomicReference<>();
+        doAnswer(invocation -> {
+            ShareAcknowledgeSyncEvent event = invocation.getArgument(0);
+            sentAcknowledgements.set(event.acknowledgementsMap());
+            Map<TopicIdPartition, Acknowledgements> completed = new HashMap<>();
+            event.acknowledgementsMap().forEach((partition, nodeAcknowledgements) -> {
+                Acknowledgements acknowledgements = nodeAcknowledgements.acknowledgements();
+                acknowledgements.complete(failures.get(partition));
+                completed.put(partition, acknowledgements);
+            });
+            boolean hasRenewals = completed.values().stream()
+                .anyMatch(acknowledgements -> acknowledgements.getAcknowledgementsTypeMap().containsValue(AcknowledgeType.RENEW));
+            if (hasRenewals) {
+                acknowledgementEventQueue.add(new ShareAcknowledgementEvent(completed, true, Optional.empty()));
+            }
+            event.future().complete(completed);
+            return null;
+        }).when(applicationEventHandler).add(any(ShareAcknowledgeSyncEvent.class));
+        return sentAcknowledgements;
     }
 
     private void completeShareUnsubscribeApplicationEventSuccessfully(ShareSubscriptionState subscriptions) {

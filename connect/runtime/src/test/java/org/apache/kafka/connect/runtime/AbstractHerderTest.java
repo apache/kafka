@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
@@ -31,9 +32,11 @@ import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.AllowlistConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -54,6 +57,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.sink.ShareSinkTask;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -824,6 +829,69 @@ public class AbstractHerderTest {
     }
 
     @Test
+    public void testConfigValidationShareGroupIdDeniedByNonePolicy() {
+        AbstractHerder herder = createConfigValidationHerder(SampleShareSinkConnector.class, noneConnectorClientConfigOverridePolicy);
+        Map<String, String> config = shareSinkConfig();
+        config.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "shared-work");
+
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
+
+        assertEquals(1, result.errorCount());
+        assertInfoValue(result, SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "shared-work",
+                "The 'None' policy does not allow 'group.id' to be overridden in the connector configuration.");
+        assertNull(findInfo(result, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.GROUP_ID_CONFIG));
+        verifyValidationIsolation();
+    }
+
+    @Test
+    public void testConfigValidationShareGroupIdAllowedByAllPolicy() {
+        ConnectorClientConfigOverridePolicy policy = Mockito.spy(new AllConnectorClientConfigOverridePolicy());
+        AbstractHerder herder = createConfigValidationHerder(SampleShareSinkConnector.class, policy);
+        Map<String, String> config = shareSinkConfig();
+        config.put(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "shared-work");
+        String groupIdOverride = ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.GROUP_ID_CONFIG;
+        config.put(groupIdOverride, "shared-work");
+
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
+
+        assertEquals(0, result.errorCount());
+        assertInfoValue(result, SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, "shared-work");
+        assertInfoValue(result, groupIdOverride, "shared-work");
+        List<String> names = result.configs().stream().map(info -> info.configValue().name()).toList();
+        assertEquals(new HashSet<>(names).size(), names.size());
+        ArgumentCaptor<ConnectorClientConfigRequest> request = ArgumentCaptor.forClass(ConnectorClientConfigRequest.class);
+        verify(policy).validate(request.capture());
+        assertEquals(ConnectorClientConfigRequest.ClientType.CONSUMER, request.getValue().clientType());
+        assertEquals(Map.of(ConsumerConfig.GROUP_ID_CONFIG, "shared-work"), request.getValue().clientProps());
+        verifyValidationIsolation();
+    }
+
+    @Test
+    public void testConfigValidationDerivedShareGroupIdIsNotAnOverride() {
+        AbstractHerder herder = createConfigValidationHerder(SampleShareSinkConnector.class, noneConnectorClientConfigOverridePolicy);
+
+        ConfigInfos result = herder.validateConnectorConfig(shareSinkConfig(), s -> null, false);
+
+        assertEquals(0, result.errorCount());
+        assertInfoValue(result, SinkConnectorConfig.SHARE_GROUP_ID_CONFIG, null);
+        assertNull(findInfo(result, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.GROUP_ID_CONFIG));
+        verifyValidationIsolation();
+    }
+
+    @Test
+    public void testConfigValidationShareModeRequiresDurableTaskCapability() {
+        AbstractHerder herder = createConfigValidationHerder(SampleSinkConnector.class, noneConnectorClientConfigOverridePolicy);
+        Map<String, String> config = shareSinkConfig();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
+
+        assertEquals(1, result.errorCount());
+        assertTrue(findInfo(result, SinkConnectorConfig.CONSUMER_TYPE_CONFIG).configValue().errors().get(0).contains("ShareSinkTask"));
+        verifyValidationIsolation();
+    }
+
+    @Test
     public void testConfigValidationAllowlistOverride() {
         final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
         AllowlistConnectorClientConfigOverridePolicy policy = new AllowlistConnectorClientConfigOverridePolicy();
@@ -1548,7 +1616,44 @@ public class AbstractHerderTest {
     }
 
 
+    private static Map<String, String> shareSinkConfig() {
+        return new HashMap<>(Map.of(
+                ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleShareSinkConnector.class.getName(),
+                ConnectorConfig.NAME_CONFIG, "connector-name",
+                SinkConnectorConfig.TOPICS_CONFIG, "input",
+                SinkConnectorConfig.CONSUMER_TYPE_CONFIG, SinkConnectorConfig.SHARE_CONSUMER_TYPE,
+                SinkConnectorConfig.SHARE_PROCESSING_MAX_AGE_MS_CONFIG, "30000",
+                SinkConnectorConfig.SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG, "1000",
+                "required", "value"));
+    }
+
     private static String producerOverrideKey(String config) {
         return ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + config;
+    }
+
+    public static class SampleShareSinkConnector extends SampleSinkConnector {
+        @Override
+        public Class<? extends Task> taskClass() {
+            return SampleShareSinkTask.class;
+        }
+    }
+
+    public static class SampleShareSinkTask extends ShareSinkTask {
+        @Override
+        public String version() {
+            return "1";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+        }
+
+        @Override
+        public void stop() {
+        }
     }
 }
