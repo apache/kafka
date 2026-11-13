@@ -3246,6 +3246,7 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         if (subscriptionTopicNames == null || subscriptionTopicNames.isEmpty() || metadataImage.isEmpty()) {
+            maybeRemoveUnsubscribedStartOffsets(groupId, subscriptionTopicNames, records);
             return Optional.empty();
         }
 
@@ -3253,6 +3254,7 @@ public class GroupMetadataManager {
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
+            maybeRemoveUnsubscribedStartOffsets(groupId, subscriptionTopicNames, records);
             return Optional.empty();
         }
 
@@ -3262,10 +3264,54 @@ public class GroupMetadataManager {
         topicPartitionChangeMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
             startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, initialStartOffset(info, topicId, partitionId))));
 
-        // The start offsets are stored, so that a retry of the initialization sends the same ones.
-        addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap, startOffsets);
+        // The start offsets are stored, so that a retry of the initialization sends the same ones. The same
+        // record removes the start offsets of the topics which the group no longer subscribes to.
+        addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap, startOffsets,
+            subscribedStartOffsets(info, subscriptionTopicNames));
 
         return Optional.of(buildInitializeShareGroupState(groupId, groupEpoch, startOffsets));
+    }
+
+    /**
+     * Returns the stored start offsets without those of the topics which the group does not subscribe to and
+     * which are neither initializing nor initialized. The initialization of such a topic failed, so the group
+     * never consumed it, and a new subscription to it must not be taken as a retry.
+     */
+    private Map<Uuid, Map<Integer, Long>> subscribedStartOffsets(
+        ShareGroupStatePartitionMetadataInfo info,
+        Set<String> subscriptionTopicNames
+    ) {
+        if (info == null) {
+            return Map.of();
+        }
+        Set<Uuid> subscribedTopicIds = new HashSet<>();
+        if (subscriptionTopicNames != null) {
+            subscriptionTopicNames.forEach(topicName -> metadataImage.topicMetadata(topicName)
+                .ifPresent(topicMetadata -> subscribedTopicIds.add(topicMetadata.id())));
+        }
+        Set<Uuid> topicsToRemove = info.initializingStartOffsets().keySet().stream()
+            .filter(topicId -> !subscribedTopicIds.contains(topicId)
+                && !info.initializingTopics().containsKey(topicId)
+                && !info.initializedTopics().containsKey(topicId))
+            .collect(Collectors.toSet());
+        return topicsToRemove.isEmpty() ? info.initializingStartOffsets() : removeStartOffsetsOfTopics(info.initializingStartOffsets(), topicsToRemove);
+    }
+
+    /**
+     * Adds a record which removes the start offsets of the topics which the group no longer subscribes to, if any.
+     */
+    private void maybeRemoveUnsubscribedStartOffsets(String groupId, Set<String> subscriptionTopicNames, List<CoordinatorRecord> records) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        Map<Uuid, Map<Integer, Long>> startOffsets = subscribedStartOffsets(info, subscriptionTopicNames);
+        if (info != null && startOffsets.size() != info.initializingStartOffsets().size()) {
+            records.add(newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                info.initializingTopics(),
+                info.initializedTopics(),
+                attachTopicName(info.deletingTopics()),
+                startOffsets
+            ));
+        }
     }
 
     /**
@@ -3339,14 +3385,17 @@ public class GroupMetadataManager {
 
     // Visibility for tests
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
-        addInitializingTopicsRecords(groupId, records, topicPartitionMap, Map.of());
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        addInitializingTopicsRecords(groupId, records, topicPartitionMap, Map.of(),
+            info == null ? Map.of() : info.initializingStartOffsets());
     }
 
     private void addInitializingTopicsRecords(
         String groupId,
         List<CoordinatorRecord> records,
         Map<Uuid, InitMapValue> topicPartitionMap,
-        Map<Uuid, Map<Integer, Long>> startOffsets
+        Map<Uuid, Map<Integer, Long>> startOffsets,
+        Map<Uuid, Map<Integer, Long>> storedStartOffsets
     ) {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
@@ -3360,7 +3409,7 @@ public class GroupMetadataManager {
 
         // The stored start offsets are kept, as a retry uses them.
         Map<Uuid, Map<Integer, Long>> finalStartOffsets = new HashMap<>();
-        currentMap.initializingStartOffsets().forEach((topicId, offsets) -> finalStartOffsets.put(topicId, new HashMap<>(offsets)));
+        storedStartOffsets.forEach((topicId, offsets) -> finalStartOffsets.put(topicId, new HashMap<>(offsets)));
         startOffsets.forEach((topicId, offsets) -> offsets.forEach((partitionId, startOffset) ->
             finalStartOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).putIfAbsent(partitionId, startOffset)));
 
@@ -5193,11 +5242,13 @@ public class GroupMetadataManager {
         records.add(newShareGroupMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
         // We update the subscription metadata without the leaving member.
+        Map<String, SubscriptionCount> subscribedTopicNames = group.computeSubscribedTopicNames(member, null);
         long groupMetadataHash = ModernGroup.computeMetadataHash(
-            group.computeSubscribedTopicNames(member, null),
+            subscribedTopicNames,
             topicHashCache,
             metadataImage
         );
+        maybeRemoveUnsubscribedStartOffsets(group.groupId(), subscribedTopicNames.keySet(), records);
 
         if (groupMetadataHash != group.metadataHash()) {
             log.info("[GroupId {}] Computed new metadata hash: {}.",
