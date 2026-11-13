@@ -135,6 +135,7 @@ class RequestChannel(val queueSize: Int,
       // We should only send one of the following per request
       case _: SendResponse | _: NoOpResponse | _: CloseConnectionResponse =>
         val request = response.request
+        request.closeLocalTime()
         val timeNanos = time.nanoseconds()
         request.responseCompleteTimeNanos(timeNanos)
         if (request.apiLocalCompleteTimeNanos == -1L)
