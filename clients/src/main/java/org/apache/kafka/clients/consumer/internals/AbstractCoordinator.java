@@ -522,7 +522,9 @@ public abstract class AbstractCoordinator implements Closeable {
                             "modified by heartbeat thread to %s/%s before the rebalance callback triggered",
                             generationSnapshot, stateSnapshot);
 
-                    resetStateAndRejoin(reason, true);
+                    // A static member keeps the member id that the heartbeat thread left in place, so that
+                    // the rejoin is not treated as a new instance that could fence this member (KAFKA-20985).
+                    resetStateAndRejoin(reason, isDynamicMember());
                     resetJoinGroupFuture();
                 }
             } else {
@@ -1080,10 +1082,6 @@ public abstract class AbstractCoordinator implements Closeable {
         resetStateAndRejoin(reason, shouldResetMemberId);
     }
 
-    synchronized void resetGenerationOnLeaveGroup() {
-        resetStateAndRejoin("consumer pro-actively leaving the group", true);
-    }
-
     public synchronized void requestRejoinIfNecessary(final String shortReason,
                                                       final String fullReason) {
         if (!this.rejoinNeeded) {
@@ -1168,7 +1166,8 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized RequestFuture<Void> maybeLeaveGroup(CloseOptions.GroupMembershipOperation membershipOperation, String leaveReason) {
         RequestFuture<Void> future = null;
 
-        if (shouldSendLeaveGroupRequest(membershipOperation)) {
+        boolean shouldSendLeaveGroup = shouldSendLeaveGroupRequest(membershipOperation);
+        if (shouldSendLeaveGroup) {
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
@@ -1180,7 +1179,10 @@ public abstract class AbstractCoordinator implements Closeable {
             client.pollNoWakeup();
         }
 
-        resetGenerationOnLeaveGroup();
+        // A static member whose LeaveGroup was suppressed is still registered under this member id,
+        // so keep it to avoid being treated as a new instance on the next rejoin (KAFKA-20985).
+        boolean shouldResetMemberId = shouldSendLeaveGroup || isDynamicMember();
+        resetStateAndRejoin("consumer pro-actively leaving the group", shouldResetMemberId);
 
         return future;
     }
