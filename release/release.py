@@ -43,6 +43,13 @@ release.py stage-docs [kafka-site-path]
   With no arguments this script assumes you have the Kafka repository and kafka-site repository checked out side-by-side, but
   you can specify a full path to the kafka-site repository if this is not the case.
 
+release.py blog [kafka-site-path]
+
+  Generates a skeleton of the release announcement blog post and adds the release to the downloads page of the
+  kafka-site repository. The release manager is expected to fill in the TODO markers in the generated blog post.
+
+  With no arguments this script assumes you have the Kafka repository and kafka-site repository checked out side-by-side.
+
 release.py release-email
 
   Generates the email content/template for sending release announcement email.
@@ -123,10 +130,18 @@ def detect_docs_release_version(version):
     return ".".join(version_parts)
 
 
-def command_stage_docs():
+def kafka_site_repo_path_arg():
+    """
+    The kafka-site repository path given on the command line, defaulting to a kafka-site folder next to this repository.
+    """
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo_dir, "..", "kafka-site")
     if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "hugo.yaml")):
         fail(f"{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
+    return kafka_site_repo_path
+
+
+def command_stage_docs():
+    kafka_site_repo_path = kafka_site_repo_path_arg()
 
     jdk25_env = get_jdk(25)
 
@@ -199,24 +214,75 @@ def validate_release_num(version):
     validate_release_version_parts(version)
 
 
-def command_release_announcement_email():
+def version_key(version):
+    return [int(x) for x in version.split(".")]
+
+
+def release_tags():
     release_tag_pattern = re.compile("^[0-9]+\\.[0-9]+\\.[0-9]+$")
-    release_tags = sorted([t for t in git.tags() if re.match(release_tag_pattern, t)])
-    release_version_num = release_tags[-1]
+    return sorted([t for t in git.tags() if re.match(release_tag_pattern, t)], key=version_key)
+
+
+def prompt_current_and_previous_release():
+    tags = release_tags()
+    release_version_num = tags[-1]
     if not confirm(f"Is the current release {release_version_num}?"):
         release_version_num = prompt("What is the current release version:")
         validate_release_num(release_version_num)
-    previous_release_version_num = release_tags[-2]
+    previous_release_version_num = tags[-2]
     if not confirm(f"Is the previous release {previous_release_version_num}?"):
         previous_release_version_num = prompt("What is the previous release version:")
         validate_release_num(previous_release_version_num)
-    if release_version_num < previous_release_version_num :
+    if version_key(release_version_num) < version_key(previous_release_version_num):
         fail("Current release version number can't be less than previous release version number")
+    return release_version_num, previous_release_version_num
+
+
+def command_release_announcement_email():
+    release_version_num, previous_release_version_num = prompt_current_and_previous_release()
     contributors = git.contributors(previous_release_version_num, release_version_num)
     release_announcement_email = templates.release_announcement_email(release_version_num, contributors)
     print(templates.release_announcement_email_instructions(release_announcement_email))
     sys.exit(0)
 
+
+def command_release_blog():
+    kafka_site_repo_path = kafka_site_repo_path_arg()
+    release_version_num, previous_release_version_num = prompt_current_and_previous_release()
+    author = preferences.get('blog_author', lambda: prompt("Enter your name as it should appear as the blog author: "))
+    num_commits = git.commit_count(previous_release_version_num, release_version_num)
+    contributors = git.contributors(previous_release_version_num, release_version_num)
+
+    today = datetime.date.today()
+    release_date_str = prompt(f"Enter the release date (YYYY-MM-DD, blank for today {today}): ") or today.isoformat()
+    try:
+        release_date = datetime.datetime.strptime(release_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        fail(f"Invalid release date: {release_date_str}, expected YYYY-MM-DD")
+
+    # prepare the update of downloads.md
+    downloads_path = os.path.join(kafka_site_repo_path, "content", "en", "community", "downloads.md")
+    downloads = textfiles.read(downloads_path)
+    downloads_section = templates.downloads_section(release_version_num, previous_release_version_num, release_date) + "\n"
+    supported_releases_heading = re.search("^## Supported releases\\n+", downloads, re.MULTILINE)
+    if supported_releases_heading is None:
+        fail(f"Could not find the 'Supported releases' heading in {downloads_path}")
+    insert_at = supported_releases_heading.end()
+    for heading in re.finditer("^### ([0-9]+\\.[0-9]+\\.[0-9]+)$", downloads, re.MULTILINE):
+        if heading.start() >= supported_releases_heading.end() and version_key(heading.group(1)) < version_key(release_version_num):
+            insert_at = heading.start()
+            break
+    downloads = downloads[:insert_at] + downloads_section + downloads[insert_at:]
+
+    # write release blog
+    blog_path = os.path.join(kafka_site_repo_path, "content", "en", "blog", "releases", f"ak-{release_version_num}.md")
+    textfiles.write(blog_path, templates.release_blog_post(release_version_num, previous_release_version_num, release_date, author, num_commits, contributors))
+    print(f"Wrote the release announcement blog post skeleton to: {blog_path}")
+
+    # update downloads.md
+    textfiles.write(downloads_path, downloads)
+    print(f"Updated the downloads page: {downloads_path}")
+    sys.exit(0)
 
 project_version = textfiles.prop(os.path.join(repo_dir, "gradle.properties"), 'version')
 release_version = project_version.replace('-SNAPSHOT', '')
@@ -230,6 +296,8 @@ if subcommand == 'stage-docs':
     command_stage_docs()
 elif subcommand == 'release-email':
     command_release_announcement_email()
+elif subcommand == 'blog':
+    command_release_blog()
 elif not (subcommand is None or subcommand == 'stage'):
     fail(f"Unknown subcommand: {subcommand}")
 # else -> default subcommand stage
