@@ -54,6 +54,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static java.util.Collections.emptyList;
@@ -801,6 +802,37 @@ public class MetricsTest {
         assertFalse(reportFuture.isDone(), "Report failed");
 
         alive.set(false);
+    }
+
+    @Test
+    public void testCloseIsIdempotent() {
+        AtomicInteger closeCount = new AtomicInteger();
+        MetricsReporter reporter = new MetricsReporter() {
+            @Override
+            public void init(List<KafkaMetric> metrics) {
+            }
+
+            @Override
+            public void metricChange(KafkaMetric metric) {
+            }
+
+            @Override
+            public void metricRemoval(KafkaMetric metric) {
+            }
+
+            @Override
+            public void close() {
+                closeCount.incrementAndGet();
+            }
+
+            @Override
+            public void configure(Map<String, ?> configs) {
+            }
+        };
+        try (Metrics metrics = new Metrics(config, singletonList(reporter), new MockTime(10), true)) {
+            metrics.close();
+        }
+        assertEquals(1, closeCount.get(), "MetricsReporter.close() should be invoked exactly once");
     }
 
     private static class ConcurrentMetricOperation implements Runnable {
