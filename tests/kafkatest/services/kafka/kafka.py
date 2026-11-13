@@ -926,7 +926,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def wait_for_start(self, node, monitor, timeout_sec=60):
         # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
-        monitor.wait_until("Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
+        monitor.wait_until(r"Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
                            err_msg="Kafka server didn't finish startup in %d seconds" % timeout_sec)
 
         if self.quorum_info.using_zk or self.quorum_info.has_brokers: # TODO: SCRAM currently unsupported for controller quorum
@@ -964,6 +964,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
+            kafka_mode = self.context.globals.get("kafka_mode", "")
+            if kafka_mode == "native":
+                return [int(pid) for pid in node.account.ssh_capture(f"pgrep {self.java_class_name()}", allow_fail=True)]
             return node.account.java_pids(self.java_class_name())
         except (RemoteCommandError, ValueError) as e:
             return []
@@ -2105,7 +2108,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         raise Exception("No offset returned for %s:%d" % (topic, partition))
 
     def java_class_name(self):
-        return "kafka\.Kafka"
+        return r"kafka\.Kafka"
 
     def describe_consumer_group_members(self, group, node=None, command_config=None):
         """ Describe a consumer group.
