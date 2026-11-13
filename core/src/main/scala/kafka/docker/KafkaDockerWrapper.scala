@@ -295,8 +295,13 @@ object KafkaDockerWrapper extends Logging {
     val nameToLoggers = config.getLoggers.getLogger.asScala.map(logger => (logger.getName, logger)).to(collection.mutable.Map)
     loggerFromEnv.foreach(logger => nameToLoggers.put(logger.getName, logger))
     config.getLoggers.setLogger(nameToLoggers.values.toList.asJava)
-    if (rootOption.isDefined) {
-      config.getLoggers.setRoot(rootOption.get)
+    rootOption.foreach { envRoot =>
+      var existingRoot = config.getLoggers.getRoot
+      if (existingRoot == null) {
+        existingRoot = new Root
+        config.getLoggers.setRoot(existingRoot)
+      }
+      existingRoot.setLevel(envRoot.getLevel)
     }
     Files.write(filepath, mapper.writeValueAsString(yaml).getBytes(StandardCharsets.UTF_8), StandardOpenOption.TRUNCATE_EXISTING)
   }
