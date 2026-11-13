@@ -10207,11 +10207,7 @@ public class GroupMetadataManager {
             return !maybeOldMember.userEndpoint().get().equals(updatedMember.userEndpoint().get());
         }
 
-        if (!hasPreviousUserEndpoint && !hasCurrentUserEndpoint) {
-            return false;
-        }
-
-        return true;
+        return hasPreviousUserEndpoint || hasCurrentUserEndpoint;
     }
 
     private static boolean hasEpochRelevantMemberConfigChanged(
