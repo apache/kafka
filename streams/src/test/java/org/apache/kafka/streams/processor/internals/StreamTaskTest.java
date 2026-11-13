@@ -2013,6 +2013,33 @@ public class StreamTaskTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "300000"})
+    public void shouldLogNormalIdlingAtDebugOnly(final String maxTaskIdleMs) {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(maxTaskIdleMs));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.updateLags();
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamTask.class)) {
+            appender.setClassLogger(StreamTask.class, Level.DEBUG);
+            assertFalse(task.isProcessable(0L));
+            assertFalse(task.isProcessable(119_999L));
+            assertTrue(appender.getMessages().isEmpty());
+            assertFalse(task.isProcessable(120_000L));
+            assertEquals(1, appender.getMessages("DEBUG").size());
+            assertFalse(task.isProcessable(240_000L));
+            assertEquals(2, appender.getMessages("DEBUG").size());
+            assertTrue(appender.getMessages("INFO").isEmpty());
+            final String expectedMessage = maxTaskIdleMs.equals("0")
+                ? "No partitions were buffered locally"
+                : "Waiting for new data to be produced";
+            assertTrue(appender.getMessages("DEBUG").stream().allMatch(message -> message.contains(expectedMessage)));
+        }
+    }
+
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         when(stateManager.taskId()).thenReturn(taskId);
