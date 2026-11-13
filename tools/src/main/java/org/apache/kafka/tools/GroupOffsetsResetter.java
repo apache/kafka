@@ -210,7 +210,10 @@ public class GroupOffsetsResetter {
             successfulLogTimestampOffsets.putAll(getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet()));
 
             return successfulLogTimestampOffsets;
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
@@ -239,7 +242,10 @@ public class GroupOffsetsResetter {
                     ? new LogOffset(offsets.get(tp).offset())
                     : new Unknown()
             ));
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
@@ -483,7 +489,10 @@ public class GroupOffsetsResetter {
                 .toList();
 
             return topicPartitions.stream().filter(tp -> !existPartitions.contains(tp)).toList();
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
