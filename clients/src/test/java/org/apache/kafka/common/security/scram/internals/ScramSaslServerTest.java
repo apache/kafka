@@ -104,11 +104,13 @@ public class ScramSaslServerTest {
         String tokenClientFirstMessage = "n,,n=unknownTokenId,r=" + formatter.secureRandomString() + ",tokenauth=true";
         assertEquals(4096, new ServerFirstMessage(tokenSaslServer.evaluateResponse(tokenClientFirstMessage.getBytes(StandardCharsets.UTF_8))).iterations());
 
-        assertThrows(SaslException.class, () -> saslServer.evaluateResponse(clientFinalMessage(serverFirstMessage.nonce())));
+        SaslException e = assertThrows(SaslException.class, () -> saslServer.evaluateResponse(clientFinalMessage(serverFirstMessage.nonce())));
+        assertEquals("Authentication failed: Invalid user credentials", e.getMessage());
 
         ScramSaslServer knownUserSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
         ServerFirstMessage knownUserServerFirstMessage = new ServerFirstMessage(knownUserSaslServer.evaluateResponse(clientFirstMessage(USER_A, null)));
-        assertThrows(SaslException.class, () -> knownUserSaslServer.evaluateResponse(clientFinalMessage(knownUserServerFirstMessage.nonce())));
+        e = assertThrows(SaslException.class, () -> knownUserSaslServer.evaluateResponse(clientFinalMessage(knownUserServerFirstMessage.nonce())));
+        assertEquals("Invalid client credentials", e.getMessage());
     }
 
     @Test
@@ -128,7 +130,8 @@ public class ScramSaslServerTest {
         byte[] saltedPassword = formatter.saltedPassword(tokenHmac, serverFirstMessage.salt(), serverFirstMessage.iterations());
         clientFinalMessage.proof(formatter.clientProof(saltedPassword, clientFirstMessage, serverFirstMessage, clientFinalMessage));
 
-        assertThrows(SaslException.class, () -> tokenSaslServer.evaluateResponse(clientFinalMessage.toBytes()));
+        SaslException e = assertThrows(SaslException.class, () -> tokenSaslServer.evaluateResponse(clientFinalMessage.toBytes()));
+        assertEquals("Authentication failed: Invalid user credentials", e.getMessage());
         assertFalse(tokenSaslServer.isComplete());
     }
 
