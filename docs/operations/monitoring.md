@@ -860,6 +860,21 @@ kafka.server:type=Request,user=([-.\w]+),client-id=([-.\w]+)
 
 Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0. request-time indicates the percentage of time spent in broker network and I/O threads to process requests from client group. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
 </td> </tr>  
+<tr>
+<td>
+
+Controller mutation quota metrics per (user, client-id), user or client-id
+</td>
+<td>
+
+kafka.server:type=ControllerMutation,user=([-.\w]+),client-id=([-.\w]+)
+</td>
+<td>
+
+Three attributes. mutation-rate indicates the rate of partition mutations in partitions/sec for topic creation, partition creation and topic deletion. tokens indicates the number of remaining tokens in the token bucket. A negative value indicates that the quota is exhausted and throttling is applied. throttle-time indicates the average time in ms the client was throttled. Ideally = 0. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
+The active controller records partition mutations for CreateTopics, CreatePartitions, and DeleteTopics requests.
+This includes automatic topic creation requests sent by brokers.
+</td> </tr>
 <tr>  
 <td>
 
