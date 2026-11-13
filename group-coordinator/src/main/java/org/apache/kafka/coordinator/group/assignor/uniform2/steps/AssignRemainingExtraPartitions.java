@@ -68,6 +68,20 @@ public final class AssignRemainingExtraPartitions {
          */
         int membersWithExtraPartitionOfTopic;
 
+        /**
+         * The lowest number of extra partitions among the members without an extra partition of
+         * the topic being assigned. It is computed once every member with the lowest number of
+         * extra partitions has an extra partition of the topic, and is -1 until then.
+         */
+        int lowestExtraPartitionsWithoutTopic = -1;
+
+        /**
+         * The position in the members from which the search for the next member with
+         * {@link #lowestExtraPartitionsWithoutTopic} extra partitions and no extra partition of the
+         * topic starts. The search goes in member order.
+         */
+        int cursorWithoutTopic;
+
         CohortState(int[] members) {
             this.members = members;
         }
@@ -194,7 +208,9 @@ public final class AssignRemainingExtraPartitions {
         // Resets the state of the topic for the next one, including the members just assigned.
         for (int i = 0; i < members.size(); i++) {
             hasExtraPartitionOfTopic[members.get(i)] = false;
-            cohortStates[group.cohortOf(members.get(i))].membersWithExtraPartitionOfTopic = 0;
+            var state = cohortStates[group.cohortOf(members.get(i))];
+            state.membersWithExtraPartitionOfTopic = 0;
+            state.lowestExtraPartitionsWithoutTopic = -1;
         }
     }
 
@@ -248,22 +264,63 @@ public final class AssignRemainingExtraPartitions {
      */
     private int nextMember(CohortState state) {
         var members = state.members;
-        for (int step = 0; step < members.length; step++) {
-            int index = (state.cursor + step) % members.length;
+        if (state.lowestExtraPartitionsWithoutTopic < 0) {
+            for (int step = 0; step < members.length; step++) {
+                int index = (state.cursor + step) % members.length;
+                int member = members[index];
+                if (quotas.extraPartitionCount(member) == state.lowestExtraPartitions && !hasExtraPartitionOfTopic[member]) {
+                    state.cursor = (index + 1) % members.length;
+                    return member;
+                }
+            }
+            // Every member with the lowest number of extra partitions already has an extra
+            // partition of the topic. None of them can get another one, so this holds until the
+            // next topic, and the round robin is not tried again.
+            computeLowestExtraPartitionsWithoutTopic(state);
+        }
+        // A member gets an extra partition of the topic, and one more extra partition, only when
+        // it is returned. So no member that the cursor passed can be returned before the lowest
+        // number of extra partitions among the members without one is computed again, which
+        // moves the cursor back to the first member.
+        int index = nextMemberWithoutTopic(state, state.cursorWithoutTopic);
+        if (index == members.length) {
+            computeLowestExtraPartitionsWithoutTopic(state);
+            index = nextMemberWithoutTopic(state, 0);
+        }
+        state.cursorWithoutTopic = index + 1;
+        return members[index];
+    }
+
+    /**
+     * Computes the lowest number of extra partitions among the members of the cohort without an
+     * extra partition of the topic, and moves {@link CohortState#cursorWithoutTopic} back to the
+     * first member.
+     */
+    private void computeLowestExtraPartitionsWithoutTopic(CohortState state) {
+        int lowest = Integer.MAX_VALUE;
+        for (int member : state.members) {
+            if (!hasExtraPartitionOfTopic[member]) {
+                lowest = Math.min(lowest, quotas.extraPartitionCount(member));
+            }
+        }
+        state.lowestExtraPartitionsWithoutTopic = lowest;
+        state.cursorWithoutTopic = 0;
+    }
+
+    /**
+     * @return The position of the first member of the cohort, at or after the position
+     *         {@code from} in member order, that has
+     *         {@link CohortState#lowestExtraPartitionsWithoutTopic} extra partitions and no extra
+     *         partition of the topic, or the number of members if there is none.
+     */
+    private int nextMemberWithoutTopic(CohortState state, int from) {
+        var members = state.members;
+        for (int index = from; index < members.length; index++) {
             int member = members[index];
-            if (quotas.extraPartitionCount(member) == state.lowestExtraPartitions && !hasExtraPartitionOfTopic[member]) {
-                state.cursor = (index + 1) % members.length;
-                return member;
+            if (quotas.extraPartitionCount(member) == state.lowestExtraPartitionsWithoutTopic && !hasExtraPartitionOfTopic[member]) {
+                return index;
             }
         }
-        // Every member with the lowest number of extra partitions already has one of the topic.
-        int best = -1;
-        for (int member : members) {
-            if (!hasExtraPartitionOfTopic[member] &&
-                (best < 0 || quotas.extraPartitionCount(member) < quotas.extraPartitionCount(best))) {
-                best = member;
-            }
-        }
-        return best;
+        return members.length;
     }
 }
