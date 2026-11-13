@@ -66,6 +66,7 @@ from runtime import (
     prompt,
     repo_dir,
 )
+import contributors
 import git
 import gh_actions
 import gpg
@@ -212,8 +213,8 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    contributors = git.contributors(previous_release_version_num, release_version_num)
-    release_announcement_email = templates.release_announcement_email(release_version_num, contributors)
+    people, ais = contributors.of_release(previous_release_version_num, release_version_num, report=print)
+    release_announcement_email = templates.release_announcement_email(release_version_num, people, ais)
     print(templates.release_announcement_email_instructions(release_announcement_email))
     sys.exit(0)
 
