@@ -1177,10 +1177,17 @@ public abstract class AbstractCoordinator implements Closeable {
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));
-            client.pollNoWakeup();
-        }
 
-        resetGenerationOnLeaveGroup();
+            // Reset the state before polling: the poll below may process responses that are already pending,
+            // e.g. a JoinGroup response of an in-flight rebalance. Once we have decided to leave, such responses
+            // must be discarded (which is what the handlers do when the state is no longer PREPARING_REBALANCE)
+            // instead of driving the rebalance forward. Otherwise, being elected leader from within this poll
+            // would block waiting for a metadata refresh regardless of the caller's timeout (KAFKA-17734).
+            resetGenerationOnLeaveGroup();
+            client.pollNoWakeup();
+        } else {
+            resetGenerationOnLeaveGroup();
+        }
 
         return future;
     }
