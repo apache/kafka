@@ -1121,26 +1121,26 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
             final TopicPartition partition = storeMetadata.changelogPartition();
-            final Long currentOffset = storeMetadata.offset();
+            final Long storeOffset = storeMetadata.offset();
             final Long endOffset = changelogs.get(partition).restoreEndOffset;
 
-            if (currentOffset != null) {
-                // the current offset is the offset of the last record, so the "next" record to fetch is
+            if (storeOffset != null) {
+                // the store offset is the offset of the last restored record, so the "next" record to fetch is
                 // that offset + 1; it is also the floor the probe may never seek below, since doing so
                 // would re-apply applied records and rewind the stored offset
-                final long floor = currentOffset + 1;
+                final long floor = storeOffset + 1;
                 if (shouldProbePastStoredOffset(changelogMetadata, partition, floor, endOffset)) {
                     newWindowedPartitionsRetention.put(partition, storeMetadata.retentionPeriod());
                     newPartitionsFloor.put(partition, floor);
 
                     log.debug("Start restoring windowed changelog partition {} by probing to skip expired data " +
-                        "past stored offset {} to end offset {}.", partition, currentOffset, recordEndOffset(endOffset));
+                        "past stored offset {} to end offset {}.", partition, storeOffset, recordEndOffset(endOffset));
                 } else {
                     // seek is not a blocking call so there's nothing to capture
                     restoreConsumer.seek(partition, floor);
 
-                    log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
-                        partition, currentOffset, recordEndOffset(endOffset));
+                    log.debug("Start restoring changelog partition {} past stored offset {} to end offset {}.",
+                        partition, storeOffset, recordEndOffset(endOffset));
                 }
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();

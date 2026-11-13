@@ -1407,7 +1407,7 @@ public class IntegrationTestUtils {
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
                                     final String storeName,
-                                    final long batchEndOffset,
+                                    final long lastBatchOffset,
                                     final long numRestored) {
             changelogToTotalNumRestored.get(topicPartition).addAndGet(numRestored);
         }
@@ -1446,12 +1446,12 @@ public class IntegrationTestUtils {
         }
 
         @Override
-        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long lastBatchOffset, final long batchSize, final long lastChangelogOffset) {
 
         }
 
         @Override
-        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long lastChangelogOffset, final SuspendReason reason) {
             if (reason.equals(SuspendReason.PROMOTED)) {
                 promotedPartitions.add(topicPartition);
             }

@@ -196,7 +196,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 @Override
                 public void onBatchRestored(final TopicPartition topicPartition,
                                             final String storeName,
-                                            final long batchEndOffset,
+                                            final long lastBatchOffset,
                                             final long numRestored) {
                     instance1NumRestored.accumulateAndGet(
                         numRestored,

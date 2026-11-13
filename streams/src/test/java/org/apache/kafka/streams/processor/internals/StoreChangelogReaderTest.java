@@ -1235,12 +1235,12 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
-        // Verifies the 3-step fallback chain in changelogEndOffsets():
-        //   1) ChangelogMetadata.restoreEndOffset (preferred)
-        //   2) StateStoreMetadata.endOffset (physical Fetch high-water-mark)
-        //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
-        // This test wires a standby with restoreEndOffset == null but
-        // storeMetadata.endOffset == 42L → fallback returns 42L.
+        // Verifies the fallback chain in logicalChangelogEndOffsets():
+        //   1) ChangelogMetadata.restoreEndOffset, if known
+        //   2) StateStoreMetadata.lastChangelogOffset, if known
+        //   3) null
+        // This test wires a standby with restoreEndOffset == null and
+        // lastChangelogOffset == 42L, so the fallback returns 42L.
         setupStandbyStateManager();
         when(storeMetadata.lastChangelogOffset()).thenReturn(42L);
 

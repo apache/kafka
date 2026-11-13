@@ -42,12 +42,12 @@ public final class MockStandbyUpdateListener implements StandbyUpdateListener {
     }
 
     @Override
-    public void onBatchLoaded(TopicPartition topicPartition, String storeName, TaskId taskId, long batchEndOffset, long batchSize, long currentEndOffset) {
+    public void onBatchLoaded(TopicPartition topicPartition, String storeName, TaskId taskId, long lastBatchOffset, long batchSize, long lastChangelogOffset) {
         storeNameCalledUpdate.put(UPDATE_BATCH, storeName);
     }
 
     @Override
-    public void onUpdateSuspended(TopicPartition partition, String storeName, long storeOffset, long currentEndOffset, SuspendReason reason) {
+    public void onUpdateSuspended(TopicPartition partition, String storeName, long storeOffset, long lastChangelogOffset, SuspendReason reason) {
         storeNameCalledUpdate.put(UPDATE_SUSPENDED, storeName);
         this.updateSuspendedReason = reason;
         this.updatePartition = partition;
