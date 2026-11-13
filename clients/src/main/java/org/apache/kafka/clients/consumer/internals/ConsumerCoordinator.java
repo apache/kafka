@@ -730,9 +730,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
-            addedPartitions.removeAll(ownedPartitions.get(entry.getKey()));
+            ownedPartitions.get(entry.getKey()).forEach(addedPartitions::remove);
             final Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions.get(entry.getKey()));
-            revokedPartitions.removeAll(assignment.partitions());
+            assignment.partitions().forEach(revokedPartitions::remove);
 
             totalAddedPartitions.addAll(addedPartitions);
             totalRevokedPartitions.addAll(revokedPartitions);
