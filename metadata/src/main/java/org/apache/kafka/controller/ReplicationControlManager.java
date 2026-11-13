@@ -1153,7 +1153,7 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersionOrThrow(),
-                    getTopicEffectiveMinIsr(topic.name),
+                    getTopicMinIsr(topic.name),
                     featureControl.isElrFeatureEnabled()
                 );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
@@ -1721,7 +1721,7 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topic),
+            getTopicMinIsr(topic),
             featureControl.isElrFeatureEnabled()
         )
             .setElection(election)
@@ -1888,7 +1888,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name),
+                getTopicMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
@@ -2172,7 +2172,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name),
+                getTopicMinIsr(topic.name),
                 featureControl.isElrFeatureEnabled()
             );
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
@@ -2292,7 +2292,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topicName),
+            getTopicMinIsr(topicName),
             featureControl.isElrFeatureEnabled()
         );
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
@@ -2358,7 +2358,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name),
+            getTopicMinIsr(topics.get(tp.topicId()).name),
             featureControl.isElrFeatureEnabled()
         );
         if (!reassignment.replicas().equals(currentReplicas)) {
@@ -2441,7 +2441,7 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersionOrThrow(),
-                                    getTopicEffectiveMinIsr(topicName),
+                                    getTopicMinIsr(topicName),
                                     featureControl.isElrFeatureEnabled()
                             )
                                     .setDirectory(brokerId, dirId)
@@ -2502,13 +2502,8 @@ public class ReplicationControlManager {
             setReplicas(Replicas.toList(partition.replicas)));
     }
 
-    // Visible to test.
-    int getTopicEffectiveMinIsr(String topicName) {
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
-        int currentMinIsr = Integer.parseInt(minIsrConfig);
-        Uuid topicId = topicsByName.get(topicName);
-        int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        return Math.min(currentMinIsr, replicationFactor);
+    private int getTopicMinIsr(String topicName) {
+        return Integer.parseInt(configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value());
     }
 
     /**
