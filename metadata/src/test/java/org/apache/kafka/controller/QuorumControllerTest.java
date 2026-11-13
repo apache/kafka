@@ -263,7 +263,11 @@ public class QuorumControllerTest {
         List<Integer> brokersToFence = List.of(2, 3, 4, 5);
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
-        long sessionTimeoutMillis = 1000;
+        // A session timeout of 1000ms left too little margin between the test's 100ms heartbeat
+        // resend interval (TestUtils.DEFAULT_POLL_INTERVAL_MS) and the controller's real-time
+        // session timeout, causing brokersToKeepUnfenced to be spuriously fenced under CI load
+        // (KAFKA-16634). testBalancePartitionLeaders uses the same pattern with 2000ms.
+        long sessionTimeoutMillis = 2000;
 
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
