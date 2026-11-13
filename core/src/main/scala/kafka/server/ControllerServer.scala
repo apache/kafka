@@ -56,7 +56,7 @@ import org.apache.kafka.server.util.{Deadline, FutureUtils}
 import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -304,6 +304,13 @@ class ControllerServer(
             fatal = false,
             () => {}
           ))
+          .setMigrationConflictHandler((epoch: Int) => {
+            try {
+              controller.forceRenounce(epoch).get(10, TimeUnit.SECONDS)
+            } catch {
+              case e: TimeoutException => sharedServer.fatalQuorumControllerFaultHandler.handleFault("Failed to renounce leadership", e)
+            }
+          })
           .setQuorumFeatures(quorumFeatures)
           .setConfigSchema(configSchema)
           .setControllerMetrics(quorumControllerMetrics)
