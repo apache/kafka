@@ -269,6 +269,16 @@ else
   JAVA="$JAVA_HOME/bin/java"
 fi
 
+# The first segment of the version number, which is '1' for releases before Java 9
+# it then becomes '9', '10', ...
+# Some examples of the first line of `java --version`:
+# 8 -> java version "1.8.0_152"
+# 9.0.4 -> java version "9.0.4"
+# 10 -> java version "10" 2018-03-20
+# 10.0.1 -> java version "10.0.1" 2018-04-17
+# We need to match to the end of the line to prevent sed from printing the characters that do not match
+JAVA_MAJOR_VERSION=$("$JAVA" -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
+
 # Memory options
 if [ -z "$KAFKA_HEAP_OPTS" ]; then
   KAFKA_HEAP_OPTS="-Xmx256M"
@@ -277,7 +287,13 @@ fi
 # JVM performance options
 # MaxInlineLevel=15 is the default since JDK 14 and can be removed once older JDKs are no longer supported
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15"
+  # InitiatingHeapOccupancyPercent was renamed to G1IHOP in Java 27.
+  if [[ "$JAVA_MAJOR_VERSION" -ge "27" ]] ; then
+    IHOP_OPT="-XX:G1IHOP=35"
+  else
+    IHOP_OPT="-XX:InitiatingHeapOccupancyPercent=35"
+  fi
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 $IHOP_OPT -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15"
 fi
 
 while [ $# -gt 0 ]; do
@@ -310,15 +326,6 @@ GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
 
-  # The first segment of the version number, which is '1' for releases before Java 9
-  # it then becomes '9', '10', ...
-  # Some examples of the first line of `java --version`:
-  # 8 -> java version "1.8.0_152"
-  # 9.0.4 -> java version "9.0.4"
-  # 10 -> java version "10" 2018-03-20
-  # 10.0.1 -> java version "10.0.1" 2018-04-17
-  # We need to match to the end of the line to prevent sed from printing the characters that do not match
-  JAVA_MAJOR_VERSION=$("$JAVA" -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
   if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
     KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=100M"
   else
