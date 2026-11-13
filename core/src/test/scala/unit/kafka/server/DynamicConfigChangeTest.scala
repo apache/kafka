@@ -558,6 +558,7 @@ class DynamicConfigChangeUnitTest {
     assertEquals(Seq(6), parse(configHandler, "6:102"))
     assertEquals(Seq(6), parse(configHandler, "6:102 "))
     assertEquals(Seq(6), parse(configHandler, " 6:102"))
+    assertEquals(Seq(6, 7), parse(configHandler, "6:102, 7:102"))
   }
 
   @Test
