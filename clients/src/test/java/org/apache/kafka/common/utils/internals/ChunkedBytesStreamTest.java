@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -33,6 +34,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.spy;
@@ -48,6 +50,16 @@ public class ChunkedBytesStreamTest {
         byte[] got = new byte[lengthGreaterThanInput];
         try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(input), supplier, 10, false)) {
             assertEquals(8, is.read(got, 0, got.length), "Should return 8 signifying end of input");
+        }
+    }
+
+    @Test
+    public void testMarkAndResetNotSupported() throws IOException {
+        byte[] data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+        // The underlying stream supports mark/reset, but ChunkedBytesStream must not claim support for it.
+        try (InputStream is = new ChunkedBytesStream(new ByteArrayInputStream(data), supplier, 4, false)) {
+            assertFalse(is.markSupported(), "ChunkedBytesStream must not advertise mark support");
+            assertThrows(IOException.class, is::reset, "reset should not be supported");
         }
     }
 
