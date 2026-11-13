@@ -200,6 +200,21 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
+      // Wait for the first regex resolution to bump the epoch before creating a matching topic.
+      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId("grp")
+          .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
+          .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
+          .setTopicPartitions(List.empty.asJava)
+      ).build()
+
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
+        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+          consumerGroupHeartbeatResponse.data.memberEpoch == 2
+      }, msg = s"Could not reconcile after the initial regex resolution. Last response $consumerGroupHeartbeatResponse.")
+
       // Create the topic.
       val topicId = createTopic(
         topic = "foo",
@@ -229,7 +244,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
 
       // Verify the response.
-      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
       // Delete the topic.
@@ -255,7 +270,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       }, msg = s"Could not get partitions revoked. Last response $consumerGroupHeartbeatResponse.")
 
       // Verify the response.
-      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(3, consumerGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
     } finally {
       admin.close()
