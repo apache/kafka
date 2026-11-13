@@ -130,7 +130,7 @@ public class Utils {
      * Decrements value by 1; returns null when reaching zero. This helper is
      * meant to be used with Map#compute.
      */
-    public static Integer decValue(String key, Integer value) {
+    public static Integer decValue(Object key, Integer value) {
         if (value == null) return null;
         return value == 1 ? null : value - 1;
     }
@@ -138,7 +138,7 @@ public class Utils {
     /**
      * Increments value by 1; This helper is meant to be used with Map#compute.
      */
-    public static Integer incValue(String key, Integer value) {
+    public static Integer incValue(Object key, Integer value) {
         return value == null ? 1 : value + 1;
     }
 
@@ -190,7 +190,7 @@ public class Utils {
     }
 
     /**
-     * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
+     * Converts a ConsumerProtocolAssignment to a map of topic id and partition set.
      *
      * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
      * @param metadataImage              The Metadata image.
@@ -363,22 +363,6 @@ public class Utils {
         String error
     ) throws InvalidRequestException {
         if (value == null || !value.isEmpty()) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is not null and non-empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    static void throwIfNotNullOrEmpty(
-        Collection<?> value,
-        String error
-    ) throws InvalidRequestException {
-        if (value != null && !value.isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }

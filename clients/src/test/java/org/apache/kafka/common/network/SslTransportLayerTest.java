@@ -44,6 +44,7 @@ import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -55,6 +56,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -83,6 +85,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1484,6 +1488,151 @@ public class SslTransportLayerTest {
         assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }
 
+    /**
+     * Tests that a client reports the disconnect at once when the peer sends part of a response and a close_notify in
+     * one write and no TCP FIN, as a proxy half-closing its TLS side does (RFC 8446 section 6.1).
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseNotifyAfterPartialResponseWithoutFinDisconnects(Args args) throws Exception {
+        // A response frame announcing 1000 bytes, of which only 100 arrive before the close_notify.
+        ByteBuffer partialResponse = ByteBuffer.allocate(104).putInt(1000).put(new byte[100]);
+        partialResponse.flip();
+
+        assertEquals(0, receiveFromCloseNotifyPeer(args, partialResponse, false));
+    }
+
+    /**
+     * Tests that a client delivers a full response that arrives with a close_notify and no TCP FIN, and reports the
+     * disconnect at once.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseNotifyAfterFullResponseWithoutFinDeliversResponseAndDisconnects(Args args) throws Exception {
+        ByteBuffer fullResponse = ByteBuffer.allocate(14).putInt(10).put(new byte[10]);
+        fullResponse.flip();
+
+        assertEquals(1, receiveFromCloseNotifyPeer(args, fullResponse, false));
+    }
+
+    /**
+     * Tests that a channel muted after receiving a full message that arrives with a close_notify and no TCP FIN, as
+     * SocketServer mutes a channel while it handles a request, stays open while muted and reports the disconnect at
+     * once when unmuted.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseNotifyAfterFullResponseWithoutFinDisconnectsOnUnmute(Args args) throws Exception {
+        ByteBuffer fullResponse = ByteBuffer.allocate(14).putInt(10).put(new byte[10]);
+        fullResponse.flip();
+
+        assertEquals(1, receiveFromCloseNotifyPeer(args, fullResponse, true));
+    }
+
+    /**
+     * Tests that a client delivers a zero-length message that arrives with a close_notify and no TCP FIN, and reports
+     * the disconnect at once.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseNotifyAfterZeroLengthResponseWithoutFinDeliversResponseAndDisconnects(Args args) throws Exception {
+        ByteBuffer zeroLengthResponse = ByteBuffer.allocate(4).putInt(0);
+        zeroLengthResponse.flip();
+
+        assertEquals(1, receiveFromCloseNotifyPeer(args, zeroLengthResponse, false));
+    }
+
+    /**
+     * Connects a client Selector to a TLS peer that writes {@code response} and a close_notify in a single write and
+     * keeps the TCP connection open, and verifies that the client reports the disconnect within 5 seconds. If
+     * {@code muteOnReceive} is set, the client mutes the channel for a while after the first completed receive and
+     * the disconnect is timed from the unmute.
+     *
+     * @return the number of receives the client completed
+     */
+    private int receiveFromCloseNotifyPeer(Args args, ByteBuffer response, boolean muteOnReceive) throws Exception {
+        String node = "0";
+        String peerId = "peer";
+        AtomicReference<SSLEngine> peerEngine = new AtomicReference<>();
+        TestSslChannelBuilder peerChannelBuilder = new TestSslChannelBuilder(ConnectionMode.SERVER) {
+            @Override
+            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine)
+                    throws IOException {
+                peerEngine.set(sslEngine);
+                return super.newTransportLayer(id, key, sslEngine);
+            }
+        };
+        peerChannelBuilder.configure(args.sslServerConfigs);
+        try (ServerSocketChannel peerServer = ServerSocketChannel.open();
+             Selector peerSelector = new Selector(100 * 5000, new Metrics(), TIME, "PeerMetricGroup",
+                 peerChannelBuilder, new LogContext())) {
+            peerServer.bind(new InetSocketAddress("localhost", 0));
+            createSelector(args.sslClientConfigs);
+            selector.connect(node, new InetSocketAddress("localhost", peerServer.socket().getLocalPort()),
+                BUFFER_SIZE, BUFFER_SIZE);
+            SocketChannel peerChannel = peerServer.accept();
+            peerChannel.configureBlocking(false);
+            peerSelector.register(peerId, peerChannel);
+            TestUtils.waitForCondition(() -> {
+                selector.poll(10);
+                peerSelector.poll(10);
+                return selector.isChannelReady(node) && peerSelector.isChannelReady(peerId);
+            }, TestUtils.DEFAULT_MAX_WAIT_MS, 1, () -> "TLS handshake did not complete");
+
+            // Bypass the peer's transport layer so that the response and the close_notify go out in a single write
+            // and the TCP connection stays open. The peer selector is not polled again.
+            SSLEngine engine = peerEngine.get();
+            ByteBuffer data = peerWrap(engine, response);
+            engine.closeOutbound();
+            ByteBuffer closeNotify = peerWrap(engine, ByteBuffer.allocate(0));
+            ByteBuffer both = ByteBuffer.allocate(data.remaining() + closeNotify.remaining())
+                .put(data)
+                .put(closeNotify);
+            both.flip();
+            peerWrite(peerChannel, both);
+
+            int completedReceives = 0;
+            long disconnectedAfterMs = -1;
+            long start = System.currentTimeMillis();
+            while (System.currentTimeMillis() - start < 10_000) {
+                selector.poll(50);
+                int receives = selector.completedReceives().size();
+                completedReceives += receives;
+                if (selector.disconnected().containsKey(node)) {
+                    disconnectedAfterMs = System.currentTimeMillis() - start;
+                    break;
+                }
+                if (muteOnReceive && receives > 0) {
+                    selector.mute(node);
+                    long unmuteAt = System.currentTimeMillis() + 500;
+                    while (System.currentTimeMillis() < unmuteAt) {
+                        selector.poll(50);
+                        // A muted channel closed by a read would be tracked as closing rather than disconnected.
+                        assertNotNull(selector.channel(node), "Channel closed while muted");
+                        assertNull(selector.closingChannel(node), "Channel closed while muted");
+                    }
+                    selector.unmute(node);
+                    start = System.currentTimeMillis();
+                }
+            }
+            assertTrue(disconnectedAfterMs >= 0, "Client did not report the disconnect");
+            assertTrue(disconnectedAfterMs < 5_000, "Disconnect took " + disconnectedAfterMs + " ms");
+            return completedReceives;
+        }
+    }
+
+    private static ByteBuffer peerWrap(SSLEngine engine, ByteBuffer src) throws Exception {
+        ByteBuffer out = ByteBuffer.allocate(engine.getSession().getPacketBufferSize() * 2);
+        engine.wrap(src, out);
+        out.flip();
+        return out;
+    }
+
+    private static void peerWrite(SocketChannel channel, ByteBuffer buffer) throws Exception {
+        while (buffer.hasRemaining())
+            channel.write(buffer);
+    }
+
     private Selector createSelector(Map<String, Object> sslClientConfigs) {
         return createSelector(sslClientConfigs, null, null, null);
     }
@@ -1859,5 +2008,53 @@ public class SslTransportLayerTest {
         assertEquals(7, sslTransportLayer.read(dsts, 1, 2));
         assertArrayEquals("Hel".getBytes(StandardCharsets.UTF_8), dsts[1].array());
         assertArrayEquals("lo, ".getBytes(StandardCharsets.UTF_8), dsts[2].array());
+    }
+
+    @Test
+    public void testScatteringReadReturnsBytesReadBeforeEof() throws IOException {
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                mock(SelectionKey.class),
+                mock(SSLEngine.class),
+                mock(ChannelMetadataRegistry.class)
+        ));
+
+        ByteBuffer mockSocket = ByteBuffer.wrap("Hel".getBytes(StandardCharsets.UTF_8));
+        when(sslTransportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            if (!mockSocket.hasRemaining())
+                throw new EOFException("Peer sent close_notify");
+            ByteBuffer buf = invocation.getArgument(0);
+            int read = Math.min(buf.remaining(), mockSocket.remaining());
+            for (int i = 0; i < read; i++) {
+                buf.put(mockSocket.get());
+            }
+            return read;
+        });
+        ByteBuffer[] dsts = {ByteBuffer.allocate(3), ByteBuffer.allocate(4)};
+
+        assertEquals(3, sslTransportLayer.read(dsts, 0, 2));
+        assertArrayEquals("Hel".getBytes(StandardCharsets.UTF_8), dsts[0].array());
+        assertThrows(EOFException.class, () -> sslTransportLayer.read(dsts, 1, 1));
+    }
+
+    @Test
+    public void testHasBytesBufferedOnceInboundIsDone() {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                mock(SelectionKey.class),
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        doReturn(true).when(sslTransportLayer).ready();
+        assertFalse(sslTransportLayer.hasBytesBuffered());
+
+        // Set by any read that unwraps a close_notify, including one that ends in an exception.
+        when(sslEngine.isInboundDone()).thenReturn(true);
+        assertTrue(sslTransportLayer.hasBytesBuffered());
+
+        // Not after a local close or a handshake failure, which also close the engine's inbound side.
+        doReturn(false).when(sslTransportLayer).ready();
+        assertFalse(sslTransportLayer.hasBytesBuffered());
     }
 }

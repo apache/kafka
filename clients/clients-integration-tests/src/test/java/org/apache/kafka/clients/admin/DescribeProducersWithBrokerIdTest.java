@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -61,26 +62,23 @@ public class DescribeProducersWithBrokerIdTest {
         clusterInstance.createTopic(TOPIC_NAME, NUM_PARTITIONS, REPLICATION_FACTOR);
     }
 
-    private List<Integer> getReplicaBrokerIds(Admin admin) throws Exception {
-        var topicDescription = admin.describeTopics(List.of(TOPIC_PARTITION.topic())).allTopicNames().get().get(TOPIC_PARTITION.topic());
-        return topicDescription.partitions().get(TOPIC_PARTITION.partition()).replicas().stream()
-            .map(Node::id)
-            .toList();
+    private static TopicPartitionInfo partitionInfo(Admin admin) throws Exception {
+        return admin.describeTopics(List.of(TOPIC_NAME)).allTopicNames().get()
+            .get(TOPIC_NAME).partitions().get(TOPIC_PARTITION.partition());
     }
-    
-    private int getNonReplicaBrokerId(Admin admin) throws Exception {
-        var replicaBrokerIds = getReplicaBrokerIds(admin);
+
+    private int getNonReplicaBrokerId(TopicPartitionInfo partitionInfo) {
+        var replicaBrokerIds = partitionInfo.replicas().stream().map(Node::id).toList();
         return clusterInstance.brokerIds().stream()
             .filter(id -> !replicaBrokerIds.contains(id))
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("No non-replica broker found"));
     }
-    
-    private int getFollowerBrokerId(Admin admin) throws Exception {
-        var replicaBrokerIds = getReplicaBrokerIds(admin);
-        var leaderBrokerId = clusterInstance.getLeaderBrokerId(TOPIC_PARTITION);
-        return replicaBrokerIds.stream()
-            .filter(id -> id != leaderBrokerId)
+
+    private static int getFollowerBrokerId(TopicPartitionInfo partitionInfo) {
+        return partitionInfo.replicas().stream()
+            .map(Node::id)
+            .filter(id -> id != partitionInfo.leader().id())
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("No follower found for partition " + TOPIC_PARTITION));
     }
@@ -93,7 +91,7 @@ public class DescribeProducersWithBrokerIdTest {
             
             var stateWithExplicitLeader = admin.describeProducers(
                 List.of(TOPIC_PARTITION), 
-                new DescribeProducersOptions().brokerId(clusterInstance.getLeaderBrokerId(TOPIC_PARTITION))
+                new DescribeProducersOptions().brokerId(partitionInfo(admin).leader().id())
             ).partitionResult(TOPIC_PARTITION).get();
             
             var stateWithDefaultRouting = admin.describeProducers(
@@ -114,7 +112,7 @@ public class DescribeProducersWithBrokerIdTest {
 
             var followerState = admin.describeProducers(
                 List.of(TOPIC_PARTITION), 
-                new DescribeProducersOptions().brokerId(getFollowerBrokerId(admin))
+                new DescribeProducersOptions().brokerId(getFollowerBrokerId(partitionInfo(admin)))
             ).partitionResult(TOPIC_PARTITION).get();
             
             var leaderState = admin.describeProducers(
@@ -136,7 +134,7 @@ public class DescribeProducersWithBrokerIdTest {
             TestUtils.assertFutureThrows(NotLeaderOrFollowerException.class, 
                 admin.describeProducers(
                     List.of(TOPIC_PARTITION), 
-                    new DescribeProducersOptions().brokerId(getNonReplicaBrokerId(admin))
+                    new DescribeProducersOptions().brokerId(getNonReplicaBrokerId(partitionInfo(admin)))
                 ).partitionResult(TOPIC_PARTITION)); 
         }
     }

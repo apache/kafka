@@ -269,7 +269,7 @@ public class ShareFetchCollectorTest {
     @MethodSource("testErrorInInitializeSource")
     public void testErrorInInitializeDoesNotLoseRecordsFromEarlierPartitions(RuntimeException expectedException) {
         buildDependencies();
-        subscriptions.subscribeToShareGroup(Set.of(topicAPartition0.topic()));
+        subscriptions.subscribe(Set.of(topicAPartition0.topic()));
         subscriptions.assignFromSubscribed(Set.of(topicAPartition0.topicPartition(), topicAPartition1.topicPartition()));
 
         // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization for partition 1 only.
@@ -442,7 +442,7 @@ public class ShareFetchCollectorTest {
     }
 
     private void subscribeAndAssign(TopicIdPartition tp) {
-        subscriptions.subscribeToShareGroup(Set.of(tp.topic()));
+        subscriptions.subscribe(Set.of(tp.topic()));
         subscriptions.assignFromSubscribed(Set.of(tp.topicPartition()));
     }
 

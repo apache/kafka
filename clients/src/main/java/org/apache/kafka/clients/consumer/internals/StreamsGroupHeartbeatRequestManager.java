@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -183,6 +184,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 if (assignmentChanged
                     || taskOffsetIntervalPassed(now)
                     || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
+                    || hasAtLeastOneHotRestoringActiveTask(reconciledAssignment.activeTasks(), taskOffsetSum, taskEndOffsetSum)
+                    || hasAtLeastOneActiveTaskStartedOrFinishedRestoring(reconciledAssignment.activeTasks(), taskOffsetSum)
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
@@ -221,26 +224,57 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
             final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
         ) {
-            if (warmupTasks.isEmpty()) {
+            return warmupTasks.stream().anyMatch(taskId -> isHot(taskId, taskOffsetSum, taskEndOffsetSum));
+        }
+
+        /**
+         * Whether an active task is restoring with a lag within the acceptable recovery lag: a client reports the
+         * offsets of an active task only while restoring it, so a running active task is never hot here.
+         */
+        private boolean hasAtLeastOneHotRestoringActiveTask(
+            final Set<StreamsRebalanceData.TaskId> activeTasks,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
+            return activeTasks.stream().anyMatch(taskId -> isHot(taskId, taskOffsetSum, taskEndOffsetSum));
+        }
+
+        private boolean isHot(
+            final StreamsRebalanceData.TaskId taskId,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
+            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
+
+            final Long offset = taskOffsetSum.get(taskId);
+            final Long endOffset = taskEndOffsetSum.get(taskId);
+
+            // offset and endOffset might not be known,
+            // or be capped at MAX_VALUE due to overflow
+            if (offset == null || offset == Long.MAX_VALUE
+                || endOffset == null || endOffset == Long.MAX_VALUE) {
                 return false;
             }
 
-            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
+            return endOffset - offset <= acceptableRecoveryLag;
+        }
 
-            return warmupTasks.stream()
-                .anyMatch(taskId -> {
-                    final Long offset = taskOffsetSum.get(taskId);
-                    final Long endOffset = taskEndOffsetSum.get(taskId);
+        /**
+         * Whether an active task is in exactly one of the last sent task offsets and the current ones: a client reports
+         * the offsets of an active task only while restoring it, so the task finished restoring, or started restoring
+         * again without an assignment change, as after a {@code TaskCorruptedException}.
+         */
+        private boolean hasAtLeastOneActiveTaskStartedOrFinishedRestoring(
+            final Set<StreamsRebalanceData.TaskId> activeTasks,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum
+        ) {
+            final Map<StreamsRebalanceData.TaskId, Long> lastSentTaskOffsets = lastSentFields.taskOffsets;
+            if (lastSentTaskOffsets == null) {
+                return false;
+            }
 
-                    // offset and endOffset might not be known,
-                    // or be capped at MAX_VALUE due to overflow
-                    if (offset == null || offset == Long.MAX_VALUE
-                        || endOffset == null || endOffset == Long.MAX_VALUE) {
-                        return false;
-                    }
-
-                    return endOffset - offset <= acceptableRecoveryLag;
-                });
+            return activeTasks.stream()
+                .anyMatch(taskId -> lastSentTaskOffsets.containsKey(taskId) != taskOffsetSum.containsKey(taskId));
         }
 
         private static List<StreamsGroupHeartbeatRequestData.TaskIds> fromStreamsToHeartbeatRequest(final Set<StreamsRebalanceData.TaskId> tasks) {
@@ -661,6 +695,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
         final StreamsGroupHeartbeatResponseData data = response.data();
+
+        final List<String> unknownStatuses = unknownStatuses(data.status());
+        if (!unknownStatuses.isEmpty()) {
+            final String errorMessage = String.format(
+                "The group coordinator returned status %s in the Streams group heartbeat response, which this client "
+                    + "cannot interpret; it knows the status codes %s. A status code must not be sent to a client that "
+                    + "cannot interpret it, so this is a bug on the group coordinator.",
+                unknownStatuses,
+                StreamsGroupHeartbeatResponse.Status.knownCodes()
+            );
+            logger.error(errorMessage);
+            heartbeatRequestState.onFailedAttempt(currentTimeMs);
+            heartbeatState.reset();
+            handleFatalFailure(new KafkaException(errorMessage));
+            membershipManager.onFatalHeartbeatFailure();
+            return;
+        }
+
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
@@ -695,6 +747,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private static List<String> unknownStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        if (statuses == null) {
+            return List.of();
+        }
+        return statuses.stream()
+            .filter(status -> !StreamsGroupHeartbeatResponse.Status.isKnownCode(status.statusCode()))
+            .sorted(Comparator.comparing(StreamsGroupHeartbeatResponseData.Status::statusCode))
+            .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+            .collect(Collectors.toList());
     }
 
     private void maybeLogStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {

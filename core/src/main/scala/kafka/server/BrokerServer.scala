@@ -48,7 +48,7 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, MetadataVersion, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, QuotaConfig}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
@@ -59,7 +59,7 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
-import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
+import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, InterBrokerNetworkClientFactory, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -74,7 +74,7 @@ import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -149,8 +149,6 @@ class BrokerServer(
   @volatile var metadataCache: KRaftMetadataCache = _
 
   var quotaManagers: QuotaFactory.QuotaManagers = _
-
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
@@ -299,8 +297,6 @@ class BrokerServer(
         sharedServer.socketFactory,
         connectionDisconnectListeners)
 
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
-
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
           config.effectiveAdvertisedBrokerListeners.asJava).
             withWildcardHostnamesResolved().
@@ -315,12 +311,13 @@ class BrokerServer(
         time,
         metrics,
         s"broker-${config.nodeId}-",
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        () => requestHeaderVersion(_.alterPartitionRequestHeaderVersion)
       )
       alterPartitionManager.start()
 
       val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-      val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnNetworkClient = InterBrokerNetworkClientFactory.create("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
       val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
         config,
         addPartitionsToTxnNetworkClient,
@@ -418,7 +415,8 @@ class BrokerServer(
         config.brokerId,
         time,
         () => lifecycleManager.brokerEpoch,
-        clientToControllerChannelManager
+        clientToControllerChannelManager,
+        () => requestHeaderVersion(_.allocateProducerIdsRequestHeaderVersion)
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
@@ -550,7 +548,8 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager,
+          quotaManagers.userClientQuotaUpdaters(),
+          (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala),
         ),
         new DynamicTopicClusterQuotaPublisher(
           clusterId,
@@ -675,10 +674,19 @@ class BrokerServer(
     }
   }
 
+  private def requestHeaderVersion(headerVersion: MetadataVersion => Short): Short = {
+    try {
+      headerVersion(metadataCache.metadataVersion())
+    } catch {
+      // The metadata version is unknown until the first metadata image is loaded.
+      case _: IllegalStateException => headerVersion(MetadataVersion.MINIMUM_VERSION)
+    }
+  }
+
   private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
     new NetworkPartitionMetadataClient(
       metadataCache,
-      () => NetworkUtils.buildNetworkClient(
+      () => InterBrokerNetworkClientFactory.create(
         "NetworkPartitionMetadataClient",
         config,
         metrics,
@@ -760,7 +768,7 @@ class BrokerServer(
     if (className.nonEmpty) {
       if (className.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
-          NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+          InterBrokerNetworkClientFactory.create("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer
@@ -784,7 +792,7 @@ class BrokerServer(
     if (className.nonEmpty) {
       if (className.equals(classOf[DefaultShareGroupDLQManager].getName)) {
         DefaultShareGroupDLQManager.instance(
-          NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
+          InterBrokerNetworkClientFactory.create("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer,

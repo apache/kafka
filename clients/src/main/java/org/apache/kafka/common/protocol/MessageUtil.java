@@ -40,7 +40,20 @@ public final class MessageUtil {
 
     public static final int MAX_ARRAY_LENGTH = 1_000_000;
 
+    private static volatile int maxArrayLength = MAX_ARRAY_LENGTH;
+
     public static final int MAX_TAGGED_FIELD_COUNT = 10_000;
+
+    public static int maxArrayLength() {
+        return maxArrayLength;
+    }
+
+    public static void setMaxArrayLength(int newMaxArrayLength) {
+        if (newMaxArrayLength < 1) {
+            throw new IllegalArgumentException("maxArrayLength must be at least 1, but was " + newMaxArrayLength);
+        }
+        maxArrayLength = newMaxArrayLength;
+    }
 
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's

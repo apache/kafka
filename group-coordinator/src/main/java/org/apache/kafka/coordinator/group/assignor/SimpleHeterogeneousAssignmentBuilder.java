@@ -61,7 +61,7 @@ public class SimpleHeterogeneousAssignmentBuilder {
     private final Set<Uuid> subscribedTopicIds;
 
     /**
-     * The list of members in the consumer group.
+     * The list of members in the share group.
      */
     private final List<String> memberIds;
 
@@ -249,9 +249,11 @@ public class SimpleHeterogeneousAssignmentBuilder {
         private final Map<Integer, Set<Integer>> finalAssignmentByMember;
 
         /**
-         * The desired sharing for each target partition.
-         * For entirely balanced assignment, we would expect (numTargetPartitions / numGroupMembers) partitions per member, rounded upwards.
-         * That can be expressed as:  Math.ceil(numTargetPartitions / (double) numGroupMembers)
+         * The desired sharing for each target partition, which is the number of members that the
+         * partition is assigned to.
+         * For entirely balanced assignment, we would expect
+         * (numSubscribedMembers / numTargetPartitions) members per partition, rounded upwards.
+         * That can be expressed as:  Math.ceil(numSubscribedMembers / (double) numTargetPartitions)
          */
         private final Integer desiredSharing;
 

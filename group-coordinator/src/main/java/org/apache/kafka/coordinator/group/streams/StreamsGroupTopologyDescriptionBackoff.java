@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * description push. An entry is armed when the broker decides to set
  * {@code TopologyDescriptionRequired=true} on a heartbeat or after a transient plugin
  * failure; consecutive arms at the same topology epoch advance the attempt count and
- * delegate to {@link ExponentialBackoff} for the next delay . Successful pushes, permanent plugin failures,
- * and topology-epoch advances clear the entry.
+ * delegate to {@link ExponentialBackoff} for the next delay. Successful pushes, permanent plugin
+ * failures, and topology-epoch advances clear the entry.
  */
 public class StreamsGroupTopologyDescriptionBackoff {
 

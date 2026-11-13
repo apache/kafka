@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -40,9 +41,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -115,8 +117,10 @@ public class UncommittedBytesLimitIntegrationTest {
         CLUSTER.deleteAllTopics();
     }
 
-    @Test
-    public void shouldProcessRecordsWhenProcessorInitWritesExceedUncommittedBytesLimit() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldProcessRecordsWhenProcessorInitWritesExceedUncommittedBytesLimit(final boolean processingThreadsEnabled) throws Exception {
+        streamsConfig.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         streamsConfig.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, INIT_WRITE_BYTES / 4L);
         startApplication(true);
 
@@ -127,8 +131,10 @@ public class UncommittedBytesLimitIntegrationTest {
         assertEquals(List.of(KeyValue.pair("k", "v")), results);
     }
 
-    @Test
-    public void shouldProcessRecordsWhenUncommittedBytesLimitIsBelowEmptyStoreOverhead() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldProcessRecordsWhenUncommittedBytesLimitIsBelowEmptyStoreOverhead(final boolean processingThreadsEnabled) throws Exception {
+        streamsConfig.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         streamsConfig.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, 1L);
         startApplication(false);
 
