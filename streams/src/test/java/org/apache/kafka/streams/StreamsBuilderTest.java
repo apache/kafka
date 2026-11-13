@@ -81,6 +81,8 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -2355,6 +2357,40 @@ public class StreamsBuilderTest {
         builder.table("topic");
         builder.table("topic");
         assertThrows(TopologyException.class, builder::build);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "false,false,false", "false,false,true", "false,true,false", "false,true,true",
+        "true,false,false", "true,false,true", "true,true,false", "true,true,true"
+    })
+    public void shouldAllowGlobalTableAndRegularSourceOnSameTopic(final boolean globalFirst,
+                                                                 final boolean localTable,
+                                                                 final boolean optimize) {
+        if (globalFirst) {
+            builder.globalTable("topic", Consumed.as("global"), Materialized.as("global-store"));
+        }
+        if (localTable) {
+            builder.table("topic", Consumed.as("local"), Materialized.as("local-store"));
+        } else {
+            builder.stream("topic", Consumed.as("local"));
+        }
+        if (!globalFirst) {
+            builder.globalTable("topic", Consumed.as("global"), Materialized.as("global-store"));
+        }
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, optimize ? StreamsConfig.OPTIMIZE : StreamsConfig.NO_OPTIMIZATION);
+        final Topology topology = builder.build(props);
+        final InternalTopologyBuilder internalBuilder =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
+
+        assertEquals("local" + (localTable ? "-source" : ""), internalBuilder.buildTopology().source("topic").name());
+        assertEquals("global-source", internalBuilder.buildGlobalStateTopology().source("topic").name());
+        assertEquals(1, topology.describe().subtopologies().size());
+        assertEquals(1, topology.describe().globalStores().size());
+        if (localTable && optimize) {
+            assertEquals("topic", internalBuilder.buildTopology().storeToChangelogTopic().get("local-store"));
+            assertEquals("local-store", internalBuilder.storeForChangelogTopic("topic"));
+        }
     }
 
     @Test
