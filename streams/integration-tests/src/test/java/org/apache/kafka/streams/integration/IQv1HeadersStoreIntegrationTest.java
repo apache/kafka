@@ -252,6 +252,7 @@ public class IQv1HeadersStoreIntegrationTest {
         // globalTable() does not reprocess the records on restore, but copies them, together with their headers,
         // into the store (see RecordConverters.rawValueToHeadersValue()). So, unlike the processor, the restore
         // keeps the headers of the source records. This pins down the current behavior.
+        // TODO: update the expected headers once we address https://issues.apache.org/jira/browse/KAFKA-21493
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), properties)) {
