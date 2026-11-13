@@ -295,9 +295,11 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         try (LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
             completeHeartbeatThrowingWhileHandling(successfulResponse, unexpected);
 
-            assertUnexpectedErrorLogged(logAppender);
+            assertErrorLogged(logAppender, "Unexpected error while handling " + heartbeatRequestManager.heartbeatRequestName());
         }
-        ensureFatalUnexpectedError(unexpected);
+        assertErrorEventCause(unexpected);
+        verify(membershipManager).transitionToFatal();
+        verify(membershipManager).onHeartbeatFailure(false);
         assertFalse(heartbeatRequestState.requestInFlight(), "The request must not be left in flight");
     }
 
@@ -314,13 +316,10 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         try (LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
             completeHeartbeatThrowingWhileHandling(true, unexpected);
 
-            assertUnexpectedErrorLogged(logAppender);
-            assertTrue(logAppender.getMessages(Level.ERROR).stream()
-                .anyMatch(m -> m.contains("Unexpected error while failing the member")));
+            assertErrorLogged(logAppender, "Unexpected error while handling " + heartbeatRequestManager.heartbeatRequestName());
+            assertErrorLogged(logAppender, "Unexpected error while failing the member");
         }
-        ArgumentCaptor<ErrorEvent> errorEventCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
-        verify(backgroundEventHandler).add(errorEventCaptor.capture());
-        assertSame(unexpected, errorEventCaptor.getValue().error().getCause());
+        assertErrorEventCause(unexpected);
     }
 
     /**
@@ -345,20 +344,20 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         }
     }
 
-    private void assertUnexpectedErrorLogged(LogCaptureAppender logAppender) {
-        assertTrue(logAppender.getMessages(Level.ERROR).stream()
-            .anyMatch(m -> m.contains("Unexpected error while handling " + heartbeatRequestManager.heartbeatRequestName())),
-                "Unexpected error while handling HB response should be logged");
+    private static void assertErrorLogged(LogCaptureAppender logAppender, String expectedMessage) {
+        assertTrue(logAppender.getMessages(Level.ERROR).stream().anyMatch(m -> m.contains(expectedMessage)),
+            "Missing expected ERROR log containing: " + expectedMessage);
     }
 
-    private void ensureFatalUnexpectedError(Throwable expectedCause) {
+    /**
+     * Verifies that a single error event was propagated to the application, wrapping the given cause.
+     */
+    private void assertErrorEventCause(Throwable expectedCause) {
         ArgumentCaptor<ErrorEvent> errorEventCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
         verify(backgroundEventHandler).add(errorEventCaptor.capture());
         Throwable error = errorEventCaptor.getValue().error();
         assertInstanceOf(KafkaException.class, error);
         assertSame(expectedCause, error.getCause());
-        verify(membershipManager).transitionToFatal();
-        verify(membershipManager).onHeartbeatFailure(false);
     }
 
     @ParameterizedTest

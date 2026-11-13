@@ -2410,12 +2410,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             completeHeartbeatThrowingWhileHandling(heartbeatRequestManager, successfulResponse, unexpected);
 
-            assertTrue(logAppender.getMessages(Level.ERROR).stream()
-                .anyMatch(m -> m.contains("Unexpected error while handling StreamsGroupHeartbeatRequest")));
-            final ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
-            verify(backgroundEventHandler).add(errorEvent.capture());
-            assertInstanceOf(KafkaException.class, errorEvent.getValue().error());
-            assertSame(unexpected, errorEvent.getValue().error().getCause());
+            assertErrorLogged(logAppender, "Unexpected error while handling StreamsGroupHeartbeatRequest");
+            assertErrorEventCause(unexpected);
             verify(membershipManager).transitionToFatal();
             verify(membershipManager).onFatalHeartbeatFailure();
             // The unexpected error resets the heartbeat state. On a request failure, onFailure has
@@ -2445,14 +2441,25 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             completeHeartbeatThrowingWhileHandling(heartbeatRequestManager, true, unexpected);
 
-            assertTrue(logAppender.getMessages(Level.ERROR).stream()
-                .anyMatch(m -> m.contains("Unexpected error while handling StreamsGroupHeartbeatRequest")));
-            assertTrue(logAppender.getMessages(Level.ERROR).stream()
-                .anyMatch(m -> m.contains("Unexpected error while failing the member")));
-            final ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
-            verify(backgroundEventHandler).add(errorEvent.capture());
-            assertSame(unexpected, errorEvent.getValue().error().getCause());
+            assertErrorLogged(logAppender, "Unexpected error while handling StreamsGroupHeartbeatRequest");
+            assertErrorLogged(logAppender, "Unexpected error while failing the member");
+            assertErrorEventCause(unexpected);
         }
+    }
+
+    private static void assertErrorLogged(final LogCaptureAppender logAppender, final String expectedMessage) {
+        assertTrue(logAppender.getMessages(Level.ERROR).stream().anyMatch(m -> m.contains(expectedMessage)),
+            "Missing expected ERROR log containing: " + expectedMessage);
+    }
+
+    /**
+     * Verifies that a single error event was propagated to the application, wrapping the given cause.
+     */
+    private void assertErrorEventCause(final Throwable expectedCause) {
+        final ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEvent.capture());
+        assertInstanceOf(KafkaException.class, errorEvent.getValue().error());
+        assertSame(expectedCause, errorEvent.getValue().error().getCause());
     }
 
     /**
