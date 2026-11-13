@@ -49,6 +49,11 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * HTTP(S) calls ({@link RefreshingHttpsJwksVerificationKeyResolver}), we only want to create
  * a new instance for each particular set of configuration. Because each set of configuration
  * may have multiple instances, we want to reuse the single instance.
+ *
+ * <p>The resolver returned from {@link #get(Map, String, List)} is reference counted: the caller
+ * must call {@link CloseableVerificationKeyResolver#configure(Map, String, List)} before use and
+ * {@link CloseableVerificationKeyResolver#close()} when finished with it so that the underlying
+ * resolver is initialized on first use and its resources are released when the last user closes it.
  */
 public class VerificationKeyResolverFactory {
 
@@ -65,9 +70,14 @@ public class VerificationKeyResolverFactory {
                     configs,
                     saslMechanism,
                     jaasConfigEntries
-                )
+                ),
+                k
             )
         );
+    }
+
+    private static synchronized void remove(VerificationKeyResolverKey cacheKey) {
+        CACHE.remove(cacheKey);
     }
 
     static CloseableVerificationKeyResolver create(Map<String, ?> configs,
@@ -75,10 +85,9 @@ public class VerificationKeyResolverFactory {
                                                    List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
-        CloseableVerificationKeyResolver resolver;
 
         if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            resolver = new JwksFileVerificationKeyResolver();
+            return new JwksFileVerificationKeyResolver();
         } else {
             long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
             JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
@@ -101,11 +110,8 @@ public class VerificationKeyResolverFactory {
                 refreshIntervalMs,
                 cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS),
                 cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS));
-            resolver = new RefreshingHttpsJwksVerificationKeyResolver(refreshingHttpsJwks);
+            return new RefreshingHttpsJwksVerificationKeyResolver(refreshingHttpsJwks);
         }
-
-        resolver.configure(configs, saslMechanism, jaasConfigEntries);
-        return resolver;
     }
 
     /**
@@ -161,10 +167,13 @@ public class VerificationKeyResolverFactory {
 
         private final CloseableVerificationKeyResolver delegate;
 
+        private final VerificationKeyResolverKey cacheKey;
+
         private final AtomicInteger count = new AtomicInteger(0);
 
-        public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate) {
+        public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate, VerificationKeyResolverKey cacheKey) {
             this.delegate = delegate;
+            this.cacheKey = cacheKey;
         }
 
         @Override
@@ -180,8 +189,12 @@ public class VerificationKeyResolverFactory {
 
         @Override
         public void close() throws IOException {
-            if (count.decrementAndGet() == 0)
+            if (count.decrementAndGet() == 0) {
+                // Drop the cache entry so that a later get() with the same configuration builds a new
+                // resolver rather than resurrecting this closed one.
+                remove(cacheKey);
                 delegate.close();
+            }
         }
     }
 }
