@@ -33,6 +33,7 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
     private final Time time;
     private final long startNs;
     private final long startTimestampMs;
+    private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
     private final Set<MeteredIterator> openIterators;
     private final LongAdder numOpenIterators;
 
@@ -57,6 +58,11 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
     @Override
     public long startTimestamp() {
         return startTimestampMs;
+    }
+
+    @Override
+    public long sequenceNumber() {
+        return sequenceNumber;
     }
 
     @Override
