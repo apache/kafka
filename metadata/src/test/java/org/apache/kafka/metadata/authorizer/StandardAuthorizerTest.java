@@ -35,6 +35,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -200,6 +202,10 @@ public class StandardAuthorizerTest {
     }
 
     private StandardAuthorizer createAndInitializeStandardAuthorizer(Map<String, Object> configs) {
+        return createAndInitializeStandardAuthorizer(configs, metrics);
+    }
+
+    private StandardAuthorizer createAndInitializeStandardAuthorizer(Map<String, Object> configs, Metrics metrics) {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(configs);
         authorizer.withPluginMetrics(new PluginMetricsImpl(metrics, Map.of()));
@@ -693,6 +699,44 @@ public class StandardAuthorizerTest {
                 List.of(newAction(READ, TOPIC, "green"))));
         // StandardAuthorizer has 4 metrics
         assertEquals(5, metrics.metrics().size());
+    }
+
+    @Test
+    public void testAuthorizationRateMetrics() throws Exception {
+        MockTime time = new MockTime();
+        try (Metrics rateMetrics = new Metrics(time)) {
+            StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(Map.of(), rateMetrics);
+            KafkaMetric allowedRate = rateMetrics.metric(rateMetrics.metricName("authorization-allowed-rate-per-minute", "plugins", "", Map.of()));
+            KafkaMetric deniedRate = rateMetrics.metric(rateMetrics.metricName("authorization-denied-rate-per-minute", "plugins", "", Map.of()));
+            KafkaMetric requestRate = rateMetrics.metric(rateMetrics.metricName("authorization-request-rate-per-minute", "plugins", "", Map.of()));
+            assertEquals(0.0, allowedRate.metricValue());
+            assertEquals(0.0, deniedRate.metricValue());
+            assertEquals(0.0, requestRate.metricValue());
+
+            List<StandardAclWithId> acls = List.of(
+                withId(new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", ALL, ALLOW)),
+                withId(new StandardAcl(TOPIC, "bar", LITERAL, "User:alice", "*", READ, DENY)));
+
+            acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
+
+            assertEquals(List.of(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
+                newRequestContext("alice"),
+                List.of(
+                    newAction(READ, TOPIC, "foo"),
+                    newAction(READ, TOPIC, "bar"),
+                    newAction(WRITE, TOPIC, "foo"))));
+
+            // The initial rate window is 30 seconds, so each action contributes 2 per minute.
+            assertEquals(4.0, allowedRate.metricValue());
+            assertEquals(2.0, deniedRate.metricValue());
+            assertEquals(6.0, requestRate.metricValue());
+
+            // All samples expire after two 30-second windows without new authorizations.
+            time.sleep(TimeUnit.MINUTES.toMillis(1));
+            assertEquals(0.0, allowedRate.metricValue());
+            assertEquals(0.0, deniedRate.metricValue());
+            assertEquals(0.0, requestRate.metricValue());
+        }
     }
 
     @Test
