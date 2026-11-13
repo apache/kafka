@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.common.runtime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -69,6 +70,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     private final Map<String, ExecutorTask<?>> tasks = new HashMap<>();
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
+    private final List<String> cancelledTasks = new ArrayList<>();
 
     @Override
     public <R> boolean schedule(
@@ -92,7 +94,13 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     @Override
     public void cancel(String key) {
-        tasks.remove(key);
+        if (tasks.remove(key) != null) {
+            cancelledTasks.add(key);
+        }
+    }
+
+    public List<String> cancelledTasks() {
+        return List.copyOf(cancelledTasks);
     }
 
     public List<ExecutorResult<T>> poll() {
@@ -103,5 +111,18 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
         queue.clear();
         return results;
+    }
+
+    public ExecutorResult<T> poll(String key) {
+        Iterator<ExecutorTask<?>> it = queue.iterator();
+        while (it.hasNext()) {
+            ExecutorTask<?> task = it.next();
+            if (task.key.equals(key)) {
+                it.remove();
+                if (!tasks.remove(task.key, task)) continue;
+                return new ExecutorResult<>(task.key, task.execute());
+            }
+        }
+        return null;
     }
 }

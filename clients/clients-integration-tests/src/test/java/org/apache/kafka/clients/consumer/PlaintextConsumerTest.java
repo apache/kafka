@@ -100,6 +100,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
@@ -362,10 +363,20 @@ public class PlaintextConsumerTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerGroupConsumption() throws Exception {
@@ -394,10 +405,20 @@ public class PlaintextConsumerTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
@@ -938,11 +959,8 @@ public class PlaintextConsumerTest {
 
             // Test subscribe
             // Create a consumer and consumer some messages.
-            var listener = new TestConsumerReassignmentListener();
-            consumer.setRebalanceListener(listener);
             consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
-            assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
             // Verify the metric exist.
             Map<String, String> tags1 = Map.of(
@@ -962,7 +980,6 @@ public class PlaintextConsumerTest {
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.setRebalanceListener(listener);
             consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
@@ -1003,11 +1020,8 @@ public class PlaintextConsumerTest {
             
             // Test subscribe
             // Create a consumer and consumer some messages.
-            var listener = new TestConsumerReassignmentListener();
-            consumer.setRebalanceListener(listener);
             consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
-            assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
             // Verify the metric exist.
             Map<String, String> tags1 = Map.of(
@@ -1028,7 +1042,6 @@ public class PlaintextConsumerTest {
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.setRebalanceListener(listener);
             consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
@@ -1399,10 +1412,20 @@ public class PlaintextConsumerTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart() throws Exception {

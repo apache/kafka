@@ -207,6 +207,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
                  enable_assignment_batching=None,
+                 enable_assignment_offload=None,
                  share_version=None
                  ):
         """
@@ -272,6 +273,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263. If not specified, defaults to True.
+        :param enable_assignment_offload: When true, enables assignor offloading introduced in KIP-1263. If not specified, defaults to True.
         :param share_version: When set, bootstraps the cluster with --feature share.version=<value> (KIP-932/KIP-1191).
         """
 
@@ -309,6 +311,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if enable_assignment_batching is None:
                 enable_assignment_batching = True
         self.enable_assignment_batching = enable_assignment_batching
+
+        # Set enable_assignment_offload based on context and arguments.
+        # If not specified, defaults to true.
+        if enable_assignment_offload is None:
+            arg_name = 'enable_assignment_offload'
+            if context.injected_args is not None:
+                enable_assignment_offload = context.injected_args.get(arg_name)
+            if enable_assignment_offload is None:
+                enable_assignment_offload = context.globals.get(arg_name)
+            if enable_assignment_offload is None:
+                enable_assignment_offload = True
+        self.enable_assignment_offload = enable_assignment_offload
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -361,6 +375,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
                     use_transactions_v2=self.use_transactions_v2,
                     enable_assignment_batching=self.enable_assignment_batching,
+                    enable_assignment_offload=self.enable_assignment_offload,
                     share_version=self.share_version
                 )
                 self.controller_quorum = self.isolated_controller_quorum
@@ -789,6 +804,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             override_configs[config_property.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
             override_configs[config_property.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
             override_configs[config_property.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
+
+        if self.enable_assignment_offload:
+            # Assignor offloading is enabled by default in Kafka
+            pass
+        else:
+            override_configs[config_property.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE] = "false"
+            override_configs[config_property.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE] = "false"
+            override_configs[config_property.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE] = "false"
 
         #update template configs with test override configs
         configs.update(override_configs)

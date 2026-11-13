@@ -139,16 +139,27 @@ class OffsetValidationTest(VerifiableConsumerTest):
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=consumer_group.all_group_protocols,
-        enable_assignment_batching=[True]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False],
+        enable_assignment_offload=[False, True]
     )
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=[consumer_group.consumer_group_protocol],
-        enable_assignment_batching=[False]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True, enable_assignment_offload=True):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -396,16 +407,27 @@ class OffsetValidationTest(VerifiableConsumerTest):
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=consumer_group.all_group_protocols,
-        enable_assignment_batching=[True]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        enable_autocommit=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False],
+        enable_assignment_offload=[False, True]
     )
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True],
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=[consumer_group.consumer_group_protocol],
-        enable_assignment_batching=[False]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True, enable_assignment_offload=True):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
@@ -496,14 +518,23 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=consumer_group.all_group_protocols,
-        enable_assignment_batching=[True]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False],
+        enable_assignment_offload=[False, True]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=[consumer_group.consumer_group_protocol],
-        enable_assignment_batching=[False]
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
-    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
+    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True, enable_assignment_offload=True):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -565,9 +596,10 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=[consumer_group.consumer_group_protocol],
         group_remote_assignor=consumer_group.all_remote_assignors,
-        enable_assignment_batching=[False, True]
+        enable_assignment_batching=[False, True],
+        enable_assignment_offload=[False, True]
     )
-    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, group_protocol=None, group_remote_assignor=None, enable_assignment_batching=True):
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, group_protocol=None, group_remote_assignor=None, enable_assignment_batching=True, enable_assignment_offload=True):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.
