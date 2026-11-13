@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -26,8 +27,19 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,6 +50,59 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HttpJwtRetrieverTest extends OAuthBearerTest {
+
+    private static final String TOKEN_ENDPOINT_URL = "http://www.example.com";
+
+    @AfterEach
+    public void tearDown() {
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+    }
+
+    @Test
+    public void testLoginTimeoutsDefaultWhenNotConfigured() {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, TOKEN_ENDPOINT_URL);
+        // A plain map has no config definition defaults, so the retriever has to apply them.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, TOKEN_ENDPOINT_URL);
+        configs.put(SASL_LOGIN_RETRY_BACKOFF_MS, 100L);
+        configs.put(SASL_LOGIN_RETRY_BACKOFF_MAX_MS, 10000L);
+
+        HttpJwtRetriever retriever = new HttpJwtRetriever(mock(HttpRequestFormatter.class));
+        retriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        assertEquals(DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS, retriever.loginConnectTimeoutMs());
+        assertEquals(DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS, retriever.loginReadTimeoutMs());
+        assertEquals(10000, retriever.loginConnectTimeoutMs());
+        assertEquals(10000, retriever.loginReadTimeoutMs());
+    }
+
+    @Test
+    public void testLoginTimeoutsDefaultFromConfigDefinition() {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, TOKEN_ENDPOINT_URL);
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, TOKEN_ENDPOINT_URL);
+
+        HttpJwtRetriever retriever = new HttpJwtRetriever(mock(HttpRequestFormatter.class));
+        retriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        assertEquals(DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS, retriever.loginConnectTimeoutMs());
+        assertEquals(DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS, retriever.loginReadTimeoutMs());
+    }
+
+    @Test
+    public void testLoginTimeoutsCanBeOverridden() {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, TOKEN_ENDPOINT_URL);
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, TOKEN_ENDPOINT_URL);
+        overrides.put(SASL_LOGIN_CONNECT_TIMEOUT_MS, 1234);
+        overrides.put(SASL_LOGIN_READ_TIMEOUT_MS, 5678);
+        Map<String, ?> configs = getSaslConfigs(overrides);
+
+        HttpJwtRetriever retriever = new HttpJwtRetriever(mock(HttpRequestFormatter.class));
+        retriever.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        assertEquals(1234, retriever.loginConnectTimeoutMs());
+        assertEquals(5678, retriever.loginReadTimeoutMs());
+    }
 
     @Test
     public void test() throws IOException {
