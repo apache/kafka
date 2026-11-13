@@ -817,14 +817,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            log.trace("Task processed record: topic={}, partition={}, offset={}",
-                record.topic(), record.partition(), record.offset());
+            if (log.isTraceEnabled()) {
+                log.trace("Task processed record: topic={}, partition={}, offset={}",
+                    record.topic(), record.partition(), record.offset());
+            }
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() <= maxBufferedSize) {
-                log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
-                        partition, recordInfo.queue().size(), maxBufferedSize);
+                if (log.isTraceEnabled()) {
+                    log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
+                            partition, recordInfo.queue().size(), maxBufferedSize);
+                }
                 partitionsToResume.add(partition);
             }
 

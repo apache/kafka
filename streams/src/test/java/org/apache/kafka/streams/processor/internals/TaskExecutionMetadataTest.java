@@ -16,19 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 public class TaskExecutionMetadataTest {
@@ -37,6 +44,7 @@ public class TaskExecutionMetadataTest {
     static final Set<String> NAMED_TOPOLOGIES = Set.of(TOPOLOGY1, TOPOLOGY2);
     static final int TIME_ZERO = 0;
     static final int CONSTANT_BACKOFF_MS = 5000;
+    static final long NOT_READY_LOG_INTERVAL_MS = 120_000L;
 
     @Test
     public void testCanProcessWithoutNamedTopologies() {
@@ -113,6 +121,35 @@ public class TaskExecutionMetadataTest {
 
         assertTrue(metadata.canProcessTask(mockTask1, CONSTANT_BACKOFF_MS + 1));
         assertTrue(metadata.canProcessTask(mockTask2, CONSTANT_BACKOFF_MS + 1));
+    }
+
+    @Test
+    public void shouldNotFormatLogMessageUntilItIsLogged() {
+        // KAFKA-21372: canProcessTask runs for every task on every loop iteration
+        final Set<String> pausedTopologies = new HashSet<>();
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies, ProcessingMode.AT_LEAST_ONCE);
+        final String taskName = new TaskId(0, 0, TOPOLOGY1).toString();
+        final AtomicInteger formatted = new AtomicInteger();
+        final TaskId taskId = spy(new TaskId(0, 0, TOPOLOGY1));
+        doAnswer(invocation -> {
+            formatted.incrementAndGet();
+            return invocation.callRealMethod();
+        }).when(taskId).toString();
+        final Task mockTask = mock(Task.class);
+        when(mockTask.id()).thenReturn(taskId);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskExecutionMetadata.class)) {
+            assertTrue(metadata.canProcessTask(mockTask, TIME_ZERO));
+            pausedTopologies.add(TOPOLOGY1);
+            assertFalse(metadata.canProcessTask(mockTask, TIME_ZERO));
+            assertFalse(metadata.canProcessTask(mockTask, NOT_READY_LOG_INTERVAL_MS - 1));
+            assertEquals(0, formatted.get());
+
+            assertFalse(metadata.canProcessTask(mockTask, NOT_READY_LOG_INTERVAL_MS));
+            assertEquals(
+                List.of("Task " + taskName + " is not ready to process: Task " + taskName + " can't be processed: topology 'topology1' is paused"),
+                appender.getMessages(Level.INFO));
+        }
     }
 
     private static Task createMockTask(final String topologyName) {
