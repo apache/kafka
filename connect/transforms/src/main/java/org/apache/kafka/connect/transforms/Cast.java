@@ -62,7 +62,8 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     public static final String OVERVIEW_DOC =
             "Cast fields or the entire key or value to a specific type, e.g. to force an integer field to a smaller "
                     + "width. Cast from integers, floats, boolean and string to any other type, "
-                    + "and cast binary to string (base64 encoded)."
+                    + "and cast binary to string (base64 encoded). "
+                    + "Only top-level fields are supported; nested field casting via dotted notation is not currently available."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
@@ -83,7 +84,8 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
-                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.")
+                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string. "
+                    + "Only top-level fields are supported; nested fields cannot be addressed using dotted notation.")
             .define(REPLACE_NULL_WITH_DEFAULT_CONFIG,
                     ConfigDef.Type.BOOLEAN,
                     true,
