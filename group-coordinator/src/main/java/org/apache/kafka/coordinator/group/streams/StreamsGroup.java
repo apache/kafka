@@ -603,6 +603,12 @@ public class StreamsGroup implements Group {
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateNumStableMembers(oldMember, null);
@@ -810,6 +816,13 @@ public class StreamsGroup implements Group {
      */
     public void removeTargetAssignment(String memberId) {
         targetAssignment.remove(memberId);
+    }
+
+    /**
+     * Removes the target assignment of every member.
+     */
+    public void clearTargetAssignment() {
+        targetAssignment.clear();
     }
 
     /**

@@ -15293,11 +15293,17 @@ public class GroupMetadataManagerTest {
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
 
+        // The consumer group is no longer subscribed to its topics.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
+
         // Simulate a failed write to the log.
         context.rollback();
 
         // The group is reverted back to the consumer group.
         assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
     }
 
     @Test
@@ -25573,9 +25579,18 @@ public class GroupMetadataManagerTest {
     @Test
     public void testClassicGroupJoinWithEmptyStreamsGroup() throws Exception {
         String streamsGroupId = "streams-group-id";
+        String subtopologyId = "subtopology-1";
+        String topicName = "foo";
+        StreamsTopology topology = new StreamsTopology(1, Map.of(subtopologyId,
+            new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of(topicName))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10).withTopology(topology))
             .build();
+
+        // The empty streams group is subscribed to the topics of its topology.
+        assertEquals(Set.of(streamsGroupId), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(streamsGroupId)
@@ -25596,6 +25611,10 @@ public class GroupMetadataManagerTest {
             Group.GroupType.CLASSIC,
             context.groupMetadataManager.getOrMaybeCreateClassicGroup(streamsGroupId, false).type()
         );
+
+        // The streams group is removed without replaying its tombstones. It must no longer be
+        // subscribed to the topics of its topology.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
     }
 
     @Test
@@ -26459,6 +26478,39 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayConsumerGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0, 1, 2)), 10))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ConsumerGroupMemberMetadata tombstone without the ConsumerGroupCurrentMemberAssignment
+        // and ConsumerGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+    }
+
+    @Test
     public void testReplayConsumerGroupMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -26477,6 +26529,38 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+    }
+
+    @Test
+    public void testReplayConsumerGroupMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0, 1, 2)), 10))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ConsumerGroupMetadata tombstone without the member and
+        // ConsumerGroupTargetAssignmentMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
@@ -26585,6 +26669,28 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayConsumerGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group with a target assignment.
+        Uuid topicId = Uuid.randomUuid();
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
+
+        // Replay the ConsumerGroupTargetAssignmentMetadata tombstone without the
+        // ConsumerGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
+    }
+
+    @Test
     public void testReplayConsumerGroupCurrentMemberAssignment() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -26618,6 +26724,113 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMemberMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupMemberMetadata tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupMemberMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ShareGroupMember member = new ShareGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ShareGroupMemberMetadata tombstone without the ShareGroupCurrentMemberAssignment
+        // and ShareGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+    }
+
+    @Test
+    public void testReplayShareGroupMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ShareGroupMember member = new ShareGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord("foo",
+            Map.of(), Map.of(topicId, new InitMapValue("bar", Set.of(0, 1, 2), 1)), Map.of()));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertTrue(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey("foo"));
+
+        // Replay the ShareGroupMetadata tombstone without the member, ShareGroupTargetAssignmentMetadata
+        // and ShareGroupStatePartitionMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions and its state partition
+        // metadata.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertFalse(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey("foo"));
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMemberTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupTargetAssignmentMember tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
     }
 
     @Test
@@ -26656,6 +26869,45 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group with a target assignment.
+        Uuid topicId = Uuid.randomUuid();
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+
+        // Replay the ShareGroupTargetAssignmentMetadata tombstone without the
+        // ShareGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
+    }
+
+    @Test
+    public void testReplayShareGroupCurrentMemberAssignmentTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupCurrentMemberAssignment tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupCurrentMemberAssignment tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
     }
 
     @Test
@@ -26708,7 +26960,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26725,7 +26977,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26743,25 +26995,31 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
-        assertEquals("Received a tombstone record to delete member m1 but did not receive "
-                + "StreamsGroupCurrentMemberAssignmentValue tombstone.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
-
-        IllegalStateException e2 = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
-        assertEquals("Received a tombstone record to delete member m1 but did not receive "
-                + "StreamsGroupTargetAssignmentMetadataValue tombstone.",
-            e2.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-
+        // The member is still in the group with a live member epoch and a target assignment,
+        // i.e. the StreamsGroupCurrentMemberAssignment and StreamsGroupTargetAssignmentMember
+        // tombstones have not been seen. This can happen when the coordinator loads while
+        // compaction removed them. The member tombstone is authoritative and removes the member.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.streamsGroup("foo").hasMember("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithoutCurrentMemberAssignment() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Only the StreamsGroupMemberMetadata record of the member is replayed, so the member
+        // has no member epoch.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+            "foo",
+            streamsGroupMemberBuilderWithDefaults("m1").build()
+        ));
+
+        // The member tombstone is authoritative and removes the member.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").members());
     }
 
     @Test
@@ -26775,7 +27033,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneNotExisting() {
+    public void testReplayStreamsGroupMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26786,7 +27044,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneExisting() {
+    public void testReplayStreamsGroupMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26796,34 +27054,30 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
                     TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             );
+        final StreamsTopology topology = StreamsTopology.fromRecord(new StreamsGroupTopologyValue()
+            .setEpoch(0)
+            .setSubtopologies(List.of(new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("subtopology-1")
+                .setSourceTopics(List.of("bar")))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
                     .withTargetAssignmentEpoch(10)
                     .withMember(streamsGroupMemberBuilderWithDefaults("m1").build())
                     .withTargetAssignment("m1", tasks)
+                    .withTopology(topology)
             )
             .build();
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
-        assertEquals("Received a tombstone record to delete group foo but the group still has 1 members.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
-
-        IllegalStateException e2 = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
-        assertEquals("Received a tombstone record to delete group foo but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.",
-            e2.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
-
+        // The group still has a member, a target assignment epoch and a topology, i.e. the member,
+        // StreamsGroupTargetAssignmentMetadata and StreamsGroupTopology tombstones have not been
+        // seen. This can happen when the coordinator loads while compaction removed them. The group
+        // tombstone is authoritative and removes the group along with its topic subscriptions.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
 
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
@@ -26871,7 +27125,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMemberTombstoneNonExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMemberTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26913,7 +27167,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26925,6 +27179,25 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTargetAssignmentEpoch(10)
+                    .withTargetAssignmentTimestamp(12345L)
+            )
+            .build();
+
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+
+        // Replay the tombstone. It should reset both the epoch and the timestamp.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26944,19 +27217,15 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        IllegalStateException e = assertThrows(
-            IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"))
-        );
-        assertEquals("Received a tombstone record to delete target assignment of foo but the assignment still has 1 members.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-
+        // The target assignment still has a member, i.e. the StreamsGroupTargetAssignmentMember
+        // tombstone has not been seen. This can happen when the coordinator loads while compaction
+        // removed it. The metadata tombstone is authoritative: the target assignment is removed
+        // along with the epoch.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
     }
 
     @Test
@@ -26984,7 +27253,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupCurrentMemberAssignmentTombstoneNotExisting() {
+    public void testReplayStreamsGroupCurrentMemberAssignmentTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -27060,7 +27329,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneNotExists() {
+    public void testReplayStreamsGroupTopologyTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -27077,7 +27346,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneExists() {
+    public void testReplayStreamsGroupTopologyTombstoneExisting() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)

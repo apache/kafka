@@ -276,6 +276,13 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
+     * Removes the target assignment of every member.
+     */
+    public void clearTargetAssignment() {
+        targetAssignment.clear();
+    }
+
+    /**
      * @return An immutable Map containing all the target assignment keyed by member id.
      */
     public Map<String, Assignment> targetAssignment() {
