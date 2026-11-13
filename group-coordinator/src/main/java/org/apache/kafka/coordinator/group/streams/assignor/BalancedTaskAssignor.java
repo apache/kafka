@@ -241,10 +241,12 @@ public class BalancedTaskAssignor implements TaskAssignor {
         }
     }
 
-    private static void assignStandbyReplicaTasks(final Collection<ProcessTasks> processes,
-                                                  final SortedSet<TaskId> statefulTasks,
-                                                  final int numStandbyReplicas,
-                                                  final List<String> rackAwareAssignmentTags) {
+    private static void assignStandbyReplicaTasks(
+        final Collection<ProcessTasks> processes,
+        final SortedSet<TaskId> statefulTasks,
+        final int numStandbyReplicas,
+        final List<String> rackAwareAssignmentTags
+    ) {
         final Map<TaskId, Integer> rackAwareStandbys = rackAwareAssignmentTags.isEmpty()
             ? Map.of()
             : assignRackAwareStandbys(processes, statefulTasks, numStandbyReplicas, rackAwareAssignmentTags);
@@ -295,10 +297,12 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * most diverse ones, and returns the number placed per task. A process takes them while one of its members is
      * below the per-member task quota.
      */
-    private static Map<TaskId, Integer> assignRackAwareStandbys(final Collection<ProcessTasks> processes,
-                                                               final SortedSet<TaskId> statefulTasks,
-                                                               final int numStandbyReplicas,
-                                                               final List<String> rackAwareAssignmentTags) {
+    private static Map<TaskId, Integer> assignRackAwareStandbys(
+        final Collection<ProcessTasks> processes,
+        final SortedSet<TaskId> statefulTasks,
+        final int numStandbyReplicas,
+        final List<String> rackAwareAssignmentTags
+    ) {
         final Map<TaskId, ProcessTasks> activeTaskToProcess = Utils.newHashMap(statefulTasks.size());
         for (final ProcessTasks process : processes) {
             for (final TaskId task : process.statefulActiveTasks) {
@@ -306,7 +310,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
         }
 
-        final TaskQuota quota = new TaskQuota(processes, (long) statefulTasks.size() * numStandbyReplicas);
+        final TaskQuota quota = new TaskQuota(processes, statefulTasks.size() * numStandbyReplicas);
         // The processes are in sorted order of their ID, so a load tie goes to the smaller ID, as in BY_ASSIGNED_LOAD.
         final RackAwareStandbyPicker<ProcessTasks> picker = new RackAwareStandbyPicker<>(
             rackAwareAssignmentTags,
@@ -371,9 +375,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
      *
      * @param rackDiversity The rack diversity of the tasks, or {@code null} without {@code rack.aware.assignment.tags}.
      */
-    static void balanceTasksOverProcesses(final Collection<ProcessTasks> processes,
-                                          final Function<ProcessTasks, SortedSet<TaskId>> tasksToBalance,
-                                          final RackDiversity rackDiversity) {
+    static void balanceTasksOverProcesses(
+        final Collection<ProcessTasks> processes,
+        final Function<ProcessTasks, SortedSet<TaskId>> tasksToBalance,
+        final RackDiversity rackDiversity
+    ) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -448,19 +454,19 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * The per-member quota on active plus standby tasks: the tasks left over the members left, rounded up, where a
-     * member that reaches it leaves with its tasks. The members of a process are levelled once the placement is final,
-     * so the member that takes the n-th task of a process with c members reaches ceil(n / c).
+     * The upper bound on how many active plus standby tasks any member may hold, one value for the whole group: all
+     * tasks over all members, rounded up. When a member reaches it, the member and its tasks are taken out and the
+     * bound is computed again from the rest, which can lower it for the others.
      */
     private static final class TaskQuota {
         private int totalMembersWithTaskCapacity;
-        private long totalTasks;
+        private int totalTasks;
         private int totalTasksPerMember;
 
         /**
          * @param standbysToPlace The standbys still to place; the tasks the processes hold count as placed one by one.
          */
-        private TaskQuota(final Collection<ProcessTasks> processes, final long standbysToPlace) {
+        private TaskQuota(final Collection<ProcessTasks> processes, final int standbysToPlace) {
             totalTasks = standbysToPlace;
             for (final ProcessTasks process : processes) {
                 totalMembersWithTaskCapacity += process.capacity();
@@ -476,7 +482,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         /** Whether one of the members of the process is below the quota. */
         private boolean hasRoom(final ProcessTasks process) {
-            return process.assignedTaskCount() < (long) process.capacity() * totalTasksPerMember;
+            return process.assignedTaskCount() < process.capacity() * totalTasksPerMember;
         }
 
         private void maybeUpdateTotalTasksPerMember(final int taskNo) {
@@ -487,8 +493,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
         }
 
-        private static int computeTasksPerMember(final long numberOfTasks, final int numberOfMembers) {
-            return numberOfMembers == 0 ? 0 : (int) ((numberOfTasks + numberOfMembers - 1) / numberOfMembers);
+        private static int computeTasksPerMember(final int numberOfTasks, final int numberOfMembers) {
+            return numberOfMembers == 0 ? 0 : (numberOfTasks + numberOfMembers - 1) / numberOfMembers;
         }
 
         /** The task count of the member that takes the {@code processTaskCount}-th task of a levelled process. */
@@ -498,9 +504,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * The processes holding each stateful task, to tell whether moving a standby lowers the rack diversity of its task:
-     * the first tag key, in {@code rack.aware.assignment.tags} order, whose distinct values among the holders change
-     * may not lose one. A missing value counts as no value.
+     * How rack-diverse each stateful task currently is, across all processes that hold one of its replicas. A standby
+     * may move only if the move does not lower the rack diversity of its task: the number of distinct values of each
+     * tag key, compared in {@code rack.aware.assignment.tags} order, where an earlier key outweighs all later ones.
+     * A process without a value for a key adds nothing to the diversity of that key.
      */
     static final class RackDiversity {
         private final List<String> tagKeys;
@@ -527,7 +534,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 if (Objects.equals(sourceValue, destinationValue)) {
                     continue;
                 }
-                // The source's value stays if another holder has it; the destination's value is new if none has it.
+                // The task's values of this key form a set: before the move, the other holders' values plus the
+                // source's; after it, the other holders' values plus the destination's. The source's value stays in
+                // the set if another holder has it, and the destination's value is new to the set if no other holder
+                // has it. A missing value is never an element of the set.
                 boolean sourceValueStays = sourceValue == null;
                 boolean destinationValueNew = destinationValue != null;
                 for (final ProcessTasks holder : holders.get(task)) {
@@ -577,9 +587,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return processId;
         }
 
-        void addMember(final String memberId,
-                       final Map<String, String> memberClientTags,
-                       final MemberAssignmentState currentAssignment) {
+        void addMember(
+            final String memberId,
+            final Map<String, String> memberClientTags,
+            final MemberAssignmentState currentAssignment
+        ) {
             // The members of a process report the same client tags; the smallest member ID wins if they do not.
             if (memberIds.isEmpty() || memberId.compareTo(memberIds.first()) < 0) {
                 clientTags = memberClientTags;
