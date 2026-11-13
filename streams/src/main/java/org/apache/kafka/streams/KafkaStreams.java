@@ -737,11 +737,11 @@ public class KafkaStreams implements AutoCloseable {
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
                                     final String storeName,
-                                    final long batchEndOffset,
+                                    final long lastBatchOffset,
                                     final long numRestored) {
             if (userStateRestoreListener != null) {
                 try {
-                    userStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    userStateRestoreListener.onBatchRestored(topicPartition, storeName, lastBatchOffset, numRestored);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -798,10 +798,10 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         @Override
-        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long lastBatchOffset, final long batchSize, final long lastChangelogOffset) {
             if (userStandbyListener != null) {
                 try {
-                    userStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, batchEndOffset, batchSize, currentEndOffset);
+                    userStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, lastBatchOffset, batchSize, lastChangelogOffset);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -809,10 +809,10 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         @Override
-        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long lastChangelogOffset, final SuspendReason reason) {
             if (userStandbyListener != null) {
                 try {
-                    userStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, currentEndOffset, reason);
+                    userStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, lastChangelogOffset, reason);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }

@@ -90,7 +90,7 @@ The handler executes on the thread that produced the exception. Because the hand
 You can set a `StateRestoreListener` to be notified about the progress of state store restoration. This is useful for monitoring and logging the restoration process. The listener provides callbacks for the following lifecycle events:
 
   * `onRestoreStart` -- Called when restoration begins for a state store partition, providing the starting and ending offsets.
-  * `onBatchRestored` -- Called after each batch of records is restored, providing the batch end offset and the number of records restored in the batch.
+  * `onBatchRestored` -- Called after each batch of records is restored, providing the offset of the last record of the batch and the number of records restored in the batch.
   * `onRestoreEnd` -- Called when restoration completes for a state store partition, providing the total number of records restored.
   * `onRestoreSuspended` -- Called when restoration is suspended because the task was migrated to another instance.
 
@@ -107,7 +107,7 @@ Example:
 
         @Override
         public void onBatchRestored(TopicPartition topicPartition, String storeName,
-                                    long batchEndOffset, long numRestored) {
+                                    long lastBatchOffset, long numRestored) {
             // track progress
         }
 
@@ -125,7 +125,7 @@ Because the listener is shared across all `StreamThread` instances, the implemen
 You can set a `StandbyUpdateListener` to be notified about updates to standby state store replicas. Standby replicas keep a copy of the state store on a different instance for faster failover. The listener provides callbacks for the following lifecycle events:
 
   * `onUpdateStart` -- Called when a standby task begins consuming from the changelog, providing the starting offset.
-  * `onBatchLoaded` -- Called after each batch of records is loaded into the standby store, providing the batch end offset, batch size, and the current end offset of the changelog partition.
+  * `onBatchLoaded` -- Called after each batch of records is loaded into the standby store, providing the offset of the last record of the batch, the batch size, and the offset of the last record of the changelog partition.
   * `onUpdateSuspended` -- Called when the standby task stops updating. The `SuspendReason` parameter indicates why: `MIGRATED` means the task was moved to another instance, while `PROMOTED` means the standby was promoted to an active task (in which case the corresponding `StateRestoreListener.onRestoreStart` will be called next).
 
 Example:
@@ -141,14 +141,14 @@ Example:
 
         @Override
         public void onBatchLoaded(TopicPartition topicPartition, String storeName,
-                                  TaskId taskId, long batchEndOffset,
-                                  long batchSize, long currentEndOffset) {
+                                  TaskId taskId, long lastBatchOffset,
+                                  long batchSize, long lastChangelogOffset) {
             // track standby replication progress
         }
 
         @Override
         public void onUpdateSuspended(TopicPartition topicPartition, String storeName,
-                                      long storeOffset, long currentEndOffset,
+                                      long storeOffset, long lastChangelogOffset,
                                       StandbyUpdateListener.SuspendReason reason) {
             // log reason for suspension
         }
