@@ -17,13 +17,59 @@
 package org.apache.kafka.common.utils.internals;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ByteBufferInputStreamTest {
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    public void testReadWithInvalidBounds(int inputSize) {
+        ByteBuffer buffer = ByteBuffer.allocate(inputSize);
+        ByteBufferInputStream inputStream = new ByteBufferInputStream(buffer);
+        byte[] bytes = new byte[4];
+
+        assertAll(
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, -1, 0)),
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, 5, 0)),
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, 0, -1)),
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, 0, 5)),
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, 3, 2)),
+            () -> assertThrows(IndexOutOfBoundsException.class, () -> inputStream.read(bytes, 1, Integer.MAX_VALUE))
+        );
+        assertEquals(0, buffer.position());
+        assertArrayEquals(new byte[4], bytes);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 0", "0, 1", "1, 0", "1, 1"})
+    public void testReadWithNullArray(int inputSize, int length) {
+        ByteBuffer buffer = ByteBuffer.allocate(inputSize);
+        ByteBufferInputStream inputStream = new ByteBufferInputStream(buffer);
+
+        assertThrows(NullPointerException.class, () -> inputStream.read(null, 0, length));
+        assertEquals(0, buffer.position());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    public void testReadZeroBytesAtEndOfArray(int inputSize) {
+        ByteBuffer buffer = ByteBuffer.allocate(inputSize);
+        ByteBufferInputStream inputStream = new ByteBufferInputStream(buffer);
+        byte[] bytes = new byte[4];
+
+        assertEquals(0, inputStream.read(bytes, bytes.length, 0));
+        assertEquals(0, buffer.position());
+    }
 
     @Test
     public void testReadUnsignedIntFromInputStream() throws IOException {
