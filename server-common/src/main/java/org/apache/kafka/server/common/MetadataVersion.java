@@ -17,6 +17,8 @@
 package org.apache.kafka.server.common;
 
 
+import org.apache.kafka.common.protocol.ApiKeys;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -312,9 +314,10 @@ public enum MetadataVersion {
         }
     }
 
-    public short fetchRequestVersion() {
+    public short fetchRequestVersion(boolean unstableApiVersionsEnabled) {
         if (isAtLeast(IBP_4_5_IV0)) {
-            return 19;
+            // Leaders reject unstable versions unless they enable them.
+            return (short) Math.min(19, ApiKeys.FETCH.latestVersion(unstableApiVersionsEnabled));
         } else if (isAtLeast(IBP_4_1_IV1)) {
             return 18;
         } else if (isAtLeast(IBP_3_9_IV0)) {

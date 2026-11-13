@@ -207,7 +207,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       val version: Short = if (!fetchData.canUseTopicIds) {
         12
       } else {
-        metadataVersion.fetchRequestVersion
+        metadataVersion.fetchRequestVersion(brokerConfig.unstableApiVersionsEnabled)
       }
       val requestBuilder = FetchRequest.Builder
         .forReplica(version, brokerConfig.brokerId, brokerEpochSupplier(), maxWait, minBytes, fetchData.toSend)
