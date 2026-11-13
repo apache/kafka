@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
@@ -89,6 +91,11 @@ public final class RollAndOffloadActiveSegmentTest {
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 4L)
                 .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"))
+                .expectLogOffsets(broker0, topicA, p0, 4L, 4L, 4L)
+                // Local retention must not advance the start offset of data still available remotely.
+                .expectListOffsets(topicA, p0, OffsetSpec.earliest(), new EpochEntry(0, 0))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(0, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(0, 3))
                 // consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 4)
                 .consume(topicA, p0, 0L, 4, 4);
