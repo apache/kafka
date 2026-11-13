@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -61,6 +62,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -1830,6 +1832,79 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         shutdownExecutorService(service);
 
         verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    /**
+     * When the log directory of the partition leader fails, the broker keeps running and returns
+     * KAFKA_STORAGE_ERROR for the partition while the leadership moves to another broker. Share consumers that
+     * were already fetching from the old leader must move to the new leader.
+     */
+    @ClusterTest(
+        brokers = 3,
+        disksPerBroker = 2,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
+        }
+    )
+    @Timeout(180)
+    public void testShareConsumersMoveToNewLeaderAfterLogDirFailure() throws Exception {
+        String topic = "logdir";
+        String groupId = "group1";
+        TopicPartition partition = new TopicPartition(topic, 0);
+        createTopic(topic, 1, 3);
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> consumer1 = createShareConsumer(groupId);
+             ShareConsumer<byte[], byte[]> consumer2 = createShareConsumer(groupId);
+             Admin admin = createAdminClient()) {
+            List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer1, consumer2);
+            consumer1.subscribe(Set.of(topic));
+            consumer2.subscribe(Set.of(topic));
+
+            produceValues(producer, partition, "before", 10);
+            assertEquals(values("before", 10), receiveValues(consumers, 10, DEFAULT_MAX_WAIT_MS));
+
+            ClientsTestUtils.failLeaderLogDir(cluster, admin, partition);
+
+            produceValues(producer, partition, "after", 10);
+            assertEquals(values("after", 10), receiveValues(consumers, 10, DEFAULT_MAX_WAIT_MS));
+        }
+    }
+
+    private static void produceValues(Producer<byte[], byte[]> producer, TopicPartition partition, String prefix, int count)
+        throws Exception {
+        for (int i = 0; i < count; i++) {
+            producer.send(new ProducerRecord<>(partition.topic(), partition.partition(), null, (prefix + i).getBytes(StandardCharsets.UTF_8))).get();
+        }
+    }
+
+    private static Set<String> values(String prefix, int count) {
+        Set<String> values = new HashSet<>();
+        for (int i = 0; i < count; i++) {
+            values.add(prefix + i);
+        }
+        return values;
+    }
+
+    /**
+     * Polls the consumers in turn, acknowledging what they receive, until they have received {@code count}
+     * records or {@code timeoutMs} has passed. Returns the record values.
+     */
+    private static Set<String> receiveValues(List<ShareConsumer<byte[], byte[]>> consumers, int count, long timeoutMs) {
+        Set<String> values = new HashSet<>();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (values.size() < count && System.currentTimeMillis() < deadline) {
+            for (ShareConsumer<byte[], byte[]> consumer : consumers) {
+                consumer.poll(Duration.ofMillis(500)).forEach(record -> values.add(new String(record.value(), StandardCharsets.UTF_8)));
+                consumer.commitSync();
+            }
+        }
+        return values;
     }
 
     @ClusterTest(

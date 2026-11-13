@@ -3108,6 +3108,80 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
+     * When the leader returns an error indicating that the metadata is stale but no new leader information, such as
+     * KAFKA_STORAGE_ERROR when its log dir fails while the broker keeps running, and the metadata then moves the
+     * leadership to another node which is still in the cluster, the next fetch must go to the new leader rather
+     * than to the node of the share session.
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"KAFKA_STORAGE_ERROR", "REPLICA_NOT_AVAILABLE", "INCONSISTENT_TOPIC_ID"})
+    public void testFetchMovesToLeaderInMetadataAfterStaleMetadataError(Errors error) {
+        buildRequestManager();
+
+        subscriptions.subscribe(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        // Two-node cluster; tp0 is led by node 0, so the share session and the cached leader are on node 0.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // Establish the share session and cache the leader (node 0) for tp0.
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        // Node 0 keeps running but returns the error for tp0, without new leader information.
+        assertEquals(1, sendFetches());
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
+        partitionData.put(tip0,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip0.topicPartition().partition())
+                .setErrorCode(error.code()));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+        assertTrue(metadata.updateRequested());
+
+        // The metadata moves the leadership of tp0 to node 1, and node 0 is still in the cluster.
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1),
+                List.of(nodeId0.id(), nodeId1.id()), List.of(nodeId1.id()), List.of(nodeId0.id()));
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        MetadataResponse newLeaderMetadata = RequestTestUtils.metadataResponse(
+                List.of(nodeId0, nodeId1), "kafka-cluster", 1, List.of(topicMetadata));
+        metadata.updateWithCurrentRequestVersion(newLeaderMetadata, false, time.milliseconds());
+        assertNotNull(metadata.fetch().nodeById(0));
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp0));
+
+        // The next fetch for tp0 goes to the new leader (node 1). A fetch may also be sent to node 0 to remove tp0
+        // from the share session there.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        boolean fetchesFromNewLeader = false;
+        StringBuilder sent = new StringBuilder();
+        for (NetworkClientDelegate.UnsentRequest request : pollResult.unsentRequests) {
+            ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) request.requestBuilder();
+            sent.append(request.node()).append(' ').append(builder.data()).append("; ");
+            fetchesFromNewLeader |= request.node().get().equals(nodeId1) && builder.data().topics().stream()
+                .anyMatch(topic -> topic.topicId().equals(tip0.topicId()) && topic.partitions().stream()
+                    .anyMatch(partition -> partition.partitionIndex() == tp0.partition()));
+        }
+        assertTrue(fetchesFromNewLeader, "Expected a fetch for " + tp0 + " from the new leader after " + error + ", got " + sent);
+    }
+
+    /**
      * When the node backing a share session disappears from the cluster metadata, the stale session handler
      * must be removed and any acknowledgements that were queued to be piggybacked on a fetch to that node
      * must be failed with NETWORK_EXCEPTION.
