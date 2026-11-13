@@ -127,6 +127,16 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS));
         }
 
+        if (validator instanceof ClientJwtValidator) {
+            Utils.closeQuietly(validator, "JWT validator");
+            throw new ConfigException(String.format(
+                "The OAuth validator for the broker cannot use \"%s\" because it does not verify JWT signatures." +
+                " Set \"%s\" to a signature-verifying validator, such as \"%s\".",
+                ClientJwtValidator.class.getName(),
+                SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                BrokerJwtValidator.class.getName()));
+        }
+
         jwtValidator = validator;
     }
 

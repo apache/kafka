@@ -257,6 +257,16 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     @Test
+    public void testFailsToStartWithClientJwtValidator() {
+        Map<String, ?> configs = getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                ClientJwtValidator.class.getName());
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        assertThrowsWithMessage(ConfigException.class,
+            () -> handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
+            ClientJwtValidator.class.getName());
+    }
+
+    @Test
     public void testConfigureAcceptsCustomValidatorClass() {
         // A custom (non-default) validator class must be accepted; the startup check only applies
         // when the default validator is in use.
