@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ListGroupsOptionsTest {
@@ -120,5 +122,15 @@ public class ListGroupsOptionsTest {
         Set<GroupType> groupTypes = Set.of(GroupType.values());
         options = new ListGroupsOptions().withTypes(groupTypes);
         assertEquals(groupTypes, options.types());
+    }
+
+    @Test
+    public void testRequireCommittedOffsets() {
+        ListGroupsOptions options = new ListGroupsOptions();
+        assertFalse(options.requireCommittedOffsets());
+        assertSame(options, options.requireCommittedOffsets(true));
+        assertTrue(options.requireCommittedOffsets());
+        assertFalse(ListGroupsOptions.forConsumerGroups().requireCommittedOffsets());
+        assertTrue(ListGroupsOptions.forConsumerGroups().requireCommittedOffsets(true).requireCommittedOffsets());
     }
 }

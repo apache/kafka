@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -862,6 +863,26 @@ public class RequestResponseTest {
         ListGroupsRequestData data = new ListGroupsRequestData()
                 .setStatesFilter(singletonList(GroupState.STABLE.name()));
         assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 3));
+    }
+
+    @Test
+    public void testListGroupRequestV5FailsWithRequireCommittedOffsets() {
+        ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 5));
+    }
+
+    @Test
+    public void testListGroupRequestV4FailsWithRequireCommittedOffsetsAndDowngradableTypes() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setTypesFilter(List.of(GroupType.CLASSIC.toString(), GroupType.CONSUMER.toString()))
+                .setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 4));
+    }
+
+    @Test
+    public void testListGroupRequestV5SucceedsWithoutRequireCommittedOffsets() {
+        ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(false);
+        assertEquals((short) 5, new ListGroupsRequest.Builder(data).build((short) 5).version());
     }
 
     @Test
@@ -2360,6 +2381,8 @@ public class RequestResponseTest {
         ListGroupsRequestData data = new ListGroupsRequestData();
         if (version >= 4)
             data.setStatesFilter(singletonList("Stable"));
+        if (version >= 6)
+            data.setRequireCommittedOffsets(true);
         return new ListGroupsRequest.Builder(data).build(version);
     }
 
