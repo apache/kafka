@@ -276,6 +276,54 @@ class BatchAccumulatorTest {
     }
 
     @Test
+    public void testAppendTimestampUnchangedAfterBufferReleasedAndReused() {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        BatchMemoryPool pool = new BatchMemoryPool(1, maxBatchSize);
+        BatchAccumulator<String> acc = new BatchAccumulator<>(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize,
+            maxNumberOfBatches,
+            pool,
+            time,
+            Compression.NONE,
+            serde
+        );
+
+        assertEquals(baseOffset, acc.append(leaderEpoch, List.of("a"), false));
+        long firstAppendTimestamp = time.milliseconds();
+        time.sleep(lingerMs);
+        List<BatchAccumulator.CompletedBatch<String>> firstDrain = acc.drain();
+        assertEquals(1, firstDrain.size());
+        BatchAccumulator.CompletedBatch<String> first = firstDrain.get(0);
+        assertEquals(firstAppendTimestamp, first.appendTimestamp());
+        assertEquals(List.of("a"), first.records.get());
+        first.release();
+
+        time.sleep(1000);
+        assertEquals(baseOffset + 1, acc.append(leaderEpoch, List.of("b"), false));
+        long secondAppendTimestamp = time.milliseconds();
+        time.sleep(lingerMs);
+        List<BatchAccumulator.CompletedBatch<String>> secondDrain = acc.drain();
+        assertEquals(1, secondDrain.size());
+        BatchAccumulator.CompletedBatch<String> second = secondDrain.get(0);
+        assertEquals(secondAppendTimestamp, second.appendTimestamp());
+        assertEquals(List.of("b"), second.records.get());
+        assertNotEquals(firstAppendTimestamp, secondAppendTimestamp);
+
+        assertEquals(List.of("a"), first.records.get());
+        assertEquals(firstAppendTimestamp, first.appendTimestamp());
+
+        second.release();
+        acc.close();
+    }
+
+    @Test
     public void testUnflushedBuffersReleasedByClose() {
         int leaderEpoch = 17;
         long baseOffset = 157;
