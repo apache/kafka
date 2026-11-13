@@ -79,10 +79,11 @@ public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap
     }
 
     private ConfiguredSubtopology getSubtopologyOrFail(String subtopologyId) {
-        if (!subtopologyMap.containsKey(subtopologyId)) {
+        final ConfiguredSubtopology subtopology = subtopologyMap.get(subtopologyId);
+        if (subtopology == null) {
             throw new NoSuchElementException(String.format("Topology does not contain subtopology %s", subtopologyId));
         }
-        return subtopologyMap.get(subtopologyId);
+        return subtopology;
     }
 
 }

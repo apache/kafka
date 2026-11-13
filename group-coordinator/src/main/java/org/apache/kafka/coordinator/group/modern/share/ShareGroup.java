@@ -89,6 +89,8 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         Map<Uuid, InitMapValue> initializedTopics,
         Set<Uuid> deletingTopics
     ) {
+        public static final ShareGroupStatePartitionMetadataInfo EMPTY = new ShareGroupStatePartitionMetadataInfo(Map.of(), Map.of(), Set.of());
+
         public ShareGroupStatePartitionMetadataInfo {
             initializingTopics = Collections.unmodifiableMap(initializingTopics);
             initializedTopics = Collections.unmodifiableMap(initializedTopics);
@@ -194,7 +196,8 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ShareGroup#updateMember(ShareGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Whether the member must be created if it does not exist.
@@ -215,9 +218,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
                 String.format("Member %s is not a member of group %s.", memberId, groupId));
         }
 
-        member = new ShareGroupMember.Builder(memberId).build();
-        updateMember(member);
-        return member;
+        return new ShareGroupMember.Builder(memberId).build();
     }
 
     /**

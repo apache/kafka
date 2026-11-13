@@ -1985,11 +1985,12 @@ project(':mirror-coordinator') {
   }
 
   dependencies {
+    implementation libs.re2j
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':coordinator-common')
 
-    testImplementation project(':server-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2457,6 +2458,7 @@ project(':server-common') {
     implementation libs.joptSimple
     implementation libs.jacksonDatabind
     implementation libs.pcollections
+    implementation libs.re2j
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
@@ -2782,6 +2784,7 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':mirror-coordinator')
     implementation project(':share-coordinator')
     implementation project(':raft')
     implementation libs.argparse4j

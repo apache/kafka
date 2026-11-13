@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -1072,7 +1073,7 @@ public class DescribeConsumerGroupTest {
         ) {
             // shutdown the target broker
             int noneLeaderPartition = 2;
-            int shutdownBrokerId = clusterInstance.getLeaderBrokerId(new TopicPartition(topic, noneLeaderPartition));
+            int shutdownBrokerId = AdminClientTestUtils.currentLeader(admin, new TopicPartition(topic, noneLeaderPartition)).orElseThrow();
             clusterInstance.shutdownBroker(shutdownBrokerId);
 
             TestUtils.waitForCondition(() -> {

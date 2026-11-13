@@ -171,25 +171,45 @@ public class StreamsAssignorBenchmarkUtils {
      *
      * @param memberCount           The number of members in the group.
      * @param membersPerProcess     The number of members per process.
+     * @param valuesPerTagKey       The number of values of each client tag key, empty for members without tags.
      *
      * @return The new StreamsGroupMembers map.
      */
     public static Map<String, StreamsGroupMember> createStreamsMembers(
         int memberCount,
-        int membersPerProcess
+        int membersPerProcess,
+        Map<String, Integer> valuesPerTagKey
     ) {
         Map<String, StreamsGroupMember> members = new HashMap<>();
 
         for (int i = 0; i < memberCount; i++) {
             String memberId = "member-" + i;
-            String processId = "process-" + i / membersPerProcess;
+            int processIndex = i / membersPerProcess;
+            String processId = "process-" + processIndex;
 
             members.put(memberId, StreamsGroupMember.Builder.withDefaults(memberId)
                     .setProcessId(processId)
+                    .setClientTags(createClientTags(processIndex, valuesPerTagKey))
                     .build());
         }
 
         return members;
+    }
+
+    /**
+     * Creates the client tags of a process: for each key, one of its values, taken round-robin by process index.
+     *
+     * @param processIndex      The index of the process.
+     * @param valuesPerTagKey   The number of values of each client tag key.
+     *
+     * @return The client tags.
+     */
+    public static Map<String, String> createClientTags(int processIndex, Map<String, Integer> valuesPerTagKey) {
+        Map<String, String> clientTags = new HashMap<>();
+        for (Map.Entry<String, Integer> valuesPerKey : valuesPerTagKey.entrySet()) {
+            clientTags.put(valuesPerKey.getKey(), valuesPerKey.getKey() + "-" + processIndex % valuesPerKey.getValue());
+        }
+        return clientTags;
     }
 
     /**
