@@ -863,6 +863,44 @@ public class ShareCompletedFetchTest {
         assertEquals(30L, batch4.getInFlightRecords().get(0).offset());
     }
 
+    @Test
+    public void testLeaderEpochIsSetPerBatch() {
+        // 3 batches of 3 records each, the second one without a partition leader epoch
+        int[] leaderEpochs = {5, RecordBatch.NO_PARTITION_LEADER_EPOCH, 1000};
+        int recordsPerBatch = 3;
+        int numRecords = leaderEpochs.length * recordsPerBatch;
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        for (int i = 0; i < leaderEpochs.length; i++) {
+            try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                    TimestampType.CREATE_TIME, (long) i * recordsPerBatch, RecordBatch.NO_TIMESTAMP, leaderEpochs[i])) {
+                for (int j = 0; j < recordsPerBatch; j++)
+                    builder.append(0L, "key".getBytes(), "value".getBytes());
+            }
+        }
+        buffer.flip();
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+            .setRecords(MemoryRecords.readableRecords(buffer))
+            .setAcquiredRecords(acquiredRecords(0L, numRecords));
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        // read 2 records at a time so that fetches resume in the middle of a batch
+        long expectedOffset = 0;
+        List<ConsumerRecord<String, String>> records;
+        while (!(records = completedFetch.fetchRecords(deserializers, 2, true).getInFlightRecords()).isEmpty()) {
+            for (ConsumerRecord<String, String> record : records) {
+                assertEquals(expectedOffset, record.offset());
+                int leaderEpoch = leaderEpochs[(int) (expectedOffset / recordsPerBatch)];
+                Optional<Integer> expectedLeaderEpoch = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH
+                    ? Optional.empty() : Optional.of(leaderEpoch);
+                assertEquals(expectedLeaderEpoch, record.leaderEpoch());
+                expectedOffset++;
+            }
+        }
+        assertEquals(numRecords, expectedOffset);
+    }
+
     private ShareCompletedFetch newShareCompletedFetch(ShareFetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
         ShareFetchMetricsRegistry shareFetchMetricsRegistry = new ShareFetchMetricsRegistry();

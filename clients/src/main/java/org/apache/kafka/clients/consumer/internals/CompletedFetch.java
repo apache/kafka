@@ -281,9 +281,8 @@ public class CompletedFetch {
                 if (lastRecord == null)
                     break;
 
-                Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 TimestampType timestampType = currentBatch.timestampType();
-                ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch, timestampType, lastRecord);
+                ConsumerRecord<K, V> record = parseRecord(deserializers, partition, lastEpoch, timestampType, lastRecord);
                 records.add(record);
                 recordsRead++;
                 bytesRead += lastRecord.sizeInBytes();
