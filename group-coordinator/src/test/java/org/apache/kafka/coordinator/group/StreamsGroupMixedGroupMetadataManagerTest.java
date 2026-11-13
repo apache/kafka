@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.group.streams.MemberState;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
@@ -485,7 +486,9 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         //   - static member left temporarily with -2 epoch.
         //   - dynamic member alive in group.
         // When the same static instance rejoins with a different processId, the coordinator
-        // bumps the group epoch and recomputes the target assignment.
+        // bumps the group epoch and recomputes the target assignment without inheriting current tasks.
+        // The old ownership is removed when the replacement records are replayed, so the static
+        // member receives its active task on a subsequent heartbeat with the new assignment epoch.
         // The dynamic member keeps its current assignment until its next heartbeat.
         // When the dynamic member sends the next heartbeat, it reconciles to the recomputed target assignment.
 
@@ -505,7 +508,8 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String newProcessId = "new-process-id";
 
         // Initial assignment
-        TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
+        // Temporary leave resets active task epochs to zero while retaining ownership.
+        TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(0, 0, 1);
         TasksTuple oldStaticTargetAssignment = topic.targetAssignment(0, 1);
 
         TasksTupleWithEpochs dynamicAssignedTasks = topic.assignedTasks(groupEpoch, 2, 3);
@@ -548,7 +552,9 @@ class StreamsGroupMixedGroupMetadataManagerTest {
 
         // static member try to rejoin with new process id.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
-            staticJoinHeartbeat(groupId, rejoinStaticMemberId, staticInstanceId, newProcessId)
+            staticJoinHeartbeat(groupId, rejoinStaticMemberId, staticInstanceId, topic)
+                .setProcessId(newProcessId)
+                .setClientTags(List.of())
         );
 
         assertResponseEquals(
@@ -558,7 +564,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
                 .setAcceptableRecoveryLag(10000)
-                .setActiveTasks(topic.responseTasks(0))
+                .setActiveTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
             rejoinResult.response().data()
@@ -572,6 +578,8 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         // static member should be replaced.
         assertFalse(group.hasMember(oldStaticMemberId));
         assertTrue(group.hasMember(rejoinStaticMemberId));
+        assertEquals(TasksTupleWithEpochs.EMPTY, group.getMemberOrThrow(rejoinStaticMemberId).assignedTasks());
+        assertEquals(MemberState.UNRELEASED_TASKS, group.getMemberOrThrow(rejoinStaticMemberId).state());
         assertEquals(rejoinStaticMemberId, group.staticMember(staticInstanceId).memberId());
 
         // Because group epoch is bumped up, target assignment should be recomputed.
@@ -580,39 +588,32 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         assertEquals(dynamicAssignedTasks, group.getMemberOrThrow(dynamicMemberId).assignedTasks());
         assertEquals(groupEpoch, group.getMemberOrThrow(dynamicMemberId).memberEpoch());
 
-        StreamsGroupMember expectedCopiedStaticMember = streamsGroupMemberBuilderWithDefaults(rejoinStaticMemberId, staticInstanceId)
+        // Replacement preserves metadata; the join request updates the process id in the next record.
+        StreamsGroupMember expectedNewStaticMember = streamsGroupMemberBuilderWithDefaults(rejoinStaticMemberId, staticInstanceId)
             .setProcessId(oldProcessId)
             .setMemberEpoch(0)
             .setPreviousMemberEpoch(0)
-            .setAssignedTasks(staticAssignedTasks)
             .build();
-
         StreamsGroupMember expectedUpdatedStaticMember = streamsGroupMemberBuilderWithDefaults(rejoinStaticMemberId, staticInstanceId)
             .setProcessId(newProcessId)
             .setMemberEpoch(0)
             .setPreviousMemberEpoch(0)
-            .setAssignedTasks(staticAssignedTasks)
             .build();
 
-        StreamsGroupMember expectedReconciledStaticMember = streamsGroupMemberBuilderWithDefaults(rejoinStaticMemberId, staticInstanceId)
-            .setProcessId(newProcessId)
+        StreamsGroupMember expectedWaitingStaticMember = new StreamsGroupMember.Builder(expectedUpdatedStaticMember)
             .setMemberEpoch(bumpedGroupEpoch)
-            .setPreviousMemberEpoch(0)
-            .setAssignedTasks(mkTasksTupleWithEpochs(
-                TaskRole.ACTIVE,
-                mkTasksWithEpochs(subtopologyId, Map.of(0, groupEpoch))
-            ))
+            .setState(MemberState.UNRELEASED_TASKS)
             .build();
-        
+
         List<CoordinatorRecord> expectedRecordsBeforeRecomputedAssignments = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, oldStaticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, oldStaticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, oldStaticMemberId),
 
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedCopiedStaticMember),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedNewStaticMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, rejoinStaticMemberId,
                 oldStaticTargetAssignment),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedCopiedStaticMember),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedNewStaticMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedUpdatedStaticMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
                 groupId,
@@ -635,7 +636,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecordsAfterRecomputedAssignments = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, bumpedGroupEpoch,
                 context.time.milliseconds()),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedReconciledStaticMember)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedWaitingStaticMember)
         );
 
         assertRecordsEquals(
@@ -690,6 +691,39 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         assertEquals(expectedUpdatedDynamicMember.assignedTasks(), group.getMemberOrThrow(dynamicMemberId).assignedTasks());
         assertEquals(bumpedGroupEpoch, group.getMemberOrThrow(dynamicMemberId).memberEpoch());
         assertEquals(newDynamicTargetAssignment, group.targetAssignment(dynamicMemberId, Optional.empty()));
+
+        // After replacement records are replayed, the static member can acquire task 0 from scratch.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> staticHeartbeatResult = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, rejoinStaticMemberId, staticInstanceId, bumpedGroupEpoch)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+        );
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(rejoinStaticMemberId)
+                .setMemberEpoch(bumpedGroupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
+                .setActiveTasks(topic.responseTasks(0))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()),
+            staticHeartbeatResult.response().data()
+        );
+        StreamsGroupMember expectedReconciledStaticMember = new StreamsGroupMember.Builder(expectedWaitingStaticMember)
+            .setPreviousMemberEpoch(bumpedGroupEpoch)
+            .setState(MemberState.STABLE)
+            .setAssignedTasks(topic.assignedTasks(bumpedGroupEpoch, 0))
+            .build();
+        assertRecordsEquals(
+            List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedReconciledStaticMember)),
+            staticHeartbeatResult.records()
+        );
+        assertEquals(expectedReconciledStaticMember, group.getMemberOrThrow(rejoinStaticMemberId));
+        assertEquals(expectedUpdatedDynamicMember, group.getMemberOrThrow(dynamicMemberId));
+        assertEquals(newProcessId, group.currentActiveTaskProcessId(subtopologyId, 0));
+        assertEquals(expectedUpdatedDynamicMember.processId(), group.currentActiveTaskProcessId(subtopologyId, 1));
     }
 
     @Test
