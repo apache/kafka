@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -35,6 +37,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -59,6 +66,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.time.Duration;
@@ -85,6 +94,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -431,6 +441,39 @@ public abstract class TopologyTestDriverTest {
                 () -> new TopologyTestDriverBuilder(setupSingleProcessorTopology())
                     .withConfig(null));
         assertEquals("config cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void shouldAllowUnusedNonStringDefaultConfig() {
+        final Properties defaults = new Properties();
+        defaults.put("unused.property", new Object());
+        final Properties driverConfig = new Properties(defaults);
+        driverConfig.putAll(config);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(setupSourceSinkTopology()).withConfig(driverConfig).build()) {
+            driver.createInputTopic(SOURCE_TOPIC_1, new ByteArraySerializer(), new ByteArraySerializer())
+                .pipeInput(new byte[]{1}, new byte[]{2});
+            assertArrayEquals(new byte[]{2}, driver.createOutputTopic(SINK_TOPIC_1, new ByteArrayDeserializer(), new ByteArrayDeserializer()).readValue());
+        }
+    }
+
+    @Test
+    public void shouldPreserveInheritedAndExplicitSerdeConfig() {
+        final Properties defaults = new Properties();
+        defaults.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        defaults.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        final Properties driverConfig = new Properties(defaults);
+        driverConfig.putAll(config);
+        driverConfig.remove(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        driverConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(setupSourceSinkTopology()).withConfig(driverConfig).build()) {
+            driver.createInputTopic(SOURCE_TOPIC_1, new StringSerializer(), new LongSerializer()).pipeInput("key", -1L);
+            assertEquals(KeyValue.pair("key", -1L), driver.createOutputTopic(SINK_TOPIC_1, new StringDeserializer(), new LongDeserializer()).readKeyValue());
+        }
+
+        assertFalse(driverConfig.containsKey(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG));
+        assertEquals(Serdes.LongSerde.class, driverConfig.get(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG));
     }
 
     @Test
@@ -1702,6 +1745,119 @@ public abstract class TopologyTestDriverTest {
                 Instant.now());
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             assertEquals("value1", globalStore.get("k1"));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldFailOnGlobalTableDeserializationError(final boolean configureHandler,
+                                                            final boolean invalidKey) {
+        if (configureHandler) {
+            config.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+        }
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(config).build()) {
+            final TestInputTopic<byte[], byte[]> input = driver.createInputTopic("global-topic", new ByteArraySerializer(), new ByteArraySerializer());
+            final byte[] valid = new LongSerializer().serialize("global-topic", 1L);
+            input.pipeInput(valid, valid);
+
+            final StreamsException exception = assertThrows(StreamsException.class,
+                () -> input.pipeInput(invalidKey ? new byte[0] : valid, invalidKey ? valid : new byte[0]));
+
+            assertInstanceOf(SerializationException.class, exception.getCause());
+            assertTrue(exception.getMessage().startsWith("Deserialization exception handler is set to fail"));
+            assertEquals(1L, driver.getKeyValueStore("global-store").get(1L));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldContinueAfterGlobalTableDeserializationError(final boolean invalidKey,
+                                                                 final boolean inheritHandler) {
+        final Properties handlerConfig = new Properties();
+        handlerConfig.setProperty(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class.getName());
+        final Properties driverConfig = inheritHandler ? new Properties(handlerConfig) : handlerConfig;
+        driverConfig.putAll(config);
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(driverConfig).build()) {
+            final TestInputTopic<byte[], byte[]> input = driver.createInputTopic("global-topic", new ByteArraySerializer(), new ByteArraySerializer());
+            final byte[] valid = new LongSerializer().serialize("global-topic", 1L);
+            input.pipeInput(valid, valid);
+            input.pipeInput(invalidKey ? new byte[0] : valid, invalidKey ? valid : new byte[0]);
+            assertEquals(1L, driver.getKeyValueStore("global-store").get(1L));
+
+            input.pipeInput(valid, new LongSerializer().serialize("global-topic", 2L));
+            assertEquals(2L, driver.getKeyValueStore("global-store").get(1L));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "deserialization.exception.handler, false",
+        "deserialization.exception.handler, true",
+        "default.deserialization.exception.handler, false",
+        "default.deserialization.exception.handler, true"
+    })
+    public void shouldInvokeConfiguredGlobalTableDeserializationHandler(final String handlerConfig,
+                                                                      final boolean inheritHandler) {
+        final List<ConsumerRecord<byte[], byte[]>> failedRecords = new ArrayList<>();
+        final Properties handlerDefaults = new Properties();
+        handlerDefaults.setProperty(handlerConfig, TrackingDeserializationExceptionHandler.class.getName());
+        final Properties driverConfig = inheritHandler ? new Properties(handlerDefaults) : handlerDefaults;
+        driverConfig.putAll(config);
+        driverConfig.put("test.failed.records", failedRecords);
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(driverConfig).build()) {
+            final TestInputTopic<Long, byte[]> input = driver.createInputTopic("global-topic", new LongSerializer(), new ByteArraySerializer());
+            final byte[] valid = new LongSerializer().serialize("global-topic", 1L);
+            input.pipeInput(1L, valid);
+            input.pipeInput(new TestRecord<>(1L, new byte[0], headers, timestamp1));
+
+            assertEquals(1, failedRecords.size());
+            final ConsumerRecord<byte[], byte[]> failedRecord = failedRecords.get(0);
+            assertEquals("global-topic", failedRecord.topic());
+            assertEquals(0, failedRecord.partition());
+            assertEquals(1L, failedRecord.offset());
+            assertEquals(timestamp1, failedRecord.timestamp());
+            assertEquals(headers, failedRecord.headers());
+            assertArrayEquals(valid, failedRecord.key());
+            assertArrayEquals(new byte[0], failedRecord.value());
+            assertEquals(1L, driver.getKeyValueStore("global-store").get(1L));
+
+            input.pipeInput(2L, valid);
+            assertEquals(1L, driver.getKeyValueStore("global-store").get(2L));
+            assertEquals(1, failedRecords.size());
+        }
+    }
+
+    private Topology globalTableTopology() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("global-topic",
+            Consumed.with(Serdes.Long(), Serdes.Long()),
+            Materialized.as(Stores.inMemoryKeyValueStore("global-store")));
+        return builder.build();
+    }
+
+    public static class TrackingDeserializationExceptionHandler implements DeserializationExceptionHandler {
+        private List<ConsumerRecord<byte[], byte[]>> failedRecords;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            failedRecords = (List<ConsumerRecord<byte[], byte[]>>) configs.get("test.failed.records");
+        }
+
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final ConsumerRecord<byte[], byte[]> record,
+                                    final Exception exception) {
+            assertInstanceOf(SerializationException.class, exception);
+            assertEquals(record.topic(), context.topic());
+            assertEquals(record.partition(), context.partition());
+            assertEquals(record.offset(), context.offset());
+            assertEquals(record.timestamp(), context.timestamp());
+            assertEquals(record.headers(), context.headers());
+            assertArrayEquals(record.key(), context.sourceRawKey());
+            assertArrayEquals(record.value(), context.sourceRawValue());
+            failedRecords.add(record);
+            return Response.resume();
         }
     }
 
