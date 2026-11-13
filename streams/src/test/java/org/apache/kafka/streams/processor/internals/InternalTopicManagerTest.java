@@ -350,57 +350,12 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionIfGetPartitionInfoHasTopicDescriptionTimeout() {
+    public void shouldAddTopicToTempUnknownIfGetPartitionInfoHasTopicDescriptionTimeout() {
         mockAdminClient.timeoutNextRequest(1);
+        final Set<String> tempUnknownTopics = new HashSet<>();
 
-        final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            internalTopicManager.getTopicPartitionInfo(topic1set, null);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
-
-        mockAdminClient.timeoutNextRequest(1);
-
-        try {
-            final Set<String> topic2set = Set.of(topic2);
-            internalTopicManager.getTopicPartitionInfo(topic2set, null);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
-    }
-
-    @Test
-    public void shouldThrowTimeoutExceptionIfGetNumPartitionsHasTopicDescriptionTimeout() {
-        mockAdminClient.timeoutNextRequest(1);
-
-        final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
-
-            internalTopicManager.getNumPartitions(topic1set, topic2set);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
-
-        mockAdminClient.timeoutNextRequest(1);
-
-        try {
-            final Set<String> topic1set = Set.of(topic1);
-            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
-
-            internalTopicManager.getNumPartitions(topic1set, topic2set);
-
-        } catch (final TimeoutException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
+        assertEquals(Map.of(), internalTopicManager.getTopicPartitionInfo(Set.of(topic1), tempUnknownTopics));
+        assertEquals(Set.of(topic1), tempUnknownTopics);
     }
 
     @Test
