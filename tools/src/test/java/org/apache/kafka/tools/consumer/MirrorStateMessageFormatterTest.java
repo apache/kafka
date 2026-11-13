@@ -26,8 +26,13 @@ import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsKey;
 import org.apache.kafka.coordinator.mirror.generated.LastMirrorEpochsValue;
 import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateKey;
 import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValue;
+import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValueJsonConverter;
 import org.apache.kafka.server.mirror.MirrorPartitionState;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -81,12 +86,14 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 """
                     {"key":{"type":0,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
                      "value":{"version":0,
-                              "data":{"state":"FAILED",
+                              "data":{"state":8,
                                       "leaderEpoch":42,
                                       "stateEpoch":7,
                                       "errorMessage":"error",
                                       "retryAttempt":3,
-                                      "previousState":"MIRRORING"}}}
+                                      "previousState":3,
+                                      "stateName":"FAILED",
+                                      "previousStateName":"MIRRORING"}}}
                 """
             ),
             Arguments.of(
@@ -95,12 +102,14 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 """
                     {"key":{"type":0,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
                      "value":{"version":0,
-                              "data":{"state":"LOG_ALIGNMENT",
+                              "data":{"state":0,
                                       "leaderEpoch":-1,
                                       "stateEpoch":0,
                                       "errorMessage":null,
                                       "retryAttempt":0,
-                                      "previousState":"UNKNOWN"}}}
+                                      "previousState":-1,
+                                      "stateName":"LOG_ALIGNMENT",
+                                      "previousStateName":"UNKNOWN"}}}
                 """
             ),
             Arguments.of(
@@ -111,12 +120,14 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 """
                     {"key":{"type":0,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
                      "value":{"version":0,
-                              "data":{"state":"127",
+                              "data":{"state":127,
                                       "leaderEpoch":-1,
                                       "stateEpoch":0,
                                       "errorMessage":null,
                                       "retryAttempt":0,
-                                      "previousState":"MIRRORING"}}}
+                                      "previousState":3,
+                                      "stateName":"127",
+                                      "previousStateName":"MIRRORING"}}}
                 """
             ),
             Arguments.of(
@@ -127,12 +138,14 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 """
                     {"key":{"type":0,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
                      "value":{"version":0,
-                              "data":{"state":"FAILED",
+                              "data":{"state":8,
                                       "leaderEpoch":-1,
                                       "stateEpoch":0,
                                       "errorMessage":null,
                                       "retryAttempt":0,
-                                      "previousState":"-128"}}}
+                                      "previousState":-128,
+                                      "stateName":"FAILED",
+                                      "previousStateName":"-128"}}}
                 """
             ),
             Arguments.of(
@@ -143,12 +156,14 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 """
                     {"key":{"type":0,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
                      "value":{"version":0,
-                              "data":{"state":"127",
+                              "data":{"state":127,
                                       "leaderEpoch":-1,
                                       "stateEpoch":0,
                                       "errorMessage":null,
                                       "retryAttempt":0,
-                                      "previousState":"-128"}}}
+                                      "previousState":-128,
+                                      "stateName":"127",
+                                      "previousStateName":"-128"}}}
                 """
             ),
             Arguments.of(
@@ -226,6 +241,23 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
     @MethodSource("malformedRecords")
     public void testMalformedRecord(byte[] key, byte[] value) {
         assertFormattingFails(key, value);
+    }
+
+    @Test
+    public void testRoundTrip() throws Exception {
+        byte[] key = MessageUtil.toCoordinatorTypePrefixedBytes(STATE_KEY);
+        byte[] value = MessageUtil.toVersionPrefixedBytes((short) 0, STATE_VALUE);
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("__mirror_state", 0, 0, key, value);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (MessageFormatter formatter = formatter(); PrintStream stream = new PrintStream(output, false, UTF_8)) {
+            formatter.writeTo(record, stream);
+        }
+
+        JsonNode data = new ObjectMapper().readTree(output.toByteArray()).path("value").path("data");
+        MirrorPartitionStateValue roundTripped = MirrorPartitionStateValueJsonConverter.read(data, (short) 0);
+        assertEquals(STATE_VALUE, roundTripped);
+        assertEquals(MirrorPartitionState.FAILED, MirrorPartitionState.fromValue(roundTripped.state()));
+        assertEquals(MirrorPartitionState.MIRRORING, MirrorPartitionState.fromValue(roundTripped.previousState()));
     }
 
     private RuntimeException assertFormattingFails(byte[] key, byte[] value) {
