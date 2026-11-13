@@ -163,6 +163,7 @@ public class BrokerRegistration {
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
     private final List<Uuid> directories;
+    private final Set<Uuid> directorySet;
     private final List<Uuid> cordonedDirectories;
 
     private BrokerRegistration(
@@ -198,6 +199,7 @@ public class BrokerRegistration {
         directories = new ArrayList<>(directories);
         directories.sort(Uuid::compareTo);
         this.directories = Collections.unmodifiableList(directories);
+        this.directorySet = Set.copyOf(directories);
         this.cordonedDirectories = cordonedDirectories == null ? null : Collections.unmodifiableList(cordonedDirectories);
     }
 
@@ -280,7 +282,7 @@ public class BrokerRegistration {
     }
 
     public boolean hasOnlineDir(Uuid dir) {
-        return DirectoryId.isOnline(dir, directories);
+        return DirectoryId.isOnline(dir, directorySet);
     }
 
     public boolean hasUncordonedDirs() {
