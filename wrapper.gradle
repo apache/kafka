@@ -43,8 +43,8 @@ task bootstrapWrapper() {
         // the bootstrap jar Gradle uses to build itself, which may be from the previous version and then
         // doesn't match the published wrapper checksum; for more details see gradle/wrapper/README.md
         // and https://issues.apache.org/jira/browse/KAFKA-21299
-        String wrapperJarCommit = "dcc5ee0ec88270575344e6afd490f96d96f84ab3"
-        String wrapperChecksum = "3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98"
+        String wrapperJarCommit = "ae8419a5eab376de5c94bb25e5463feef9b56c37"
+        String wrapperChecksum = "621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8"
         def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
