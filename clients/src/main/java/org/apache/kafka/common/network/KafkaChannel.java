@@ -439,8 +439,8 @@ public class KafkaChannel implements AutoCloseable {
             return 0;
 
         midWrite = true;
-        // A ByteBufferSend is written with one call, but SSL writes each of its buffers as its own TLS record
-        boolean singleWrite = send.send() instanceof ByteBufferSend && !(transportLayer instanceof SslTransportLayer);
+        // A ByteBufferSend is written with one call, other sends are written part by part
+        boolean singleWrite = send.send() instanceof ByteBufferSend;
         if (!OperatingSystem.IS_LINUX || singleWrite)
             return send.writeTo(transportLayer);
 

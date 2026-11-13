@@ -86,16 +86,11 @@ public class KafkaChannelTest {
     }
 
     @Test
-    public void testByteBufferSendTogglesOnlyWithSsl() throws IOException {
-        assumeTrue(OperatingSystem.IS_LINUX);
-
-        SocketChannel plaintext = socketChannelAfterWrite(Mockito.mock(TransportLayer.class),
+    public void testByteBufferSendKeepsTcpNoDelay() throws IOException {
+        SocketChannel socketChannel = socketChannelAfterWrite(Mockito.mock(TransportLayer.class),
             ByteBufferSend.sizePrefixed(ByteBuffer.allocate(128)));
-        Mockito.verify(plaintext, Mockito.never()).setOption(Mockito.any(), Mockito.any());
 
-        SocketChannel ssl = socketChannelAfterWrite(Mockito.mock(SslTransportLayer.class),
-            ByteBufferSend.sizePrefixed(ByteBuffer.allocate(128)));
-        Mockito.verify(ssl).setOption(StandardSocketOptions.TCP_NODELAY, false);
+        Mockito.verify(socketChannel, Mockito.never()).setOption(Mockito.any(), Mockito.any());
     }
 
     private static SocketChannel socketChannelAfterWrite(TransportLayer transport, Send send) throws IOException {
