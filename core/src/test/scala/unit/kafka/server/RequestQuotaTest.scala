@@ -742,19 +742,19 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), 3.toShort)
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), ApiKeys.INITIALIZE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.INITIALIZE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), 3.toShort)
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), ApiKeys.READ_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), 3.toShort)
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), ApiKeys.WRITE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), 3.toShort)
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), ApiKeys.DELETE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.DELETE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), 3.toShort)
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion))
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())
