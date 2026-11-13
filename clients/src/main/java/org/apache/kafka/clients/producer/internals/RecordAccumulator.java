@@ -29,7 +29,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
@@ -406,44 +405,39 @@ public class RecordAccumulator {
     }
 
     /**
-     * Decide whether an append pass may run, and throw if it may not because no time is left.
+     * Decide whether an append pass may run, and throw if it may not because the pool denied the pass before it
+     * and no time is left to try again.
      * <ul>
      * <li>The first pass is always allowed. The deadline is not even read, so an append that completes in one
-     *     pass never depends on the clock</li>
-     * <li>Every following pass is allowed only while there is time left before {@code deadlineMs}. The first one
-     *     that finds the deadline gone throws.</li>
+     *     pass never depends on the clock.</li>
+     * <li>A retry that follows a pass which was not denied memory is always allowed, as in {@link #append}.
+     *     Such a pass waited for nothing: the sticky partitioner switched, or a concurrent appender replaced,
+     *     filled or extended the batch the pass read. Retrying costs no time, so the deadline does not apply
+     *     and an append with no time to block (e.g. {@code max.block.ms=0}) still buffers its record. Each such
+     *     retry needs a state change made by the partitioner or by another thread, so the loop is bounded.</li>
+     * <li>A retry that follows a pass which was denied memory is allowed only while there is time left before
+     *     {@code deadlineMs}. The first one that finds the deadline gone throws.</li>
      * </ul>
-     * The deadline therefore bounds the loop as well as the waiting inside it.
-     * Every acquire is bounded by the {@link #remainingTimeToBlockMs}.
-     * Every retry that waits for nothing is bounded too (e.g., the partition changed, the batch the pass
-     * read was replaced or filled under it).
+     * Every blocking acquire is bounded separately by {@link #remainingTimeToBlockMs}.
      *
      * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
-     * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
-     *                     reported. Only the incremental extension acquire can be refused and still let its
-     *                     pass finish, and it suppresses the pool's own buffer-exhausted metric so the drop is
-     *                     counted here — exactly once either way. The full path should pass {@code false}:
-     *                     {@link BufferPool#allocate} records that metric itself and its refusal ends the append.
-     * @throws BufferExhaustedException if the pass that gave up was denied memory
-     * @throws TimeoutException if the deadline has been reached (and it's not the first pass).
+     * @param deniedMemory whether the pool refused the pass that just ended. Only the incremental extension
+     *                     acquire can be refused and still let its pass finish, and it suppresses the pool's own
+     *                     buffer-exhausted metric so the drop is counted here — exactly once either way.
+     * @throws BufferExhaustedException if the pass just ended was denied memory and the deadline has been reached
      */
     protected void throwIfNoMoreRetriesAllowed(boolean firstPass, long deadlineMs,
-                                              boolean deniedMemory, String topic) {
-        // The common case is a single pass, so it costs no clock read.
-        if (firstPass)
+                                               boolean deniedMemory, String topic) {
+        // The common case is a single pass, so it costs no clock read. Nor does a retry that did not wait.
+        if (firstPass || !deniedMemory)
             return;
         if (time.milliseconds() < deadlineMs)
             return;
-        if (deniedMemory) {
-            free.recordBufferExhausted();
-            throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
-                    + " within " + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". Total memory: "
-                    + free.totalMemory() + " bytes. Available memory: "
-                    + free.availableMemory() + " bytes.");
-        }
-        throw new TimeoutException("Failed to append a record to topic " + topic + " within "
-                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept retrying because concurrent "
-                + "appends changed the state it read.");
+        free.recordBufferExhausted();
+        throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
+                + " within " + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". Total memory: "
+                + free.totalMemory() + " bytes. Available memory: "
+                + free.availableMemory() + " bytes.");
     }
 
     /**

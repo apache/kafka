@@ -124,11 +124,12 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         List<ByteBuffer> extensionChunks = null;
 
         // This append's share of max.block.ms, as an absolute deadline. Blocking allocations bound themselves against it.
-        // Retries that never block are bounded by it through throwIfNoMoreRetriesAllowed: they are allowed while
-        // time is left. All retries bounded consistently (retry failed extension, retry on partition change).
+        // A retry after a denied non-blocking extension is bounded by it through throwIfNoMoreRetriesAllowed.
+        // Retries that waited for nothing (partition switch, batch changed by a concurrent appender) are not:
+        // they always run, as in the full strategy, so they cannot fail an append that has no time to block.
         long deadlineMs = appendDeadlineMs(nowMs, maxTimeToBlock);
 
-        // The first pass is always allowed; the deadline is enforced on every retry after it.
+        // The first pass is always allowed; the deadline is enforced only on a retry after a denied acquire.
         boolean firstPass = true;
 
         // Whether the non-blocking extension was denied memory on the pass that just ended (only
