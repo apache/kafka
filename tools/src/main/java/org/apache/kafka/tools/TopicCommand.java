@@ -46,6 +46,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.server.common.MinInSyncReplicas;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -311,8 +312,10 @@ public abstract class TopicCommand {
             this.reassignment = reassignment;
         }
 
+        // Effective min ISR, capped at the replica count like Partition#effectiveMinIsr on the broker.
         int minIsrCount() {
-            return Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
+            int configuredMinIsr = Integer.parseInt(config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
+            return MinInSyncReplicas.effectiveMinIsr(configuredMinIsr, info.replicas().size());
         }
 
         boolean isUnderReplicated() {
@@ -776,9 +779,11 @@ public abstract class TopicCommand {
             reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                 "If set when describing topics, only show partitions whose leader is not available.");
             reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
-                "If set when describing topics, only show partitions whose isr count is less than the configured minimum.");
+                "If set when describing topics, only show partitions whose isr count is less than the effective minimum " +
+                "(the lesser of min.insync.replicas and the replica count).");
             reportAtMinIsrPartitionsOpt = parser.accepts("at-min-isr-partitions",
-                "If set when describing topics, only show partitions whose isr count is equal to the configured minimum.");
+                "If set when describing topics, only show partitions whose isr count is equal to the effective minimum " +
+                "(the lesser of min.insync.replicas and the replica count).");
             topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                 "If set when describing topics, only show topics that have overridden configs.");
             ifExistsOpt = parser.accepts("if-exists",
