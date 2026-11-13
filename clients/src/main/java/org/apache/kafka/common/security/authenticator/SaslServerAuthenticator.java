@@ -72,6 +72,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.ArrayList;
@@ -210,7 +211,7 @@ public class SaslServerAuthenticator implements Authenticator {
         } else {
             try {
                 saslServer = SecurityManagerCompatibility.get().callAs(subject, () ->
-                    Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
+                    Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostString(), configs, callbackHandler));
                 if (saslServer == null) {
                     throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism);
                 }
@@ -414,8 +415,8 @@ public class SaslServerAuthenticator implements Authenticator {
         return netOutBuffer.completed();
     }
 
-    private InetAddress serverAddress() {
-        return transportLayer.socketChannel().socket().getLocalAddress();
+    private InetSocketAddress serverAddress() {
+        return (InetSocketAddress) transportLayer.socketChannel().socket().getLocalSocketAddress();
     }
 
     private InetAddress clientAddress() {
