@@ -109,4 +109,13 @@ public interface ClientTelemetrySender extends AutoCloseable {
      * is being closed. This method should not throw an exception if the client is already closed.
      */
     void initiateClose();
+
+    /**
+     * Returns whether the terminating push requested by {@link #initiateClose()} has still to be
+     * sent or is in flight. The enclosing client can use this to keep driving network I/O while
+     * closing so that the final metrics push reaches the broker before the network client is closed.
+     *
+     * @return {@code true} if the terminating push has not yet completed, else {@code false}
+     */
+    boolean isTerminatingPushPending();
 }
