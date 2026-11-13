@@ -2675,6 +2675,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, group.state());
         context.streamsGroupHeartbeat(
             refinementHeartbeat(groupId, memberA, null, 11, "process-a", List.of(3), List.of()));
+        assertEquals(12, group.groupEpoch());
 
         return context;
     }

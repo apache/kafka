@@ -104,7 +104,8 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {
-        return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+        return targetAssignment == refinedAssignment
+            || countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
     }
 
     private static int countActiveTasks(Map<String, TasksTuple> assignment) {
