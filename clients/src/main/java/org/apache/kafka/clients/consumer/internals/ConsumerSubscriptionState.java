@@ -956,6 +956,10 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
+    public synchronized void clearPendingRevocation(Set<TopicPartition> tps) {
+        tps.forEach(tp -> assignedState(tp).clearPendingRevocation());
+    }
+    
     // Visible for testing
     synchronized void markPendingOnAssignedCallback(Collection<TopicPartition> tps,
                                                     boolean pendingOnAssignedCallback) {
@@ -1317,6 +1321,10 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
             this.pendingRevocation = true;
         }
 
+        private void clearPendingRevocation() {
+            this.pendingRevocation = false;
+        }
+        
         private void markPendingOnAssignedCallback(boolean pendingOnAssignedCallback) {
             this.pendingOnAssignedCallback = pendingOnAssignedCallback;
         }

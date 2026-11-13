@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
@@ -32,6 +33,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopicMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -39,7 +41,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * This class contains helper methods to create records stored in the __consumer_offsets topic.
@@ -233,7 +237,8 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupTargetAssignmentMetadataRecord(
         String groupId,
         int assignmentEpoch,
-        long assignmentTimestamp
+        long assignmentTimestamp,
+        Optional<GroupMetadataManager.TopologyMetadataSnapshot> metadataSnapshot
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
 
@@ -243,7 +248,10 @@ public class StreamsCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(assignmentEpoch)
-                    .setAssignmentTimestamp(assignmentTimestamp),
+                    .setAssignmentTimestamp(assignmentTimestamp)
+                    .setTopologyMetadataSnapshot(metadataSnapshot
+                        .map(StreamsCoordinatorRecordHelpers::toRecordSnapshot)
+                        .orElse(null)),
                 (short) 0
             )
         );
@@ -458,5 +466,58 @@ public class StreamsCoordinatorRecordHelpers {
             new StreamsGroupTopologyKey()
                 .setGroupId(groupId)
         );
+    }
+
+    private static StreamsGroupTargetAssignmentMetadataValue.TopologyMetadataSnapshot toRecordSnapshot(
+        GroupMetadataManager.TopologyMetadataSnapshot snapshot
+    ) {
+
+        Map<String, Map<String, ConfiguredTopicMetadata>> sourceTopicsBySubtopology = snapshot.sourceTopicsBySubtopology();
+        Map<String, Map<String, ConfiguredTopicMetadata>> repartitionSourceTopicsBySubtopology = snapshot.repartitionSourceTopicsBySubtopology();
+
+        List<StreamsGroupTargetAssignmentMetadataValue.SubtopologyMetadata> subtopologies = new ArrayList<>(sourceTopicsBySubtopology.size());
+
+        for (String subtopologyId : new TreeSet<>(sourceTopicsBySubtopology.keySet())) {
+            subtopologies.add(
+                new StreamsGroupTargetAssignmentMetadataValue.SubtopologyMetadata()
+                    .setSubtopologyId(subtopologyId)
+                    .setSourceTopics(
+                        toRecordTopicMetadata(sourceTopicsBySubtopology.get(subtopologyId))
+                    )
+                    .setRepartitionSourceTopics(
+                        toRecordTopicMetadata(repartitionSourceTopicsBySubtopology.get(subtopologyId))
+                    ));
+        }
+
+        return new StreamsGroupTargetAssignmentMetadataValue.TopologyMetadataSnapshot()
+            .setMetadataHash(snapshot.metadataHash())
+            .setSubtopologies(subtopologies);
+    }
+
+    private static List<StreamsGroupTargetAssignmentMetadataValue.TopicMetadata> toRecordTopicMetadata(
+        Map<String, ConfiguredTopicMetadata> topics
+    ) {
+
+        List<StreamsGroupTargetAssignmentMetadataValue.TopicMetadata> result = new ArrayList<>(topics.size());
+
+        for (String topicName : new TreeSet<>(topics.keySet())) {
+            ConfiguredTopicMetadata topic = topics.get(topicName);
+
+            result.add(
+                new StreamsGroupTargetAssignmentMetadataValue.TopicMetadata()
+                    .setTopicName(topic.topicName())
+                    .setResolvedMetadata(
+                        topic.topicIdAndPartition()
+                            .map(resolved ->
+                                new StreamsGroupTargetAssignmentMetadataValue.ResolvedTopicMetadata()
+                                    .setTopicId(resolved.topicId())
+                                    .setPartitionCount(resolved.partitionCount())
+                            )
+                            .orElse(null)
+                    )
+            );
+        }
+
+        return result;
     }
 }
