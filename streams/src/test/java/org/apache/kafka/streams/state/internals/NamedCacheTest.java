@@ -32,10 +32,12 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -191,6 +193,83 @@ public class NamedCacheTest {
         cache.flush();
         assertEquals(1, cache.size());
         assertNotNull(cache.get(Bytes.wrap(new byte[]{1})));
+    }
+
+    @Test
+    public void shouldRetainDirtyKeysAtQuarterOfPeak() {
+        cache.setListener(dirty -> { /* no-op */ });
+        putDirty(0, 16);
+        cache.flush();
+        final Set<Bytes> dirtyKeys = cache.dirtyKeys();
+
+        putDirty(0, 4);
+        cache.flush();
+
+        assertSame(dirtyKeys, cache.dirtyKeys());
+    }
+
+    @Test
+    public void shouldReplaceDirtyKeysBelowQuarterOfPeakAndKeepFlushOrder() {
+        final List<Bytes> flushed = new ArrayList<>();
+        cache.setListener(dirty -> dirty.forEach(entry -> flushed.add(entry.key())));
+        putDirty(0, 16);
+        cache.flush();
+        final Set<Bytes> dirtyKeys = cache.dirtyKeys();
+
+        putDirty(0, 3);
+        cache.flush();
+        assertNotSame(dirtyKeys, cache.dirtyKeys());
+
+        flushed.clear();
+        putDirty(3, 1);
+        putDirty(2, 1);
+        cache.flush();
+        assertEquals(List.of(Bytes.wrap(new byte[]{3}), Bytes.wrap(new byte[]{2})), flushed);
+    }
+
+    @Test
+    public void shouldReplaceDirtyKeysOnIdleFlushAfterPeak() {
+        cache.setListener(dirty -> { /* no-op */ });
+        putDirty(0, 16);
+        cache.flush();
+        final Set<Bytes> dirtyKeys = cache.dirtyKeys();
+
+        cache.flush();
+
+        assertNotSame(dirtyKeys, cache.dirtyKeys());
+    }
+
+    @Test
+    public void shouldReplaceDirtyKeysOnClearAfterPeak() {
+        cache.setListener(dirty -> { /* no-op */ });
+        putDirty(0, 16);
+        cache.flush();
+        final Set<Bytes> dirtyKeys = cache.dirtyKeys();
+
+        cache.clear();
+
+        assertNotSame(dirtyKeys, cache.dirtyKeys());
+    }
+
+    @Test
+    public void shouldTrackDirtyKeysPeakAcrossDeletes() {
+        cache.setListener(dirty -> { /* no-op */ });
+        putDirty(0, 16);
+        for (byte i = 1; i < 16; i++) {
+            cache.delete(Bytes.wrap(new byte[]{i}));
+        }
+        final Set<Bytes> dirtyKeys = cache.dirtyKeys();
+
+        cache.flush();
+
+        assertNotSame(dirtyKeys, cache.dirtyKeys());
+    }
+
+    private void putDirty(final int firstKey, final int count) {
+        for (int i = firstKey; i < firstKey + count; i++) {
+            final byte key = (byte) i;
+            cache.put(Bytes.wrap(new byte[]{key}), new LRUCacheEntry(new byte[]{key}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        }
     }
 
     @Test
