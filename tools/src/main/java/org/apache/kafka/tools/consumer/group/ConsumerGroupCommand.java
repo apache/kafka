@@ -45,6 +45,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.GroupOffsetsResetter;
+import org.apache.kafka.tools.ToolsUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -182,13 +183,16 @@ public class ConsumerGroupCommand {
         final ConsumerGroupCommandOptions opts;
         final Map<String, String> configOverrides;
         private final Admin adminClient;
+        private final long timeoutMs;
         private final GroupOffsetsResetter groupOffsetsResetter;
 
         ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             this.configOverrides = configOverrides;
             try {
-                this.adminClient = createAdminClient(configOverrides);
+                Properties adminClientProps = adminClientProps(configOverrides);
+                this.adminClient = createAdminClient(adminClientProps);
+                this.timeoutMs = ToolsUtils.groupCommandTimeoutMs(opts.options, opts.timeoutMsOpt, adminClientProps);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -203,7 +207,7 @@ public class ConsumerGroupCommand {
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
                     opts.options.valueOf(opts.resetByDurationOpt),
                     opts.options.valueOf(opts.resetShiftByOpt),
-                    opts.options.valueOf(opts.timeoutMsOpt));
+                    timeoutMs);
         }
 
         void listGroups() throws ExecutionException, InterruptedException {
@@ -930,16 +934,19 @@ public class ConsumerGroupCommand {
         }
 
         // Visibility for testing
-        protected Admin createAdminClient(Map<String, String> configOverrides) throws IOException {
+        protected Admin createAdminClient(Properties adminClientProps) {
+            return Admin.create(adminClientProps);
+        }
+
+        private Properties adminClientProps(Map<String, String> configOverrides) throws IOException {
             Properties props = opts.options.has(opts.commandConfigOpt) ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) : new Properties();
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
-            return Admin.create(props);
+            return props;
         }
 
         private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
-            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
-            return options.timeoutMs(t);
+            return options.timeoutMs((int) timeoutMs);
         }
 
         private Collection<TopicPartition> getPartitionsToReset(String groupId) throws ExecutionException, InterruptedException {
