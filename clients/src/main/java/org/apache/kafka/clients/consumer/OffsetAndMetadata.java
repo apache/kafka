@@ -28,6 +28,11 @@ import java.util.Optional;
  * when an offset is committed. This can be useful (for example) to store information about which
  * node made the commit, what time the commit was made, etc.
  * <p>
+ * The metadata is sent to the broker as a UTF-8 encoded string. If the committed metadata bytes are not
+ * valid UTF-8, the broker replaces each malformed sequence with the Unicode replacement character
+ * ({@code U+FFFD}). The replaced value, not the original bytes, is returned when the committed offsets
+ * are later fetched.
+ * <p>
  * Besides the offset and the metadata string, this class carries the <i>leader epoch</i> of the consumed
  * record, which can be obtained from {@link ConsumerRecord#leaderEpoch()} or
  * {@link ConsumerRecords#nextOffsets()}. The consumer uses the committed leader epoch to validate that
