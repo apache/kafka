@@ -7000,6 +7000,130 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testJoinPhaseCompletesWhenLastRejoiningMembersAreRejectedWithGroupMaxSize() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, 2)
+            .build();
+
+        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+            List.of("foo"))).array();
+        List<GroupMetadataValue.MemberMetadata> members = Stream.of("member-0", "member-1", "member-2", "member-3")
+            .map(memberId -> new GroupMetadataValue.MemberMetadata()
+                .setMemberId(memberId)
+                .setSubscription(subscription)
+                .setAssignment(new byte[]{2})
+                .setClientId("client-id")
+                .setClientHost("client-host")
+                .setSessionTimeout(4000)
+                .setRebalanceTimeout(9000))
+            .toList();
+        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id", new GroupMetadataValue()
+            .setMembers(members)
+            .setGeneration(1)
+            .setLeader("member-0")
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setCurrentStateTimestamp(context.time.milliseconds())));
+        context.groupMetadataManager.onLoaded();
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+        assertEquals(STABLE, group.previousState());
+
+        Function<String, CompletableFuture<JoinGroupResponseData>> rejoin = memberId -> context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(memberId)
+                .withDefaultProtocolTypeAndProtocols()
+                .withRebalanceTimeoutMs(9000)
+                .withSessionTimeoutMs(4000)
+                .build()
+        ).joinFuture;
+
+        CompletableFuture<JoinGroupResponseData> member0 = rejoin.apply("member-0");
+        assertFalse(member0.isDone());
+        CompletableFuture<JoinGroupResponseData> member1 = rejoin.apply("member-1");
+        assertFalse(member0.isDone());
+        assertFalse(member1.isDone());
+
+        // member-3 has not rejoined yet, so the join phase must not complete.
+        assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), rejoin.apply("member-2").join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", "member-2")));
+        assertFalse(member0.isDone());
+        assertFalse(member1.isDone());
+
+        assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), rejoin.apply("member-3").join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", "member-3")));
+        assertTrue(member0.isDone());
+        assertTrue(member1.isDone());
+        assertEquals(Errors.NONE.code(), member0.join().errorCode());
+        assertEquals(Errors.NONE.code(), member1.join().errorCode());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Set.of("member-0", "member-1"), group.allMemberIds());
+    }
+
+    @Test
+    public void testJoinPhaseCompletesWhenLastPendingMemberIsRejectedWithGroupMaxSize() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, 2)
+            .build();
+
+        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+            List.of("foo"))).array();
+        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id", new GroupMetadataValue()
+            .setMembers(List.of(new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member-0")
+                .setSubscription(subscription)
+                .setAssignment(new byte[]{2})
+                .setClientId("client-id")
+                .setClientHost("client-host")
+                .setSessionTimeout(4000)
+                .setRebalanceTimeout(9000)))
+            .setGeneration(1)
+            .setLeader("member-0")
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setCurrentStateTimestamp(context.time.milliseconds())));
+        context.groupMetadataManager.onLoaded();
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+        assertTrue(group.isInState(STABLE));
+
+        Function<String, CompletableFuture<JoinGroupResponseData>> join = memberId -> context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(memberId)
+                .withDefaultProtocolTypeAndProtocols()
+                .withRebalanceTimeoutMs(9000)
+                .withSessionTimeoutMs(4000)
+                .build(),
+            true
+        ).joinFuture;
+
+        String pendingMember1Id = join.apply(UNKNOWN_MEMBER_ID).join().memberId();
+        String pendingMember2Id = join.apply(UNKNOWN_MEMBER_ID).join().memberId();
+        assertEquals(2, group.numPendingJoinMembers());
+
+        CompletableFuture<JoinGroupResponseData> pendingMember1 = join.apply(pendingMember1Id);
+        assertFalse(pendingMember1.isDone());
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+        assertEquals(STABLE, group.previousState());
+
+        // pendingMember2 is still pending, so the join phase must not complete.
+        CompletableFuture<JoinGroupResponseData> member0 = join.apply("member-0");
+        assertFalse(pendingMember1.isDone());
+        assertFalse(member0.isDone());
+        assertEquals(1, group.numPendingJoinMembers());
+
+        assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), join.apply(pendingMember2Id).join().errorCode());
+        assertFalse(context.timer.isScheduled(classicGroupHeartbeatKey("group-id", pendingMember2Id)));
+        assertTrue(pendingMember1.isDone());
+        assertTrue(member0.isDone());
+        assertEquals(Errors.NONE.code(), pendingMember1.join().errorCode());
+        assertEquals(Errors.NONE.code(), member0.join().errorCode());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(Set.of("member-0", pendingMember1Id), group.allMemberIds());
+    }
+
+    @Test
     public void testJoinGroupUnknownMemberNewGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
