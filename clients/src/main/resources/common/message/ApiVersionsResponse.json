@@ -31,7 +31,9 @@
   // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion from being 0.
   //
   // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
-  "validVersions": "0-5",
+  //
+  // Version 6 is the same as version 5 (KIP-1313).
+  "validVersions": "0-6",
   "flexibleVersions": "3+",
   // ApiVersionsResponse always includes a v0 header.
   // See KIP-511 for details.

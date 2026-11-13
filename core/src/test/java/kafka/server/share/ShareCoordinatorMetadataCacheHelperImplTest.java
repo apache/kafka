@@ -554,6 +554,57 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
+    @Test
+    public void testProduceRequestHeaderVersionReturnsHeaderV3() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals((short) 3, cache.produceRequestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testProduceRequestHeaderVersionReturnsHeaderV2OnOlderMetadataVersion() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals((short) 2, cache.produceRequestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testProduceRequestHeaderVersionReturnsMinimumVersionHeaderOnException() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals(MetadataVersion.MINIMUM_VERSION.produceRequestHeaderVersion(), cache.produceRequestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
     // Tests for shareGroupDlqTopic
 
     @Test

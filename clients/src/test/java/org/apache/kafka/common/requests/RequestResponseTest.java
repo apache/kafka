@@ -1646,7 +1646,8 @@ public class RequestResponseTest {
         return new EnvelopeRequest.Builder(
                 ByteBuffer.wrap("data".getBytes(StandardCharsets.UTF_8)),
                 "principal".getBytes(StandardCharsets.UTF_8),
-                "address".getBytes(StandardCharsets.UTF_8))
+                "address".getBytes(StandardCharsets.UTF_8),
+                ApiKeys.ENVELOPE.requestHeaderVersion(version))
                 .build(version);
     }
 

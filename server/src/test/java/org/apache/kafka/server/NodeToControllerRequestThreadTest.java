@@ -305,7 +305,8 @@ class NodeToControllerRequestThreadTest {
 
         // build an EnvelopeRequest by dummy data
         EnvelopeRequest.Builder envelopeRequestBuilder = new EnvelopeRequest.Builder(ByteBuffer.allocate(0),
-            kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes());
+            kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes(),
+            ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion()));
 
         NodeToControllerQueueItem queueItem = new NodeToControllerQueueItem(
             time.milliseconds(),

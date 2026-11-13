@@ -24,7 +24,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import java.nio.ByteBuffer;
 
 public final class ForwardingManagerUtil {
-    public static EnvelopeRequest.Builder buildEnvelopeRequest(RequestContext context, ByteBuffer forwardRequestBuffer) {
+    public static EnvelopeRequest.Builder buildEnvelopeRequest(RequestContext context, ByteBuffer forwardRequestBuffer, short requestHeaderVersion) {
         KafkaPrincipalSerde principalSerde = context.principalSerde.orElseThrow(() ->
             new IllegalArgumentException(
                 "Cannot deserialize principal from request context " + context +
@@ -35,7 +35,8 @@ public final class ForwardingManagerUtil {
         return new EnvelopeRequest.Builder(
             forwardRequestBuffer,
             serializedPrincipal,
-            context.clientAddress.getAddress()
+            context.clientAddress.getAddress(),
+            requestHeaderVersion
         );
     }
 }

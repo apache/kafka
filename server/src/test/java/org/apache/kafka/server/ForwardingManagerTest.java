@@ -58,6 +58,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -68,6 +69,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ForwardingManagerTest {
+
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion());
 
     private final MockTime time = new MockTime();
     private final DefaultKafkaPrincipalBuilder principalBuilder = new DefaultKafkaPrincipalBuilder(null, null);
@@ -91,7 +97,7 @@ public class ForwardingManagerTest {
         client = new MockClient(time);
         metrics = new Metrics();
         brokerToController = new MockNodeToControllerChannelManager(client, time, controllerNodeProvider, controllerApiVersions());
-        forwardingManager = new ForwardingManagerImpl(brokerToController, metrics);
+        forwardingManager = new ForwardingManagerImpl(brokerToController, metrics, () -> LATEST_REQUEST_HEADER_VERSION);
         queueTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().queueTimeMsHist().latencyP999Name());
         queueLength = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().queueLengthName());
         remoteTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().remoteTimeMsHist().latencyP999Name());
@@ -244,6 +250,40 @@ public class ForwardingManagerTest {
         assertEquals(0, (Integer) queueLength.metricValue());
         assertEquals(brokerToController.getTimeoutMs() * 0.999, (Double) queueTimeMsP999.metricValue());
         assertEquals(Double.NaN, (Double) remoteTimeMsP999.metricValue());
+    }
+
+    @Test
+    public void testRequestVersionFollowsRequestHeaderVersionChange() {
+        AtomicInteger requestHeaderVersion = new AtomicInteger(OLDEST_REQUEST_HEADER_VERSION);
+        try (Metrics gatedMetrics = new Metrics()) {
+            ForwardingManagerImpl gatedForwardingManager =
+                new ForwardingManagerImpl(brokerToController, gatedMetrics, () -> (short) requestHeaderVersion.get());
+            Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo());
+
+            assertRequestVersion(forwardAndCaptureEnvelope(gatedForwardingManager).version(), OLDEST_REQUEST_HEADER_VERSION);
+
+            requestHeaderVersion.set(LATEST_REQUEST_HEADER_VERSION);
+            assertRequestVersion(forwardAndCaptureEnvelope(gatedForwardingManager).version(), LATEST_REQUEST_HEADER_VERSION);
+        }
+    }
+
+    private static void assertRequestVersion(short requestVersion, short requestHeaderVersion) {
+        assertEquals(ApiKeys.ENVELOPE.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
+        assertEquals(requestHeaderVersion, ApiKeys.ENVELOPE.requestHeaderVersion(requestVersion));
+    }
+
+    private EnvelopeRequest forwardAndCaptureEnvelope(ForwardingManagerImpl manager) {
+        ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(
+                new AlterConfigsResponse(new AlterConfigsResponseData()), headerAndBuffer.header.apiVersion(), requestCorrelationId);
+        AtomicReference<EnvelopeRequest> envelopeRequest = new AtomicReference<>();
+        client.prepareResponse(req -> {
+            envelopeRequest.set((EnvelopeRequest) req);
+            return true;
+        }, new EnvelopeResponse(responseBuffer, Errors.NONE));
+
+        manager.forwardRequest(request, response -> { });
+        brokerToController.poll();
+        return envelopeRequest.get();
     }
 
     record HeaderAndBuffer(RequestHeader header, ByteBuffer buffer) { }

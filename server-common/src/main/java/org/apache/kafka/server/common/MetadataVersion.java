@@ -284,6 +284,14 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
     }
 
+    public short envelopeRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short produceRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
     public short partitionChangeRecordVersion() {
         if (isElrSupported()) {
             return (short) 2;
@@ -305,7 +313,9 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (isAtLeast(IBP_4_1_IV1)) {
+        if (isAtLeast(IBP_4_5_IV0)) {
+            return 19;
+        } else if (isAtLeast(IBP_4_1_IV1)) {
             return 18;
         } else if (isAtLeast(IBP_3_9_IV0)) {
             return 17;

@@ -60,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,12 +69,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KRaftTopicCreatorTest {
 
     private static final int REQUEST_TIMEOUT = 100;
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion());
 
     private NodeToControllerChannelManager brokerToController;
     private KRaftTopicCreator kraftTopicCreator;
@@ -90,7 +96,7 @@ public class KRaftTopicCreatorTest {
         when(brokerToController.controllerApiVersions())
             .thenReturn(Optional.of(NodeApiVersions.create(Set.of(createTopicApiVersion))));
 
-        kraftTopicCreator = new KRaftTopicCreator(brokerToController);
+        kraftTopicCreator = new KRaftTopicCreator(brokerToController, () -> LATEST_REQUEST_HEADER_VERSION);
     }
 
     @Test
@@ -508,6 +514,30 @@ public class KRaftTopicCreatorTest {
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
         assertInstanceOf(IllegalStateException.class, exception.getCause());
         assertTrue(responseFuture.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testRequestVersionFollowsRequestHeaderVersionChange() {
+        AtomicInteger requestHeaderVersion = new AtomicInteger(OLDEST_REQUEST_HEADER_VERSION);
+        KRaftTopicCreator gatedTopicCreator = new KRaftTopicCreator(brokerToController, () -> (short) requestHeaderVersion.get());
+        RequestContext requestContext = initializeRequestContextWithUserPrincipal();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<AbstractRequest.Builder<? extends AbstractRequest>> argumentCaptor =
+            (ArgumentCaptor<AbstractRequest.Builder<? extends AbstractRequest>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(AbstractRequest.Builder.class);
+
+        gatedTopicCreator.createTopicWithPrincipal(requestContext, createCreateTopicsRequestBuilder("topic"));
+        verify(brokerToController).sendRequest(argumentCaptor.capture(), any(ControllerRequestCompletionHandler.class));
+        assertRequestVersion(argumentCaptor.getValue().latestAllowedVersion(), OLDEST_REQUEST_HEADER_VERSION);
+
+        requestHeaderVersion.set(LATEST_REQUEST_HEADER_VERSION);
+        gatedTopicCreator.createTopicWithPrincipal(requestContext, createCreateTopicsRequestBuilder("topic"));
+        verify(brokerToController, times(2)).sendRequest(argumentCaptor.capture(), any(ControllerRequestCompletionHandler.class));
+        assertRequestVersion(argumentCaptor.getValue().latestAllowedVersion(), LATEST_REQUEST_HEADER_VERSION);
+    }
+
+    private static void assertRequestVersion(short requestVersion, short requestHeaderVersion) {
+        assertEquals(ApiKeys.ENVELOPE.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
+        assertEquals(requestHeaderVersion, ApiKeys.ENVELOPE.requestHeaderVersion(requestVersion));
     }
 
     private RequestContext initializeRequestContextWithUserPrincipal() {

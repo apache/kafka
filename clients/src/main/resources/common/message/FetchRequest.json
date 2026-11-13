@@ -58,11 +58,15 @@
   // Version 17 adds directory id support from KIP-853
   //
   // Version 18 adds high-watermark from KIP-1166
-  "validVersions": "4-18",
+  //
+  // Version 19 uses the v3 request header (KIP-1313).
+  "latestVersionUnstable": true,
+  "validVersions": "4-19",
   "flexibleVersions": "12+",
   "headerVersions": {
     "0-11": "1",
-    "12+": "2"
+    "12-18": "2",
+    "19+": "3"
   },
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",

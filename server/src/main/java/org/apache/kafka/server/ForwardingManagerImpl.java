@@ -38,6 +38,7 @@ import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class ForwardingManagerImpl implements ForwardingManager {
 
@@ -45,9 +46,11 @@ public class ForwardingManagerImpl implements ForwardingManager {
 
     private final NodeToControllerChannelManager channelManager;
     private final ForwardingManagerMetrics forwardingManagerMetrics;
+    private final Supplier<Short> requestHeaderVersionSupplier;
 
-    public ForwardingManagerImpl(NodeToControllerChannelManager channelManager, Metrics metrics) {
+    public ForwardingManagerImpl(NodeToControllerChannelManager channelManager, Metrics metrics, Supplier<Short> requestHeaderVersionSupplier) {
         this.channelManager = channelManager;
+        this.requestHeaderVersionSupplier = requestHeaderVersionSupplier;
         this.forwardingManagerMetrics = new ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs());
     }
 
@@ -61,7 +64,7 @@ public class ForwardingManagerImpl implements ForwardingManager {
             ByteBuffer requestBufferCopy,
             AbstractRequest requestBody,
             Consumer<Optional<AbstractResponse>> responseCallback) {
-        EnvelopeRequest.Builder envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(originalRequest.context(), requestBufferCopy);
+        EnvelopeRequest.Builder envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(originalRequest.context(), requestBufferCopy, requestHeaderVersionSupplier.get());
         long requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(originalRequest.startTimeNanos());
 
         class ForwardingResponseHandler implements ControllerRequestCompletionHandler {
