@@ -34,6 +34,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.MirrorVersion;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.common.StreamsVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -320,6 +321,7 @@ public class FormatterTest {
                 formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
+            assertEquals(MirrorVersion.MV_1.featureLevel(), bootstrapMetadata.featureLevel(MirrorVersion.FEATURE_NAME));
         }
     }
 
@@ -439,11 +441,55 @@ public class FormatterTest {
             formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
-                    "are: eligible.leader.replicas.version, group.version, kraft.version, " +
+                    "are: eligible.leader.replicas.version, group.version, kraft.version, mirror.version, " +
                     "share.version, streams.version, test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     formatter1.formatter::run).
                         getMessage());
+        }
+    }
+
+    @Test
+    public void testMirrorVersionDisabledByDefault() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext context = testEnv.newFormatter();
+            context.formatter.run();
+            assertEquals(0, context.formatter.bootstrapMetadata().featureLevel(MirrorVersion.FEATURE_NAME));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 1})
+    public void testExplicitMirrorVersionAtSupportedMetadataVersion(short level) throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext context = testEnv.newFormatter();
+            context.formatter.setReleaseVersion(MetadataVersion.IBP_4_5_IV1);
+            context.formatter.setUnstableFeatureVersionsEnabled(true);
+            context.formatter.setFeatureLevel(MirrorVersion.FEATURE_NAME, level);
+            context.formatter.run();
+            assertEquals(level, context.formatter.bootstrapMetadata().featureLevel(MirrorVersion.FEATURE_NAME));
+        }
+    }
+
+    @Test
+    public void testMirrorVersionRequiresNewMetadataVersion() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext context = testEnv.newFormatter();
+            context.formatter.setReleaseVersion(MetadataVersion.IBP_4_5_IV0);
+            context.formatter.setUnstableFeatureVersionsEnabled(true);
+            context.formatter.setFeatureLevel(MirrorVersion.FEATURE_NAME, (short) 1);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, context.formatter::run);
+            assertTrue(e.getMessage().contains("depends on metadata.version level " + MetadataVersion.IBP_4_5_IV1.featureLevel()), e.getMessage());
+        }
+    }
+
+    @Test
+    public void testMirrorVersionRequiresUnstableOptIn() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext context = testEnv.newFormatter();
+            context.formatter.setFeatureLevel(MirrorVersion.FEATURE_NAME, (short) 1);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, context.formatter::run);
+            assertTrue(e.getMessage().contains("No feature:mirror.version with feature level 1"), e.getMessage());
         }
     }
 
