@@ -45,6 +45,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -422,6 +423,31 @@ public class KafkaStreamsTest {
                 streams.start();
                 verify(stateDirectory, times(1)).initializeStartupStores(any(), any(), any());
             }
+        }
+    }
+
+    @Test
+    public void shouldLogInternalRepartitionTopicsOnStart() {
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("source-topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .selectKey((key, value) -> value)
+            .groupByKey()
+            .count();
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+             final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+
+            final String applicationId = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+            assertTrue(appender.getMessages().stream().anyMatch(message ->
+                message.contains("Internal repartition topics detected:") &&
+                    message.contains(applicationId) &&
+                    message.contains("-repartition")));
         }
     }
 
