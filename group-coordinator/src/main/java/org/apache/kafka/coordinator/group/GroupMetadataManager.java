@@ -2241,8 +2241,14 @@ public class GroupMetadataManager {
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
+                Optional<Boolean> wasReady = group.configuredTopology().map(ConfiguredTopology::isReady);
                 updatedConfiguredTopology = InternalTopicManager.configureTopics(log, groupId, memberId, metadataHash, updatedTopology, metadataImage, time);
                 group.setConfiguredTopology(updatedConfiguredTopology);
+                // No endpoint information is reported while the topology is not ready, so members must refetch it
+                // when the topology becomes ready or stops being ready, even if no assignment changes.
+                if (wasReady.isPresent() && wasReady.get() != updatedConfiguredTopology.isReady()) {
+                    group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
+                }
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
             }
