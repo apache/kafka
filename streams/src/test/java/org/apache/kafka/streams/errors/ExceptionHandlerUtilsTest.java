@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -37,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,6 +93,61 @@ public class ExceptionHandlerUtilsTest {
         assertEquals("hello world",
             stringDeserializer.deserialize(null,
                 headers.lastHeader("sourceHeader").value()));
+    }
+
+    @Test
+    public void shouldNotDuplicateErrorHeadersFromSourceRecord() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        final StringDeserializer stringDeserializer = new StringDeserializer();
+        final MockRecordCollector collector = new MockRecordCollector();
+        final InternalProcessorContext<Object, Object> internalProcessorContext = new InternalMockProcessorContext<>(
+                new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+                collector
+        );
+        final RecordHeaders sourceHeaders = new RecordHeaders();
+        sourceHeaders.add(new RecordHeader("sourceHeader", stringSerializer.serialize(null, "hello world")));
+        sourceHeaders.add(new RecordHeader(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME,
+                stringSerializer.serialize(null, "other-topic")));
+        sourceHeaders.add(new RecordHeader(ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME,
+                stringSerializer.serialize(null, "999")));
+        internalProcessorContext.setRecordContext(new ProcessorRecordContext(
+                1L,
+                2,
+                3,
+                "source",
+                sourceHeaders,
+                "key".getBytes(),
+                "value".getBytes()
+        ));
+        final ErrorHandlerContext errorHandlerContext = getErrorHandlerContext(internalProcessorContext);
+
+        final ProducerRecord<byte[], byte[]> dlqRecord = ExceptionHandlerUtils.buildDeadLetterQueueRecord(
+                "dlq",
+                errorHandlerContext.sourceRawKey(),
+                errorHandlerContext.sourceRawValue(),
+                errorHandlerContext,
+                new NullPointerException("Oopsie!"));
+        final Headers headers = dlqRecord.headers();
+
+        for (final String errorHeader : List.of(
+                ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_NAME,
+                ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME,
+                ExceptionHandlerUtils.HEADER_ERRORS_STACKTRACE_NAME,
+                ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME,
+                ExceptionHandlerUtils.HEADER_ERRORS_PARTITION_NAME,
+                ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME)) {
+            final Iterator<Header> instances = headers.headers(errorHeader).iterator();
+            assertTrue(instances.hasNext(), errorHeader + " should be present");
+            instances.next();
+            assertFalse(instances.hasNext(), errorHeader + " should appear exactly once");
+        }
+
+        assertEquals("source", stringDeserializer.deserialize(null,
+                headers.headers(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME).iterator().next().value()));
+        assertEquals("2", stringDeserializer.deserialize(null,
+                headers.headers(ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME).iterator().next().value()));
+
+        assertEquals("hello world", stringDeserializer.deserialize(null, headers.lastHeader("sourceHeader").value()));
     }
 
     @Test

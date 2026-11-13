@@ -89,6 +89,12 @@ public class ExceptionHandlerUtils {
                 producerRecord.headers().add(header);
             }
         }
+        producerRecord.headers().remove(HEADER_ERRORS_EXCEPTION_NAME);
+        producerRecord.headers().remove(HEADER_ERRORS_EXCEPTION_MESSAGE_NAME);
+        producerRecord.headers().remove(HEADER_ERRORS_STACKTRACE_NAME);
+        producerRecord.headers().remove(HEADER_ERRORS_TOPIC_NAME);
+        producerRecord.headers().remove(HEADER_ERRORS_PARTITION_NAME);
+        producerRecord.headers().remove(HEADER_ERRORS_OFFSET_NAME);
         final StringWriter stackTraceStringWriter = new StringWriter();
         final PrintWriter stackTracePrintWriter = new PrintWriter(stackTraceStringWriter);
         e.printStackTrace(stackTracePrintWriter);
