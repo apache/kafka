@@ -21,10 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PartitionStatesTest {
 
@@ -209,4 +213,48 @@ public class PartitionStatesTest {
         checkState(states, expected);
     }
 
+    @Test
+    public void testUpdateAndMoveToEndReusesEntry() {
+        PartitionStates<String> states = new PartitionStates<>();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        TopicPartition foo1 = new TopicPartition("foo", 1);
+        states.update(foo0, "foo 0");
+        states.update(foo1, "foo 1");
+        Map.Entry<TopicPartition, String> before = states.partitionStateMap().entrySet().iterator().next();
+
+        states.updateAndMoveToEnd(foo0, "foo 0 updated");
+
+        Iterator<Map.Entry<TopicPartition, String>> entries = states.partitionStateMap().entrySet().iterator();
+        assertEquals(foo1, entries.next().getKey());
+        Map.Entry<TopicPartition, String> after = entries.next();
+        assertSame(before, after);
+        assertEquals("foo 0 updated", after.getValue());
+    }
+
+    @Test
+    public void testPartitionStateMapIsOrderedLiveAndUnmodifiable() {
+        PartitionStates<String> states = new PartitionStates<>();
+        states.set(createMap());
+        Map<TopicPartition, String> view = states.partitionStateMap();
+
+        states.updateAndMoveToEnd(new TopicPartition("foo", 2), "foo 2 updated");
+        states.update(new TopicPartition("baz", 2), "baz 2 updated");
+        states.remove(new TopicPartition("blah", 1));
+
+        List<TopicPartition> expectedOrder = List.of(
+            new TopicPartition("foo", 0),
+            new TopicPartition("blah", 2),
+            new TopicPartition("baz", 2),
+            new TopicPartition("baz", 3),
+            new TopicPartition("foo", 2));
+        assertEquals(expectedOrder, new ArrayList<>(view.keySet()));
+        assertEquals(List.of("foo 0", "blah 2", "baz 2 updated", "baz 3", "foo 2 updated"), new ArrayList<>(view.values()));
+        assertEquals(List.of("foo 0", "blah 2", "baz 2 updated", "baz 3", "foo 2 updated"), states.partitionStateValues());
+
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        assertThrows(UnsupportedOperationException.class, () -> view.put(foo0, "x"));
+        assertThrows(UnsupportedOperationException.class, () -> view.remove(foo0));
+        assertThrows(UnsupportedOperationException.class, () -> view.entrySet().iterator().next().setValue("x"));
+        assertThrows(UnsupportedOperationException.class, () -> states.partitionSet().remove(foo0));
+    }
 }
