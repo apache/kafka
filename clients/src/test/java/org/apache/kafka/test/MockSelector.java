@@ -114,6 +114,15 @@ public class MockSelector implements Selectable {
         close(id);
     }
 
+    /**
+     * Simulate a refused connection, reported by {@link #disconnected()} as
+     * {@link ChannelState#NOT_CONNECTED} on the next {@link #poll(long)}.
+     */
+    public void serverConnectionRefused(String id) {
+        this.disconnected.put(id, ChannelState.NOT_CONNECTED);
+        close(id);
+    }
+
     public void serverAuthenticationFailed(String id) {
         ChannelState authFailed = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED,
                 new AuthenticationException("Authentication failed"), null);
