@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -120,6 +121,41 @@ public class KafkaMetricTest {
                 + "tags={client-id=consumer-1}], "
                 + "metricValueProvider=org.apache.kafka.common.metrics.stats.Avg]",
                 metric.toString());
+    }
+
+    /**
+     * Metrics without an owning sensor are always enabled.
+     */
+    @Test
+    public void testKafkaMetricWithoutSensor() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider, new MetricConfig(), new MockTime());
+        assertTrue(KafkaMetric.InternalAccess.isEnabled(metric));
+    }
+
+    @Test
+    public void testKafkaMetricFollowsRecordingEnabledSupplier() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        AtomicBoolean enabled = new AtomicBoolean(false);
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider,
+                new MetricConfig(), new MockTime(), enabled::get);
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
+        enabled.set(true);
+        assertTrue(KafkaMetric.InternalAccess.isEnabled(metric));
+        enabled.set(false);
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
+    }
+
+    @Test
+    public void testKafkaMetricConfigDoesNotOverrideRecordingEnabledSupplier() {
+        Measurable metricValueProvider = (config, now) -> 0;
+        MetricConfig metricConfig = new MetricConfig();
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_1, metricValueProvider,
+                metricConfig, new MockTime(), () -> false);
+        metricConfig.recordLevel(Sensor.RecordingLevel.TRACE);
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
+        metric.config(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
+        assertFalse(KafkaMetric.InternalAccess.isEnabled(metric));
     }
 
     private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
