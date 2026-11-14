@@ -545,19 +545,35 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void maybeUpdateKeyChangingRepartitionNodeMap() {
+        // Assign each key changer's repartition set to only the nearest merge node
+        // This prevents duplicate registration when repartition nodes are downstream of nested merges
+        final Map<GraphNode, GraphNode> keyChangerToNearestMerge = new LinkedHashMap<>();
         final Map<GraphNode, Set<GraphNode>> mergeNodesToKeyChangers = new HashMap<>();
         final Set<GraphNode> mergeNodeKeyChangingParentsToRemove = new HashSet<>();
+
+        // each key changer's set goes to exactly one merge, which is the most downstream
         for (final GraphNode mergeNode : mergeNodes) {
             mergeNodesToKeyChangers.put(mergeNode, new LinkedHashSet<>());
-            final Set<Map.Entry<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entrySet = keyChangingOperationsToOptimizableRepartitionNodes.entrySet();
-            for (final Map.Entry<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> entry : entrySet) {
+            for (final Map.Entry<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>> entry :
+                    keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
+                final GraphNode keyChanger = entry.getKey();
+                // check if every repartition of this key changer is below the merge
                 if (mergeNodeHasRepartitionChildren(mergeNode, entry.getValue())) {
-                    final GraphNode maybeParentKey = findParentNodeMatching(mergeNode, node -> node.parentNodes().contains(entry.getKey()));
+                    // the key changer is above the merge
+                    final GraphNode maybeParentKey = findParentNodeMatching(mergeNode,
+                        node -> node.parentNodes().contains(keyChanger));
                     if (maybeParentKey != null) {
-                        mergeNodesToKeyChangers.get(mergeNode).add(entry.getKey());
+                        final GraphNode currentNearestMerge = keyChangerToNearestMerge.get(keyChanger);
+                        if (currentNearestMerge == null || isCloserToRepartition(mergeNode, currentNearestMerge)) {
+                            keyChangerToNearestMerge.put(keyChanger, mergeNode);
+                        }
                     }
                 }
             }
+        }
+
+        for (final Map.Entry<GraphNode, GraphNode> entry : keyChangerToNearestMerge.entrySet()) {
+            mergeNodesToKeyChangers.get(entry.getValue()).add(entry.getKey());
         }
 
         for (final Map.Entry<GraphNode, Set<GraphNode>> entry : mergeNodesToKeyChangers.entrySet()) {
@@ -568,12 +584,20 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 repartitionNodes.addAll(keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingParent));
                 mergeNodeKeyChangingParentsToRemove.add(keyChangingParent);
             }
-            keyChangingOperationsToOptimizableRepartitionNodes.put(mergeKey, repartitionNodes);
+            if (!repartitionNodes.isEmpty()) {
+                keyChangingOperationsToOptimizableRepartitionNodes.put(mergeKey, repartitionNodes);
+            }
         }
 
         for (final GraphNode mergeNodeKeyChangingParent : mergeNodeKeyChangingParentsToRemove) {
             keyChangingOperationsToOptimizableRepartitionNodes.remove(mergeNodeKeyChangingParent);
         }
+    }
+
+    // Helper to determine which merge node is closer to the repartition node
+    private boolean isCloserToRepartition(final GraphNode candidateMerge, final GraphNode currentNearestMerge) {
+        // A merge is closer if the current nearest is an ancestor of the candidate
+        return findParentNodeMatching(candidateMerge, node -> node == currentNearestMerge) != null;
     }
 
     private boolean mergeNodeHasRepartitionChildren(final GraphNode mergeNode,
