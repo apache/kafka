@@ -1749,7 +1749,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * that should still proceed to tombstoning. Version-agnostic: the raw {@link ApiError}
      * is added as-is; any per-version translation of new error codes (e.g. downgrading
      * {@code GROUP_DELETION_FAILED} for {@code DeleteGroups} v&lt;3) happens at the
-     * {@code KafkaApis} layer where {@code request.context.effectiveApiVersion()} is in scope and
+     * {@code KafkaApis} layer where the request version is in scope and
      * matches how other new error codes are version-gated.
      */
     private static List<String> filterStreamsTopologyErrors(
