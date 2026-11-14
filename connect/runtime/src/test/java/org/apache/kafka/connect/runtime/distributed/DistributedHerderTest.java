@@ -2029,6 +2029,51 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testConnectorConfigUpdateRepublishesUnchangedTaskConfigsWithoutAppliedConfig() {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+
+        expectRebalance(1, List.of(CONN1), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        expectMemberPoll();
+
+        ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
+        expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
+
+        herder.tick();
+
+        ClusterConfigState snapshotWithoutAppliedConfig = new ClusterConfigState(
+                1,
+                null,
+                Map.of(CONN1, 3),
+                Map.of(CONN1, CONN1_CONFIG),
+                Map.of(CONN1, TargetState.STARTED),
+                TASK_CONFIGS_MAP,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Set.of(),
+                Set.of()
+        );
+        expectMemberEnsureActive();
+        when(configBackingStore.snapshot()).thenReturn(snapshotWithoutAppliedConfig);
+        doNothing().when(worker).stopAndAwaitConnector(CONN1);
+
+        configUpdateListener.onConnectorConfigUpdate(CONN1);
+        herder.tick();
+        herder.tick();
+
+        verify(configBackingStore).putTaskConfigs(CONN1, TASK_CONFIGS);
+        verify(worker, times(2)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
+        verifyNoMoreInteractions(worker, member, configBackingStore);
+    }
+
+    @Test
     public void testConnectorConfigUpdateFailedTransformation() {
         // Connector config can be applied without any rebalance
 

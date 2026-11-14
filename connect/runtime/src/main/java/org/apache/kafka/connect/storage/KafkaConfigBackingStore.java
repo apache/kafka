@@ -1015,6 +1015,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
                 @SuppressWarnings("unchecked")
                 Map<String, String> stringsConnectorConfig = (Map<String, String>) newConnectorConfig;
                 connectorConfigs.put(connectorName, stringsConnectorConfig);
+                appliedConnectorConfigs.remove(connectorName);
 
                 // Set the initial state of the connector to STARTED, which ensures that any connectors
                 // which were created with 0.9 Connect will be initialized in the STARTED state.
