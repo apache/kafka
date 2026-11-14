@@ -706,6 +706,9 @@ public class KafkaConfigBackingStoreTest {
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
+        // The connector config after the task commit invalidates the applied connector config so the
+        // connector will republish its task configs even if they are otherwise unchanged.
+        assertNull(configState.appliedConnectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(9, (int) configState.taskCountRecord(CONNECTOR_IDS.get(1)));
         assertEquals(Set.of(), configState.inconsistentConnectors());
         assertEquals(Set.of("connector1"), configState.connectorsPendingFencing);
