@@ -240,7 +240,7 @@ class KafkaRequestHandlerTest {
 
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)
-    new Request(0, context, time.nanoseconds(), mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
+    new Request(0, context, time, time.nanoseconds(), mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
   }
 
   def setupBrokerTopicMetrics(systemRemoteStorageEnabled: Boolean = true): BrokerTopicMetrics = {

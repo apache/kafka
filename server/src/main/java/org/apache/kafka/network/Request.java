@@ -57,6 +57,7 @@ public final class Request implements BaseRequest {
 
     private final int processor;
     private final RequestContext context;
+    private final Time time;
     private final long startTimeNanos;
     private final MemoryPool memoryPool;
     private final Session session;
@@ -86,11 +87,12 @@ public final class Request implements BaseRequest {
                 || (REQUEST_LOGGER.isInfoEnabled() && header.isApiVersionDeprecated());
     }
 
-    public Request(int processor, RequestContext context, long startTimeNanos,
+    public Request(int processor, RequestContext context, Time time, long startTimeNanos,
                    MemoryPool memoryPool, ByteBuffer buffer,
                    RequestChannelMetrics metrics, Optional<Request> envelope) {
         this.processor = processor;
         this.context = context;
+        this.time = time;
         this.startTimeNanos = startTimeNanos;
         this.memoryPool = memoryPool;
         this.buffer = buffer;
@@ -119,10 +121,10 @@ public final class Request implements BaseRequest {
         }
     }
 
-    public Request(int processor, RequestContext context, long startTimeNanos,
+    public Request(int processor, RequestContext context, Time time, long startTimeNanos,
                    MemoryPool memoryPool, ByteBuffer buffer,
                    RequestChannelMetrics metrics) {
-        this(processor, context, startTimeNanos, memoryPool, buffer, metrics, Optional.empty());
+        this(processor, context, time, startTimeNanos, memoryPool, buffer, metrics, Optional.empty());
     }
 
     public int processor() {
@@ -131,6 +133,10 @@ public final class Request implements BaseRequest {
 
     public RequestContext context() {
         return context;
+    }
+
+    public Time time() {
+        return time;
     }
 
     public long startTimeNanos() {
@@ -311,7 +317,7 @@ public final class Request implements BaseRequest {
 
     public long requestThreadTimeNanos() {
         if (apiLocalCompleteTimeNanos == -1L) {
-            apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds();
+            apiLocalCompleteTimeNanos = time.nanoseconds();
         }
         return Math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L);
     }
@@ -327,7 +333,7 @@ public final class Request implements BaseRequest {
     }
 
     public void updateRequestMetrics(long networkThreadTimeNanos, Optional<JsonNode> responseLog) {
-        long endTimeNanos = Time.SYSTEM.nanoseconds();
+        long endTimeNanos = time.nanoseconds();
 
         double requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos);
         long cbCompleteNanos = callbackRequestCompleteTimeNanos.orElse(0L);

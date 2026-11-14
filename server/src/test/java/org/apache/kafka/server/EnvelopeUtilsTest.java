@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.network.Request;
@@ -225,6 +226,7 @@ public class EnvelopeUtilsTest {
         return new Request(
             1,
             envelopeContext,
+            Time.SYSTEM,
             0,
             MemoryPool.NONE,
             envelopeRequestBuffer,

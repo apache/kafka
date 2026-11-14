@@ -201,7 +201,7 @@ class ControllerApisTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-    new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
+    new Request(1, context, time, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
   }
 
   def createDenyAllAuthorizer(): Plugin[Authorizer] = {
