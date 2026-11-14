@@ -196,7 +196,8 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ShareGroup#updateMember(ShareGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Whether the member must be created if it does not exist.
@@ -217,9 +218,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
                 String.format("Member %s is not a member of group %s.", memberId, groupId));
         }
 
-        member = new ShareGroupMember.Builder(memberId).build();
-        updateMember(member);
-        return member;
+        return new ShareGroupMember.Builder(memberId).build();
     }
 
     /**
@@ -247,6 +246,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     @Override
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();

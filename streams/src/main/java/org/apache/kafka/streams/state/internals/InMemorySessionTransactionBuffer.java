@@ -118,11 +118,6 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
     }
 
     @Override
-    void stageToBackend(final SessionEntryKey key, final byte[] value) {
-        // no-op — staging map is sufficient; no write-batch concept for in-memory
-    }
-
-    @Override
     ManagedKeyValueIterator<SessionEntryKey, byte[]> newBaseIterator(final SessionEntryKey from, final SessionEntryKey to) {
         return newBaseIterator(from, to, true, true);
     }
