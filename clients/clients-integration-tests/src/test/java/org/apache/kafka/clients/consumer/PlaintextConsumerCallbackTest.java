@@ -537,6 +537,83 @@ public class PlaintextConsumerCallbackTest {
         assertEquals(2, revokedCount.get(), "close() should invoke onPartitionsRevoked");
     }
 
+    @ClusterTest
+    public void testClassicConsumerRebalanceListenerRemovedByNull() throws InterruptedException {
+        testRebalanceListenerRemovedByNull(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerRebalanceListenerRemovedByNull() throws InterruptedException {
+        testRebalanceListenerRemovedByNull(CONSUMER);
+    }
+
+    private void testRebalanceListenerRemovedByNull(GroupProtocol groupProtocol) throws InterruptedException {
+        var assignedCount = new AtomicInteger(0);
+        var revokedCount = new AtomicInteger(0);
+        var totalRecords = 10;
+        var consumer = createConsumer(groupProtocol);
+        try {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        assignedCount.incrementAndGet();
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        revokedCount.incrementAndGet();
+                    }
+                }
+            });
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 1,
+                    "Timed out before expected rebalance completed"
+            );
+
+            // positive control: while the listener is set, unsubscribe() invokes onPartitionsRevoked
+            // without a poll, so the silence asserted further down is a real change of behaviour
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke the listener while it is set");
+
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 2,
+                    "Timed out before the listener was invoked again"
+            );
+
+            consumer.setRebalanceListener(null);
+
+            // the very same call that invoked onPartitionsRevoked above is now silent
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get(), "unsubscribe() should not invoke the removed listener");
+
+            // consuming every record proves the new assignment is fully usable without the callback,
+            // not merely present in assignment()
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> consumer.assignment().contains(tp),
+                    "Timed out before the partition was assigned again"
+            );
+            sendRecords(cluster, tp, totalRecords, 0L);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, 0);
+            assertEquals(2, assignedCount.get(), "re-subscribing should not invoke the removed listener");
+            assertEquals(1, revokedCount.get());
+        } finally {
+            consumer.close();
+        }
+        // close() gives up the assignment, again without invoking the removed listener
+        assertThrows(IllegalStateException.class, consumer::assignment, "close() should have closed the consumer");
+        assertEquals(1, revokedCount.get(), "close() should not invoke the removed listener");
+        assertEquals(2, assignedCount.get());
+    }
+
     private void triggerOnPartitionsAssignedConsumerAware(
             TopicPartition tp,
             Consumer<byte[], byte[]> consumer,
