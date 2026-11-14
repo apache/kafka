@@ -325,35 +325,92 @@ public class StreamsGroupCommand {
         }
 
         private void printMembers(StreamsGroupDescription description, boolean verbose) {
-            final int groupLen = Math.max(15, description.groupId().length());
-            int maxMemberIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<StreamsGroupMemberDescription> members = description.members();
-            if (isGroupStateValid(description.groupState(), description.members().size())) {
-                maybePrintEmptyGroupState(description.groupId(), description.groupState());
-                for (StreamsGroupMemberDescription member : members) {
-                    maxMemberIdLen = Math.max(maxMemberIdLen, member.memberId().length());
-                    maxHostLen = Math.max(maxHostLen, member.processId().length());
-                    maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
-                }
-
-                if (!verbose) {
-                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-                    System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
-                    for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId(),
-                            getTasksForPrinting(member.assignment(), Optional.empty()));
-                    }
-                } else {
-                    final int targetAssignmentEpochLen = 25, topologyEpochLen = 15, memberProtocolLen = 15, memberEpochLen = 15;
-                    String fmt = "%" + -groupLen + "s %" + -targetAssignmentEpochLen + "s %" + -topologyEpochLen + "s%" + -maxMemberIdLen
-                        + "s %" + -memberProtocolLen + "s %" + -memberEpochLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
-                    for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
-                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId(), getTasksForPrinting(member.assignment(), Optional.of(member.targetAssignment())));
-                    }
-                }
+            if (!isGroupStateValid(description.groupState(), members.size())) {
+                return;
             }
+            maybePrintEmptyGroupState(description.groupId(), description.groupState());
+
+            final int groupLen = Math.max(15, description.groupId().length());
+            final int targetAssignmentEpochLen = 25, topologyEpochLen = 15, memberProtocolLen = 15, memberEpochLen = 15;
+            int maxMemberIdLen = 15, maxProcessIdLen = 15, maxClientIdLen = 15, maxInstanceIdLen = 17, maxRackIdLen = 15;
+            boolean hasInstanceId = false, hasRackId = false;
+
+            for (StreamsGroupMemberDescription member : members) {
+                String instanceId = member.instanceId().orElse("");
+                String rackId = member.rackId().orElse("");
+
+                maxMemberIdLen = Math.max(maxMemberIdLen, member.memberId().length());
+                maxProcessIdLen = Math.max(maxProcessIdLen, member.processId().length());
+                maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
+                maxInstanceIdLen = Math.max(maxInstanceIdLen, instanceId.length());
+                maxRackIdLen = Math.max(maxRackIdLen, rackId.length());
+
+                hasInstanceId |= !instanceId.isEmpty();
+                hasRackId |= !rackId.isEmpty();
+            }
+
+            boolean includeRackId = verbose && hasRackId;
+
+            String groupFmt = "%" + -groupLen + "s ";
+            String groupEpochFmt = "%" + -targetAssignmentEpochLen + "s %" + -topologyEpochLen + "s ";
+            String memberFmt = "%" + -maxMemberIdLen + "s ";
+            String instanceFmt = "%" + -maxInstanceIdLen + "s ";
+            String memberEpochFmt = "%" + -memberProtocolLen + "s %" + -memberEpochLen + "s ";
+            String clientFmt = "%" + -maxProcessIdLen + "s %" + -maxClientIdLen + "s ";
+            String rackFmt = "%" + -maxRackIdLen + "s ";
+
+            printMembersHeader(verbose, hasInstanceId, includeRackId, groupFmt, groupEpochFmt, memberFmt, instanceFmt, memberEpochFmt, clientFmt, rackFmt);
+            for (StreamsGroupMemberDescription member : members) {
+                System.out.printf(groupFmt, description.groupId());
+                if (verbose) {
+                    System.out.printf(groupEpochFmt, description.targetAssignmentEpoch(), description.topologyEpoch());
+                }
+                System.out.printf(memberFmt, member.memberId());
+                if (hasInstanceId) {
+                    System.out.printf(instanceFmt, member.instanceId().orElse(""));
+                }
+                if (verbose) {
+                    System.out.printf(memberEpochFmt, member.isClassic() ? "classic" : "streams", member.memberEpoch());
+                }
+                System.out.printf(clientFmt, member.processId(), member.clientId());
+                if (includeRackId) {
+                    System.out.printf(rackFmt, member.rackId().orElse(""));
+                }
+                System.out.println(getTasksForPrinting(member.assignment(), verbose ? Optional.of(member.targetAssignment()) : Optional.empty()
+                ));
+            }
+        }
+
+
+        private void printMembersHeader(
+            boolean verbose,
+            boolean hasInstanceId,
+            boolean includeRackId,
+            String groupFmt,
+            String groupEpochFmt,
+            String memberFmt,
+            String instanceFmt,
+            String memberEpochFmt,
+            String clientFmt,
+            String rackFmt
+        ) {
+            System.out.printf(groupFmt, "GROUP");
+            if (verbose) {
+                System.out.printf(groupEpochFmt, "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH");
+            }
+            System.out.printf(memberFmt, "MEMBER");
+            if (hasInstanceId) {
+                System.out.printf(instanceFmt, "GROUP-INSTANCE-ID");
+            }
+            if (verbose) {
+                System.out.printf(memberEpochFmt, "MEMBER-PROTOCOL", "MEMBER-EPOCH");
+            }
+            System.out.printf(clientFmt, "PROCESS", "CLIENT-ID");
+            if (includeRackId) {
+                System.out.printf(rackFmt, "RACK-ID");
+            }
+            System.out.println("ASSIGNMENTS");
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {

@@ -256,6 +256,48 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
+    public void testDescribeStreamsGroupsWithInstanceAndRackIds(ClusterInstance cluster) throws Exception {
+        final String bootstrapServers = cluster.bootstrapServers();
+        cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
+
+        Properties propsWithIds = new Properties();
+        propsWithIds.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance-1");
+        propsWithIds.put(ConsumerConfig.CLIENT_RACK_CONFIG, "rack-1");
+
+        try (KafkaStreams streams1 = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC, propsWithIds);
+             KafkaStreams streams2 = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+            assertDescribeStreamsGroupMembersWithMixedIds(bootstrapServers);
+            assertDescribeStreamsGroupMembersWithMixedIdsAndVerboseOption(bootstrapServers);
+        }
+    }
+
+    private static void assertDescribeStreamsGroupMembersWithMixedIds(String clusterBootstrapServers) throws Exception {
+        final List<String> expectedHeader = List.of("GROUP", "MEMBER", "GROUP-INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final Map<List<String>, Long> expectedIds = Map.of(
+            List.of("instance-1-1"), 1L,
+            List.of("instance-1-2"), 1L,
+            List.of(""), 2L);
+
+        validateDescribeMemberIdsOutput(
+            List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--members", "--group", APP_ID),
+            expectedHeader, expectedIds);
+    }
+
+    private static void assertDescribeStreamsGroupMembersWithMixedIdsAndVerboseOption(String clusterBootstrapServers) throws Exception {
+        final List<String> expectedHeader = List.of(
+            "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "GROUP-INSTANCE-ID",
+            "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "RACK-ID", "ASSIGNMENTS");
+        final Map<List<String>, Long> expectedIds = Map.of(
+            List.of("instance-1-1", "rack-1"), 1L,
+            List.of("instance-1-2", "rack-1"), 1L,
+            List.of("", ""), 2L);
+
+        validateDescribeMemberIdsOutput(
+            List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID),
+            expectedHeader, expectedIds);
+    }
+
+    @ClusterTest
     public void testDescribeNonExistingStreamsGroup(ClusterInstance cluster) {
         final String nonExistingGroup = "non-existing-group";
         final String errorMessage = String.format(
@@ -270,6 +312,14 @@ public class DescribeStreamsGroupTest {
 
     private KafkaStreams startStreamsApp(ClusterInstance cluster, String appId, String inputTopic, String outputTopic) throws InterruptedException {
         KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), streamsProp(cluster, appId));
+        StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
+        return streams;
+    }
+
+    private KafkaStreams startStreamsApp(ClusterInstance cluster, String appId, String inputTopic, String outputTopic, Properties givenProps) throws InterruptedException {
+        Properties props = streamsProp(cluster, appId);
+        props.putAll(givenProps);
+        KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), props);
         StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
     }
@@ -303,6 +353,40 @@ public class DescribeStreamsGroupTest {
             opts,
             Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
+    }
+
+    private static void validateDescribeMemberIdsOutput(
+        List<String> args,
+        List<String> expectedHeader,
+        Map<List<String>, Long> expectedIds
+    ) throws InterruptedException {
+        final AtomicReference<String> out = new AtomicReference<>("");
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(
+                () -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
+            out.set(output);
+
+            List<String> lines = output.lines().toList();
+            if (lines.isEmpty()) return false;
+            String header = lines.get(0);
+            if (!expectedHeader.equals(List.of(header.split("\\s+")))) return false;
+
+            // Preserve empty ID cells by using the header's column boundaries instead of splitting rows on whitespace.
+            boolean verbose = expectedHeader.contains("RACK-ID");
+            int instanceStart = header.indexOf("GROUP-INSTANCE-ID");
+            int instanceEnd = header.indexOf(verbose ? "MEMBER-PROTOCOL" : "PROCESS");
+            int rackStart = header.indexOf("RACK-ID");
+            int rackEnd = header.indexOf("ASSIGNMENTS");
+            Map<List<String>, Long> actualIds = new HashMap<>();
+            for (String line : lines.subList(1, lines.size())) {
+                String instanceId = line.substring(instanceStart, instanceEnd).trim();
+                List<String> ids = verbose
+                    ? List.of(instanceId, line.substring(rackStart, rackEnd).trim())
+                    : List.of(instanceId);
+                actualIds.merge(ids, 1L, Long::sum);
+            }
+            return expectedIds.equals(actualIds);
+        }, () -> String.format("Expected header=%s and member IDs=%s, but found:%n%s", expectedHeader, expectedIds, out.get()));
     }
 
     private static void validateDescribeOutput(List<String> args, String errorMessage) {
