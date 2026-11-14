@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -42,6 +44,15 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
     @Override
     KeyValueSegments getSegments() {
         return new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+    }
+
+    @Test
+    public void shouldReportUnknownCommittedOffsetWithoutSegments() {
+        final TopicPartition changelogPartition = new TopicPartition("changelog", 0);
+        assertEquals(OffsetCheckpoint.OFFSET_UNKNOWN, segments.committedOffset(changelogPartition));
+
+        segments.getOrCreateSegmentIfLive(0, context, -1L);
+        assertNull(segments.committedOffset(changelogPartition));
     }
 
     @Test
