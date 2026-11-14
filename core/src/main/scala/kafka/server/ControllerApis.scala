@@ -154,11 +154,6 @@ class ControllerApis(
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", t)
         requestHelper.handleError(request, t)
-    } finally {
-      // Only record local completion time if it is unset.
-      if (request.apiLocalCompleteTimeNanos < 0) {
-        request.apiLocalCompleteTimeNanos(time.nanoseconds)
-      }
     }
   }
 
