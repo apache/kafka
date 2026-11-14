@@ -153,6 +153,13 @@ public class ConfigCommand {
         }
     }
 
+    // --entity-type brokers accepts both --entity-name and --entity-default to alter the broker and cluster-default configs together
+    private static boolean isBrokerNameWithDefault(List<String> entityTypes, List<String> entityNames) {
+        return entityTypes.equals(List.of(BROKER_TYPE))
+                && entityNames.size() == 2
+                && entityNames.stream().filter(String::isEmpty).count() == 1;
+    }
+
     static Properties parseConfigsToBeAdded(ConfigCommandOptions opts) throws IOException {
         Properties props = new Properties();
         if (opts.options.has(opts.addConfigFile)) {
@@ -208,7 +215,10 @@ public class ConfigCommand {
                 opts.bootstrapServerOpt,
                 opts.bootstrapControllerOpt);
 
-        if (opts.options.has(opts.alterOpt) && opts.entityTypes().size() != opts.entityNames().size()) {
+        List<String> entityTypes = opts.entityTypes();
+        List<String> entityNames = opts.entityNames();
+        if (opts.options.has(opts.alterOpt) && entityTypes.size() != entityNames.size()
+                && !isBrokerNameWithDefault(entityTypes, entityNames)) {
             throw new IllegalArgumentException("An entity name must be specified for every entity type");
         }
 

@@ -800,48 +800,44 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingKRaft() throws Exception {
-        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
-
         try (Admin client = cluster.admin()) {
-
-            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "110000"), alterOpts);
-            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "130000"), alterOpts);
-
-            assertThrows(ExecutionException.class,
-                    () -> alterAndVerifyBothLevelConfig(
-                            client,
-                            Optional.of(defaultBrokerId),
-                            Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"),
-                            alterOpts)
-            );
-            assertThrows(ExecutionException.class,
-                    () -> alterAndVerifyBothLevelConfig(
-                            client,
-                            Optional.of(defaultBrokerId),
-                            Map.of("listener.name.external.ssl.keystore.password", "secret"),
-                            alterOpts)
-            );
+            alterAndVerifyBothLevelConfig(client, Map.of("message.max.bytes", "110000"));
+            alterAndVerifyBothLevelConfig(client, Map.of("message.max.bytes", "130000"));
         }
+
+        assertNonZeroStatusExit(bothLevelAlterArgs(Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")),
+                errOut -> assertTrue(errOut.contains("Error while executing config command"), errOut));
+        assertNonZeroStatusExit(bothLevelAlterArgs(Map.of("listener.name.external.ssl.keystore.password", "secret")),
+                errOut -> assertTrue(errOut.contains("Error while executing config command"), errOut));
     }
 
-    private void alterAndVerifyBothLevelConfig(Admin client,
-                                               Optional<String> brokerId,
-                                               Map<String, String> config,
-                                               List<String> alterOpts) throws Exception {
-        alterBothLevelConfigWithKraft(client, brokerId, config, alterOpts);
-        verifyBrokerConfig(client, brokerId, config);
+    @ClusterTest
+    public void testRejectMultipleEntityNamesExceptBrokerNameWithDefault() {
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "brokers",
+                "--entity-name", defaultBrokerId,
+                "--entity-name", "1",
+                "--alter", "--add-config", "message.max.bytes=110000")),
+                errOut -> assertTrue(errOut.contains("Found multiple arguments for option entity-name"), errOut));
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "topics",
+                "--entity-name", "test-topic",
+                "--entity-default",
+                "--alter", "--add-config", "retention.ms=1000")),
+                errOut -> assertTrue(errOut.contains("An entity name must be specified for every entity type"), errOut));
+    }
+
+    private void alterAndVerifyBothLevelConfig(Admin client, Map<String, String> config) throws Exception {
+        String message = captureStandardOut(run(bothLevelAlterArgs(config)));
+        assertTrue(message.contains("Completed updating config for broker " + defaultBrokerId), message);
+        verifyBrokerConfig(client, Optional.of(defaultBrokerId), config);
         verifyBrokerConfig(client, Optional.empty(), config);
     }
 
-    private void alterBothLevelConfigWithKraft(Admin client,
-                                               Optional<String> brokerId,
-                                               Map<String, String> config,
-                                               List<String> alterOpts) throws Exception {
-        String configStr = transferConfigMapToString(config);
-        ConfigCommand.ConfigCommandOptions addOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
-                        entityOp(Optional.empty()), List.of("--add-config", configStr)));
-        ConfigCommand.alterConfig(client, addOpts);
+    private Stream<String> bothLevelAlterArgs(Map<String, String> config) {
+        return Stream.of(toArray(generateDefaultAlterOpts(cluster.bootstrapServers()),
+                entityOp(Optional.of(defaultBrokerId)), entityOp(Optional.empty()),
+                List.of("--add-config", transferConfigMapToString(config))));
     }
 
     @ClusterTest
@@ -855,7 +851,6 @@ public class ConfigCommandIntegrationTest {
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
         }
     }
-
 
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
