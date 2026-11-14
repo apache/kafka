@@ -31,7 +31,6 @@ import org.apache.kafka.network.{CallbackRequest, Request, ShutdownRequest, Wake
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
-import java.util.OptionalLong
 import scala.collection.mutable
 
 trait ApiRequestHandler {
@@ -130,20 +129,8 @@ class KafkaRequestHandler(
 
         case callback: CallbackRequest =>
           val originalRequest = callback.originalRequest
+          originalRequest.beginLocalTime()
           try {
-
-            // If we've already executed a callback for this request, reset the times and subtract the callback time from the
-            // new dequeue time. This will allow calculation of multiple callback times.
-            // Otherwise, set dequeue time to now.
-            if (originalRequest.callbackRequestDequeueTimeNanos.isPresent) {
-              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.orElse(0L) -
-                originalRequest.callbackRequestDequeueTimeNanos.orElse(0L)
-              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.empty)
-              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds() - prevCallbacksTimeNanos))
-            } else {
-              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds()))
-            }
-
             threadCurrentRequest.set(originalRequest)
             callback.fun().accept(requestLocal)
           } catch {
@@ -154,14 +141,14 @@ class KafkaRequestHandler(
           } finally {
             // When handling requests, we try to complete actions after, so we should try to do so here as well.
             apis.tryCompleteActions()
-            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
-              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.of(time.nanoseconds()))
+            originalRequest.endLocalTime()
             threadCurrentRequest.remove()
           }
 
         case request: Request =>
+          request.requestDequeueTimeNanos(endTime)
+          request.beginLocalTime(endTime)
           try {
-            request.requestDequeueTimeNanos(endTime)
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             threadCurrentRequest.set(request)
             apis.handle(request, requestLocal)
@@ -171,6 +158,7 @@ class KafkaRequestHandler(
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            request.endLocalTime()
             threadCurrentRequest.remove()
             request.releaseBuffer()
           }

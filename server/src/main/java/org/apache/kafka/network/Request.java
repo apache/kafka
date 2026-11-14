@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
@@ -96,15 +95,12 @@ public final class Request implements BaseRequest, RequestTimeRecorder {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     private volatile long requestDequeueTimeNanos = -1L;
-    private volatile long apiLocalCompleteTimeNanos = -1L;
     private volatile long responseCompleteTimeNanos = -1L;
     private volatile long responseDequeueTimeNanos = -1L;
     private volatile long messageConversionsTimeNanos = 0L;
     private volatile long apiThrottleTimeMs = 0L;
     private volatile long temporaryMemoryBytes = 0L;
 
-    private volatile OptionalLong callbackRequestDequeueTimeNanos = OptionalLong.empty();
-    private volatile OptionalLong callbackRequestCompleteTimeNanos = OptionalLong.empty();
     private volatile LongConsumer recordNetworkThreadTimeCallback = __ -> { };
 
     /**
@@ -295,14 +291,6 @@ public final class Request implements BaseRequest, RequestTimeRecorder {
             PartialTimeAndCount.partialTimeNanos(PartialTimeAndCount.pack(partialTime + time.nanoseconds(), 0));
     }
 
-    public long apiLocalCompleteTimeNanos() {
-        return apiLocalCompleteTimeNanos;
-    }
-
-    public void apiLocalCompleteTimeNanos(long apiLocalCompleteTimeNanos) {
-        this.apiLocalCompleteTimeNanos = apiLocalCompleteTimeNanos;
-    }
-
     public void responseCompleteTimeNanos(long responseCompleteTimeNanos) {
         this.responseCompleteTimeNanos = responseCompleteTimeNanos;
     }
@@ -329,22 +317,6 @@ public final class Request implements BaseRequest, RequestTimeRecorder {
 
     public void temporaryMemoryBytes(long temporaryMemoryBytes) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
-    }
-
-    public OptionalLong callbackRequestDequeueTimeNanos() {
-        return callbackRequestDequeueTimeNanos;
-    }
-
-    public void callbackRequestDequeueTimeNanos(OptionalLong callbackRequestDequeueTimeNanos) {
-        this.callbackRequestDequeueTimeNanos = callbackRequestDequeueTimeNanos;
-    }
-
-    public OptionalLong callbackRequestCompleteTimeNanos() {
-        return callbackRequestCompleteTimeNanos;
-    }
-
-    public void callbackRequestCompleteTimeNanos(OptionalLong callbackRequestCompleteTimeNanos) {
-        this.callbackRequestCompleteTimeNanos = callbackRequestCompleteTimeNanos;
     }
 
     public RequestHeader header() {
@@ -452,10 +424,7 @@ public final class Request implements BaseRequest, RequestTimeRecorder {
     }
 
     public long requestThreadTimeNanos() {
-        if (apiLocalCompleteTimeNanos == -1L) {
-            apiLocalCompleteTimeNanos = time.nanoseconds();
-        }
-        return Math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L);
+        return localTimeNanos();
     }
 
     /**
@@ -472,15 +441,11 @@ public final class Request implements BaseRequest, RequestTimeRecorder {
         long endTimeNanos = time.nanoseconds();
 
         double requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos);
-        // Local time is the sum of the time spent handling the request and its callbacks on the request handler
-        // threads, and the local time spent outside the request handler threads.
-        long cbCompleteNanos = callbackRequestCompleteTimeNanos.orElse(0L);
-        long cbDequeueNanos = callbackRequestDequeueTimeNanos.orElse(0L);
-        long callbackRequestTimeNanos = cbCompleteNanos - cbDequeueNanos;
+        // Local time is the time during which at least one local time span was active, whether on the request
+        // handler threads or elsewhere. Remote time is the rest of the time until the response is complete.
         long localTimeNanos = localTimeNanos();
-        double apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos + callbackRequestTimeNanos + localTimeNanos);
-        // Remote time is the rest of the time until the response is complete.
-        double apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos - callbackRequestTimeNanos - localTimeNanos);
+        double apiLocalTimeMs = nanosToMs(localTimeNanos);
+        double apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - requestDequeueTimeNanos - localTimeNanos);
         double responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos);
         double responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos);
         double messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos);
