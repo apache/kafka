@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -85,11 +84,11 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
@@ -1538,13 +1537,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final int numRecords = records.count();
 
-        for (final TopicPartition topicPartition: records.partitions()) {
-            records
-                .records(topicPartition)
-                .stream()
-                .max(Comparator.comparing(ConsumerRecord::offset))
-                .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
-        }
+        updateTaskEndOffsets(records);
 
         log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
             pollLatency, numRecords, records.partitions());
@@ -1563,6 +1556,23 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler.accept(nonFatalExceptionsToHandle.poll(), true);
         }
         return pollLatency;
+    }
+
+    /**
+     * Sets the end offset of each partition this poll returned records for, or advanced the position of, to the main
+     * consumer's position plus its current lag: the high watermark, or the last stable offset under read_committed, of
+     * the partition's latest fetch response. The position can pass the last returned record, as control records and
+     * aborted transactions are skipped.
+     */
+    private void updateTaskEndOffsets(final ConsumerRecords<byte[], byte[]> records) {
+        final Set<TopicPartition> partitions = new HashSet<>(records.partitions());
+        partitions.addAll(records.nextOffsets().keySet());
+        for (final TopicPartition partition : partitions) {
+            final OptionalLong lag = mainConsumer.currentLag(partition);
+            if (lag.isPresent()) {
+                taskManager.updateTaskEndMetadata(partition, mainConsumer.position(partition) + lag.getAsLong());
+            }
+        }
     }
 
     /**

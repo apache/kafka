@@ -17,9 +17,11 @@
 
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -40,6 +42,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -148,7 +152,30 @@ public class TaskMetadataIntegrationTest {
                 TestUtils.waitForCondition(() -> !process.get(), "The record was not processed");
                 process.set(true);
             }
-            assertEquals(9L, taskMetadata.endOffsets().get(topicPartition));
+            assertEquals(10L, taskMetadata.endOffsets().get(topicPartition));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldReportEndOffsetPastTransactionMarker(final String processingGuarantee) throws Exception {
+        final StreamsBuilder topologyBuilder = new StreamsBuilder();
+        topologyBuilder.stream(inputTopic).foreach((key, value) -> { });
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(topologyBuilder.build(), properties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
+            final TaskMetadata taskMetadata = getTaskMetadata(kafkaStreams);
+            final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
+
+            // records at offsets 0 to 2 and the commit marker at offset 3
+            produceMessagesTransactionally(List.of(new KeyValue<>("1", "a"), new KeyValue<>("1", "b"), new KeyValue<>("1", "c")));
+
+            TestUtils.waitForCondition(
+                () -> taskMetadata.endOffsets().get(topicPartition) == 4L && taskMetadata.committedOffsets().get(topicPartition) == 4L,
+                () -> "Expected end offset and committed offset 4, but got end offsets " + taskMetadata.endOffsets() +
+                    " and committed offsets " + taskMetadata.committedOffsets()
+            );
         }
     }
 
@@ -176,6 +203,18 @@ public class TaskMetadataIntegrationTest {
                         StringSerializer.class,
                         new Properties()),
                 timestamp);
+    }
+
+    private void produceMessagesTransactionally(final List<KeyValue<String, String>> records) {
+        final Properties producerOverrides = new Properties();
+        producerOverrides.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            inputTopic,
+            records,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerOverrides),
+            Time.SYSTEM,
+            true
+        );
     }
 
     private class PauseProcessor extends ContextualProcessor<String, String, Void, Void> {
