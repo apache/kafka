@@ -3428,7 +3428,7 @@ public class GroupMetadataManager {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
         topicPartitionMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
-            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, PartitionFactory.UNINITIALIZED_START_OFFSET)));
+            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, (long) PartitionFactory.UNINITIALIZED_START_OFFSET)));
         addInitializingTopicsRecords(groupId, records, topicPartitionMap, startOffsets,
             info == null ? Map.of() : info.initializingStartOffsets());
     }
