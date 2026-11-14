@@ -3331,19 +3331,27 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Creates a ShareGroupStatePartitionMetadata record from the given state. The record replaces the previous one,
+     * so the state is derived from the current one with the with* methods, which keep the fields that do not change.
+     */
+    private CoordinatorRecord shareGroupStatePartitionMetadataRecord(String groupId, ShareGroupStatePartitionMetadataInfo info) {
+        return newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            info.initializingTopics(),
+            info.initializedTopics(),
+            attachTopicName(info.deletingTopics()),
+            info.initializingStartOffsets()
+        );
+    }
+
+    /**
      * Adds a record which removes the start offsets of the topics which the group no longer subscribes to, if any.
      */
     private void maybeRemoveUnsubscribedStartOffsets(String groupId, Set<String> subscriptionTopicNames, List<CoordinatorRecord> records) {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, Map<Integer, Long>> startOffsets = subscribedStartOffsets(info, subscriptionTopicNames);
         if (info != null && !startOffsets.equals(info.initializingStartOffsets())) {
-            records.add(newShareGroupStatePartitionMetadataRecord(
-                groupId,
-                info.initializingTopics(),
-                info.initializedTopics(),
-                attachTopicName(info.deletingTopics()),
-                startOffsets
-            ));
+            records.add(shareGroupStatePartitionMetadataRecord(groupId, info.withInitializingStartOffsets(startOffsets)));
         }
     }
 
@@ -3440,7 +3448,9 @@ public class GroupMetadataManager {
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         if (currentMap == null) {
-            records.add(newShareGroupStatePartitionMetadataRecord(groupId, topicPartitionMap, Map.of(), Map.of(), startOffsets));
+            records.add(shareGroupStatePartitionMetadataRecord(groupId, ShareGroupStatePartitionMetadataInfo.EMPTY
+                .withInitializingTopics(topicPartitionMap)
+                .withInitializingStartOffsets(startOffsets)));
             return;
         }
 
@@ -3465,15 +3475,10 @@ public class GroupMetadataManager {
             });
         }
 
-        records.add(
-            newShareGroupStatePartitionMetadataRecord(
-                groupId,
-                finalInitializingMap,
-                currentMap.initializedTopics(),
-                attachTopicName(currentDeleting),
-                finalStartOffsets
-            )
-        );
+        records.add(shareGroupStatePartitionMetadataRecord(groupId, currentMap
+            .withInitializingTopics(finalInitializingMap)
+            .withDeletingTopics(currentDeleting)
+            .withInitializingStartOffsets(finalStartOffsets)));
     }
 
     // Visibility for testing
@@ -6057,7 +6062,8 @@ public class GroupMetadataManager {
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
         if (currentMap == null) {
             return new CoordinatorResult<>(
-                List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), Map.of(), enrichedTopicPartitionMap, Map.of())),
+                List.of(shareGroupStatePartitionMetadataRecord(group.groupId(),
+                    ShareGroupStatePartitionMetadataInfo.EMPTY.withInitializedTopics(enrichedTopicPartitionMap))),
                 null
             );
         }
@@ -6082,13 +6088,10 @@ public class GroupMetadataManager {
         }
 
         return new CoordinatorResult<>(List.of(
-            newShareGroupStatePartitionMetadataRecord(
-                group.groupId(),
-                finalInitializingMap,
-                finalInitializedMap,
-                attachTopicName(currentMap.deletingTopics()),
-                removeStartOffsets(currentMap.initializingStartOffsets(), topicPartitionMap)
-            )),
+            shareGroupStatePartitionMetadataRecord(group.groupId(), currentMap
+                .withInitializingTopics(finalInitializingMap)
+                .withInitializedTopics(finalInitializedMap)
+                .withInitializingStartOffsets(removeStartOffsets(currentMap.initializingStartOffsets(), topicPartitionMap)))),
             null
         );
     }
@@ -6132,20 +6135,14 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
         Set<String> subscribedTopicNames = group instanceof ShareGroup shareGroup ? shareGroup.subscribedTopicNames().keySet() : Set.of();
         Map<Uuid, Map<Integer, Long>> startOffsets = subscribedStartOffsets(
-            new ShareGroupStatePartitionMetadataInfo(finalInitializingTopics, info.initializedTopics(), info.deletingTopics(), info.initializingStartOffsets()),
+            info.withInitializingTopics(finalInitializingTopics),
             subscribedTopicNames
         );
 
         return new CoordinatorResult<>(
-            List.of(
-                newShareGroupStatePartitionMetadataRecord(
-                    groupId,
-                    finalInitializingTopics,
-                    info.initializedTopics(),
-                    attachTopicName(info.deletingTopics()),
-                    startOffsets
-                )
-            ),
+            List.of(shareGroupStatePartitionMetadataRecord(groupId, info
+                .withInitializingTopics(finalInitializingTopics)
+                .withInitializingStartOffsets(startOffsets))),
             null
         );
     }
@@ -9676,6 +9673,7 @@ public class GroupMetadataManager {
         // could be previous deleting topics due to offsets delete, we need to account for them as well.
         // If some older deleting topics could not be found in the metadata image, they will be ignored
         // and logged.
+        // The record is built from scratch, as the group no longer has initializing, initialized topics or start offsets.
         records.add(newShareGroupStatePartitionMetadataRecord(
             shareGroupId,
             Map.of(),
@@ -9782,15 +9780,10 @@ public class GroupMetadataManager {
             }
         });
 
-        records.add(
-            newShareGroupStatePartitionMetadataRecord(
-                groupId,
-                currentMap.initializingTopics(),
-                initializedTopics,
-                attachTopicName(deletingTopics),
-                removeStartOffsetsOfTopics(currentMap.initializingStartOffsets(), deletingTopics)
-            )
-        );
+        records.add(shareGroupStatePartitionMetadataRecord(groupId, currentMap
+            .withInitializedTopics(initializedTopics)
+            .withDeletingTopics(deletingTopics)
+            .withInitializingStartOffsets(removeStartOffsetsOfTopics(currentMap.initializingStartOffsets(), deletingTopics))));
 
         return deleteShareGroupStateRequestTopicsData;
     }
@@ -9944,13 +9937,11 @@ public class GroupMetadataManager {
             Set<Uuid> finalDeleting = new HashSet<>(metadata.deletingTopics());
             finalDeleting.removeAll(deletedTopicIds);
 
-            records.add(newShareGroupStatePartitionMetadataRecord(
-                groupId,
-                finalInitializing,
-                finalInitialized,
-                attachTopicName(finalDeleting),
-                removeStartOffsetsOfTopics(metadata.initializingStartOffsets(), deletedTopicIds)
-            ));
+            records.add(shareGroupStatePartitionMetadataRecord(groupId, metadata
+                .withInitializingTopics(finalInitializing)
+                .withInitializedTopics(finalInitialized)
+                .withDeletingTopics(finalDeleting)
+                .withInitializingStartOffsets(removeStartOffsetsOfTopics(metadata.initializingStartOffsets(), deletedTopicIds))));
         });
 
         return new CoordinatorResult<>(records);
@@ -9980,15 +9971,7 @@ public class GroupMetadataManager {
 
         topics.keySet().forEach(updatedDeletingTopics::remove);
 
-        records.add(
-            newShareGroupStatePartitionMetadataRecord(
-                groupId,
-                currentMap.initializingTopics(),
-                currentMap.initializedTopics(),
-                attachTopicName(updatedDeletingTopics),
-                currentMap.initializingStartOffsets()
-            )
-        );
+        records.add(shareGroupStatePartitionMetadataRecord(groupId, currentMap.withDeletingTopics(updatedDeletingTopics)));
 
         return topics.entrySet().stream().map(entry ->
             new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()

@@ -100,6 +100,22 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             deletingTopics = Collections.unmodifiableSet(deletingTopics);
             initializingStartOffsets = Collections.unmodifiableMap(initializingStartOffsets);
         }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializingTopics(Map<Uuid, InitMapValue> initializingTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializedTopics(Map<Uuid, InitMapValue> initializedTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withDeletingTopics(Set<Uuid> deletingTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializingStartOffsets(Map<Uuid, Map<Integer, Long>> initializingStartOffsets) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
     }
 
     /**
