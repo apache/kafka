@@ -173,6 +173,9 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
             List<Integer> nullIndexList = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
+                if (primitiveSize == null) {
+                    throw new SerializationException("Data is encoded as constant size entries, but configured inner deserializer is not a known fixed-size deserializer.");
+                }
                 // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
                 nullIndexList = deserializeNullIndexList(dis, data.length);
             }

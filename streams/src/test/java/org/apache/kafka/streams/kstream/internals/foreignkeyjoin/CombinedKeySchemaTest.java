@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 
@@ -87,5 +88,24 @@ public class CombinedKeySchemaTest {
         );
         final String foreignKey = null;
         assertThrows(NullPointerException.class, () -> cks.prefixBytes(foreignKey));
+    }
+
+    @Test
+    public void shouldThrowWhenForeignKeyLengthExceedsRemainingBytes() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
+
+        final byte[] foreignKeyRaw = Serdes.String().serializer().serialize("fkTopic", "foreignKey");
+        final byte[] primaryKeyRaw = Serdes.Integer().serializer().serialize("pkTopic", 1);
+        final int fakeForeignKeyLength = foreignKeyRaw.length + primaryKeyRaw.length + 1; // one past what's actually there
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeyRaw.length + primaryKeyRaw.length);
+        buf.putInt(fakeForeignKeyLength);
+        buf.put(foreignKeyRaw).put(primaryKeyRaw);
+        final Bytes corrupted = Bytes.wrap(buf.array());
+
+        assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted));
     }
 }
