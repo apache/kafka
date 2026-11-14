@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -38,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -45,6 +50,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -52,10 +58,10 @@ import static org.mockito.Mockito.when;
 
 /**
  * Method-level coverage of {@link TimestampedToHeadersWindowStoreAdapter} over a mocked inner store: reads
- * convert/wrap, put strips headers. Strict stubs make a call to the wrong inner overload fail the test
- * instead of returning {@code null}. See {@link TimestampedToHeadersWindowStoreAdapterCompletenessTest}
- * for the completeness guard and {@link TimestampedToHeadersWindowStoreAdapterTest} for coverage against a
- * real RocksDB store.
+ * convert/wrap, put strips headers, and the remaining {@link StateStore} methods delegate. Strict stubs
+ * make a call to the wrong inner overload fail the test instead of returning {@code null}. See
+ * {@link TimestampedToHeadersWindowStoreAdapterCompletenessTest} for the completeness guard and
+ * {@link TimestampedToHeadersWindowStoreAdapterTest} for coverage against a real RocksDB store.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -170,6 +176,54 @@ public class TimestampedToHeadersWindowStoreAdapterDelegationTest {
     @Test
     public void shouldReturnPersistentTrue() {
         assertTrue(adapter.persistent());
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final StateStoreContext context = mock(StateStoreContext.class);
+        final StateStore root = mock(StateStore.class);
+        adapter.init(context, root);
+        verify(inner).init(context, root);
+    }
+
+    @Test
+    public void shouldDelegateCommit() {
+        final Map<TopicPartition, Long> changelogOffsets = Map.of(new TopicPartition("changelog", 0), 7L);
+        adapter.commit(changelogOffsets);
+        verify(inner).commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateManagesOffsets() {
+        when(inner.managesOffsets()).thenReturn(true);
+        assertTrue(adapter.managesOffsets());
+    }
+
+    @Test
+    public void shouldDelegateCommittedOffset() {
+        final TopicPartition partition = new TopicPartition("changelog", 0);
+        when(inner.committedOffset(partition)).thenReturn(7L);
+        assertEquals(7L, adapter.committedOffset(partition));
+    }
+
+    @Test
+    public void shouldDelegateApproximateNumUncommittedBytes() {
+        when(inner.approximateNumUncommittedBytes()).thenReturn(123L);
+        assertEquals(123L, adapter.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldDelegateGetPosition() {
+        final Position position = Position.emptyPosition();
+        when(inner.getPosition()).thenReturn(position);
+        assertSame(position, adapter.getPosition());
+    }
+
+    @Test
+    public void shouldDelegateClose() {
+        adapter.close();
+        verify(inner).close();
     }
 
     private static <R> Arguments call(final String name, final Function<WindowStore<Bytes, byte[]>, R> call) {

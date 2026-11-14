@@ -78,9 +78,10 @@ public class AbstractReadOnlyDecoratorTest {
         assertEquals(expectedDecorator, getReadOnlyStore(mock(storeType)).getClass());
     }
 
-    // Pins current behavior: unlike wrapWithReadWriteStore, getReadOnlyStore has no branch for the
-    // window/session headers stores, so a global store of either type falls through to the base
-    // decorator, which does not implement the headers interface.
+    // Pins a known gap, not intended behavior: unlike wrapWithReadWriteStore, getReadOnlyStore has no
+    // branch for the window/session headers stores, so a global store of either type falls through to
+    // the base decorator, which does not implement the headers interface. KAFKA-XXXXX adds the missing
+    // read-only headers decorators; once it lands, move these cases into storeTypes() above.
     private static Stream<Arguments> headersStoreTypesWithoutReadOnlyDecorator() {
         return Stream.of(
             Arguments.of(TimestampedWindowStoreWithHeaders.class, WindowStoreReadOnlyDecorator.class),

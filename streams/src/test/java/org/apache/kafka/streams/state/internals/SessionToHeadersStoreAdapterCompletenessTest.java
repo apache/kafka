@@ -32,9 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Requires every {@link SessionStore} method to be classified into a contract group, and every non-special
- * method to be overridden by {@link SessionToHeadersStoreAdapter}, so a header-aware override that is
- * silently dropped (returning raw bytes) fails this test rather than escaping to manual testing
- * (KAFKA-20328). Behavioral assertions live in {@link SessionToHeadersStoreAdapterTest}.
+ * method to be overridden by {@link SessionToHeadersStoreAdapter}, so a dropped override fails this test
+ * rather than escaping to manual testing (KAFKA-20328). An inherited interface default cannot reach the
+ * inner store, so a dropped override either throws {@link UnsupportedOperationException} (e.g. the
+ * {@code backward*} methods) or silently stops delegating.
+ * Behavioral assertions live in {@link SessionToHeadersStoreAdapterTest}.
  * <p>
  * The Instant overloads are exempt from the override check: they are {@link SessionStore} defaults that
  * delegate to their long counterparts, so they convert/wrap through the adapter's long overrides.
@@ -82,7 +84,10 @@ public class SessionToHeadersStoreAdapterCompletenessTest {
         "getPosition()"
     );
 
-    // query has bespoke iterator wrapping; flush is a deprecated no-op; readOnly returns `this`.
+    // query has bespoke iterator wrapping; flush is a deprecated no-op.
+    // readOnly is NOT harmless: the adapter inherits the default that returns `this`, so the isolation
+    // level never reaches the inner store and READ_COMMITTED reads can observe uncommitted writes.
+    // Tracked by KAFKA-21505; remove readOnly from SPECIAL once the adapter overrides it.
     private static final Set<String> SPECIAL = Set.of(
         "query(Query,PositionBound,QueryConfig)",
         "flush()",
@@ -115,7 +120,7 @@ public class SessionToHeadersStoreAdapterCompletenessTest {
         assertTrue(unclassified.isEmpty(),
             "Unclassified SessionStore method(s): " + unclassified + ". Add each to a contract group in "
                 + "this test AND cover it with a behavioral test in SessionToHeadersStoreAdapterTest, so a "
-                + "forgotten header conversion cannot leak raw bytes silently.");
+                + "dropped override cannot go unnoticed.");
     }
 
     @Test
@@ -130,7 +135,8 @@ public class SessionToHeadersStoreAdapterCompletenessTest {
 
         assertTrue(notOverridden.isEmpty(),
             "SessionStore method(s) not overridden by SessionToHeadersStoreAdapter: " + notOverridden
-                + ". The inherited default would return the inner store's raw bytes without header conversion.");
+                + ". An inherited interface default cannot reach the inner store: it either throws "
+                + "UnsupportedOperationException or silently stops delegating (no-op or constant return).");
     }
 
     // For a generic method the adapter's override is reached via its compiler-generated bridge, which
