@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.AutoOffsetReset;
 import org.apache.kafka.streams.KeyValue;
@@ -25,6 +26,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -1404,5 +1406,104 @@ public class InternalStreamsBuilderTest {
             @Override
             public void writeToTopology(final InternalTopologyBuilder topologyBuilder) { }
         };
+    }
+
+    @Test
+    public void shouldHandleNestedMergesWithKeyChangingOperations() {
+        // Reproduction test for KAFKA-21357
+        // Given: topology optimization is enabled
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        // Create three streams with key-changing operations (selectKey)
+        final KStream<String, String> f1 = builder.stream(Collections.singleton("a"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> f2 = builder.stream(Collections.singleton("b"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> j = builder.stream(Collections.singleton("c"), consumed)
+                .selectKey((k, v) -> v);
+
+        // Create nested merges: f1.merge(f2) creates inner merge, then merge with j creates outer merge
+        f1.merge(f2).merge(j)
+                .groupByKey(Grouped.with("grp", Serdes.String(), Serdes.String()))
+                .count();
+
+        // When: build and optimize topology
+        // This should NOT throw "Found a null keyChangingChild node" exception
+        builder.buildAndOptimizeTopology(props);
+
+        // Then: verify that repartition nodes are optimized correctly
+        assertSingleRepartitionBelowOutermostMerge();
+    }
+
+    @Test
+    public void shouldHandleNestedMergesWithMixedKeyChangingOperations() {
+        // Extended test with mixed key-changing and non-key-changing streams
+        // Given: topology optimization is enabled
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        // Create four streams: three with key-changing operations, one without
+        final KStream<String, String> f1 = builder.stream(Collections.singleton("a"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> f2 = builder.stream(Collections.singleton("b"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> j = builder.stream(Collections.singleton("c"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> l = builder.stream(Collections.singleton("d"), consumed);  // no selectKey
+
+        // Create nested merges with mixed operations
+        f1.merge(f2).merge(j).merge(l)
+                .groupByKey(Grouped.with("grp", Serdes.String(), Serdes.String()))
+                .count();
+
+        // When: build and optimize topology
+        builder.buildAndOptimizeTopology(props);
+
+        // Then: single repartition below the outermost merge
+        assertSingleRepartitionBelowOutermostMerge();
+    }
+
+    @Test
+    public void shouldHandleSingleSelectKeyWithNestedMerges() {
+        // Minimal test: single selectKey with nested merges
+        // Given: topology optimization is enabled
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        // Only one stream has selectKey
+        final KStream<String, String> a = builder.stream(Collections.singleton("a"), consumed)
+                .selectKey((k, v) -> v);
+        final KStream<String, String> b = builder.stream(Collections.singleton("b"), consumed);
+        final KStream<String, String> c = builder.stream(Collections.singleton("c"), consumed);
+
+        // Create nested merges: a.selectKey feeds inner merge, inner merge feeds outer merge
+        a.merge(b).merge(c)
+                .groupByKey(Grouped.with("grp", Serdes.String(), Serdes.String()))
+                .count();
+
+        // When: build and optimize topology
+        builder.buildAndOptimizeTopology(props);
+
+        // Then: single repartition below the outermost merge
+        assertSingleRepartitionBelowOutermostMerge();
+    }
+
+    private void assertSingleRepartitionBelowOutermostMerge() {
+        final List<GraphNode> repartitionNodes = new ArrayList<>();
+        getNodesByType(builder.root, OptimizableRepartitionNode.class, new HashSet<>(), repartitionNodes);
+        assertEquals(1, repartitionNodes.size(), "Expected single optimized repartition node");
+
+        final GraphNode optimizedRepartition = repartitionNodes.get(0);
+
+        // Verify parent is a merge node
+        assertFalse(optimizedRepartition.parentNodes().isEmpty(), "Repartition node should have a parent");
+        final GraphNode parent = optimizedRepartition.parentNodes().iterator().next();
+        assertTrue(parent.nodeName().startsWith("KSTREAM-MERGE-"),
+            "Repartition parent should be a merge node, got: " + parent.nodeName());
+
+        // Verify repartition feeds downstream processing (not left disconnected)
+        assertFalse(optimizedRepartition.children().isEmpty(), "Repartition should feed the downstream aggregation");
+
+        // Verify children don't contain merge nodes (proving R is below the outermost merge)
+        assertTrue(optimizedRepartition.children().stream().noneMatch(GraphNode::isMergeNode),
+            "Repartition must be below the outermost merge (children should not contain merge nodes)");
     }
 }
