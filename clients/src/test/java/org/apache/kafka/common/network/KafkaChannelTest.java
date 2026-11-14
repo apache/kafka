@@ -21,6 +21,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -64,6 +65,42 @@ public class KafkaChannelTest {
         assertEquals(64, channel.write());
         assertEquals(0, send.remaining());
         assertEquals(networkSend, channel.maybeCompleteSend());
+    }
+
+    @Test
+    public void testWriteBatchesSend() throws IOException {
+        TransportLayer transport = Mockito.mock(TransportLayer.class);
+        Send send = Mockito.mock(Send.class);
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> Mockito.mock(Authenticator.class),
+            1024, Mockito.mock(MemoryPool.class), Mockito.mock(ChannelMetadataRegistry.class));
+        channel.setSend(new NetworkSend("0", send));
+
+        channel.write();
+
+        InOrder inOrder = Mockito.inOrder(transport, send);
+        inOrder.verify(transport).startWriteBatch();
+        inOrder.verify(send).writeTo(transport);
+        inOrder.verify(transport).endWriteBatch();
+    }
+
+    @Test
+    public void testSendCompletesAfterPendingWrites() throws IOException {
+        TransportLayer transport = Mockito.mock(TransportLayer.class);
+        Send send = Mockito.mock(Send.class);
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> Mockito.mock(Authenticator.class),
+            1024, Mockito.mock(MemoryPool.class), Mockito.mock(ChannelMetadataRegistry.class));
+        NetworkSend networkSend = new NetworkSend("0", send);
+        channel.setSend(networkSend);
+        Mockito.when(send.completed()).thenReturn(true);
+
+        Mockito.when(transport.hasPendingWrites()).thenReturn(true);
+        assertEquals(0, channel.write());
+        assertNull(channel.maybeCompleteSend());
+
+        Mockito.when(transport.hasPendingWrites()).thenReturn(false);
+        assertEquals(0, channel.write());
+        assertEquals(networkSend, channel.maybeCompleteSend());
+        Mockito.verify(send, Mockito.never()).writeTo(transport);
     }
 
     @Test
