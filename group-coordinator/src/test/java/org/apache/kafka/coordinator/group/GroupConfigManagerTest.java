@@ -20,7 +20,6 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,13 +42,6 @@ public class GroupConfigManagerTest {
     @BeforeEach
     public void setUp() {
         configManager = createConfigManager();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (configManager != null) {
-            configManager.close();
-        }
     }
 
     @Test
