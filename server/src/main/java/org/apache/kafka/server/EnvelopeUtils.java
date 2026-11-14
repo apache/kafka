@@ -73,7 +73,12 @@ public final class EnvelopeUtils {
             forwardedRequestBuffer,
             requestChannelMetrics
         );
-        handler.accept(forwardedRequest);
+        forwardedRequest.beginLocalTime(forwardedRequest.requestDequeueTimeNanos());
+        try {
+            handler.accept(forwardedRequest);
+        } finally {
+            forwardedRequest.endLocalTime();
+        }
     }
 
     private static InetAddress parseForwardedClientAddress(byte[] address) {
@@ -94,6 +99,7 @@ public final class EnvelopeUtils {
             Request forwardedRequest = new Request(
                 envelope.processor(),
                 forwardedContext,
+                envelope.time(),
                 envelope.startTimeNanos(),
                 envelope.memoryPool(),
                 buffer,

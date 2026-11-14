@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.network.metrics.RequestMetrics;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,16 +48,40 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 
-public final class Request implements BaseRequest {
+public final class Request implements BaseRequest, RequestTimeRecorder {
     private static final Logger LOG = LoggerFactory.getLogger(Request.class);
     private static final Logger REQUEST_LOGGER = LoggerFactory.getLogger("kafka.request.logger");
 
+    /**
+     * A time and count packed into a single long.
+     * <p>
+     * Only 48 bits of the time are preserved, so nanosecond durations greater than or equal to
+     * 2<sup>48</sup> ns (about 78 hours) will overflow.
+     */
+    private static class PartialTimeAndCount {
+        private static final int COUNT_BITS = 16;
+        private static final long COUNT_MASK = (1L << COUNT_BITS) - 1;
+
+        private static long pack(long partialTimeNanos, long count) {
+            return (partialTimeNanos << COUNT_BITS) | count;
+        }
+
+        private static long partialTimeNanos(long partialTimeAndCount) {
+            return partialTimeAndCount >>> COUNT_BITS;
+        }
+
+        private static long count(long partialTimeAndCount) {
+            return partialTimeAndCount & COUNT_MASK;
+        }
+    }
+
     private final int processor;
     private final RequestContext context;
+    private final Time time;
     private final long startTimeNanos;
     private final MemoryPool memoryPool;
     private final Session session;
@@ -70,27 +95,51 @@ public final class Request implements BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     private volatile long requestDequeueTimeNanos = -1L;
-    private volatile long apiLocalCompleteTimeNanos = -1L;
     private volatile long responseCompleteTimeNanos = -1L;
     private volatile long responseDequeueTimeNanos = -1L;
     private volatile long messageConversionsTimeNanos = 0L;
     private volatile long apiThrottleTimeMs = 0L;
     private volatile long temporaryMemoryBytes = 0L;
 
-    private volatile OptionalLong callbackRequestDequeueTimeNanos = OptionalLong.empty();
-    private volatile OptionalLong callbackRequestCompleteTimeNanos = OptionalLong.empty();
     private volatile LongConsumer recordNetworkThreadTimeCallback = __ -> { };
+
+    /**
+     * Tracks the local time and the active local spans.
+     * <p>
+     * To avoid double counting, local time starts when a local span starts while there are no other
+     * active local spans and local time ends when there are no more active local spans.
+     * <p>
+     * We need to track three things atomically:
+     * <ul>
+     *   <li>The number of active local spans.</li>
+     *   <li>The start time of the current period during which at least one local span has been
+     *       active, if any.</li>
+     *   <li>The total local time so far. This has to be atomic with the previous two since we may
+     *       send a response and capture the final request metrics inside of an active local span
+     *       and must account for the local time elapsed in the current active local spans.</li>
+     * </ul>
+     * <p>
+     * We cannot fit all three into a single long as-is, so we must combine the total local time and
+     * the start time in some way. When inside a span, the total local time so far is given by<br>
+     *     <code>total local time + current time - start time</code>,<br>
+     * so we choose to store the partial sum<br>
+     *     <code>total local time                - start time</code>.<br>
+     * When there is no active local span, <code>start time</code> is set to <code>0</code>.
+     */
+    private final AtomicLong localTimeAndCount = new AtomicLong();
+    private volatile long apiLocalTimeNanos = -1L;
 
     private static boolean isRequestLoggingEnabled(RequestHeader header) {
         return REQUEST_LOGGER.isDebugEnabled()
                 || (REQUEST_LOGGER.isInfoEnabled() && header.isApiVersionDeprecated());
     }
 
-    public Request(int processor, RequestContext context, long startTimeNanos,
+    public Request(int processor, RequestContext context, Time time, long startTimeNanos,
                    MemoryPool memoryPool, ByteBuffer buffer,
                    RequestChannelMetrics metrics, Optional<Request> envelope) {
         this.processor = processor;
         this.context = context;
+        this.time = time;
         this.startTimeNanos = startTimeNanos;
         this.memoryPool = memoryPool;
         this.buffer = buffer;
@@ -119,10 +168,10 @@ public final class Request implements BaseRequest {
         }
     }
 
-    public Request(int processor, RequestContext context, long startTimeNanos,
+    public Request(int processor, RequestContext context, Time time, long startTimeNanos,
                    MemoryPool memoryPool, ByteBuffer buffer,
                    RequestChannelMetrics metrics) {
-        this(processor, context, startTimeNanos, memoryPool, buffer, metrics, Optional.empty());
+        this(processor, context, time, startTimeNanos, memoryPool, buffer, metrics, Optional.empty());
     }
 
     public int processor() {
@@ -131,6 +180,10 @@ public final class Request implements BaseRequest {
 
     public RequestContext context() {
         return context;
+    }
+
+    public Time time() {
+        return time;
     }
 
     public long startTimeNanos() {
@@ -153,12 +206,89 @@ public final class Request implements BaseRequest {
         this.requestDequeueTimeNanos = requestDequeueTimeNanos;
     }
 
-    public long apiLocalCompleteTimeNanos() {
-        return apiLocalCompleteTimeNanos;
+    @Override
+    public void beginLocalTime() {
+        long startTimeNanos = time.nanoseconds();
+        beginLocalTime(startTimeNanos);
     }
 
-    public void apiLocalCompleteTimeNanos(long apiLocalCompleteTimeNanos) {
-        this.apiLocalCompleteTimeNanos = apiLocalCompleteTimeNanos;
+    @Override
+    public void beginLocalTime(long startTimeNanos) {
+        while (true) {
+            long partialTimeAndCount = localTimeAndCount.get();
+            long count = PartialTimeAndCount.count(partialTimeAndCount);
+            if (count == PartialTimeAndCount.COUNT_MASK) {
+                LOG.error("Ignoring beginLocalTime() because request {} already has the maximum of {} active local " +
+                    "time spans. The LocalTimeMs and RemoteTimeMs metrics for this request will be inaccurate.",
+                    header(), PartialTimeAndCount.COUNT_MASK);
+                return;
+            }
+            long partialTimeNanos = PartialTimeAndCount.partialTimeNanos(partialTimeAndCount);
+            if (count == 0) {
+                // Store the partial local time sum, total local time - start time.
+                // The end time term will be added when the local span ends or when we need to
+                // calculate the total local time so far. This can overflow the packed long, but the
+                // overflow will be cancelled out once end time is added.
+                partialTimeNanos -= startTimeNanos;
+            }
+            if (localTimeAndCount.compareAndSet(partialTimeAndCount, PartialTimeAndCount.pack(partialTimeNanos, count + 1))) {
+                return;
+            }
+        }
+    }
+
+    @Override
+    public void endLocalTime() {
+        while (true) {
+            long partialTimeAndCount = localTimeAndCount.get();
+            long count = PartialTimeAndCount.count(partialTimeAndCount);
+            if (count == 0) {
+                LOG.error("Ignoring endLocalTime() without a matching beginLocalTime() for request {}. " +
+                    "The LocalTimeMs and RemoteTimeMs metrics for this request will be inaccurate.", header());
+                return;
+            }
+            long partialTimeNanos = PartialTimeAndCount.partialTimeNanos(partialTimeAndCount);
+            if (count == 1) {
+                // Complete the partial local time sum, total local time - start time, by adding
+                // the end time.
+                partialTimeNanos += time.nanoseconds();
+            }
+            if (localTimeAndCount.compareAndSet(partialTimeAndCount, PartialTimeAndCount.pack(partialTimeNanos, count - 1))) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Ends accumulation of local time. Local time spans that are active or begin later are not
+     * counted beyond this point.
+     */
+    public void closeLocalTime() {
+        if (apiLocalTimeNanos != -1L) {
+            return;
+        }
+
+        apiLocalTimeNanos = localTimeNanos();
+    }
+
+    /**
+     * @return The local time.
+     */
+    public long localTimeNanos() {
+        if (apiLocalTimeNanos != -1L) {
+            return apiLocalTimeNanos;
+        }
+
+        long partialTimeAndCount = localTimeAndCount.get();
+        long partialTime = PartialTimeAndCount.partialTimeNanos(partialTimeAndCount);
+
+        return PartialTimeAndCount.count(partialTimeAndCount) == 0 ?
+            partialTime :
+            // Complete the partial local time sum, total local time - start time, by adding the end
+            // time. Also discard any leading bits that may have overflowed.
+            // NB: End time must be captured after reading the atomic, otherwise the duration of the
+            //     current active span may be negative.
+            PartialTimeAndCount.partialTimeNanos(PartialTimeAndCount.pack(partialTime + time.nanoseconds(), 0));
     }
 
     public void responseCompleteTimeNanos(long responseCompleteTimeNanos) {
@@ -187,22 +317,6 @@ public final class Request implements BaseRequest {
 
     public void temporaryMemoryBytes(long temporaryMemoryBytes) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
-    }
-
-    public OptionalLong callbackRequestDequeueTimeNanos() {
-        return callbackRequestDequeueTimeNanos;
-    }
-
-    public void callbackRequestDequeueTimeNanos(OptionalLong callbackRequestDequeueTimeNanos) {
-        this.callbackRequestDequeueTimeNanos = callbackRequestDequeueTimeNanos;
-    }
-
-    public OptionalLong callbackRequestCompleteTimeNanos() {
-        return callbackRequestCompleteTimeNanos;
-    }
-
-    public void callbackRequestCompleteTimeNanos(OptionalLong callbackRequestCompleteTimeNanos) {
-        this.callbackRequestCompleteTimeNanos = callbackRequestCompleteTimeNanos;
     }
 
     public RequestHeader header() {
@@ -310,10 +424,7 @@ public final class Request implements BaseRequest {
     }
 
     public long requestThreadTimeNanos() {
-        if (apiLocalCompleteTimeNanos == -1L) {
-            apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds();
-        }
-        return Math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L);
+        return localTimeNanos();
     }
 
     /**
@@ -327,14 +438,14 @@ public final class Request implements BaseRequest {
     }
 
     public void updateRequestMetrics(long networkThreadTimeNanos, Optional<JsonNode> responseLog) {
-        long endTimeNanos = Time.SYSTEM.nanoseconds();
+        long endTimeNanos = time.nanoseconds();
 
         double requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos);
-        long cbCompleteNanos = callbackRequestCompleteTimeNanos.orElse(0L);
-        long cbDequeueNanos = callbackRequestDequeueTimeNanos.orElse(0L);
-        long callbackRequestTimeNanos = cbCompleteNanos - cbDequeueNanos;
-        double apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos + callbackRequestTimeNanos);
-        double apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos - callbackRequestTimeNanos);
+        // Local time is the time during which at least one local time span was active, whether on the request
+        // handler threads or elsewhere. Remote time is the rest of the time until the response is complete.
+        long localTimeNanos = localTimeNanos();
+        double apiLocalTimeMs = nanosToMs(localTimeNanos);
+        double apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - requestDequeueTimeNanos - localTimeNanos);
         double responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos);
         double responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos);
         double messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos);

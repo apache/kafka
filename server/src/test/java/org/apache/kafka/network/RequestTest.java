@@ -51,6 +51,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
@@ -366,6 +367,7 @@ public class RequestTest {
         Request envelopeRequest = new Request(
             1,
             envelopeContext,
+            Time.SYSTEM,
             startTimeNanos,
             MemoryPool.NONE,
             envelopeBuffer,
@@ -398,7 +400,7 @@ public class RequestTest {
             new ClientInformation("name", "version"),
             false
         );
-        return new Request(1, requestContext, 0, mock(MemoryPool.class), buffer, mock(RequestChannelMetrics.class));
+        return new Request(1, requestContext, Time.SYSTEM, 0, mock(MemoryPool.class), buffer, mock(RequestChannelMetrics.class));
     }
 
     private Map<String, String> toMap(Config config) {

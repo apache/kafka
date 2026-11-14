@@ -90,7 +90,7 @@ public class BaseClientQuotaManagerTest {
         RequestHeader header = RequestHeader.parse(buffer);
         RequestContext context = new RequestContext(header, "1", assertDoesNotThrow(InetAddress::getLocalHost), KafkaPrincipal.ANONYMOUS,
                 ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+        Request request = new Request(1, context, time, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
         quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
     }
 

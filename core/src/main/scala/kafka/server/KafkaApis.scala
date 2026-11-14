@@ -264,9 +264,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       // expiration thread for certain delayed operations (e.g. DelayedJoin)
       // Delayed fetches are also completed by ReplicaFetcherThread.
       replicaManager.tryCompleteActions()
-      // The local completion time may be set while processing the request. Only record it if it's unset.
-      if (request.apiLocalCompleteTimeNanos < 0)
-        request.apiLocalCompleteTimeNanos(time.nanoseconds)
     }
   }
 

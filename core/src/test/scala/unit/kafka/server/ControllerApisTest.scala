@@ -74,7 +74,7 @@ import org.slf4j.LoggerFactory
 import java.net.InetAddress
 import java.util
 import java.util.Collections.{singleton, singletonList, singletonMap}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
@@ -201,7 +201,7 @@ class ControllerApisTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-    new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
+    new Request(1, context, time, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
   }
 
   def createDenyAllAuthorizer(): Plugin[Authorizer] = {
@@ -245,44 +245,6 @@ class ControllerApisTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )
-  }
-
-  @Test
-  def testFetchLocalTimeComputedCorrectly(): Unit = {
-    val localTimeDurationMs = 5
-    val initialTimeNanos = time.nanoseconds()
-    val initialTimeMs = time.milliseconds()
-
-    when(
-      raftManager.handleRequest(
-        any(classOf[RequestContext]),
-        any(classOf[RequestHeader]),
-        any(classOf[ApiMessage]),
-        any(classOf[Long])
-      )
-    ).thenAnswer { _ =>
-      time.sleep(localTimeDurationMs)
-      new CompletableFuture[ApiMessage]()
-    }
-
-    // Local time should be updated when `ControllerApis.handle` returns
-    val fetchRequestData = new FetchRequestData()
-    val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
-    controllerApis = createControllerApis(None, new MockController.Builder().build())
-    controllerApis.handle(request, RequestLocal.noCaching)
-
-
-    verify(raftManager).handleRequest(
-      ArgumentMatchers.eq(request.context),
-      ArgumentMatchers.eq(request.header),
-      ArgumentMatchers.eq(fetchRequestData),
-      ArgumentMatchers.eq(initialTimeMs)
-    )
-
-    assertEquals(localTimeDurationMs, TimeUnit.MILLISECONDS.convert(
-      request.apiLocalCompleteTimeNanos - initialTimeNanos,
-      TimeUnit.NANOSECONDS
-    ))
   }
 
   @Test

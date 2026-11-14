@@ -1004,7 +1004,7 @@ private[kafka] class Processor(
                   channel.principal, listenerName, securityProtocol, channel.channelMetadataRegistry.clientInformation,
                   isPrivilegedListener, channel.principalSerde)
 
-                req = new Request(id, context, nowNanos, memoryPool, receive.payload, requestChannel.metrics)
+                req = new Request(id, context, time, nowNanos, memoryPool, receive.payload, requestChannel.metrics)
 
                 // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
                 // and version. It is done here to avoid wiring things up to the api layer.
