@@ -530,7 +530,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         // prev standby tasks
-        final Member prevStandbyMember = findPrevMemberWithLeastLoad(
+        return findPrevMemberWithLeastLoad(
             localState,
             localState.standbyTaskToPrevMember.get(task),
             Optional.of(task),
@@ -539,10 +539,6 @@ public class StickyTaskAssignor implements TaskAssignor {
                 localState.processIdToState.get(member.processId),
                 member
             ));
-        if (prevStandbyMember != null && hasUnfulfilledTaskQuota(localState, localState.processIdToState.get(prevStandbyMember.processId), prevStandbyMember)) {
-            return prevStandbyMember;
-        }
-        return null;
     }
 
     /**

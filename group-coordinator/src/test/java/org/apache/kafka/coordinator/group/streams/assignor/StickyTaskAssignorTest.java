@@ -1563,7 +1563,7 @@ public class StickyTaskAssignorTest {
             taskOffsets,
             Map.of()));
         members.put("member1_2", createMemberMetadataWithOffsets("process1", taskOffsets));
-        
+
         // Member of process2 have no local state for task 2.
         members.put("member2_1", createMemberMetadata("process2", Map.of("test-subtopology", Set.of(1)), Map.of(), Map.of()));
         members.put("member2_2", createMemberMetadata("process2"));
