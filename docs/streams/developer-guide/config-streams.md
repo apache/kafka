@@ -701,7 +701,7 @@ Medium
 </td>  
 <td>
 
-The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.
+The maximum number of warmup replicas (extra standbys beyond the configured num.standby.replicas) that can be assigned at once.
 </td>  
 <td>
 
@@ -1470,7 +1470,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### enable.metrics.push
 
-> Kafka Streams metrics can be pushed to the brokers similar to client metrics. Additionally, Kafka Streams allows to enable/disable metric pushing for each embedded client individually. However, pushing Kafka Streams metrics requires that `enable.metric.push` is enabled on the main-consumer and admin client. 
+> Kafka Streams metrics can be pushed to the brokers similar to client metrics. Additionally, Kafka Streams allows to enable/disable metric pushing for each embedded client individually. However, pushing Kafka Streams metrics requires that `enable.metrics.push` is enabled on the main-consumer and admin client. 
 
 ### max.task.idle.ms
 
@@ -1488,7 +1488,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### max.warmup.replicas
 
-> The maximum number of warmup replicas (extra standbys beyond the configured `num.standbys`) that can be assigned at once for the purpose of keeping the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1. 
+> The maximum number of warmup replicas (extra standbys beyond the configured `num.standby.replicas`) that can be assigned at once for the purpose of keeping the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1. 
 > 
 > Note that one warmup replica corresponds to one [Stream Task](/{version}/streams/architecture/#stream-partitions-and-tasks). Furthermore, note that each warmup task can only be promoted to an active task during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means that the maximum rate at which active tasks can be migrated from one Kafka Streams instance to another instance can be determined by (`max.warmup.replicas` / `probing.rebalance.interval.ms`). 
 
