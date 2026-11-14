@@ -35,13 +35,14 @@ import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -53,11 +54,60 @@ class KafkaRequestHandlerTest {
   val brokerTopicMetrics: BrokerTopicMetrics = brokerTopicStats.topicStats(topic)
   val allTopicMetrics: BrokerTopicMetrics = brokerTopicStats.allTopicsStats
 
-  @Test
-  def testCallbackTiming(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true, 0",
+    "false, 0",
+    // Start the time at 0x0FFF_FFFF_FFFF_FFFF ns, so that the intermediate local time tracking
+    // crosses a multiple of 2^48 ns and overflows.
+    "true, 1152921504606846975",
+    "false, 1152921504606846975"
+  ))
+  def testRequestTiming(sendResponseInsideSpan: Boolean, initialTimeNanos: Long): Unit = {
+    val time = new MockTime(0, 0, initialTimeNanos)
+    val startTime = time.nanoseconds()
+    val metrics = new RequestChannelMetrics(java.util.Set.of(ApiKeys.API_VERSIONS))
+    val requestChannel = new RequestChannel(10, time, metrics)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    try {
+      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
+
+      val request = makeRequest(time, metrics)
+      requestChannel.sendRequest(request)
+
+      when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+        time.sleep(2)
+        if (sendResponseInsideSpan) {
+          requestChannel.sendNoOpResponse(request)
+          time.sleep(1) // excluded from the local time
+        }
+        handler.stop()
+      }
+
+      handler.run()
+
+      if (!sendResponseInsideSpan) {
+        time.sleep(4) // excluded from the local time
+        requestChannel.sendNoOpResponse(request)
+      }
+      request.updateRequestMetrics(0, Optional.empty())
+
+      assertEquals(startTime, request.requestDequeueTimeNanos)
+      val requestMetrics = metrics.get(ApiKeys.API_VERSIONS.name)
+      // 2 ms on the request handler thread.
+      assertEquals(2.0, requestMetrics.localTimeHist.max)
+      assertEquals(if (sendResponseInsideSpan) 0.0 else 4.0, requestMetrics.remoteTimeHist.max)
+    } finally {
+      metrics.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCallbackTiming(sendResponseInsideSpan: Boolean): Unit = {
     val time = new MockTime()
     val startTime = time.nanoseconds()
-    val metrics = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val metrics = new RequestChannelMetrics(java.util.Set.of(ApiKeys.API_VERSIONS))
     val requestChannel = new RequestChannel(10, time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {
@@ -72,20 +122,69 @@ class KafkaRequestHandlerTest {
         val callback = KafkaRequestHandler.wrapAsyncCallback(
           (_: RequestLocal, ms: Int) => {
             time.sleep(ms)
+            if (sendResponseInsideSpan) {
+              requestChannel.sendNoOpResponse(request)
+              time.sleep(1) // excluded from the local time
+            }
             handler.stop()
           },
           RequestLocal.noCaching)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
-        request.apiLocalCompleteTimeNanos(time.nanoseconds)
       }
 
       handler.run()
 
+      if (!sendResponseInsideSpan) {
+        time.sleep(4) // excluded from the local time
+        requestChannel.sendNoOpResponse(request)
+      }
+      request.updateRequestMetrics(0, Optional.empty())
+
       assertEquals(startTime, request.requestDequeueTimeNanos)
-      assertEquals(startTime + 2000000, request.apiLocalCompleteTimeNanos)
-      assertEquals(startTime + 2000000, request.callbackRequestDequeueTimeNanos.getAsLong)
-      assertEquals(startTime + 3000000, request.callbackRequestCompleteTimeNanos.getAsLong)
+      val requestMetrics = metrics.get(ApiKeys.API_VERSIONS.name)
+      // 2 ms on the request handler thread and 1 ms in the callback.
+      assertEquals(3.0, requestMetrics.localTimeHist.max)
+      assertEquals(if (sendResponseInsideSpan) 0.0 else 4.0, requestMetrics.remoteTimeHist.max)
+    } finally {
+      metrics.close()
+    }
+  }
+
+  @Test
+  def testExtraSpanTiming(): Unit = {
+    val time = new MockTime()
+    val startTime = time.nanoseconds()
+    val metrics = new RequestChannelMetrics(java.util.Set.of(ApiKeys.API_VERSIONS))
+    val requestChannel = new RequestChannel(10, time, metrics)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    try {
+      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
+
+      val request = makeRequest(time, metrics)
+      requestChannel.sendRequest(request)
+
+      when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
+        time.sleep(1)
+        // Begin a span that outlives the request handler thread's span, as offloaded processing would.
+        request.beginLocalTime()
+        time.sleep(1)
+        handler.stop()
+      }
+
+      handler.run()
+
+      time.sleep(3)
+      requestChannel.sendNoOpResponse(request)
+      time.sleep(1) // excluded from the local time
+      request.endLocalTime()
+      request.updateRequestMetrics(0, Optional.empty())
+
+      assertEquals(startTime, request.requestDequeueTimeNanos)
+      val requestMetrics = metrics.get(ApiKeys.API_VERSIONS.name)
+      // 2 ms on the request handler thread and 4 ms in the other span, of which 1 ms overlaps.
+      assertEquals(5.0, requestMetrics.localTimeHist.max)
+      assertEquals(0.0, requestMetrics.remoteTimeHist.max)
     } finally {
       metrics.close()
     }
