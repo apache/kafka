@@ -31563,6 +31563,34 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupStateCleanupRemovesStartOffsetsOfDeletedTopicWhoseInitializationFailed() {
+        // The initialization of a brand-new topic fails with an error, so the topic is only in the stored start
+        // offsets. When the topic is deleted, its start offsets are removed.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String groupId = "share-group";
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage());
+
+        assertEquals(Map.of(0, -1L, 1, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+        context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Uuid, Set.of(0, 1))).records().forEach(context::replay);
+        assertEquals(Map.of(t1Uuid, Map.of(0, -1L, 1, -1L)),
+            context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingStartOffsets());
+
+        List<CoordinatorRecord> records = context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Uuid)).records();
+        assertEquals(1, records.size());
+        records.forEach(context::replay);
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingStartOffsets());
+    }
+
+    @Test
     public void testShareGroupHeartbeatTreatsTopicAsNewAfterUnsubscriptionDuringFailedInitialization() {
         // The only member leaves while the initialization of a brand-new topic is in flight, so the topic is still
         // initializing and its start offsets are kept. The initialization then fails with an error. The group no

@@ -3425,9 +3425,10 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Adds the partitions to the initializing topics without storing start offsets for them. This is used when the
-     * start offsets are given by the request, e.g. by alterShareGroupOffsets, which reports a failure to the client
-     * instead of retrying it. Visibility for tests.
+     * Adds the partitions to the initializing topics without storing start offsets for them. This is used by
+     * alterShareGroupOffsets, whose request gives the start offsets. If that request fails, the partitions stay
+     * initializing, and a later heartbeat retries their initialization with derived start offsets.
+     * Visibility for tests.
      */
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
@@ -9912,14 +9913,18 @@ public class GroupMetadataManager {
             Set<Uuid> initializingDeletedCurrent = new HashSet<>(metadata.initializingTopics().keySet());
             Set<Uuid> initializedDeletedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
             Set<Uuid> deletingDeletedCurrent = new HashSet<>(metadata.deletingTopics());
+            // A topic whose initialization failed is in none of the above, but its start offsets may still be stored.
+            Set<Uuid> startOffsetsDeletedCurrent = new HashSet<>(metadata.initializingStartOffsets().keySet());
 
             initializingDeletedCurrent.retainAll(deletedTopicIds);
             initializedDeletedCurrent.retainAll(deletedTopicIds);
             deletingDeletedCurrent.retainAll(deletedTopicIds);
+            startOffsetsDeletedCurrent.retainAll(deletedTopicIds);
 
-            // The deleted topic ids are neither present in initializing
-            // nor in initialized nor in deleting, so we have nothing to do.
-            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty() && deletingDeletedCurrent.isEmpty()) {
+            // The deleted topic ids are neither present in initializing nor in initialized
+            // nor in deleting nor in the start offsets, so we have nothing to do.
+            if (initializingDeletedCurrent.isEmpty() && initializedDeletedCurrent.isEmpty() && deletingDeletedCurrent.isEmpty()
+                && startOffsetsDeletedCurrent.isEmpty()) {
                 return;
             }
 
