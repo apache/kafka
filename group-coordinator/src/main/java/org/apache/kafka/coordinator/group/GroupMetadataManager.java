@@ -3280,16 +3280,17 @@ public class GroupMetadataManager {
         Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
         topicPartitionChangeMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
             startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, initialStartOffset(info, topicId, partitionId))));
-        if (log.isDebugEnabled() && info != null) {
+        if (log.isDebugEnabled()) {
             Map<Uuid, Set<Integer>> retried = new HashMap<>();
-            startOffsets.forEach((topicId, offsets) -> offsets.keySet().forEach(partitionId -> {
-                if (info.initializingStartOffsets().getOrDefault(topicId, Map.of()).containsKey(partitionId)) {
-                    retried.computeIfAbsent(topicId, k -> new HashSet<>()).add(partitionId);
-                }
-            }));
-            if (!retried.isEmpty()) {
-                log.debug("[GroupId {}] Retrying the initialization of {} with the stored start offsets.", groupId, retried);
+            if (info != null) {
+                startOffsets.forEach((topicId, offsets) -> offsets.keySet().forEach(partitionId -> {
+                    if (info.initializingStartOffsets().getOrDefault(topicId, Map.of()).containsKey(partitionId)) {
+                        retried.computeIfAbsent(topicId, k -> new HashSet<>()).add(partitionId);
+                    }
+                }));
             }
+            log.debug("[GroupId {}] Initializing the share group state with the start offsets {}. The partitions which use " +
+                "the start offsets stored by a previous attempt are {}.", groupId, startOffsets, retried);
         }
 
         // The start offsets are stored, so that a retry of the initialization sends the same ones. The same

@@ -54,11 +54,14 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
@@ -2229,7 +2232,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
      */
     @ClusterTest
     @Timeout(240)
-    public void testPartitionAddedWhileAllConsumersLeftStartsAtZero() throws Exception {
+    public void testPartitionAddedAfterAllConsumersLeaveStartsAtZero() throws Exception {
         String groupId = "all-left-group";
         String topic = "all-left-topic";
         alterShareAutoOffsetReset(groupId, "latest");
@@ -2264,8 +2267,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                 60000, "the consumers did not leave the group");
             admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2))).all().get();
             cluster.waitTopicCreation(topic, 2);
-            produceValues(producer, topic, 0, "empty0", 10);
-            produceValues(producer, topic, 1, "empty1", 10);
+            produceValues(producer, topic, 0, "empty0", 8);
+            produceValues(producer, topic, 1, "empty1", 6);
 
             received.clear();
             try (ShareConsumer<byte[], byte[]> consumer3 = createShareConsumer(groupId);
@@ -2279,9 +2282,9 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             assertEquals(0, received.stream().filter(v -> v.startsWith("before-")).count(),
                 "records acknowledged before the consumers left were delivered again");
-            assertEquals(10, received.stream().filter(v -> v.startsWith("empty0-")).count(),
+            assertEquals(8, received.stream().filter(v -> v.startsWith("empty0-")).count(),
                 "the consumed partition did not continue where the group stopped");
-            assertEquals(10, received.stream().filter(v -> v.startsWith("empty1-")).count(),
+            assertEquals(6, received.stream().filter(v -> v.startsWith("empty1-")).count(),
                 "the partition added while the group had no member did not start at offset 0");
         }
     }
@@ -2304,14 +2307,16 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         }
     )
     @Timeout(300)
-    public void testTopicIsNewAfterFailedInitializationAndAllConsumersLeft() throws Exception {
+    public void testTopicIsNewAfterFailedInitializationAndAllConsumersLeave() throws Exception {
         String groupId = "failed-all-left-group";
         String topic = "failed-all-left-topic";
         alterShareAutoOffsetReset(groupId, "latest");
         Set<String> received = new HashSet<>();
 
         try (Admin admin = createAdminClient();
-             Producer<byte[], byte[]> producer = createProducer()) {
+             Producer<byte[], byte[]> producer = createProducer();
+             LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(GroupMetadataManager.class, Level.DEBUG);
             // The warmup has created the share state topic, which has a single partition on one broker.
             int shareCoordinator = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0).get(0);
             List<Integer> replicas = new ArrayList<>(List.of(0, 1, 2));
@@ -2331,15 +2336,22 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             waitForCondition(() -> admin.describeShareGroups(List.of(groupId)).describedGroups().get(groupId).get().members().isEmpty(),
                 60000, "the consumers did not leave the group");
 
-            // An initialization still in flight when the consumers left fails too, while the share coordinator is down.
-            Thread.sleep(30000);
+            // An initialization still in flight when the consumers left must fail too, while the share coordinator
+            // is down. Each initialization request is logged when it is sent, and once more when it fails.
+            waitForCondition(() -> {
+                List<String> messages = appender.getMessages();
+                long sent = messages.stream().filter(m -> m.contains("[GroupId " + groupId + "] Initializing the share group state")).count();
+                long failed = messages.stream().filter(m -> m.contains("Unable to initialize share group state " + groupId + ",")
+                    || m.contains("Received error while calling initialize state for " + groupId + " ")).count();
+                return sent > 0 && sent == failed;
+            }, 120000, "the initializations sent while the share coordinator was down did not all fail");
             cluster.startBroker(shareCoordinator);
 
             // The topic gains a partition while the group has no member, and both partitions get records.
             admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2, List.of(replicas)))).all().get();
             cluster.waitTopicCreation(topic, 2);
-            produceValues(producer, topic, 0, "empty0", 10);
-            produceValues(producer, topic, 1, "empty1", 10);
+            produceValues(producer, topic, 0, "empty0", 8);
+            produceValues(producer, topic, 1, "empty1", 6);
 
             try (ShareConsumer<byte[], byte[]> consumer3 = createShareConsumer(groupId);
                  ShareConsumer<byte[], byte[]> consumer4 = createShareConsumer(groupId)) {
@@ -2358,8 +2370,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                     produceValues(producer, topic, 1, "probe1" + probes++, 1);
                     pollValues(consumers, 1000, received);
                 }
-                produceValues(producer, topic, 0, "after0", 10);
-                produceValues(producer, topic, 1, "after1", 10);
+                produceValues(producer, topic, 0, "after0", 9);
+                produceValues(producer, topic, 1, "after1", 7);
                 pollValues(consumers, 20000, received);
             }
 
@@ -2367,9 +2379,9 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                 "records written to the first partition before the consumers joined were delivered");
             assertEquals(0, received.stream().filter(v -> v.startsWith("empty1-")).count(),
                 "the partition added after the failed initialization did not use share.auto.offset.reset=latest");
-            assertEquals(10, received.stream().filter(v -> v.startsWith("after0-")).count(),
+            assertEquals(9, received.stream().filter(v -> v.startsWith("after0-")).count(),
                 "records written to the first partition after the consumers joined were not all delivered");
-            assertEquals(10, received.stream().filter(v -> v.startsWith("after1-")).count(),
+            assertEquals(7, received.stream().filter(v -> v.startsWith("after1-")).count(),
                 "records written to the added partition after the consumers joined were not all delivered");
         }
     }
