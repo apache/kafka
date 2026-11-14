@@ -92,4 +92,18 @@ public interface TransportLayer extends ScatteringByteChannel, TransferableChann
      * a later read reports even if the socket never becomes readable again.
      */
     boolean hasBytesBuffered();
+
+    /**
+     * Starts a batch of writes that belong together, like the parts of one send. A transport layer that writes
+     * each of them to the socket on its own may hold them until {@link #endWriteBatch()} and write them together.
+     */
+    default void startWriteBatch() {
+    }
+
+    /**
+     * Ends the batch that {@link #startWriteBatch()} started and writes what it holds to the socket. What the socket
+     * does not take stays pending, see {@link #hasPendingWrites()}.
+     */
+    default void endWriteBatch() throws IOException {
+    }
 }

@@ -90,6 +90,7 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
+    private boolean batching;
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine,
                                            ChannelMetadataRegistry metadataRegistry) throws IOException {
@@ -221,11 +222,26 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-     * returns true if there are any pending contents in netWriteBuffer
+     * returns true if there are any pending contents in netWriteBuffer. The records that a write batch holds
+     * are not pending, they are written when the batch ends.
      */
     @Override
     public boolean hasPendingWrites() {
-        return netWriteBuffer.hasRemaining();
+        return !batching && netWriteBuffer.hasRemaining();
+    }
+
+    /**
+     * From now on the TLS records are collected in netWriteBuffer instead of being flushed one by one.
+     */
+    @Override
+    public void startWriteBatch() {
+        batching = true;
+    }
+
+    @Override
+    public void endWriteBatch() throws IOException {
+        batching = false;
+        flush(netWriteBuffer);
     }
 
     /**
@@ -747,8 +763,12 @@ public class SslTransportLayer implements TransportLayer {
             remaining += srcs[i].remaining();
 
         long written = 0;
-        while (flush(netWriteBuffer) && written < remaining) {
-            netWriteBuffer.clear();
+        while ((batching || flush(netWriteBuffer)) && written < remaining) {
+            // the new record goes behind the records that a batch holds
+            if (netWriteBuffer.position() > 0)
+                netWriteBuffer.compact();
+            else
+                netWriteBuffer.position(netWriteBuffer.limit()).limit(netWriteBuffer.capacity());
             // one TLS record takes the bytes of as many buffers as fit into it
             SSLEngineResult wrapResult = sslEngine.wrap(srcs, offset, length, netWriteBuffer);
             netWriteBuffer.flip();
@@ -763,9 +783,17 @@ public class SslTransportLayer implements TransportLayer {
             if (wrapResult.getStatus() == Status.OK) {
                 written += wrapResult.bytesConsumed();
             } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
-                // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again
-                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, netWriteBufferSize());
-                netWriteBuffer.position(netWriteBuffer.limit());
+                // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again.
+                // `wrap` asks for the room of a whole packet, so a batch gets this room behind one packet of held
+                // records, and with more held records they are flushed first.
+                int size = netWriteBuffer.hasRemaining() ? 2 * netWriteBufferSize() : netWriteBufferSize();
+                if (netWriteBuffer.capacity() < size) {
+                    netWriteBuffer.compact();
+                    netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, size);
+                    netWriteBuffer.flip();
+                } else if (!flush(netWriteBuffer)) {
+                    break;
+                }
             } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                 throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
             } else if (wrapResult.getStatus() == Status.CLOSED) {
@@ -1018,7 +1046,7 @@ public class SslTransportLayer implements TransportLayer {
         if (state != State.READY)
             return 0;
 
-        if (!flush(netWriteBuffer))
+        if (!batching && !flush(netWriteBuffer))
             return 0;
 
         long channelSize;

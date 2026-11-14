@@ -17,7 +17,6 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.utils.internals.OperatingSystem;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -26,16 +25,13 @@ import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class KafkaChannelTest {
 
@@ -72,35 +68,39 @@ public class KafkaChannelTest {
     }
 
     @Test
-    public void testWriteTogglesTcpNoDelay() throws IOException {
-        assumeTrue(OperatingSystem.IS_LINUX);
+    public void testWriteBatchesSend() throws IOException {
         TransportLayer transport = Mockito.mock(TransportLayer.class);
         Send send = Mockito.mock(Send.class);
-
-        SocketChannel socketChannel = socketChannelAfterWrite(transport, send);
-
-        InOrder inOrder = Mockito.inOrder(socketChannel, send);
-        inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, false);
-        inOrder.verify(send).writeTo(transport);
-        inOrder.verify(socketChannel).setOption(StandardSocketOptions.TCP_NODELAY, true);
-    }
-
-    @Test
-    public void testByteBufferSendKeepsTcpNoDelay() throws IOException {
-        SocketChannel socketChannel = socketChannelAfterWrite(Mockito.mock(TransportLayer.class),
-            ByteBufferSend.sizePrefixed(ByteBuffer.allocate(128)));
-
-        Mockito.verify(socketChannel, Mockito.never()).setOption(Mockito.any(), Mockito.any());
-    }
-
-    private static SocketChannel socketChannelAfterWrite(TransportLayer transport, Send send) throws IOException {
-        SocketChannel socketChannel = Mockito.mock(SocketChannel.class);
-        Mockito.when(transport.socketChannel()).thenReturn(socketChannel);
         KafkaChannel channel = new KafkaChannel("0", transport, () -> Mockito.mock(Authenticator.class),
             1024, Mockito.mock(MemoryPool.class), Mockito.mock(ChannelMetadataRegistry.class));
         channel.setSend(new NetworkSend("0", send));
+
         channel.write();
-        return socketChannel;
+
+        InOrder inOrder = Mockito.inOrder(transport, send);
+        inOrder.verify(transport).startWriteBatch();
+        inOrder.verify(send).writeTo(transport);
+        inOrder.verify(transport).endWriteBatch();
+    }
+
+    @Test
+    public void testSendCompletesAfterPendingWrites() throws IOException {
+        TransportLayer transport = Mockito.mock(TransportLayer.class);
+        Send send = Mockito.mock(Send.class);
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> Mockito.mock(Authenticator.class),
+            1024, Mockito.mock(MemoryPool.class), Mockito.mock(ChannelMetadataRegistry.class));
+        NetworkSend networkSend = new NetworkSend("0", send);
+        channel.setSend(networkSend);
+        Mockito.when(send.completed()).thenReturn(true);
+
+        Mockito.when(transport.hasPendingWrites()).thenReturn(true);
+        assertEquals(0, channel.write());
+        assertNull(channel.maybeCompleteSend());
+
+        Mockito.when(transport.hasPendingWrites()).thenReturn(false);
+        assertEquals(0, channel.write());
+        assertEquals(networkSend, channel.maybeCompleteSend());
+        Mockito.verify(send, Mockito.never()).writeTo(transport);
     }
 
     @Test

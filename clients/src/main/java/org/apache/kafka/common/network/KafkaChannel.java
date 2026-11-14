@@ -22,13 +22,11 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.OperatingSystem;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
-import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
@@ -396,7 +394,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     public NetworkSend maybeCompleteSend() {
-        if (send != null && send.completed()) {
+        if (send != null && send.completed() && !transportLayer.hasPendingWrites()) {
             midWrite = false;
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             NetworkSend result = send;
@@ -439,19 +437,12 @@ public class KafkaChannel implements AutoCloseable {
             return 0;
 
         midWrite = true;
-        // A ByteBufferSend is written with one call, other sends are written part by part
-        boolean singleWrite = send.send() instanceof ByteBufferSend;
-        if (!OperatingSystem.IS_LINUX || singleWrite)
-            return send.writeTo(transportLayer);
-
-        // With TCP_NODELAY off the kernel joins the small parts of a send into full segments, and on Linux
-        // turning it back on sends the queued data at once instead of waiting for an ACK (see tcp(7)).
-        SocketChannel socketChannel = transportLayer.socketChannel();
-        socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, false);
+        transportLayer.startWriteBatch();
         try {
-            return send.writeTo(transportLayer);
+            // A send can be complete while the transport layer still holds some of its bytes, then only they are left
+            return send.completed() ? 0 : send.writeTo(transportLayer);
         } finally {
-            socketChannel.setOption(StandardSocketOptions.TCP_NODELAY, true);
+            transportLayer.endWriteBatch();
         }
     }
 
