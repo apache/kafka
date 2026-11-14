@@ -2924,6 +2924,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldIncludeProcessingDelayInTerminalNodeE2ELatency
 - shouldIncludePunctuatorDelayInTerminalNodeE2ELatency
 - shouldInitTaskTimeoutAndEventuallyThrow
+- shouldLogNormalIdlingAtDebugOnly
 - shouldLogNotReadyWhenStaleAfterThreshold
 - shouldMaybeReturnOffsetsForRepartitionTopicsForPurging
 - shouldNeedCommitWhenInitializationWritesUncommittedBytes
