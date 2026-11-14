@@ -802,13 +802,14 @@ public class GroupCoordinatorRecordHelpers {
         // Sorted, so that the same start offsets always give the same record.
         List<ShareGroupStatePartitionMetadataValue.TopicStartOffsets> startOffsetsInfo = initializingStartOffsets.entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
-            .map(entry -> {
-                List<Integer> partitions = entry.getValue().keySet().stream().sorted().toList();
-                return new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
-                    .setTopicId(entry.getKey())
-                    .setPartitions(partitions)
-                    .setStartOffsets(partitions.stream().map(entry.getValue()::get).toList());
-            })
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
+                .setTopicId(entry.getKey())
+                .setPartitions(entry.getValue().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(partition -> new ShareGroupStatePartitionMetadataValue.PartitionStartOffset()
+                        .setPartition(partition.getKey())
+                        .setStartOffset(partition.getValue()))
+                    .toList()))
             .toList();
 
         return CoordinatorRecord.record(

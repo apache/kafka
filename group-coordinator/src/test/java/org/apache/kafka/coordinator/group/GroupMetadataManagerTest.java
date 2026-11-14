@@ -202,6 +202,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -31478,6 +31479,52 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupHeartbeatRetryAfterFailoverKeepsStoredStartOffsets() {
+        // A brand-new topic gains a partition while it is still initializing, and the coordinator then fails over.
+        // The new coordinator loads the start offsets from the records, so the retry sends the same ones.
+        int initRetryTimeoutMs = 10;
+        MockTime time = new MockTime();
+        Supplier<GroupMetadataManagerTestContext> newContext = () -> {
+            MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+            assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+            return new GroupMetadataManagerTestContext.Builder()
+                .withShareGroupAssignor(assignor)
+                .withTime(time)
+                .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+                .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
+                .build();
+        };
+        GroupMetadataManagerTestContext context = newContext.get();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String groupId = "share-group";
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 1)
+            .buildCoordinatorMetadataImage());
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
+            shareGroupHeartbeatOfNewMember(context, groupId, t1Name);
+        assertEquals(Map.of(0, -1L), initializeStartOffsets(result, t1Uuid));
+        records.addAll(result.records());
+
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage();
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
+        result = shareGroupHeartbeatOfNewMember(context, groupId, t1Name);
+        assertEquals(Map.of(1, 0L), initializeStartOffsets(result, t1Uuid));
+        records.addAll(result.records());
+
+        // The new coordinator replays the records.
+        GroupMetadataManagerTestContext failedOver = newContext.get();
+        failedOver.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
+        records.forEach(failedOver::replay);
+        time.setCurrentTimeMs(time.milliseconds() + initRetryTimeoutMs + 1);
+        assertEquals(Map.of(0, -1L, 1, 0L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(failedOver, groupId, t1Name), t1Uuid));
+    }
+
+    @Test
     public void testShareGroupHeartbeatKeepsStartOffsetsAfterPersisterError() {
         // The first initialization of a brand-new topic fails with an error, which removes it from the
         // initializing topics. The topic then gains a partition. The next attempt still sends the start
@@ -31646,8 +31693,9 @@ public class GroupMetadataManagerTest {
         ShareGroupStatePartitionMetadataValue value = (ShareGroupStatePartitionMetadataValue) records.get(0).value().message();
         assertEquals(List.of(new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
             .setTopicId(t1Uuid)
-            .setPartitions(List.of(1))
-            .setStartOffsets(List.of(-1L))), value.initializingStartOffsets());
+            .setPartitions(List.of(new ShareGroupStatePartitionMetadataValue.PartitionStartOffset()
+                .setPartition(1)
+                .setStartOffset(-1L)))), value.initializingStartOffsets());
         records.forEach(context::replay);
 
         records = context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(t1Uuid, Set.of(1))).records();
