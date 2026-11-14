@@ -137,6 +137,7 @@ public class ShareGroupTest {
 
         shareGroup.clearTargetAssignment();
         assertEquals(Map.of(), shareGroup.targetAssignment());
+        assertEquals(Map.of(), shareGroup.invertedTargetAssignment());
     }
 
     @Test

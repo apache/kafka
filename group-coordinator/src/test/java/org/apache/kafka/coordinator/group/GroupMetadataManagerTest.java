@@ -23267,6 +23267,7 @@ public class GroupMetadataManagerTest {
         assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
         assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").invertedTargetAssignment());
     }
 
     @Test
@@ -23470,6 +23471,7 @@ public class GroupMetadataManagerTest {
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
         assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").invertedTargetAssignment());
     }
 
     @Test
