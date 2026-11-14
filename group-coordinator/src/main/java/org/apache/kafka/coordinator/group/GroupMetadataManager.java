@@ -3373,12 +3373,6 @@ public class GroupMetadataManager {
         if (storedStartOffsets != null || info.initializedTopics().containsKey(topicId)) {
             return 0L;
         }
-        // A record written by an older version does not have the start offsets. A partition which is still
-        // initializing is then a retry of a topic seen for the first time.
-        InitMapValue initializing = info.initializingTopics().get(topicId);
-        if (initializing != null && !initializing.partitions().contains(partitionId)) {
-            return 0L;
-        }
         return PartitionFactory.UNINITIALIZED_START_OFFSET;
     }
 
@@ -3425,14 +3419,17 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Adds the partitions to the initializing topics without storing start offsets for them. This is used by
-     * alterShareGroupOffsets, whose request gives the start offsets. If that request fails, the partitions stay
-     * initializing, and a later heartbeat retries their initialization with derived start offsets.
-     * Visibility for tests.
+     * Adds the partitions to the initializing topics for alterShareGroupOffsets, whose request gives the start
+     * offsets. If that request fails, the partitions stay initializing, and a later heartbeat retries their
+     * initialization. The retry uses -1, as if the offsets had not been altered, so -1 is stored for the
+     * partitions which do not have a stored start offset yet. Visibility for tests.
      */
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
-        addInitializingTopicsRecords(groupId, records, topicPartitionMap, Map.of(),
+        Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
+        topicPartitionMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
+            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, PartitionFactory.UNINITIALIZED_START_OFFSET)));
+        addInitializingTopicsRecords(groupId, records, topicPartitionMap, startOffsets,
             info == null ? Map.of() : info.initializingStartOffsets());
     }
 
@@ -7005,31 +7002,39 @@ public class GroupMetadataManager {
             shareGroupStatePartitionMetadata.remove(groupId);   // Should not throw any exceptions.
         } else {
             long timestamp = time.milliseconds();
+            Map<Uuid, InitMapValue> initializingTopics = value.initializingTopics().stream()
+                .map(topicPartitionInfo -> Map.entry(
+                    topicPartitionInfo.topicId(),
+                    new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            Map<Uuid, InitMapValue> initializedTopics = value.initializedTopics().stream()
+                .map(topicPartitionInfo -> Map.entry(
+                    topicPartitionInfo.topicId(),
+                    new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            Map<Uuid, Map<Integer, Long>> initializingStartOffsets = new HashMap<>();
+            if (value.initializingStartOffsets() == null) {
+                // A record written by a version which does not store the start offsets. The start offsets of the
+                // initializing partitions are derived as that version did: 0 for a topic which is initialized, and
+                // -1 for a topic seen for the first time.
+                initializingTopics.forEach((topicId, initializing) -> initializing.partitions().forEach(partitionId ->
+                    initializingStartOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId,
+                        initializedTopics.containsKey(topicId) ? 0L : PartitionFactory.UNINITIALIZED_START_OFFSET)));
+            } else {
+                value.initializingStartOffsets().forEach(topicStartOffsets -> topicStartOffsets.partitions().forEach(partition ->
+                    initializingStartOffsets.computeIfAbsent(topicStartOffsets.topicId(), k -> new HashMap<>())
+                        .put(partition.partition(), partition.startOffset())));
+            }
+
             ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
-                value.initializingTopics().stream()
-                    .map(topicPartitionInfo -> Map.entry(
-                        topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
-
-                value.initializedTopics().stream()
-                    .map(topicPartitionInfo -> Map.entry(
-                        topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
-
+                initializingTopics,
+                initializedTopics,
                 value.deletingTopics().stream()
                     .map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId)
                     .collect(Collectors.toSet()),
-
-                value.initializingStartOffsets().stream()
-                    .collect(Collectors.toMap(
-                        ShareGroupStatePartitionMetadataValue.TopicStartOffsets::topicId,
-                        topicStartOffsets -> {
-                            Map<Integer, Long> offsets = new HashMap<>();
-                            topicStartOffsets.partitions().forEach(partition -> offsets.put(partition.partition(), partition.startOffset()));
-                            return offsets;
-                        }))
+                initializingStartOffsets
             );
 
             // Init java record.
