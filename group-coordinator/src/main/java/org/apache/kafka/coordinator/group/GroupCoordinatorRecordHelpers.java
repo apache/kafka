@@ -765,6 +765,24 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupStatePartitionMetadata record.
      *
+     * @param groupId            The share group id.
+     * @param initializingTopics Topics which are being initialized.
+     * @param initializedTopics  Topics which have been initialized.
+     * @param deletingTopics     Topics which are being deleted.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
+        String groupId,
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
+        Map<Uuid, String> deletingTopics
+    ) {
+        return newShareGroupStatePartitionMetadataRecord(groupId, initializingTopics, initializedTopics, deletingTopics, Map.of());
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata record.
+     *
      * @param groupId                  The share group id.
      * @param initializingTopics       Topics which are being initialized.
      * @param initializedTopics        Topics which have been initialized.

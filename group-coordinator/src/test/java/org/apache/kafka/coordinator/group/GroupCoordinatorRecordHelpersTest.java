@@ -253,8 +253,7 @@ public class GroupCoordinatorRecordHelpersTest {
             Map.of(
                 topicId2,
                 topicName2
-            ),
-            Map.of()
+            )
         );
 
         assertEquals(expectedRecord, record);
