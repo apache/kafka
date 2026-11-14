@@ -6115,6 +6115,15 @@ public class GroupMetadataManager {
             }
         }
 
+        // The start offsets are kept, so that the next attempt sends the same ones. If the group no longer
+        // subscribes to a topic, which can happen while its initialization was in flight, they are removed.
+        Group group = groups.get(groupId);
+        Set<String> subscribedTopicNames = group instanceof ShareGroup shareGroup ? shareGroup.subscribedTopicNames().keySet() : Set.of();
+        Map<Uuid, Map<Integer, Long>> startOffsets = subscribedStartOffsets(
+            new ShareGroupStatePartitionMetadataInfo(finalInitializingTopics, info.initializedTopics(), info.deletingTopics(), info.initializingStartOffsets()),
+            subscribedTopicNames
+        );
+
         return new CoordinatorResult<>(
             List.of(
                 shareGroupStatePartitionMetadataRecord(
@@ -6122,8 +6131,7 @@ public class GroupMetadataManager {
                     finalInitializingTopics,
                     info.initializedTopics(),
                     attachTopicName(info.deletingTopics()),
-                    // The start offsets are kept, so that the next attempt sends the same ones.
-                    null
+                    startOffsets
                 )
             ),
             null
