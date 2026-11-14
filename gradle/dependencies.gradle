@@ -97,12 +97,12 @@ versions += [
   gradle: "8.10.2",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  jackson: "2.16.2",
+  jackson: "2.18.12",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
   jetty: "9.4.58.v20250814",
   jersey: "2.47",
-  jline: "3.25.1",
+  jline: "3.30.17",
   jmh: "1.37",
   hamcrest: "2.2",
   scalaLogging: "3.9.5",
@@ -141,10 +141,10 @@ versions += [
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/record/CompressionType.java#L73-L74
   // https://github.com/yawkat/lz4-java/blob/main/src/java/net/jpountz/lz4/LZ4Constants.java#L23-L24
-  lz4: "1.10.1",
-  mavenArtifact: "3.9.6",
+  lz4: "1.14.0",
+  mavenArtifact: "3.9.16",
   metrics: "2.2.0",
-  netty: "4.1.125.Final",
+  netty: "4.1.140.Final",
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
@@ -159,13 +159,12 @@ versions += [
   scalaJava8Compat : "1.0.2",
   scoverage: "2.0.11",
   slf4j: "1.7.36",
-  snappy: "1.1.10.5",
+  snappy: "1.1.10.12",
   spotbugs: "4.8.6",
   zinc: "1.9.2",
-  zookeeper: "3.8.4",
-  // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
-  // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  zstd: "1.5.6-4",
+  zookeeper: "3.8.8",
+  // When updating zstd, make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
+  zstd: "1.5.7-26",
   junitPlatform: "1.10.2"
 ]
 
@@ -204,7 +203,7 @@ libs += [
   jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
   jerseyHk2: "org.glassfish.jersey.inject:jersey-hk2:$versions.jersey",
-  jline: "org.jline:jline:$versions.jline",
+  jline: "org.jline:jline-reader:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",
