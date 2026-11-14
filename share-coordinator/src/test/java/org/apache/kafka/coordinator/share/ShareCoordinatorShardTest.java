@@ -61,6 +61,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +70,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1806,28 +1809,131 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testInitializeStateNotIdempotentWhenStartOffsetChanges() {
+    public void testInitializeStateRetryPreservesConsumptionProgress() {
+        // New partitions of an already-known topic are initialized at offset zero.
+        InitializeShareGroupStateRequestData.PartitionData initializeRequest = new InitializeShareGroupStateRequestData.PartitionData()
+            .setPartition(PARTITION)
+            .setStartOffset(0)
+            .setStateEpoch(5);
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> initializeResult =
+            shard.initializeState(GROUP_ID, TOPIC_ID, initializeRequest);
+        assertEquals(InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), initializeResult.response());
+        initializeResult.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+
+        ReadShareGroupStateRequestData readRequest = new ReadShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(1)))));
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> readResult =
+            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest);
+        assertEquals(Errors.NONE.code(), readResult.response().results().get(0).partitions().get(0).errorCode());
+        readResult.records().forEach(record -> shard.replay(1L, 0L, (short) 0, record));
+
+        // Consumption advances the start offset and persists acknowledgements without changing the state epoch.
+        WriteShareGroupStateRequestData writeRequest = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(1)
+                    .setStartOffset(20)
+                    .setDeliveryCompleteCount(5)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(25)
+                        .setLastOffset(29)
+                        .setDeliveryState((byte) 2)
+                        .setDeliveryCount((short) 1)))))));
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeResult = shard.writeState(writeRequest);
+        assertEquals(WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), writeResult.response());
+        writeResult.records().forEach(record -> shard.replay(2L, 0L, (short) 0, record));
+
+        ReadShareGroupStateResponseData.PartitionResult stateBeforeRetry =
+            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest).response().results().get(0).partitions().get(0);
+        assertEquals(20, stateBeforeRetry.startOffset());
+        assertEquals(1, stateBeforeRetry.stateBatches().size());
+
+        // A delayed retry from an overlapping initialization must preserve the state already consumed.
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> retryResult =
+            shard.initializeState(GROUP_ID, TOPIC_ID, initializeRequest);
+        assertEquals(InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), retryResult.response());
+        retryResult.records().forEach(record -> shard.replay(3L, 0L, (short) 0, record));
+
+        ReadShareGroupStateResponseData.PartitionResult stateAfterRetry =
+            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest).response().results().get(0).partitions().get(0);
+        assertAll(
+            () -> assertEquals(stateBeforeRetry.startOffset(), stateAfterRetry.startOffset(), "Start offset must not regress"),
+            () -> assertEquals(stateBeforeRetry.stateBatches(), stateAfterRetry.stateBatches(), "Persisted acknowledgements must be preserved")
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {-1, 0, 10, 20})
+    public void testInitializeStateSameEpochPreservesState(long startOffset) {
+        ShareGroupOffset currentState = new ShareGroupOffset.Builder()
+            .setStateEpoch(5)
+            .setSnapshotEpoch(7)
+            .setLeaderEpoch(2)
+            .setStartOffset(10)
+            .setDeliveryCompleteCount(5)
+            .setStateBatches(List.of(new PersisterStateBatch(25, 29, (byte) 2, (short) 1)))
+            .build();
+        shard.replay(0L, 0L, (short) 0, ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, currentState));
+
+        // Consumption can change the offset while initialization retries retain the same epoch.
         InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
             .setPartition(PARTITION)
-            .setStartOffset(10)
+            .setStartOffset(startOffset)
             .setStateEpoch(5);
 
         CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
-        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
-        assertEquals(1, result.records().size());
+        result.records().forEach(record -> shard.replay(1L, 0L, (short) 0, record));
 
-        // Same stateEpoch but a different startOffset should not be treated as a duplicate
-        // and must produce a new record.
-        InitializeShareGroupStateRequestData.PartitionData sameEpochDifferentOffsetPartitionData = new InitializeShareGroupStateRequestData.PartitionData()
+        assertEquals(InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), result.response());
+        assertEquals(List.of(), result.records());
+        assertEquals(currentState, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertEquals(5, shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 10, 20})
+    public void testInitializeStateHigherEpochResetsState(long startOffset) {
+        ShareGroupOffset currentState = new ShareGroupOffset.Builder()
+            .setStateEpoch(5)
+            .setSnapshotEpoch(7)
+            .setLeaderEpoch(2)
+            .setStartOffset(10)
+            .setDeliveryCompleteCount(5)
+            .setStateBatches(List.of(new PersisterStateBatch(25, 29, (byte) 2, (short) 1)))
+            .build();
+        shard.replay(0L, 0L, (short) 0, ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, currentState));
+
+        // Administrative offset resets use a new epoch, including resets to the same offset.
+        InitializeShareGroupStateRequestData.PartitionData partitionData = new InitializeShareGroupStateRequestData.PartitionData()
             .setPartition(PARTITION)
-            .setStartOffset(20)
-            .setStateEpoch(5);
+            .setStartOffset(startOffset)
+            .setStateEpoch(6);
 
-        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> secondResult = shard.initializeState(GROUP_ID, TOPIC_ID, sameEpochDifferentOffsetPartitionData);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(GROUP_ID, TOPIC_ID, partitionData);
+        assertEquals(InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), result.response());
+        assertEquals(1, result.records().size());
+        result.records().forEach(record -> shard.replay(1L, 0L, (short) 0, record));
 
-        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        assertEquals(expectedData, secondResult.response());
-        assertEquals(1, secondResult.records().size());
+        ShareGroupOffset resetState = shard.getShareStateMapValue(SHARE_PARTITION_KEY);
+        assertEquals(6, shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
+        assertEquals(6, resetState.stateEpoch());
+        assertEquals(8, resetState.snapshotEpoch());
+        assertEquals(0, resetState.leaderEpoch());
+        assertEquals(startOffset, resetState.startOffset());
+        assertEquals(0, resetState.deliveryCompleteCount());
+        assertEquals(List.of(), resetState.stateBatches());
     }
 
     @Test

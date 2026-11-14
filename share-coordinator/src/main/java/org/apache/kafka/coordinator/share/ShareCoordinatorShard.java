@@ -540,7 +540,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * This method writes a share snapshot records corresponding to the requested share partition.
+     * Initializes or resets the state of the requested share partition.
+     * If state already exists at the requested state epoch, it is preserved regardless of the
+     * requested offset and no record is written. Resetting existing state requires a higher state epoch.
      * <p>
      * This method as called by the ShareCoordinatorService will be provided with
      * the request data for a single share partition (group, topicId and partition data).
@@ -574,8 +576,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ))
         );
 
-        if (currentStateEpoch != null && currentStateEpoch == partitionData.stateEpoch() &&
-                currentState != null && currentState.startOffset() == partitionData.startOffset()) {
+        // Consumption can advance the offset within an epoch. An offset reset uses a higher
+        // state epoch, so initialization retries must preserve all existing state for the same epoch.
+        if (currentStateEpoch != null && currentStateEpoch == partitionData.stateEpoch() && currentState != null) {
             log.debug("Duplicate initialize request {} {} {}. Treating as no-op.", groupId, topicId, partitionData);
             return new CoordinatorResult<>(List.of(), responseData);
         }
