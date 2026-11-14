@@ -29,17 +29,20 @@ import java.util.concurrent.CompletableFuture;
 public interface CoordinatorLoader<U> extends AutoCloseable {
 
     /**
-     * Object that is returned as part of the future from load(). Holds the partition load time and the
-     * end time.
+     * Summary returned by the future of {@link #load}. It holds the time the load was requested,
+     * the time it ended, the time it waited in the scheduler queue, and the number of records and
+     * bytes read.
      */
     record LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) { }
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition
-     * and applying them to the Replayable object.
+     * and applying them to the CoordinatorPlayback object.
      *
      * @param tp            The TopicPartition to read from.
      * @param coordinator   The object to apply records to.
+     * @return A future completed with the summary of the load once all the records are applied, or
+     *         completed exceptionally if the load fails.
      */
     CompletableFuture<LoadSummary> load(
         TopicPartition tp,

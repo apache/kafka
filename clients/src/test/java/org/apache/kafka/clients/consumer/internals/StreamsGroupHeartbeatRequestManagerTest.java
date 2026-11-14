@@ -19,8 +19,10 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -268,6 +270,38 @@ class StreamsGroupHeartbeatRequestManagerTest {
             null
         ));
         assertEquals("Streams rebalance data cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 1000;
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+
+        ConsumerConfig testConfig =
+            new ConsumerConfig(config.originals(Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager(testConfig);
+
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+
+        // Keep the first heartbeat in flight; neither polling path should busy-spin or generate another request.
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
+
+        long elapsedMs = requestTimeoutMs / 2;
+        time.sleep(elapsedMs);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs - elapsedMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
     }
 
     @Test
@@ -1313,6 +1347,159 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testActiveTaskFinishedRestoringTriggersSend() {
+        // A client reports the offsets of an active task only while restoring it. Once the restore finishes, the task
+        // drops out of the offsets, and the next heartbeat reports that before the task-offset interval elapses, so the
+        // broker stops taking the owner to be restoring the task.
+        final StreamsRebalanceData.TaskId activeTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets =
+            new AtomicReference<>(Map.of(activeTaskId, 500L));
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> endOffsets =
+            new AtomicReference<>(Map.of(activeTaskId, 1000L));
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            offsets::get,
+            endOffsets::get
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(activeTaskId),
+            Set.of(),
+            Set.of(),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        final StreamsGroupHeartbeatRequestData first = heartbeatState.buildRequestData();
+        assertEquals(500L, first.taskOffsets().get(0).offset());
+
+        // Still restoring, and the interval did not pass: nothing is sent.
+        offsets.set(Map.of(activeTaskId, 600L));
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+
+        // The restore finished, so the task is no longer in the offsets, and that is sent without advancing time.
+        offsets.set(Map.of());
+        endOffsets.set(Map.of());
+        final StreamsGroupHeartbeatRequestData third = heartbeatState.buildRequestData();
+        assertEquals(List.of(), third.taskOffsets());
+        assertEquals(List.of(), third.taskEndOffsets());
+
+        // Reported once: the task is no longer in the last sent offsets either.
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+    }
+
+    @Test
+    public void testActiveTaskStartedRestoringTriggersSend() {
+        // An active task can restore again under the same assignment, as after a TaskCorruptedException. Its offsets
+        // reappear, and the next heartbeat reports that before the task-offset interval elapses, so the broker stops
+        // taking the owner to be processing the task.
+        final StreamsRebalanceData.TaskId activeTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets = new AtomicReference<>(Map.of());
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> endOffsets = new AtomicReference<>(Map.of());
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            offsets::get,
+            endOffsets::get
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(activeTaskId),
+            Set.of(),
+            Set.of(),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+        rebalanceData.setAcceptableRecoveryLag(100L);
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        assertEquals(List.of(), heartbeatState.buildRequestData().taskOffsets());
+
+        // The task restores again, and that is sent without advancing time. The lag is above the threshold, so the
+        // send is not triggered by the task being hot.
+        offsets.set(Map.of(activeTaskId, 500L));
+        endOffsets.set(Map.of(activeTaskId, 1000L));
+        final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
+        assertEquals(500L, second.taskOffsets().get(0).offset());
+        assertEquals(1000L, second.taskEndOffsets().get(0).offset());
+
+        // Reported once: the task is in the last sent offsets too, so progress waits for the interval.
+        offsets.set(Map.of(activeTaskId, 600L));
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+    }
+
+    @Test
+    public void testHotRestoringActiveTaskTriggersSend() {
+        // An active task restoring with a lag at or below the threshold has its progress reported before the
+        // task-offset interval elapses, so the broker learns early that the owner is close to running the task.
+        final StreamsRebalanceData.TaskId activeTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets =
+            new AtomicReference<>(Map.of(activeTaskId, 800L)); // lag = 1000 - 800 = 200 → not hot
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            newHeartbeatStateWithActiveTask(activeTaskId, offsets, Map.of(activeTaskId, 1000L), 100L);
+
+        assertEquals(800L, heartbeatState.buildRequestData().taskOffsets().get(0).offset());
+
+        // Progress above the threshold is not reported before the interval elapses.
+        offsets.set(Map.of(activeTaskId, 850L)); // lag = 150 → not hot
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+
+        // Once within the threshold, it is.
+        offsets.set(Map.of(activeTaskId, 950L)); // lag = 50 → hot
+        assertEquals(950L, heartbeatState.buildRequestData().taskOffsets().get(0).offset());
+
+        // While hot, unchanged offsets are still not resent.
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+    }
+
+    @Test
+    public void testActiveTaskNotInLastSentOffsetsDoesNotTriggerSend() {
+        // An active task that was never reported as restoring (it was processing all along) gives the broker nothing
+        // stale to correct, so it must not trigger a send when another task's offsets change.
+        final StreamsRebalanceData.TaskId activeTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final StreamsRebalanceData.TaskId standbyTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 1);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets =
+            new AtomicReference<>(Map.of(standbyTaskId, 500L));
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            offsets::get,
+            () -> Map.of(standbyTaskId, 1000L)
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(activeTaskId),
+            Set.of(standbyTaskId),
+            Set.of(),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        assertNotNull(heartbeatState.buildRequestData().taskOffsets());
+
+        offsets.set(Map.of(standbyTaskId, 600L));
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+    }
+
+    @Test
     public void testTaskOffsetsNotResentWhenUnchangedAcrossInterval() {
         // The periodic task-offset interval trigger fires, but when neither the offsets nor the
         // end-offsets changed since the last heartbeat, both fields are left null ("unchanged").
@@ -1617,6 +1804,33 @@ class StreamsGroupHeartbeatRequestManagerTest {
         rebalanceData.setTaskOffsetIntervalMs(1000);
         rebalanceData.setAcceptableRecoveryLag(acceptableRecoveryLag);
         return rebalanceData;
+    }
+
+    private StreamsGroupHeartbeatRequestManager.HeartbeatState newHeartbeatStateWithActiveTask(
+        final StreamsRebalanceData.TaskId activeTaskId,
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets,
+        final Map<StreamsRebalanceData.TaskId, Long> endOffsets,
+        final long acceptableRecoveryLag
+    ) {
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            offsets::get,
+            () -> endOffsets
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(activeTaskId),
+            Set.of(),
+            Set.of(),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+        rebalanceData.setAcceptableRecoveryLag(acceptableRecoveryLag);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        return new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
     }
 
     private <V> boolean isSorted(List<V> collection, Comparator<V> comparator) {
@@ -2192,7 +2406,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
             final ClientResponse response = buildClientErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED, "message");
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to group authorization failure: " +
                     "Not authorized to access group: " + GROUP_ID)));
             verify(heartbeatState).reset();
@@ -2231,7 +2445,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final String errorMessage = "message";
             final ClientResponse response = buildClientErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, errorMessage);
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed for member " + MEMBER_ID +
                     " with state " + MemberState.STABLE + " due to " + Errors.TOPIC_AUTHORIZATION_FAILED + ": " +
                     errorMessage)));
@@ -2285,12 +2499,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     "protocol or does not support the versions of the STREAMS group protocol used by this client " +
                     "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
                     StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
-                assertTrue(logAppender.getMessages("ERROR").stream()
+                assertTrue(logAppender.getMessages(Level.ERROR).stream()
                     .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
                         error + ": " + errorMessage)));
                 assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
             } else {
-                assertTrue(logAppender.getMessages("ERROR").stream()
+                assertTrue(logAppender.getMessages(Level.ERROR).stream()
                     .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
                         error + ": " + errorMessageInResponse)));
                 assertEquals(errorMessageInResponse, errorEvent.getValue().error().getMessage());
@@ -2326,7 +2540,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             networkRequest.handler().onComplete(response);
 
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed because instance id " +
                     INSTANCE_ID + " is fenced: " + errorMessage + ". Check for another Streams instance using " +
                     "the same group instance id.")));
@@ -2396,7 +2610,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final String errorMessage = "message";
             final ClientResponse response = buildClientErrorResponse(error, errorMessage);
             networkRequest.handler().onComplete(response);
-            assertTrue(logAppender.getMessages("ERROR").stream()
+            assertTrue(logAppender.getMessages(Level.ERROR).stream()
                 .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to unexpected error")));
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
@@ -2512,6 +2726,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
             time.sleep(1234);
 
@@ -2540,6 +2755,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(shouldNotWaitForHeartbeatInterval);
             time.sleep(1234);
 
@@ -2563,12 +2779,35 @@ class StreamsGroupHeartbeatRequestManagerTest {
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             time.sleep(1234);
 
             final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
 
             assertEquals(5, maximumTimeToWait);
             verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnknownDoesNotSpin() {
+        final long retryBackoffMs = 100L;
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.heartbeatIntervalMs()).thenReturn(0L);
+                    when(mock.retryBackoffMs()).thenReturn(retryBackoffMs);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(retryBackoffMs, maximumTimeToWait);
         }
     }
 
@@ -2704,6 +2943,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {
+        return createStreamsGroupHeartbeatRequestManager(config);
+    }
+
+    private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager(ConsumerConfig config) {
         return new StreamsGroupHeartbeatRequestManager(
             LOG_CONTEXT,
             time,
@@ -2796,6 +3039,62 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testUnknownStatusCodeFailsMemberFatally() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            final byte unknownStatusCode = (byte) (StreamsGroupHeartbeatResponse.Status.knownCodes().last() + 1);
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            result.unsentRequests.get(0).handler().onComplete(new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(unknownStatusCode)
+                            .setStatusDetail("a condition this client has never heard of")))
+                )
+            ));
+
+            // Fatal, not swallowed: the member must be told, and the error must reach the application.
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            final ArgumentCaptor<BackgroundEvent> eventCaptor = ArgumentCaptor.forClass(BackgroundEvent.class);
+            verify(backgroundEventHandler).add(eventCaptor.capture());
+            final ErrorEvent errorEvent = assertInstanceOf(ErrorEvent.class, eventCaptor.getValue());
+            assertInstanceOf(KafkaException.class, errorEvent.error());
+            final String message = errorEvent.error().getMessage();
+            assertTrue(message.contains("(" + unknownStatusCode + ") a condition this client has never heard of"),
+                "The unknown status should be named with its detail: " + message);
+            assertTrue(message.contains(StreamsGroupHeartbeatResponse.Status.knownCodes().toString()),
+                "The known status codes should be listed: " + message);
+
+            // Nothing from the rejected response is applied: the member epoch is not advanced, the assignment is not
+            // processed, and neither the statuses nor the group configuration carried by the response are stored.
+            verify(membershipManager, never()).onHeartbeatSuccess(any());
+            assertEquals(List.of(), streamsRebalanceData.statuses());
+            assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+
+            // The request is recorded as a failed attempt, as on the other fatal paths.
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(time.milliseconds());
+            verify(heartbeatRequestState, never()).onSuccessfulAttempt(anyLong());
+        }
+    }
+
+    @Test
     public void testMissingClientTagsStatusLogsWarningOnlyOnce() {
         try (
             final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
@@ -2830,11 +3129,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result1.unsentRequests.get(0).handler().onComplete(response1);
 
-            long firstWarnCount = logAppender.getMessages("WARN").stream()
+            long firstWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(1, firstWarnCount);
-            assertTrue(logAppender.getMessages("WARN").stream().anyMatch(m -> m.contains("[zone, cluster]")),
+            assertTrue(logAppender.getMessages(Level.WARN).stream().anyMatch(m -> m.contains("[zone, cluster]")),
                 "The logged warning should contain the missing client tags detail [zone, cluster]");
 
             // Second heartbeat with the same status — should NOT log again
@@ -2854,7 +3153,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result2.unsentRequests.get(0).handler().onComplete(response2);
 
-            long secondWarnCount = logAppender.getMessages("WARN").stream()
+            long secondWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(1, secondWarnCount, "MISSING_CLIENT_TAGS warning should not be logged again for the same detail");
@@ -2878,7 +3177,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result3.unsentRequests.get(0).handler().onComplete(response3);
 
-            List<String> missingTagWarnings = logAppender.getMessages("WARN").stream()
+            List<String> missingTagWarnings = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .collect(Collectors.toList());
             assertEquals(2, missingTagWarnings.size(),
@@ -2907,7 +3206,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result4.unsentRequests.get(0).handler().onComplete(response4);
 
-            long fourthWarnCount = logAppender.getMessages("WARN").stream()
+            long fourthWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(2, fourthWarnCount, "Clearing the status should not log a new warning");
@@ -2930,7 +3229,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result5.unsentRequests.get(0).handler().onComplete(response5);
 
-            long fifthWarnCount = logAppender.getMessages("WARN").stream()
+            long fifthWarnCount = logAppender.getMessages(Level.WARN).stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(3, fifthWarnCount, "MISSING_CLIENT_TAGS warning should be logged again after the status cleared and recurred");
@@ -2969,7 +3268,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result.unsentRequests.get(0).handler().onComplete(response);
 
-            assertTrue(logAppender.getMessages("WARN").stream()
+            assertTrue(logAppender.getMessages(Level.WARN).stream()
                     .noneMatch(m -> m.contains("Missing required client tags")),
                 "No MISSING_CLIENT_TAGS warning should be logged when the client provides the required tags");
         }

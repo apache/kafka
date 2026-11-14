@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 abstract class AbstractPartitionGroup {
 
@@ -31,9 +32,15 @@ abstract class AbstractPartitionGroup {
      */
     static final class ReadyToProcessResult {
         private final boolean ready;
-        private final Optional<String> logMessage;
+        // KAFKA-21372: built lazily, since readyToProcess runs per record and the caller rarely logs the message
+        private final Optional<Supplier<String>> logMessage;
+        private final boolean normalIdling;
 
-        ReadyToProcessResult(final boolean ready, final Optional<String> logMessage) {
+        ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage) {
+            this(ready, logMessage, false);
+        }
+
+        ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage, final boolean normalIdling) {
             if (ready && logMessage.isPresent()) {
                 throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is true but a log message is present.");
             } else if (!ready && logMessage.isEmpty()) {
@@ -41,13 +48,22 @@ abstract class AbstractPartitionGroup {
             }
             this.ready = ready;
             this.logMessage = logMessage;
+            this.normalIdling = normalIdling;
         }
 
         boolean isReady() {
             return ready;
         }
 
+        boolean isNormalIdling() {
+            return normalIdling;
+        }
+
         Optional<String> getLogMessage() {
+            return logMessage.map(Supplier::get);
+        }
+
+        Optional<Supplier<String>> getLogMessageSupplier() {
             return logMessage;
         }
     }

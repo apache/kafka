@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -73,8 +74,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings({"unchecked"})
 @Tag("integration")
@@ -220,7 +220,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -299,7 +299,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     @ParameterizedTest
@@ -392,9 +392,9 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams.cleanUp(); // Purge store to force restoration
 
         produceMessages(
@@ -431,7 +431,7 @@ public class SlidingWindowedKStreamIntegrationTest {
             );
         }
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
     }
 
     private void produceMessages(final String topic, final KeyValueTimestamp<String, String>... records) {

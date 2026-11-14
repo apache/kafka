@@ -173,7 +173,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["reject"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -206,7 +206,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["release"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -240,7 +240,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["reject", "release", "accept"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -284,7 +284,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["reject"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -319,7 +319,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["release"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -355,7 +355,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                            acknowledgement_mode="sync", ack_pattern=["reject", "release", "accept"])
 
         producer.start()
-        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -404,8 +404,10 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
         producer_a.start()
         producer_b.start()
-        self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
-        self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        # Both producers run concurrently, so producer_b may already have acked some or all of its
+        # records by the time producer_a's wait returns: wait on the absolute ack count, not a delta.
+        self.await_produced_messages(producer_a, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_b, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer_a.start()
         consumer_b.start()
@@ -454,8 +456,10 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
         producer_a.start()
         producer_b.start()
-        self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
-        self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        # Both producers run concurrently, so producer_b may already have acked some or all of its
+        # records by the time producer_a's wait returns: wait on the absolute ack count, not a delta.
+        self.await_produced_messages(producer_a, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_b, min_messages=self.total_messages, total=True, timeout_sec=self.default_timeout_sec)
 
         consumer_a.start()
         consumer_b.start()

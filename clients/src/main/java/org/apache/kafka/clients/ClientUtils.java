@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -230,6 +231,7 @@ public final class ClientUtils {
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
                                                     List<String> bootstrapServers,
+                                                    Uuid clientInstanceId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -242,6 +244,7 @@ public final class ClientUtils {
         return createNetworkClient(config,
                 bootstrapServers,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
+                clientInstanceId,
                 metrics,
                 metricsGroupPrefix,
                 logContext,
@@ -259,6 +262,7 @@ public final class ClientUtils {
     public static NetworkClient createNetworkClient(AbstractConfig config,
                                                     List<String> bootstrapServers,
                                                     String clientId,
+                                                    Uuid clientInstanceId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -288,6 +292,7 @@ public final class ClientUtils {
                     metadata,
                     selector,
                     clientId,
+                    clientInstanceId,
                     maxInFlightRequestsPerConnection,
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),

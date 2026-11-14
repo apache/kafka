@@ -65,8 +65,4 @@ public class SyncGroupResponse extends AbstractResponse {
         return new SyncGroupResponse(new SyncGroupResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

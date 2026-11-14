@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -56,8 +57,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cl
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -126,11 +126,11 @@ public class ResetPartitionTimeIntegrationTest {
                     new KeyValueTimestamp<>("k3", "v3", NOW + 5000)
                 )
             );
-            assertThat(lastRecordedTimestamp, is(-1L));
+            assertEquals(-1L, lastRecordedTimestamp);
             lastRecordedTimestamp = -2L;
 
-            kafkaStreams.close();
-            assertThat(kafkaStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            assertEquals(KafkaStreams.State.NOT_RUNNING, kafkaStreams.state());
 
             kafkaStreams = getStartedStreams(streamsConfig, builder, true);
 
@@ -147,7 +147,7 @@ public class ResetPartitionTimeIntegrationTest {
                     new KeyValueTimestamp<>("k5", "v5", NOW + 4999)
                 )
             );
-            assertThat(lastRecordedTimestamp, is(NOW + 5000L));
+            assertEquals(NOW + 5000L, lastRecordedTimestamp);
         } finally {
             kafkaStreams.close();
             quietlyCleanStateAfterTest(CLUSTER, kafkaStreams);

@@ -87,15 +87,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    synchronized (position) {
-                        for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            final Bytes key = Bytes.wrap(record.key());
-                            putInternal(key, record.value());
-                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                record,
-                                consistencyEnabled,
-                                position
-                            );
+                    // Same store-then-position lock order as put() (KAFKA-19629). Lock per
+                    // record so readers can interleave during large restore batches.
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        final Bytes key = Bytes.wrap(record.key());
+                        synchronized (this) {
+                            synchronized (position) {
+                                putInternal(key, record.value());
+                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                    record,
+                                    consistencyEnabled,
+                                    position
+                                );
+                            }
                         }
                     }
                 }
@@ -143,25 +147,29 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        synchronized (position) {
-            // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
-            // transaction buffer since the last commit by merging the buffer's pending position
-            // deltas into a copy of the committed position. READ_COMMITTED (and the
-            // non-transactional store) query the committed position directly.
-            final Position queryPosition;
-            if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
-                queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
-            } else {
-                queryPosition = position;
+        // Lock order must match the write paths (store monitor, then position),
+        // otherwise concurrent put/query can deadlock (KAFKA-19629).
+        synchronized (this) {
+            synchronized (position) {
+                // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
+                // transaction buffer since the last commit by merging the buffer's pending position
+                // deltas into a copy of the committed position. READ_COMMITTED (and the
+                // non-transactional store) query the committed position directly.
+                final Position queryPosition;
+                if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                    queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
+                } else {
+                    queryPosition = position;
+                }
+                return StoreQueryUtils.handleBasicQueries(
+                    query,
+                    positionBound,
+                    config,
+                    this,
+                    queryPosition,
+                    context
+                );
             }
-            return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                queryPosition,
-                context
-            );
         }
     }
 

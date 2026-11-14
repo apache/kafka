@@ -288,7 +288,7 @@ public class CreateTopicsRequestTest {
             .filter(t -> topic.name().equals(t.topic())).findFirst().orElse(null);
 
         int partitions = !topic.assignments().isEmpty() ? topic.assignments().size() : topic.numPartitions();
-        int replication = !topic.assignments().isEmpty() ? topic.assignments().iterator().next().brokerIds().size() : topic.replicationFactor();
+        int replication = topic.replicationFactor();
 
         if (validateOnly) {
             assertNotNull(metadataForTopic);
@@ -305,7 +305,18 @@ public class CreateTopicsRequestTest {
                     "The topic should have the correct number of partitions");
             }
 
-            if (replication == -1) {
+            if (!topic.assignments().isEmpty()) {
+                for (CreatableReplicaAssignment assignment : topic.assignments()) {
+                    MetadataResponse.PartitionMetadata partitionMetadata = metadataForTopic.partitionMetadata().stream()
+                        .filter(metadata -> metadata.partition() == assignment.partitionIndex())
+                        .findFirst()
+                        .orElse(null);
+                    assertNotNull(partitionMetadata,
+                        "The topic should contain partition " + assignment.partitionIndex());
+                    assertEquals(assignment.brokerIds(), partitionMetadata.replicaIds,
+                        "The replica assignment should match for partition " + assignment.partitionIndex());
+                }
+            } else if (replication == -1) {
                 assertEquals(defaultReplicationFactor(cluster), metadataForTopic.partitionMetadata().get(0).replicaIds.size(),
                     "The topic should have the default replication factor");
             } else {

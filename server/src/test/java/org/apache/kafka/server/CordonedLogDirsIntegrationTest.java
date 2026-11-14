@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
@@ -42,11 +43,14 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -105,7 +109,7 @@ public class CordonedLogDirsIntegrationTest {
         try (Admin admin = clusterInstance.admin()) {
             // When the metadata version does not support cordoning log dirs:
             // 1. we can create a topic, even if cordon.log.dirs is statically set
-            admin.createTopics(newTopic(TOPIC1)).all().get();
+            createTopic(TOPIC1);
             // 2. no log dirs are marked as cordoned
             assertCordonedLogDirs(admin, List.of());
             // 3. we can't dynamically configure cordoned.log.dirs
@@ -147,7 +151,7 @@ public class CordonedLogDirsIntegrationTest {
 
             // After uncordoning log dirs, we can create topics and partitions again
             setCordonedLogDirs(admin, List.of(), BROKER_0);
-            admin.createTopics(newTopics).all().get();
+            createTopic(TOPIC2);
             admin.createPartitions(newPartitions).all().get();
         }
     }
@@ -159,7 +163,7 @@ public class CordonedLogDirsIntegrationTest {
             assertCordonedLogDirs(admin, List.of());
 
             // We can create topics
-            admin.createTopics(newTopic(TOPIC1)).all().get();
+            createTopic(TOPIC1);
 
             // Cordon all log dirs
             setCordonedLogDirs(admin, logDirsBroker0, BROKER_0);
@@ -196,8 +200,51 @@ public class CordonedLogDirsIntegrationTest {
             assertCordonedLogDirs(admin, List.of(logDirsBroker0.get(0)));
 
             // We can create topics and partitions again
-            admin.createTopics(newTopics).all().get();
+            createTopic(TOPIC2);
             admin.createPartitions(newPartitions).all().get();
+        }
+    }
+
+    @ClusterTest(types = Type.KRAFT)
+    public void testCordonRelativeLogDir() throws Exception {
+        int brokerId = 0;
+        List<String> initialLogDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
+        String metadataLogDir = clusterInstance.brokers().get(brokerId).config().metadataLogDir();
+        Path workingDirectory = Path.of("").toAbsolutePath();
+        String relativeLogDir = initialLogDirs.stream()
+            .filter(logDir -> !logDir.equals(metadataLogDir))
+            .map(logDir -> workingDirectory.relativize(Path.of(logDir).toAbsolutePath()).toString())
+            .findFirst()
+            .orElseThrow();
+        assertFalse(Path.of(relativeLogDir).isAbsolute());
+
+        clusterInstance.restartBroker(brokerId, Map.of(LOG_DIRS_CONFIG, relativeLogDir));
+        clusterInstance.waitForReadyBrokers();
+        assertEquals(List.of(relativeLogDir), clusterInstance.brokers().get(brokerId).config().logDirs());
+
+        String absoluteLogDir = new File(relativeLogDir).getAbsolutePath();
+        Set<Uuid> expectedDirectoryIds = Set.copyOf(clusterInstance.brokers().get(brokerId).logManager().directoryIds().values());
+
+        try (Admin admin = clusterInstance.admin()) {
+            setCordonedLogDirs(admin, List.of(relativeLogDir), BROKER_0);
+
+            // Wait until the broker marks the resolved absolute log directory as cordoned.
+            TestUtils.waitForCondition(() -> {
+                Map<String, LogDirDescription> descriptions = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId);
+                return descriptions.containsKey(absoluteLogDir) && descriptions.get(absoluteLogDir).isCordoned();
+            }, 10_000, "Relative log directories were not marked as cordoned by the broker");
+
+            // Wait until controller metadata reflects the broker's cordoned directory IDs.
+            TestUtils.waitForCondition(() -> {
+                KRaftMetadataCache metadataCache = (KRaftMetadataCache) clusterInstance.brokers().get(brokerId).metadataCache();
+                var registration = metadataCache.getImage().cluster().broker(brokerId);
+                return registration != null
+                    && registration.cordonedDirectories() != null
+                    && expectedDirectoryIds.equals(Set.copyOf(registration.cordonedDirectories()));
+            }, 10_000, "Relative cordoned log directories were not propagated to the controller");
+
+            Throwable exception = assertThrows(ExecutionException.class, () -> admin.createTopics(newTopic(TOPIC1, (short) 1)).all().get());
+            assertInstanceOf(InvalidReplicationFactorException.class, exception.getCause());
         }
     }
 
@@ -218,8 +265,8 @@ public class CordonedLogDirsIntegrationTest {
             // Uncordon log dirs
             setCordonedLogDirs(admin, List.of(), BROKER_0);
 
-            // We can't create topics again
-            admin.createTopics(newTopics).all().get();
+            // We can create topics again
+            createTopic(TOPIC1);
         }
     }
 
@@ -227,7 +274,7 @@ public class CordonedLogDirsIntegrationTest {
     public void testAlterReplicaWithCordonedLogDirs() throws Exception {
         TopicPartitionReplica replica = new TopicPartitionReplica(TOPIC1, 0, 0);
         try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(newTopic(TOPIC1)).all().get();
+            createTopic(TOPIC1);
 
             // Find the log dir that does not host the replica and cordon it
             AtomicReference<String> logDir = new AtomicReference<>();
@@ -258,7 +305,7 @@ public class CordonedLogDirsIntegrationTest {
     public void testAlterPartitionWithCordonedLogDirs() throws Exception {
         Set<Integer> allBrokers = new HashSet<>(clusterInstance.brokerIds());
         try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(newTopic(TOPIC1)).all().get();
+            createTopic(TOPIC1);
 
             // Find the broker that hosts the partition and cordon the other broker
             AtomicReference<Integer> partitionBroker = new AtomicReference<>();
@@ -348,7 +395,7 @@ public class CordonedLogDirsIntegrationTest {
         try (Admin admin = clusterInstance.admin()) {
             // Create 10 topics
             for (int i = 0; i < 10; i++) {
-                admin.createTopics(newTopic("topic" + i, (short) 1)).all().get();
+                clusterInstance.createTopic("topic" + i, 1, (short) 1);
             }
 
             // Check the 10 topics have been created and find the partitions on brokerId
@@ -377,9 +424,8 @@ public class CordonedLogDirsIntegrationTest {
 
             // Create another 10 topics
             for (int i = 10; i < 20; i++) {
-                admin.createTopics(newTopic("topic" + i, (short) 1)).all().get();
+                clusterInstance.createTopic("topic" + i, 1, (short) 1);
             }
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get().size() == 20, 10_000, "Topics 10-19 were not created");
 
             // Check only the other broker has replicas
             Map<Integer, Map<String, LogDirDescription>> logDescriptionsPerBroker = admin.describeLogDirs(clusterInstance.brokerIds()).allDescriptions().get();
@@ -417,9 +463,8 @@ public class CordonedLogDirsIntegrationTest {
             // Create 10 topics, replicated to every broker so brokerId is guaranteed to host some
             // replicas on the log dir we're about to decommission
             for (int i = 0; i < 10; i++) {
-                admin.createTopics(newTopic("topic" + i)).all().get();
+                createTopic("topic" + i);
             }
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get().size() == 10, 10_000, "Topics were not created");
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId));
 
@@ -454,10 +499,7 @@ public class CordonedLogDirsIntegrationTest {
                 10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
 
             // The broker is still fully functional after losing a log dir
-            admin.createTopics(newTopic("topic-after-decommission")).all().get();
-            TestUtils.waitForCondition(() ->
-                admin.listTopics().names().get().size() == 11,
-                10_000, "Topic was not created after decommissioning a log dir");
+            createTopic("topic-after-decommission");
         }
     }
 
@@ -497,6 +539,10 @@ public class CordonedLogDirsIntegrationTest {
             Config config = describeConfigs.get(cr);
             return logDirsStr.equals(config.get(CORDONED_LOG_DIRS_CONFIG).value());
         }, 10_000, "Unable to set the " + CORDONED_LOG_DIRS_CONFIG + " configuration on " + cr + ".");
+    }
+
+    private void createTopic(String name) {
+        clusterInstance.createTopic(name, 1, (short) clusterInstance.brokers().size());
     }
 
     private Set<NewTopic> newTopic(String name) {

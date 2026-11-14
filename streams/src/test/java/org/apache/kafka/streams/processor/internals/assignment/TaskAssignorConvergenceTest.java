@@ -37,8 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -151,7 +149,7 @@ public class TaskAssignorConvergenceTest {
 
                     final int changelogNodeIndex = random.nextInt(nodes.size());
                     replica = getRandomReplica(nodes, changelogNodeIndex, i);
-                    final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], Arrays.asList(replica[0], replica[1]), Collections.emptyList());
+                    final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], List.of(replica[0], replica[1]), List.of());
                     topicPartitionInfo.computeIfAbsent(changelogTopicName, tp -> new ArrayList<>()).add(info);
                 }
                 subtopology++;
@@ -173,8 +171,8 @@ public class TaskAssignorConvergenceTest {
                 "cluster",
                 new HashSet<>(nodes),
                 partitionInfoSet,
-                Collections.emptySet(),
-                Collections.emptySet()
+                Set.of(),
+                Set.of()
             );
 
             final Map<ProcessId, ClientState> clientStates = new TreeMap<>();

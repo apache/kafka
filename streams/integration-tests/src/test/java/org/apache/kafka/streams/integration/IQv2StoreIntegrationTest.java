@@ -110,14 +110,10 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.matchesPattern;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
@@ -424,7 +420,7 @@ public class IQv2StoreIntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
+                assertTrue(recordMetadata.hasOffset());
                 INPUT_POSITION.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
@@ -433,12 +429,12 @@ public class IQv2StoreIntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 5L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 3L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 3L),
+            INPUT_POSITION);
     }
 
     public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
@@ -1325,8 +1321,8 @@ public class IQv2StoreIntegrationTest {
                 if (!failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), matchesPattern(
+                assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, partitionResult.getFailureReason());
+                assertTrue(partitionResult.getFailureMessage().matches(
                     "This store"
                         + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore.*\\)"
                         + " doesn't know how to execute the given query"
@@ -1438,8 +1434,8 @@ public class IQv2StoreIntegrationTest {
                 if (!failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), matchesPattern(
+                assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, partitionResult.getFailureReason());
+                assertTrue(partitionResult.getFailureMessage().matches(
                     "This store"
                         + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
                         + " doesn't know how to execute the given query"
@@ -1511,11 +1507,9 @@ public class IQv2StoreIntegrationTest {
                 if (!failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(),
-                    containsString("doesn't know how to execute the given query"));
-                assertThat(partitionResult.getFailureMessage(),
-                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
+                assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, partitionResult.getFailureReason());
+                assertTrue(partitionResult.getFailureMessage().contains("doesn't know how to execute the given query"));
+                assertTrue(partitionResult.getFailureMessage().contains("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
@@ -1580,11 +1574,9 @@ public class IQv2StoreIntegrationTest {
                 if (!failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(),
-                    containsString("doesn't know how to execute the given query"));
-                assertThat(partitionResult.getFailureMessage(),
-                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
+                assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, partitionResult.getFailureReason());
+                assertTrue(partitionResult.getFailureMessage().contains("doesn't know how to execute the given query"));
+                assertTrue(partitionResult.getFailureMessage().contains("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
@@ -1598,15 +1590,11 @@ public class IQv2StoreIntegrationTest {
 
         final StateQueryResult<ValueAndTimestamp<Integer>> result = kafkaStreams.query(request);
 
-        assertThat(result.getGlobalResult().isFailure(), is(true));
-        assertThat(
-            result.getGlobalResult().getFailureReason(),
-            is(FailureReason.UNKNOWN_QUERY_TYPE)
-        );
-        assertThat(
-            result.getGlobalResult().getFailureMessage(),
-            is("Global stores do not yet support the KafkaStreams#query API."
-                + " Use KafkaStreams#store instead.")
+        assertTrue(result.getGlobalResult().isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getGlobalResult().getFailureReason());
+        assertEquals(
+            "Global stores do not yet support the KafkaStreams#query API. Use KafkaStreams#store instead.",
+            result.getGlobalResult().getFailureMessage()
         );
     }
 
@@ -1623,15 +1611,11 @@ public class IQv2StoreIntegrationTest {
             partitions,
             result,
             queryResult -> {
-                assertThat(queryResult.isFailure(), is(true));
-                assertThat(queryResult.isSuccess(), is(false));
-                assertThat(
-                    queryResult.getFailureReason(),
-                    is(FailureReason.UNKNOWN_QUERY_TYPE)
-                );
-                assertThat(
-                    queryResult.getFailureMessage(),
-                    matchesPattern(
+                assertTrue(queryResult.isFailure());
+                assertFalse(queryResult.isSuccess());
+                assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, queryResult.getFailureReason());
+                assertTrue(
+                    queryResult.getFailureMessage().matches(
                         "This store (.*)"
                             + " doesn't know how to execute the given query"
                             + " (.*)."
@@ -1640,7 +1624,7 @@ public class IQv2StoreIntegrationTest {
                 );
                 assertThrows(IllegalArgumentException.class, queryResult::getResult);
 
-                assertThat(queryResult.getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.getExecutionInfo().isEmpty());
             }
         );
     }
@@ -1664,7 +1648,7 @@ public class IQv2StoreIntegrationTest {
         if (failure) {
             throw new AssertionError(queryResult.toString());
         }
-        assertThat(queryResult.isSuccess(), is(true));
+        assertTrue(queryResult.isSuccess());
 
         assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
         assertThrows(
@@ -1674,9 +1658,9 @@ public class IQv2StoreIntegrationTest {
 
         final V result1 = queryResult.getResult();
         final Integer integer = (Integer) result1;
-        assertThat(integer, is(expectedValue));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
-        assertThat(queryResult.getPosition(), is(POSITION_0));
+        assertEquals(expectedValue, integer);
+        assertTrue(queryResult.getExecutionInfo().isEmpty());
+        assertEquals(POSITION_0, queryResult.getPosition());
     }
 
     public <V> void shouldHandleTimestampedKeyQuery(
@@ -1700,7 +1684,7 @@ public class IQv2StoreIntegrationTest {
         if (failure) {
             throw new AssertionError(queryResult.toString());
         }
-        assertThat(queryResult.isSuccess(), is(true));
+        assertTrue(queryResult.isSuccess());
 
         assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
         assertThrows(
@@ -1709,9 +1693,9 @@ public class IQv2StoreIntegrationTest {
         );
 
         final ValueAndTimestamp<V> valueAndTimestamp = queryResult.getResult();
-        assertThat(valueAndTimestamp, is(expectedValueAndTimestamp));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
-        assertThat(queryResult.getPosition(), is(POSITION_0));
+        assertEquals(expectedValueAndTimestamp, valueAndTimestamp);
+        assertTrue(queryResult.getExecutionInfo().isEmpty());
+        assertEquals(POSITION_0, queryResult.getPosition());
     }
 
     public <V> void shouldHandleFailedTimestampedKeyQuery(final Integer key) {
@@ -1728,9 +1712,9 @@ public class IQv2StoreIntegrationTest {
         final QueryResult<ValueAndTimestamp<V>> queryResult =
                 result.getOnlyPartitionResult();
 
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-        assertThat(queryResult.getFailureMessage(), containsString("TimestampedKeyQuery"));
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, queryResult.getFailureReason());
+        assertTrue(queryResult.getFailureMessage().contains("TimestampedKeyQuery"));
 
         assertThrows(IllegalArgumentException.class, queryResult::getResult);
     }
@@ -1766,7 +1750,7 @@ public class IQv2StoreIntegrationTest {
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
+                assertTrue(queryResult.get(partition).isSuccess());
 
                 assertThrows(
                     IllegalArgumentException.class,
@@ -1781,10 +1765,10 @@ public class IQv2StoreIntegrationTest {
                         actualValues.add((Integer) iterator.next().value);
                     }
                 }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.get(partition).getExecutionInfo().isEmpty());
             }
-            assertThat("Result:" + result, actualValues, is(expectedValues));
-            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+            assertEquals(expectedValues, actualValues, "Result:" + result);
+            assertEquals(INPUT_POSITION, result.getPosition(), "Result:" + result);
         }
     }
 
@@ -1821,7 +1805,7 @@ public class IQv2StoreIntegrationTest {
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
+                assertTrue(queryResult.get(partition).isSuccess());
 
                 assertThrows(
                     IllegalArgumentException.class,
@@ -1837,10 +1821,10 @@ public class IQv2StoreIntegrationTest {
                         actualValueAndTimestamp.add(iterator.next().value);
                     }
                 }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.get(partition).getExecutionInfo().isEmpty());
             }
-            assertThat("Result:" + result, actualValueAndTimestamp, is(expectedValueAndTimestamp));
-            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+            assertEquals(expectedValueAndTimestamp, actualValueAndTimestamp, "Result:" + result);
+            assertEquals(INPUT_POSITION, result.getPosition(), "Result:" + result);
         }
     }
 
@@ -1876,7 +1860,7 @@ public class IQv2StoreIntegrationTest {
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
+                assertTrue(queryResult.get(partition).isSuccess());
 
                 assertThrows(
                     IllegalArgumentException.class,
@@ -1892,10 +1876,10 @@ public class IQv2StoreIntegrationTest {
                         actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.get(partition).getExecutionInfo().isEmpty());
             }
-            assertThat("Result:" + result, actualValues, is(expectedValues));
-            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+            assertEquals(expectedValues, actualValues, "Result:" + result);
+            assertEquals(INPUT_POSITION, result.getPosition(), "Result:" + result);
         }
     }
 
@@ -1926,7 +1910,7 @@ public class IQv2StoreIntegrationTest {
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
+                assertTrue(queryResult.get(partition).isSuccess());
 
                 assertThrows(
                     IllegalArgumentException.class,
@@ -1942,10 +1926,10 @@ public class IQv2StoreIntegrationTest {
                         actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.get(partition).getExecutionInfo().isEmpty());
             }
-            assertThat("Result:" + result, actualValues, is(expectedValues));
-            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+            assertEquals(expectedValues, actualValues, "Result:" + result);
+            assertEquals(INPUT_POSITION, result.getPosition(), "Result:" + result);
         }
     }
 
@@ -1973,7 +1957,7 @@ public class IQv2StoreIntegrationTest {
                 if (failure) {
                     throw new AssertionError(queryResult.toString());
                 }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
+                assertTrue(queryResult.get(partition).isSuccess());
 
                 assertThrows(
                     IllegalArgumentException.class,
@@ -1989,10 +1973,10 @@ public class IQv2StoreIntegrationTest {
                         actualValues.add((Integer) iterator.next().value);
                     }
                 }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+                assertTrue(queryResult.get(partition).getExecutionInfo().isEmpty());
             }
-            assertThat("Result:" + result, actualValues, is(expectedValues));
-            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+            assertEquals(expectedValues, actualValues, "Result:" + result);
+            assertEquals(INPUT_POSITION, result.getPosition(), "Result:" + result);
         }
     }
 
@@ -2016,7 +2000,7 @@ public class IQv2StoreIntegrationTest {
         makeAssertions(
             partitions,
             result,
-            queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
+            queryResult -> assertFalse(queryResult.getExecutionInfo().isEmpty())
         );
     }
 
@@ -2040,7 +2024,7 @@ public class IQv2StoreIntegrationTest {
         makeAssertions(
             partitions,
             result,
-            queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
+            queryResult -> assertFalse(queryResult.getExecutionInfo().isEmpty())
         );
     }
 
@@ -2052,7 +2036,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             assertion.accept(result.getGlobalResult());
         } else {
-            assertThat(result.getPartitionResults().keySet(), is(partitions));
+            assertEquals(partitions, result.getPartitionResults().keySet());
             for (final Integer partition : partitions) {
                 assertion.accept(result.getPartitionResults().get(partition));
             }

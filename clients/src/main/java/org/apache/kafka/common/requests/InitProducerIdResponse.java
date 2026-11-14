@@ -75,8 +75,4 @@ public class InitProducerIdResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

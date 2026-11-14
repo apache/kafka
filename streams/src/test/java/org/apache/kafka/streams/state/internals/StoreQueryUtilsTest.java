@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -34,15 +35,18 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.time.Instant;
+import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,13 +68,11 @@ public class StoreQueryUtilsTest {
             position,
             null
         );
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("The store is not initialized yet, so it is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, queryResult.getFailureReason());
+        assertEquals(
+            "The store is not initialized yet, so it is not yet up to the bound PositionBound{position=Position{position={topic={0=1}}}}",
+            queryResult.getFailureMessage());
     }
 
     @Test
@@ -90,14 +92,35 @@ public class StoreQueryUtilsTest {
             context
         );
 
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.NOT_UP_TO_BOUND));
-        assertThat(
-            queryResult.getFailureMessage(),
-            is("For store partition 0, the current position Position{position={topic={0=0}}}"
-                   + " is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
-        );
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, queryResult.getFailureReason());
+        assertEquals(
+            "For store partition 0, the current position Position{position={topic={0=0}}}"
+                + " is not yet up to the bound"
+                + " PositionBound{position=Position{position={topic={0=1}}}}",
+            queryResult.getFailureMessage());
+    }
+
+    @Test
+    public void shouldDeserializeInTimestampedFormatForAdapterBackedStore() {
+        // Dropping StoreQueryUtils.isAdapter() relies on KeyValueToTimestampedKeyValueByteStoreAdapter
+        // now implementing TimestampedBytesStore: isTimestamped() detects it, so IQ deserialization
+        // keeps the <timestamp,value> format instead of stripping the timestamp off as inner bytes.
+        final StateSerdes<String, ValueAndTimestamp<String>> serdes =
+            new StateSerdes<>("topic", Serdes.String(), new ValueAndTimestampSerde<>(Serdes.String()));
+        // the adapter only ever wraps a persistent store; it is never initialized here, since
+        // deserializeValue() only inspects the store type via isTimestamped()
+        final KeyValueToTimestampedKeyValueByteStoreAdapter adapterStore =
+            new KeyValueToTimestampedKeyValueByteStoreAdapter(new RocksDBStore("store", "rocksdb-state"));
+
+        final Function<byte[], ValueAndTimestamp<String>> deserializer =
+            StoreQueryUtils.deserializeValue(serdes, adapterStore);
+
+        final ValueAndTimestamp<String> result =
+            deserializer.apply(serdes.rawValue(ValueAndTimestamp.make("value", 42L)));
+
+        assertEquals("value", result.value());
+        assertEquals(42L, result.timestamp());
     }
 
     @Test

@@ -61,9 +61,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
@@ -303,6 +303,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
                 resetOffsetsIfNeededAndInitializeMetadata(offsetResetter);
                 initializeTopology();
+                // Processor.init() can write to transactional stores; without a commit those
+                // bytes never drain while processing is paused on the uncommitted-bytes limit.
+                if (stateMgr.approximateNumUncommittedBytes() > 0) {
+                    commitNeeded = true;
+                }
                 processorContext.initialize();
                 if (!eosEnabled) {
                     maybeCheckpoint();
@@ -459,7 +464,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     return committableOffsetsAndMetadata();
                 } else {
                     log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
-                    return Collections.emptyMap();
+                    return Map.of();
                 }
 
             case CLOSED:
@@ -492,7 +497,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
             case RESTORING:
-                return Collections.emptyMap();
+                return Map.of();
 
             case RUNNING:
             case SUSPENDED:
@@ -713,6 +718,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         record = null;
         closeTaskSensor.record();
         partitionsToResume.clear();
+        consumedOffsets.clear();
+        // Clear so a revived task has no stale fallback for a partition it has not re-read.
+        nextOffsetsAndMetadataToBeConsumed.clear();
 
         transitionTo(State.CLOSED);
     }
@@ -720,6 +728,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable.
+     * Prolonged waits are logged at INFO, except routine idleness (no buffered records
+     * or waiting for new data within max.task.idle.ms), which is logged at DEBUG.
      */
     public boolean isProcessable(final long wallClockTime) {
         if (state() == State.CLOSED) {
@@ -739,7 +749,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // READY -> NOT_READY - start timer
                 lastNotReadyLogTime = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit");
+                maybeLogNotReady(wallClockTime, () -> "Task is not ready to process: has pending transaction commit", false);
             }
             return false;
         }
@@ -751,7 +761,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 lastNotReadyLogTime = Optional.of(wallClockTime);
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElseThrow());
+                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessageSupplier().orElseThrow(), readyToProcess.isNormalIdling());
             }
         } else {
             // Task is ready - clear the timer
@@ -762,11 +772,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return readyToProcess.isReady();
     }
 
-    private void maybeLogNotReady(final long wallClockTime, final String logMessage) {
+    private void maybeLogNotReady(final long wallClockTime, final Supplier<String> logMessage, final boolean isNormalIdling) {
         // NOT_READY - check if it should log
         final long timeSinceLastLog = lastNotReadyLogTime.map(aLong -> wallClockTime - aLong).orElse(-1L);
         if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-            log.info(logMessage);
+            if (isNormalIdling) {
+                if (log.isDebugEnabled()) {
+                    log.debug(logMessage.get());
+                }
+            } else {
+                log.info(logMessage.get());
+            }
             lastNotReadyLogTime = Optional.of(wallClockTime);
         }
     }
@@ -826,7 +842,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw timeoutException;
             } else {
                 record = null;
-                throw new TaskCorruptedException(Collections.singleton(id));
+                throw new TaskCorruptedException(Set.of(id));
             }
         } catch (final FailedProcessingException failedProcessingException) {
             // Do not keep the failed processing exception in the stack trace
@@ -949,7 +965,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw timeoutException;
             } else {
                 record = null;
-                throw new TaskCorruptedException(Collections.singleton(id));
+                throw new TaskCorruptedException(Set.of(id));
             }
         } catch (final FailedProcessingException e) {
             throw createStreamsException(node.name(), e.getCause());
@@ -1041,9 +1057,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private Map<TopicPartition, Long> checkpointableOffsets() {
         final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
-        }
+        // The consumed offset wins over the produced offset: for a source-topic changelog the store is
+        // filled by consuming the partition, so the consumed offset is what was applied to the store.
+        checkpointableOffsets.putAll(consumedOffsets);
 
         log.debug("Checkpointable offsets {}", checkpointableOffsets);
 
@@ -1161,7 +1177,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
-            mainConsumer.pause(singleton(partition));
+            mainConsumer.pause(Set.of(partition));
         }
     }
 
@@ -1450,6 +1466,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public long approximateNumUncommittedBytes() {
         return stateMgr.approximateNumUncommittedBytes();
+    }
+
+    @Override
+    public long maxStoreUncommittedBytes() {
+        return stateMgr.maxStoreUncommittedBytes();
     }
 
     @Override

@@ -58,8 +58,9 @@ public interface Group {
         /**
          * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
          *
-         * @return The {{@link GroupType}} according to the string passed. Unknown group type is returned if
-         * the string doesn't correspond to a valid group type.
+         * @param name The group type name.
+         * @return The {@link GroupType} according to the string passed. Unknown group type is
+         * returned if the string doesn't correspond to a valid group type.
          */
         public static GroupType parse(String name) {
             if (name == null) {
@@ -79,21 +80,23 @@ public interface Group {
     }
 
     /**
-     * @return The {{@link GroupType}}.
+     * @return The {@link GroupType}.
      */
     GroupType type();
 
     /**
-     * @return The {{@link GroupType}}'s String representation.
+     * @return The group state as a string.
      */
     String stateAsString();
 
     /**
-     * @return The {{@link GroupType}}'s String representation based on the committed offset.
+     * @param committedOffset A specified committed offset corresponding to this shard.
+     * @return The group state as a string based on the committed offset.
      */
     String stateAsString(long committedOffset);
 
     /**
+     * @param committedOffset A specified committed offset corresponding to this shard.
      * @return the group formatted as a list group response based on the committed offset.
      */
     ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
@@ -108,8 +111,8 @@ public interface Group {
      *
      * @param memberId                  The member id.
      * @param groupInstanceId           The group instance id.
-     * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
-     *                                  for consumer groups.
+     * @param generationIdOrMemberEpoch The generation id for classic groups or the member epoch
+     *                                  for consumer and streams groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
      * @param apiVersion                The api version.
      * @return A validator for per-partition validation.
@@ -127,7 +130,7 @@ public interface Group {
      *
      * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @param lastCommittedOffset   The last committed offset in the timeline.
      */
     void validateOffsetFetch(
         String memberId,
@@ -183,8 +186,9 @@ public interface Group {
     /**
      * Returns true if the statesFilter contains the current state with given committedOffset.
      *
-     * @param statesFilter The states to filter, which must be lowercase.
-     * @return true if the state includes, false otherwise.
+     * @param statesFilter    The states to filter, which must be lowercase.
+     * @param committedOffset A specified committed offset corresponding to this shard.
+     * @return Whether the group state at the committed offset is in {@code statesFilter}.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);
 
@@ -219,7 +223,7 @@ public interface Group {
      * <p><b>This does not prevent expiration of the group's offsets.</b> The caller always runs
      * {@code cleanupExpiredOffsets} for the group before consulting this method, so a
      * {@code false} return only suppresses the group-metadata tombstone — committed offsets
-     * past {@code offsets.retention.ms} are still removed.
+     * past {@code offsets.retention.minutes} are still removed.
      *
      * @param config The broker-level group coordinator config; passed so per-group-type overrides
      *               can read broker-side feature flags (e.g. whether a streams topology plugin is

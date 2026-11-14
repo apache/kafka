@@ -69,6 +69,17 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     }
 
     /**
+     * @return the active tasks without their assignment epochs.
+     */
+    public Map<String, Set<Integer>> activeTasks() {
+        Map<String, Set<Integer>> activeTasks = new HashMap<>();
+        for (Map.Entry<String, Map<Integer, Integer>> entry : activeTasksWithEpochs.entrySet()) {
+            activeTasks.put(entry.getKey(), new HashSet<>(entry.getValue().keySet()));
+        }
+        return activeTasks;
+    }
+
+    /**
      * @return standby and warm-up tasks merged, since warm-up tasks are executed as standby tasks on the client.
      */
     public Map<String, Set<Integer>> standbyAndWarmupTasks() {
@@ -104,11 +115,13 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     /**
      * Creates a TasksTupleWithEpochs from a current assignment record.
      *
-     * @param activeTasks                    The active tasks from the record.
-     * @param standbyTasks                   The standby tasks from the record.
-     * @param warmupTasks                    The warmup tasks from the record.
-     * @param memberEpoch                    The member epoch to use as default for tasks without explicit epochs.
-     * @return The TasksTupleWithEpochs
+     * @param log          The logger.
+     * @param groupId      The group id.
+     * @param activeTasks  The active tasks from the record.
+     * @param standbyTasks The standby tasks from the record.
+     * @param warmupTasks  The warmup tasks from the record.
+     * @param memberEpoch  The member epoch to use as default for tasks without explicit epochs.
+     * @return The TasksTupleWithEpochs.
      */
     public static TasksTupleWithEpochs fromCurrentAssignmentRecord(
         Logger log,

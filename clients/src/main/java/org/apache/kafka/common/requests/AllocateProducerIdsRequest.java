@@ -47,8 +47,14 @@ public class AllocateProducerIdsRequest extends AbstractRequest {
 
         private final AllocateProducerIdsRequestData data;
 
-        public Builder(AllocateProducerIdsRequestData data) {
-            super(ApiKeys.ALLOCATE_PRODUCER_IDS);
+        /**
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
+        public Builder(AllocateProducerIdsRequestData data, short requestHeaderVersion) {
+            super(ApiKeys.ALLOCATE_PRODUCER_IDS,
+                ApiKeys.ALLOCATE_PRODUCER_IDS.oldestVersion(),
+                ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

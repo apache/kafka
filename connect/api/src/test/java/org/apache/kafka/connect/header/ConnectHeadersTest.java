@@ -512,21 +512,13 @@ public class ConnectHeadersTest {
     }
 
     protected void assertSchemaDoesNotMatch(Schema schema, Object value) {
-        try {
-            assertSchemaMatches(schema, value);
-            fail("Should have failed to validate value '" + value + "' and schema: " + schema);
-        } catch (DataException e) {
-            // expected
-        }
+        assertThrows(DataException.class, () -> assertSchemaMatches(schema, value),
+            "Should have failed to validate value '" + value + "' and schema: " + schema);
     }
 
     protected void attemptAndFailToAddHeader(String key, Schema schema, Object value) {
-        try {
-            headers.add(key, value, schema);
-            fail("Should have failed to add header with key '" + key + "', value '" + value + "', and schema: " + schema);
-        } catch (DataException e) {
-            // expected
-        }
+        assertThrows(DataException.class, () -> headers.add(key, value, schema),
+            "Should have failed to add header with key '" + key + "', value '" + value + "', and schema: " + schema);
     }
 
     protected void addHeader(String key, Schema schema, Object value) {

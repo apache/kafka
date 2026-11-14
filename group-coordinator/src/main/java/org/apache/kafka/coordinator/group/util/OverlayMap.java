@@ -31,7 +31,7 @@ import java.util.Set;
  * that overlay on top of it. This class expects the underlying base map to
  * be immutable.
  *
- * <p>Null values are not supported.
+ * <p>Null values are not supported, neither in the base map nor in updates.
  *
  * @param <K> The key type.
  * @param <V> The value type.
@@ -74,8 +74,10 @@ public class OverlayMap<K, V> extends AbstractMap<K, V> {
 
     @Override
     public V get(Object key) {
-        if (additions.containsKey(key)) return additions.get(key);
-        if (replacements.containsKey(key)) return replacements.get(key);
+        V value = additions.get(key);
+        if (value != null) return value;
+        value = replacements.get(key);
+        if (value != null) return value;
         if (removals.contains(key)) return null;
         return base.get(key);
     }
@@ -94,9 +96,10 @@ public class OverlayMap<K, V> extends AbstractMap<K, V> {
             replacements.put(key, value);
             return null;
         }
-        if (base.containsKey(key)) {
+        V baseValue = base.get(key);
+        if (baseValue != null) {
             replacements.put(key, value);
-            return base.get(key);
+            return baseValue;
         }
         additions.put(key, value);
         return null;
@@ -115,9 +118,10 @@ public class OverlayMap<K, V> extends AbstractMap<K, V> {
         if (removals.contains(key)) {
             return null;
         }
-        if (base.containsKey(key)) {
+        V baseValue = base.get(key);
+        if (baseValue != null) {
             removals.add(key);
-            return base.get(key);
+            return baseValue;
         }
         return null;
     }
@@ -147,8 +151,9 @@ public class OverlayMap<K, V> extends AbstractMap<K, V> {
                         if (next != null) return true;
                         while (baseIterator.hasNext()) {
                             Entry<K, V> entry = baseIterator.next();
-                            if (replacements.containsKey(entry.getKey())) {
-                                next = Map.entry(entry.getKey(), replacements.get(entry.getKey()));
+                            V replacement = replacements.get(entry.getKey());
+                            if (replacement != null) {
+                                next = Map.entry(entry.getKey(), replacement);
                             } else {
                                 next = entry;
                             }

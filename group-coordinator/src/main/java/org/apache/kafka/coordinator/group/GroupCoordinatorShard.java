@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
-import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
@@ -146,8 +146,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
- * classic and consumer groups. It holds the hard and the soft state of the groups. This class
- * has two kinds of methods:
+ * classic, consumer, share and streams groups. It holds the hard and the soft state of the
+ * groups. This class has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
  *    hard state via the replay methods.
@@ -275,6 +275,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withStreamsGroupAssignors(config.streamsGroupAssignors())
+                .withStreamsGroupAssignmentRefiner(config.streamsGroupAssignmentRefiner())
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
@@ -381,7 +382,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic, consumer and streams group size counter key to schedule a timer task.
+     * The group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
@@ -438,6 +439,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
+     * @param time                  The time.
+     * @param timer                 The coordinator timer.
+     * @param config                The group coordinator config.
      * @param coordinatorMetrics    The coordinator metrics.
      * @param metricsShard          The coordinator metrics shard.
      */
@@ -559,11 +563,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context                The request context.
      * @param request                The actual JoinGroup request.
      * @param responseFuture         The join group response future.
-     * @param topologyCleanupHandled Whether streams-topology cleanup has already run (or is not
-     *                               needed) for this request.
+     * @param topologyCleanupHandled True if an empty streams group can be converted to a
+     *                               classic group right away: its topology was already deleted
+     *                               from the plugin, or no plugin is configured.
      *
-     * @return A Result whose response signals whether the join must be deferred for streams-topology
-     *         cleanup, and a list of records to update the state machine.
+     * @return A Result with a list of records to update the state machine. Its response is
+     *         true if the group is an empty streams group whose topology must first be deleted
+     *         from the plugin. In that case nothing is changed, and the caller must delete the
+     *         topology and call again with {@code topologyCleanupHandled = true}.
      */
     public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
@@ -582,11 +589,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a SyncGroup request.
      *
-     * @param context The request context.
-     * @param request The actual SyncGroup request.
+     * @param context        The request context.
+     * @param request        The actual SyncGroup request.
+     * @param responseFuture The sync group response future.
      *
-     * @return A Result containing the SyncGroup response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a list of records to update the state machine. The response is
+     *         completed through the response future.
      */
     public CoordinatorResult<Void, CoordinatorRecord> classicGroupSync(
         AuthorizableRequestContext context,
@@ -770,7 +778,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param groupId - The group ID
      * @param topics - The set of topics which were deleted successfully by the persister
-     * @return the final response {@link DeleteShareGroupOffsetsResponseData} for the DeleteShareGroupOffsetsRequest
+     * @param errorTopicResponseList - The topic responses for the topics which were not deleted
+     *                                 successfully
+     * @return A Result containing the final response {@link DeleteShareGroupOffsetsResponseData}
+     *         for the DeleteShareGroupOffsetsRequest and a list of records to update the state
+     *         machine.
      */
     public CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> completeDeleteShareGroupOffsets(
         String groupId,
@@ -821,7 +833,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param epoch     The epoch (or offset) used to read from the
      *                  timeline data structure.
      *
-     * @return A List of OffsetFetchResponseTopics response.
+     * @return The OffsetFetchResponseGroup response.
      */
     public OffsetFetchResponseData.OffsetFetchResponseGroup fetchOffsets(
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
@@ -851,7 +863,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Handles an TxnOffsetCommit request.
+     * Handles a TxnOffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual TxnOffsetCommit request.
@@ -893,10 +905,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ConsumerGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
-     *
      */
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
         List<String> groupIds,
@@ -908,11 +920,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a StreamsGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A {@link StreamsGroupDescribeResult} containing the described groups and per-group
      *         stored description topology epoch (KIP-1331).
-     *
      */
     public StreamsGroupDescribeResult streamsGroupDescribe(
         List<String> groupIds,
@@ -934,8 +946,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param committedOffset  A committed offset corresponding to the desired snapshot.
      * @throws GroupIdNotFoundException if the group does not exist.
      * @throws UnknownMemberIdException if the member is not in the group.
-     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
-     *                                  current topology epoch.
+     * @throws StreamsInvalidTopologyEpochException if {@code pushedEpoch} does not match the
+     *                                              group's current topology epoch.
      */
     public void validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
@@ -990,13 +1002,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
-     * (no live members), no committed offsets and no pending transactional offsets, and a
-     * {@code StoredDescriptionTopologyEpoch != -1}. The cleanup cycle marks each candidate
-     * UNCERTAIN at the latest state before the plugin delete and smart-finalizes afterwards, so a
-     * concurrent {@code setTopology} that has since advanced the field is re-solicited rather than
-     * silently undone by a stale plugin delete — the observed epoch is not needed downstream, so
-     * only the group-id set is returned.
+     * Returns the IDs of the streams groups on this shard whose topology should be deleted from
+     * the plugin. A group qualifies if it has no members, no committed or pending transactional
+     * offsets, and a {@code StoredDescriptionTopologyEpoch} other than NONE ({@code -1}).
+     *
+     * <p>Only IDs are returned, not the epochs seen here. Before calling the plugin, the
+     * cleanup cycle checks each group's latest state again, so the epochs from this scan are
+     * not needed.
      *
      * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
      * expired offsets, so the eligibility check itself only asks "does this group still have any
@@ -1019,9 +1031,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 if (group == null || group.type() != Group.GroupType.STREAMS) continue;
                 StreamsGroup streamsGroup = (StreamsGroup) group;
                 if (!streamsGroup.isEmpty(committedOffset)) continue;
-                int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
-                // -2 (UNCERTAIN) falls through: a half-finished push/delete may have left plugin data.
-                if (storedEpoch == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) continue;
+                // Keep UNCERTAIN (-2): a push or delete that did not finish may have left data in the plugin.
+                if (!streamsGroup.mayHaveTopologyDescription(committedOffset)) continue;
                 if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
                 eligible.add(groupId);
             } catch (Throwable t) {
@@ -1033,7 +1044,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Shard entry point for the {@code -2} (UNCERTAIN) barrier write. See
+     * Sets the group's stored topology epoch to UNCERTAIN ({@code -2}) before a plugin call. See
      * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertain(String, boolean)}.
      */
     public CoordinatorResult<Boolean, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertain(
@@ -1044,7 +1055,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Batched UNCERTAIN(-2) barrier write for the cleanup cycle. See
+     * Sets the stored topology epoch to UNCERTAIN ({@code -2}) for a batch of groups before the
+     * cleanup cycle deletes their topologies. See
      * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertainBatch(Set)}.
      */
     public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
@@ -1054,7 +1066,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Smart finalize after {@code plugin.deleteTopology} for the cleanup cycle. See
+     * Sets the final stored topology epoch after the cleanup cycle deletes the groups'
+     * topologies from the plugin. See
      * {@link GroupMetadataManager#finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(Set)}.
      */
     public CoordinatorResult<Void, CoordinatorRecord> finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(
@@ -1066,10 +1079,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ShareGroupDescribe request.
      *
-     * @param groupIds      The IDs of the groups to describe.
+     * @param groupIds        The IDs of the groups to describe.
+     * @param committedOffset A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ShareGroupDescribeResponseData.DescribedGroup.
-     *
      */
     public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
         List<String> groupIds,
@@ -1112,7 +1125,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Handles a OffsetDelete request.
+     * Handles an OffsetDelete request.
      *
      * @param context The request context.
      * @param request The actual OffsetDelete request.
@@ -1204,7 +1217,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic/consumer groups.
+     * Schedules (or reschedules) the group size counter for the classic, consumer, share and
+     * streams groups.
      */
     private void scheduleGroupSizeCounter() {
         timer.schedule(
@@ -1221,7 +1235,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Cancels the group size counter for the classic/consumer groups.
+     * Cancels the group size counter for the classic, consumer, share and streams groups.
      */
     private void cancelGroupSizeCounter() {
         timer.cancel(GROUP_SIZE_COUNTER_KEY);

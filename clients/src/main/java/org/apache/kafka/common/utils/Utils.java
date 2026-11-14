@@ -952,47 +952,40 @@ public final class Utils {
             }
         } finally {
             if (needFlushParentDir) {
-                flushDir(target.toAbsolutePath().normalize().getParent());
+                flushPath(target.toAbsolutePath().normalize().getParent());
             }
         }
     }
 
     /**
-     * Flushes dirty directories to guarantee crash consistency.
+     * Flushes the dirty file or directory at the given path to guarantee crash consistency.
      * <p>
-     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     * This is a no-op if the path is {@code null}.
+     * <p>
+     * Note: We don't fsync on Windows OS and z/OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
-     * @throws IOException if flushing the directory fails.
+     * @throws NoSuchFileException if the path does not exist.
+     * @throws IOException if flushing the path fails.
      */
-    public static void flushDir(Path path) throws IOException {
+    public static void flushPath(Path path) throws IOException {
         if (path != null && !OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
-            try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
-                dir.force(true);
+            try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+                channel.force(true);
             }
         }
     }
 
     /**
-     * Flushes dirty directories to guarantee crash consistency with swallowing {@link NoSuchFileException}
+     * Flushes the dirty file or directory at the given path to guarantee crash consistency,
+     * swallowing {@link NoSuchFileException} if the path does not exist.
      *
-     * @throws IOException if flushing the directory fails.
+     * @throws IOException if flushing the path fails.
      */
-    public static void flushDirIfExists(Path path) throws IOException {
+    public static void flushPathIfExists(Path path) throws IOException {
         try {
-            flushDir(path);
+            flushPath(path);
         } catch (NoSuchFileException e) {
-            log.warn("Failed to flush directory {}", path);
-        }
-    }
-
-    /**
-     * Flushes dirty file with swallowing {@link NoSuchFileException}
-     */
-    public static void flushFileIfExists(Path path) throws IOException {
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
-            fileChannel.force(true);
-        } catch (NoSuchFileException e) {
-            log.warn("Failed to flush file {}", path, e);
+            log.debug("Skipped flushing {} since it no longer exists", path);
         }
     }
 

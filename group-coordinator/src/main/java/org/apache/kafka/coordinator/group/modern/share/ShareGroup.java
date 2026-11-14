@@ -32,6 +32,8 @@ import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -74,14 +76,26 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      * A record class to hold the value representing ShareGroupStatePartitionMetadata for the TimelineHashmap
      * keyed on share group id.
      *
-     * @param initializedTopics Map of set of partition ids keyed on the topic id.
-     * @param deletingTopics    Set of topic ids.
+     * @param initializingTopics Map of InitMapValue (topic name, partition ids and timestamp)
+     *                           keyed on the topic id, for the topics whose share group state is
+     *                           being initialized.
+     * @param initializedTopics  Map of InitMapValue (topic name, partition ids and timestamp)
+     *                           keyed on the topic id, for the topics whose share group state is
+     *                           initialized.
+     * @param deletingTopics     Set of topic ids.
      */
     public record ShareGroupStatePartitionMetadataInfo(
         Map<Uuid, InitMapValue> initializingTopics,
         Map<Uuid, InitMapValue> initializedTopics,
         Set<Uuid> deletingTopics
     ) {
+        public static final ShareGroupStatePartitionMetadataInfo EMPTY = new ShareGroupStatePartitionMetadataInfo(Map.of(), Map.of(), Set.of());
+
+        public ShareGroupStatePartitionMetadataInfo {
+            initializingTopics = Collections.unmodifiableMap(initializingTopics);
+            initializedTopics = Collections.unmodifiableMap(initializedTopics);
+            deletingTopics = Collections.unmodifiableSet(deletingTopics);
+        }
     }
 
     /**
@@ -97,6 +111,29 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         Set<Integer> partitions,
         long timestamp
     ) {
+        public InitMapValue {
+            partitions = Collections.unmodifiableSet(partitions);
+        }
+
+        /**
+         * @param added The partitions to add.
+         * @return A copy of this value with the partitions added.
+         */
+        public InitMapValue withAddedPartitions(Set<Integer> added) {
+            Set<Integer> newPartitions = new HashSet<>(partitions);
+            newPartitions.addAll(added);
+            return new InitMapValue(name, newPartitions, timestamp);
+        }
+
+        /**
+         * @param removed The partitions to remove.
+         * @return A copy of this value with the partitions removed.
+         */
+        public InitMapValue withRemovedPartitions(Set<Integer> removed) {
+            Set<Integer> newPartitions = new HashSet<>(partitions);
+            newPartitions.removeAll(removed);
+            return new InitMapValue(name, newPartitions, timestamp);
+        }
     }
 
     /**
@@ -139,6 +176,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -158,15 +196,16 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ShareGroup#updateMember(ShareGroupMember)} method.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
      * @return A ShareGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
+    @Override
     public ShareGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
@@ -179,9 +218,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
                 String.format("Member %s is not a member of group %s.", memberId, groupId));
         }
 
-        member = new ShareGroupMember.Builder(memberId).build();
-        updateMember(member);
-        return member;
+        return new ShareGroupMember.Builder(memberId).build();
     }
 
     /**
@@ -206,8 +243,15 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *
      * @param memberId The member id to remove.
      */
+    @Override
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
@@ -32,7 +31,6 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -86,7 +84,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
 
     /**
-     * The metadata hash which is computed based on the all subscribed topics.
+     * The metadata hash which is computed based on all the subscribed topics.
      */
     protected final TimelineLong metadataHash;
 
@@ -105,12 +103,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * The target assignment per member id.
      */
     protected final TimelineHashMap<String, Assignment> targetAssignment;
-
-    /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
-     */
-    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
@@ -138,12 +130,12 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -255,19 +247,13 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * Returns the target assignment of the member.
      *
-     * @return The ConsumerGroupMemberAssignment or an EMPTY one if it does not
+     * @param memberId The member id.
+     *
+     * @return The member's target assignment or an EMPTY one if it does not
      *         exist.
      */
     public Assignment targetAssignment(String memberId) {
         return targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
-    }
-
-    /**
-     * @return An immutable map containing all the topic partitions
-     *         with their current member assignments.
-     */
-    public Map<Uuid, Map<Integer, String>> invertedTargetAssignment() {
-        return Collections.unmodifiableMap(invertedTargetAssignment);
     }
 
     /**
@@ -277,62 +263,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        updateInvertedTargetAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, new Assignment(Map.of())),
-            newTargetAssignment
-        );
         targetAssignment.put(memberId, newTargetAssignment);
-    }
-
-    /**
-     * Updates the reverse lookup map of the target assignment.
-     *
-     * @param memberId              The member Id.
-     * @param oldTargetAssignment   The old target assignment.
-     * @param newTargetAssignment   The new target assignment.
-     */
-    private void updateInvertedTargetAssignment(
-        String memberId,
-        Assignment oldTargetAssignment,
-        Assignment newTargetAssignment
-    ) {
-        // Combine keys from both old and new assignments.
-        Set<Uuid> allTopicIds = new HashSet<>();
-        allTopicIds.addAll(oldTargetAssignment.partitions().keySet());
-        allTopicIds.addAll(newTargetAssignment.partitions().keySet());
-
-        for (Uuid topicId : allTopicIds) {
-            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Set.of());
-            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Set.of());
-
-            TimelineHashMap<Integer, String> topicPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
-                topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
-            );
-
-            // Remove partitions that aren't present in the new assignment only if the partition is currently
-            // still assigned to the member in question.
-            // If p0 was moved from A to B, and the target assignment map was updated for B first, we don't want to
-            // remove the key p0 from the inverted map and undo the action when A eventually tries to update its assignment.
-            for (Integer partition : oldPartitions) {
-                if (!newPartitions.contains(partition) && memberId.equals(topicPartitionAssignment.get(partition))) {
-                    topicPartitionAssignment.remove(partition);
-                }
-            }
-
-            // Add partitions that are in the new assignment but not in the old assignment.
-            for (Integer partition : newPartitions) {
-                if (!oldPartitions.contains(partition)) {
-                    topicPartitionAssignment.put(partition, memberId);
-                }
-            }
-
-            if (topicPartitionAssignment.isEmpty()) {
-                invertedTargetAssignment.remove(topicId);
-            } else {
-                invertedTargetAssignment.put(topicId, topicPartitionAssignment);
-            }
-        }
     }
 
     /**
@@ -341,12 +272,14 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @param memberId The member id.
      */
     public void removeTargetAssignment(String memberId) {
-        updateInvertedTargetAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            Assignment.EMPTY
-        );
         targetAssignment.remove(memberId);
+    }
+
+    /**
+     * Removes the target assignment of every member.
+     */
+    public void clearTargetAssignment() {
+        targetAssignment.clear();
     }
 
     /**
@@ -520,6 +453,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * Compute the subscription type of the group.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
+     * @param numberOfMembers           The number of members in the group.
      *
      * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
@@ -551,10 +485,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * Gets or creates a member.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
-     * @return A ConsumerGroupMember.
+     * @return The member.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public abstract T getOrMaybeCreateMember(String memberId, boolean createIfNotExists) throws UnknownMemberIdException;

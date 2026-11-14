@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestUtils {
 
@@ -81,7 +81,7 @@ public class TestUtils {
                 timeout.toMillis(),
                 wrongStateMap
             );
-            assertThat(reason, wrongStateMap.isEmpty());
+            assertTrue(wrongStateMap.isEmpty(), reason);
         });
     }
 

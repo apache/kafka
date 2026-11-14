@@ -54,7 +54,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -296,7 +295,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // history retention exceeded. we still check the latest value store in case the
             // latest record version satisfies the timestamp bound, in which case it should
             // still be returned (i.e., the latest record version per key never expires).
-            return new LogicalSegmentIterator(Collections.singletonList(latestView).listIterator(), key, fromTimestamp, toTimestamp, order);
+            return new LogicalSegmentIterator(List.of(latestView).listIterator(), key, fromTimestamp, toTimestamp, order);
         } else {
             final List<LogicalKeyValueSegment> segments = new ArrayList<>();
             // add segment stores

@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,10 +62,10 @@ public class AssignmentInfo {
                           final int commonlySupportedVersion) {
         this(version,
              commonlySupportedVersion,
-             Collections.emptyList(),
-             Collections.emptyMap(),
-             Collections.emptyMap(),
-             Collections.emptyMap(),
+             List.of(),
+             Map.of(),
+             Map.of(),
+             Map.of(),
              0);
     }
 
@@ -495,7 +494,12 @@ public class AssignmentInfo {
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
-            partitions.add(new TopicPartition(topicIndexDict.get(in.readInt()), in.readInt()));
+            final int topicIndex = in.readInt();
+            final String topic = topicIndexDict.get(topicIndex);
+            if (topic == null) {
+                throw new TaskAssignmentException("Corrupted user data byte[]. Topic index " + topicIndex + " is not in the topic dictionary.");
+            }
+            partitions.add(new TopicPartition(topic, in.readInt()));
         }
         return partitions;
     }
