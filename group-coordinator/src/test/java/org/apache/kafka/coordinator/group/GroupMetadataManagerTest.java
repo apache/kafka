@@ -29186,6 +29186,7 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
                 Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
+                Map.of(),
                 Map.of()
             )
         );
@@ -29202,7 +29203,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name),
+                Map.of()
             )
         );
 
@@ -29252,7 +29254,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
                 Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
-                Map.of(t3Uuid, t3Name)
+                Map.of(t3Uuid, t3Name),
+                Map.of()
             )
         );
 
@@ -29269,7 +29272,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(t1Uuid, t1Name, t2Uuid, t2Name, t3Uuid, t3Name)  // Existing deleting topics should be included here.
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name, t3Uuid, t3Name),  // Existing deleting topics should be included here.
+                Map.of()
             )
         );
 
@@ -29320,7 +29324,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
                 Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
-                Map.of(t3Uuid, t3Name)
+                Map.of(t3Uuid, t3Name),
+                Map.of()
             )
         );
 
@@ -29336,7 +29341,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)  // Existing deleting topics should be ignored.
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name),  // Existing deleting topics should be ignored.
+                Map.of()
             )
         );
 
@@ -29382,7 +29388,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
                 Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
-                Map.of(t3Uuid, t3Name)
+                Map.of(t3Uuid, t3Name),
+                Map.of()
             )
         );
 
@@ -29398,7 +29405,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)  // Existing deleting topics should be ignored.
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name),  // Existing deleting topics should be ignored.
+                Map.of()
             )
         );
 
@@ -29444,6 +29452,7 @@ public class GroupMetadataManagerTest {
                     topicId1, new InitMapValue(topicName1, Set.of(0, 1, 2), 1),
                     topicId2, new InitMapValue(topicName2, Set.of(0, 1), 1)
                 ),
+                Map.of(),
                 Map.of()
             )
         );
@@ -29476,7 +29485,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(topicId1, topicName1, topicId2, topicName2)
+                Map.of(topicId1, topicName1, topicId2, topicName2),
+                Map.of()
             )
         );
 
@@ -29540,7 +29550,8 @@ public class GroupMetadataManagerTest {
                 Map.of(
                     topicId3, topicName3,
                     topicId4, topicName4
-                )
+                ),
+                Map.of()
             )
         );
 
@@ -29589,7 +29600,8 @@ public class GroupMetadataManagerTest {
                     topicId2, topicName2,
                     topicId3, topicName3,
                     topicId4, topicName4
-                )
+                ),
+                Map.of()
             )
         );
 
@@ -29641,6 +29653,7 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(topicId1, new InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
+                Map.of(),
                 Map.of()
             )
         );
@@ -29665,7 +29678,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(),
                 Map.of(),
-                Map.of(topicId1, topicName1)
+                Map.of(topicId1, topicName1),
+                Map.of()
             )
         );
 
@@ -29725,6 +29739,7 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(topicId2, new InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(topicId1, new InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
+                Map.of(),
                 Map.of()
             )
         );
@@ -29749,7 +29764,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(topicId2, new InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(),
-                Map.of(topicId1, topicName1)
+                Map.of(topicId1, topicName1),
+                Map.of()
             )
         );
 
@@ -29810,6 +29826,7 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(topicId2, new InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(topicId1, new InitMapValue(topicName1, Set.of(0, 1, 2), 1)),
+                Map.of(),
                 Map.of()
             )
         );
@@ -29834,7 +29851,8 @@ public class GroupMetadataManagerTest {
                 groupId,
                 Map.of(topicId2, new InitMapValue(topicName2, Set.of(0, 1), 1)),
                 Map.of(),
-                Map.of(topicId1, topicName1)
+                Map.of(topicId1, topicName1),
+                Map.of()
             )
         );
 
@@ -29903,7 +29921,8 @@ public class GroupMetadataManagerTest {
                 Map.of(
                     topicId1, topicName1,
                     topicId2, topicName2
-                )
+                ),
+                Map.of()
             )
         );
 
@@ -29925,6 +29944,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
+                Map.of(),
                 Map.of(),
                 Map.of(),
                 Map.of()
@@ -30471,6 +30491,7 @@ public class GroupMetadataManagerTest {
                     mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1))
                 )),
                 Map.of(),
+                Map.of(),
                 Map.of()
             ))
         );
@@ -30908,7 +30929,7 @@ public class GroupMetadataManagerTest {
 
         CoordinatorResult<Void, CoordinatorRecord> result = context.groupMetadataManager.initializeShareGroupState(groupId, snapshotMetadataInitializeMap);
 
-        CoordinatorRecord record = newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), snapshotMetadataInitializeRecordMap, Map.of());
+        CoordinatorRecord record = newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), snapshotMetadataInitializeRecordMap, Map.of(), Map.of());
 
         assertNull(result.response());
         assertEquals(1, result.records().size());
@@ -31120,7 +31141,7 @@ public class GroupMetadataManagerTest {
         result = context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Id, Set.of(0, 1)));
         Set<Integer> partitions = new LinkedHashSet<>(List.of(0, 1, 2));
         assertEquals(
-            List.of(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), Map.of(t2Id, new InitMapValue(t2Name, partitions, 1)), Map.of())),
+            List.of(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), Map.of(t2Id, new InitMapValue(t2Name, partitions, 1)), Map.of(), Map.of())),
             result.records()
         );
     }

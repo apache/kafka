@@ -2487,7 +2487,8 @@ public class GroupCoordinatorShardTest {
                 Map.of(
                     topicId1, topicName1,
                     topicId2, topicName2
-                )
+                ),
+                Map.of()
             )
         );
 
@@ -2580,7 +2581,8 @@ public class GroupCoordinatorShardTest {
                 Map.of(),
                 Map.of(
                     topicId1, topicName1
-                )
+                ),
+                Map.of()
             )
         );
 
@@ -2665,6 +2667,7 @@ public class GroupCoordinatorShardTest {
                 groupId,
                 Map.of(),
                 Map.of(),
+                Map.of(),
                 Map.of()
             )
         );
@@ -2738,6 +2741,7 @@ public class GroupCoordinatorShardTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
                 groupId,
+                Map.of(),
                 Map.of(),
                 Map.of(),
                 Map.of()
