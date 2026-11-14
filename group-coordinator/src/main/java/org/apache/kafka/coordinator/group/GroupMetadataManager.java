@@ -3421,14 +3421,14 @@ public class GroupMetadataManager {
     /**
      * Adds the partitions to the initializing topics for alterShareGroupOffsets, whose request gives the start
      * offsets. If that request fails, the partitions stay initializing, and a later heartbeat retries their
-     * initialization. The retry uses -1, as if the offsets had not been altered, so -1 is stored for the
-     * partitions which do not have a stored start offset yet. Visibility for tests.
+     * initialization from offset 0, so 0 is stored for the partitions which do not have a stored start offset yet.
+     * The topic is then known to the group, so its other partitions start at 0 as well. Visibility for tests.
      */
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
         topicPartitionMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
-            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, (long) PartitionFactory.UNINITIALIZED_START_OFFSET)));
+            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, 0L)));
         addInitializingTopicsRecords(groupId, records, topicPartitionMap, startOffsets,
             info == null ? Map.of() : info.initializingStartOffsets());
     }

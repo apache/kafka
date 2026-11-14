@@ -31612,10 +31612,9 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupHeartbeatRetriesFailedAlterOffsetsWithUninitializedStartOffset() {
+    public void testShareGroupHeartbeatRetriesFailedAlterOffsetsFromZero() {
         // alterShareGroupOffsets adds partition 0 of a brand-new topic to the initializing topics, and its request
-        // fails. The topic gains a partition, and a member subscribes. Both partitions use -1, as if the offsets
-        // had not been altered.
+        // fails. The topic gains a partition, and a member subscribes. Both partitions start at 0.
         int initRetryTimeoutMs = 10;
         MockTime time = new MockTime();
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -31642,9 +31641,56 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
             .addTopic(t1Uuid, t1Name, 2)
             .buildCoordinatorMetadataImage());
-        assertEquals(Map.of(1, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+        assertEquals(Map.of(1, 0L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
         time.setCurrentTimeMs(time.milliseconds() + initRetryTimeoutMs + 1);
+        assertEquals(Map.of(0, 0L, 1, 0L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+    }
+
+    @Test
+    public void testShareGroupHeartbeatTreatsTopicAsNewAfterOffsetsDeletedWhileInitializing() {
+        // A topic is initialized, and a partition added to it is still initializing when the offsets of the topic
+        // are deleted. The group no longer knows the topic, so all its partitions use -1 when they are initialized
+        // again, as for a topic seen for the first time.
+        int initRetryTimeoutMs = 10;
+        MockTime time = new MockTime();
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withTime(time)
+            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String groupId = "share-group";
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage());
         assertEquals(Map.of(0, -1L, 1, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(t1Uuid, Set.of(0, 1))).records().forEach(context::replay);
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 3)
+            .buildCoordinatorMetadataImage());
+        assertEquals(Map.of(2, 0L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+
+        // The offsets of the topic are deleted while partition 2 is still initializing.
+        List<CoordinatorRecord> records = new ArrayList<>();
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errors = new ArrayList<>();
+        context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, new DeleteShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic().setTopicName(t1Name))),
+            errors, records);
+        assertTrue(errors.isEmpty());
+        records.forEach(context::replay);
+        records.clear();
+        context.groupMetadataManager.completeDeleteShareGroupOffsets(groupId, Map.of(t1Uuid, t1Name), records);
+        records.forEach(context::replay);
+
+        time.setCurrentTimeMs(time.milliseconds() + initRetryTimeoutMs + 1);
+        assertEquals(Map.of(0, -1L, 1, -1L, 2, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
     }
 
     @Test
@@ -31808,6 +31854,16 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(List.of(topicName)));
     }
 
+    private static ShareGroupStatePartitionMetadataValue.TopicStartOffsets mkTopicStartOffsets(Uuid topicId, long startOffset, Integer... partitions) {
+        return new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
+            .setTopicId(topicId)
+            .setPartitions(Arrays.stream(partitions)
+                .map(partition -> new ShareGroupStatePartitionMetadataValue.PartitionStartOffset()
+                    .setPartition(partition)
+                    .setStartOffset(startOffset))
+                .toList());
+    }
+
     private static Map<Integer, Long> mkStartOffsets(long startOffset, Integer... partitions) {
         Map<Integer, Long> startOffsets = new HashMap<>();
         for (int partition : partitions) {
@@ -31897,7 +31953,8 @@ public class GroupMetadataManagerTest {
                                 .setPartitions(List.of(0, 1))
                         ))
                         .setInitializedTopics(List.of())
-                        .setDeletingTopics(List.of()),
+                        .setDeletingTopics(List.of())
+                        .setInitializingStartOffsets(List.of(mkTopicStartOffsets(t1Uuid, 0L, 0, 1))),
                     (short) 0
                 )
             )
@@ -32290,7 +32347,9 @@ public class GroupMetadataManagerTest {
                             new ShareGroupStatePartitionMetadataValue.TopicInfo()
                                 .setTopicId(t5Id)
                                 .setTopicName(t5Name)
-                        )),
+                        ))
+                        // The replayed record does not have the start offsets, so they are derived for t3.
+                        .setInitializingStartOffsets(List.of(mkTopicStartOffsets(t3Id, -1L, 0, 1, 2))),
                     (short) 0
                 )
             )
