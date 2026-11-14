@@ -235,6 +235,8 @@ public class ConfigCommand {
         List<String> entityTypes = opts.entityTypes();
         List<String> entityNames = opts.entityNames();
         String entityType = entityTypes.get(0);
+        // only brokers may alter a specific entity and the default entity together
+        List<String> resourceNames = BROKER_TYPE.equals(entityType) ? entityNames : List.of(entityNames.get(0));
         Properties configsToBeAddedProps = parseConfigsToBeAdded(opts);
         Map<String, String> configsToBeAddedMap = configsToBeAddedProps.entrySet().stream()
                 .collect(Collectors.toMap(
@@ -256,42 +258,39 @@ public class ConfigCommand {
             } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.CLIENT_METRICS;
             } else if (BROKER_TYPE.equals(entityType)) {
+                resourceNames.stream()
+                        .filter(name -> !BROKER_DEFAULT_ENTITY_NAME.equals(name))
+                        .forEach(name -> validateBrokerId(name, entityType));
                 configResourceType = ConfigResource.Type.BROKER;
             } else {
                 configResourceType = ConfigResource.Type.GROUP;
             }
-            for (String entityName : entityNames) {
-                if (BROKER_TYPE.equals(entityType) && !BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
-                    validateBrokerId(entityName, entityType);
+            try {
+                alterResourceConfig(adminClient, resourceNames, configsToBeDeleted, configsToBeAdded, configResourceType);
+            } catch (ExecutionException ee) {
+                if (ee.getCause() instanceof UnsupportedVersionException) {
+                    throw new UnsupportedVersionException("The " + ApiKeys.INCREMENTAL_ALTER_CONFIGS + " API is not supported by the cluster. The API is supported starting from version 2.3.0."
+                            + " You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.");
                 }
-                try {
-                    alterResourceConfig(adminClient, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);
-                } catch (ExecutionException ee) {
-                    if (ee.getCause() instanceof UnsupportedVersionException) {
-                        throw new UnsupportedVersionException("The " + ApiKeys.INCREMENTAL_ALTER_CONFIGS + " API is not supported by the cluster. The API is supported starting from version 2.3.0."
-                                + " You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.");
-                    }
-                    throw ee;
-                }
+                throw ee;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
-            for (String entityName : entityNames) {
-                List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false, false).stream().map(ConfigEntry::name).toList();
-                // fail the command if any of the configured broker loggers do not exist
-                List<String> invalidBrokerLoggers = Stream.concat(
-                        configsToBeDeleted.stream().filter(c -> !validLoggers.contains(c)),
-                        configsToBeAdded.keySet().stream().filter(c -> !validLoggers.contains(c))
-                ).toList();
-                if (!invalidBrokerLoggers.isEmpty())
-                    throw new InvalidConfigurationException("Invalid broker logger(s): " + String.join(",", invalidBrokerLoggers));
+            String entityName = entityNames.get(0);
+            List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false, false).stream().map(ConfigEntry::name).toList();
+            // fail the command if any of the configured broker loggers do not exist
+            List<String> invalidBrokerLoggers = Stream.concat(
+                    configsToBeDeleted.stream().filter(c -> !validLoggers.contains(c)),
+                    configsToBeAdded.keySet().stream().filter(c -> !validLoggers.contains(c))
+            ).toList();
+            if (!invalidBrokerLoggers.isEmpty())
+                throw new InvalidConfigurationException("Invalid broker logger(s): " + String.join(",", invalidBrokerLoggers));
 
-                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName);
-                AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
-                List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
-                List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
-                Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
-                adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all().get(60, TimeUnit.SECONDS);
-            }
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName);
+            AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
+            List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
+            List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
+            Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
+            adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all().get(60, TimeUnit.SECONDS);
         } else if (USER_TYPE.equals(entityType) || CLIENT_TYPE.equals(entityType)) {
             boolean hasQuotaConfigsToAdd = configsToBeAdded.keySet().stream()
                     .anyMatch(QuotaConfig::isClientOrUserQuotaConfig);
@@ -359,12 +358,13 @@ public class ConfigCommand {
             throw new IllegalArgumentException("Unsupported entity type: " + entityType);
         }
 
-        String entityName = entityNames.get(0);
-        if (!entityName.isEmpty()) {
-            String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
-            System.out.println("Completed updating config for " + entityTypeSingular + " " + entityName + ".");
-        } else {
-            System.out.println("Completed updating default config for " + entityType + " in the cluster.");
+        for (String entityName : resourceNames) {
+            if (!entityName.isEmpty()) {
+                String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
+                System.out.println("Completed updating config for " + entityTypeSingular + " " + entityName + ".");
+            } else {
+                System.out.println("Completed updating default config for " + entityType + " in the cluster.");
+            }
         }
     }
 
@@ -615,13 +615,14 @@ public class ConfigCommand {
         }
     }
 
-    private static void alterResourceConfig(Admin adminClient, String entityNameHead, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
-        ConfigResource configResource = new ConfigResource(resourceType, entityNameHead);
+    private static void alterResourceConfig(Admin adminClient, List<String> entityNames, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
         AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
         List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
         List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
         Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
-        adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all().get(60, TimeUnit.SECONDS);
+        Map<ConfigResource, Collection<AlterConfigOp>> configs = entityNames.stream()
+                .collect(Collectors.toMap(name -> new ConfigResource(resourceType, name), name -> alterEntries));
+        adminClient.incrementalAlterConfigs(configs, alterOptions).all().get(60, TimeUnit.SECONDS);
     }
 
     static void validateBrokerId(String entityName, String entityType) {

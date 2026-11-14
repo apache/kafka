@@ -829,7 +829,8 @@ public class ConfigCommandIntegrationTest {
 
     private void alterAndVerifyBothLevelConfig(Admin client, Map<String, String> config) throws Exception {
         String message = captureStandardOut(run(bothLevelAlterArgs(config)));
-        assertTrue(message.contains("Completed updating config for broker " + defaultBrokerId), message);
+        assertTrue(message.contains("Completed updating config for broker " + defaultBrokerId + "."), message);
+        assertTrue(message.contains("Completed updating default config for brokers in the cluster."), message);
         verifyBrokerConfig(client, Optional.of(defaultBrokerId), config);
         verifyBrokerConfig(client, Optional.empty(), config);
     }
