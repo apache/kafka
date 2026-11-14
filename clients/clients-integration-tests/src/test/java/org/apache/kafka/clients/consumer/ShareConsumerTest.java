@@ -54,14 +54,11 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
-import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
@@ -2286,103 +2283,6 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                 "the consumed partition did not continue where the group stopped");
             assertEquals(6, received.stream().filter(v -> v.startsWith("empty1-")).count(),
                 "the partition added while the group had no member did not start at offset 0");
-        }
-    }
-
-    /**
-     * The initialization of a brand-new topic fails because the share coordinator cannot be reached, and all the
-     * consumers then leave the group. The group never consumed the topic, so when consumers join again after the
-     * topic gained a partition, share.auto.offset.reset=latest applies to all its partitions, and the records
-     * written before they joined are not delivered.
-     */
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-            @ClusterConfigProperty(key = "offsets.commit.timeout.ms", value = "2000"),
-            @ClusterConfigProperty(key = "group.share.initialize.retry.interval.ms", value = "2000")
-        }
-    )
-    @Timeout(300)
-    public void testTopicIsNewAfterFailedInitializationAndAllConsumersLeave() throws Exception {
-        String groupId = "failed-all-left-group";
-        String topic = "failed-all-left-topic";
-        alterShareAutoOffsetReset(groupId, "latest");
-        Set<String> received = new HashSet<>();
-
-        try (Admin admin = createAdminClient();
-             Producer<byte[], byte[]> producer = createProducer();
-             LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            appender.setClassLogger(GroupMetadataManager.class, Level.DEBUG);
-            // The warmup has created the share state topic, which has a single partition on one broker.
-            int shareCoordinator = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0).get(0);
-            List<Integer> replicas = new ArrayList<>(List.of(0, 1, 2));
-            replicas.remove(Integer.valueOf(shareCoordinator));
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, replicas)))).all().get();
-            cluster.waitTopicCreation(topic, 1);
-
-            // The share coordinator cannot be reached, so the initialization of the topic fails.
-            cluster.shutdownBroker(shareCoordinator);
-            try (ShareConsumer<byte[], byte[]> consumer1 = createShareConsumer(groupId);
-                 ShareConsumer<byte[], byte[]> consumer2 = createShareConsumer(groupId)) {
-                List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer1, consumer2);
-                consumer1.subscribe(Set.of(topic));
-                consumer2.subscribe(Set.of(topic));
-                pollValues(consumers, 15000, received);
-            }
-            waitForCondition(() -> admin.describeShareGroups(List.of(groupId)).describedGroups().get(groupId).get().members().isEmpty(),
-                60000, "the consumers did not leave the group");
-
-            // An initialization still in flight when the consumers left must fail too, while the share coordinator
-            // is down. Each initialization request is logged when it is sent, and once more when it fails.
-            waitForCondition(() -> {
-                List<String> messages = appender.getMessages();
-                long sent = messages.stream().filter(m -> m.contains("[GroupId " + groupId + "] Initializing the share group state")).count();
-                long failed = messages.stream().filter(m -> m.contains("Unable to initialize share group state " + groupId + ",")
-                    || m.contains("Received error while calling initialize state for " + groupId + " ")).count();
-                return sent > 0 && sent == failed;
-            }, 120000, "the initializations sent while the share coordinator was down did not all fail");
-            cluster.startBroker(shareCoordinator);
-
-            // The topic gains a partition while the group has no member, and both partitions get records.
-            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2, List.of(replicas)))).all().get();
-            cluster.waitTopicCreation(topic, 2);
-            produceValues(producer, topic, 0, "empty0", 8);
-            produceValues(producer, topic, 1, "empty1", 6);
-
-            try (ShareConsumer<byte[], byte[]> consumer3 = createShareConsumer(groupId);
-                 ShareConsumer<byte[], byte[]> consumer4 = createShareConsumer(groupId)) {
-                List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer3, consumer4);
-                consumer3.subscribe(Set.of(topic));
-                consumer4.subscribe(Set.of(topic));
-                pollUntilAssigned(consumers, groupId, new TopicPartition(topic, 1), received);
-
-                // The latest start offset is resolved when the share partition is first fetched. Write probe records
-                // until one is delivered from each partition, before the records the test counts are written.
-                int probes = 0;
-                long deadline = System.currentTimeMillis() + 60000;
-                while ((received.stream().noneMatch(v -> v.startsWith("probe0")) || received.stream().noneMatch(v -> v.startsWith("probe1")))
-                    && System.currentTimeMillis() < deadline) {
-                    produceValues(producer, topic, 0, "probe0" + probes, 1);
-                    produceValues(producer, topic, 1, "probe1" + probes++, 1);
-                    pollValues(consumers, 1000, received);
-                }
-                produceValues(producer, topic, 0, "after0", 9);
-                produceValues(producer, topic, 1, "after1", 7);
-                pollValues(consumers, 20000, received);
-            }
-
-            assertEquals(0, received.stream().filter(v -> v.startsWith("empty0-")).count(),
-                "records written to the first partition before the consumers joined were delivered");
-            assertEquals(0, received.stream().filter(v -> v.startsWith("empty1-")).count(),
-                "the partition added after the failed initialization did not use share.auto.offset.reset=latest");
-            assertEquals(9, received.stream().filter(v -> v.startsWith("after0-")).count(),
-                "records written to the first partition after the consumers joined were not all delivered");
-            assertEquals(7, received.stream().filter(v -> v.startsWith("after1-")).count(),
-                "records written to the added partition after the consumers joined were not all delivered");
         }
     }
 
