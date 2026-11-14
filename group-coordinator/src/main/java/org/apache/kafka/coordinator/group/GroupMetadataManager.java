@@ -4736,6 +4736,9 @@ public class GroupMetadataManager {
 
     /**
      * Whether the intermediate assignment differs from the assigned tasks of any member of the group.
+     * Only valid on a {@code STABLE} group: it reads the replayed members, which miss a static member replacement
+     * whose records are not replayed yet, and a static member is only replaced after it left the group with epoch
+     * {@code -2}, which keeps the group out of {@code STABLE}.
      *
      * @param refinedAssignment The intermediate assignment keyed by member ID.
      * @param group             The streams group.

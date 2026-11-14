@@ -2521,6 +2521,34 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
+    public void testRefinementOnUninvolvedMemberHeartbeatBumpsEpochAndMovesTask() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        String memberS = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context =
+            contextAfterRefinementOnUninvolvedMemberHeartbeat(groupId, memberA, memberB, memberS);
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // memberB must be told to release 0_2.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> resultB = context.streamsGroupHeartbeat(
+            refinementHeartbeat(groupId, memberB, INSTANCE_B, 11, "process-b", List.of(0, 1, 2), List.of()));
+        assertEquals(mkResponseTasks(SUBTOPOLOGY_1, 0, 1), resultB.response().data().activeTasks());
+        context.streamsGroupHeartbeat(refinementHeartbeat(
+            groupId, memberB, INSTANCE_B, resultB.response().data().memberEpoch(), "process-b", List.of(0, 1), List.of()));
+
+        // Once memberB released 0_2, memberS must be told to take it over.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> resultS = context.streamsGroupHeartbeat(
+            refinementHeartbeat(groupId, memberS, INSTANCE_S, 11, "process-s", List.of(), List.of(2)));
+        assertEquals(mkResponseTasks(SUBTOPOLOGY_1, 2), resultS.response().data().activeTasks());
+
+        assertEquals(12, group.groupEpoch());
+        assertEquals(StreamsGroup.StreamsGroupState.STABLE, group.state());
+        assertTrue(mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(SUBTOPOLOGY_1, 2))
+            .sameTasks(group.getMemberOrThrow(memberS).assignedTasks()));
+    }
+
+    @Test
     public void testStaticMemberBounceAfterRefinementOnUninvolvedMemberHeartbeat() {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();
@@ -2675,7 +2703,10 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, group.state());
         context.streamsGroupHeartbeat(
             refinementHeartbeat(groupId, memberA, null, 11, "process-a", List.of(3), List.of()));
-        assertEquals(12, group.groupEpoch());
+        // Guards the setup: every test using this context relies on the grant of 0_2 having bumped the group epoch, so
+        // a failure here means the epoch bump on refinement is broken, not what the calling test exercises.
+        assertEquals(12, group.groupEpoch(),
+            "The refinement derived on the heartbeat of memberA, which is not involved with 0_2, did not bump the group epoch");
 
         return context;
     }
