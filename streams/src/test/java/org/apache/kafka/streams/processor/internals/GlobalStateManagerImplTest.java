@@ -382,6 +382,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRestoreFromBeginningWhenStoreReportsUnknownCommittedOffset() {
         final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<>(storeName1, true, stateRestoreCallback) {
+            // otherwise the store is wrapped and its offset is read from the legacy checkpoint file
             @Deprecated
             @Override
             public boolean managesOffsets() {
@@ -404,12 +405,12 @@ public class GlobalStateManagerImplTest {
         );
         stateManager.setGlobalProcessorContext(processorContext);
         processorContext.setStateManger(stateManager);
-        initializeConsumer(2, 0, t1);
+        initializeConsumer(2, 5, t1);
 
         stateManager.initialize();
 
         // a real consumer refuses to seek to the negative sentinel
-        assertEquals(0L, stateRestoreListener.restoreStartOffset);
+        assertEquals(5L, stateRestoreListener.restoreStartOffset);
         assertEquals(2, stateRestoreCallback.restored.size());
     }
 
