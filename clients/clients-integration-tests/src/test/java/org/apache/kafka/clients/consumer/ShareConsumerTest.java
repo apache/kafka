@@ -2221,6 +2221,71 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         }
     }
 
+    /**
+     * All the consumers leave the group after it consumed a topic, and the topic gains a partition while the
+     * group has no member. When consumers join again, the topic is still known to the group: the consumed
+     * partition continues where the group stopped, and the added partition starts at offset 0, even though
+     * share.auto.offset.reset is latest.
+     */
+    @ClusterTest
+    @Timeout(240)
+    public void testPartitionAddedWhileAllConsumersLeftStartsAtZero() throws Exception {
+        String groupId = "all-left-group";
+        String topic = "all-left-topic";
+        alterShareAutoOffsetReset(groupId, "latest");
+        createTopic(topic);
+        Set<String> received = new HashSet<>();
+
+        try (Admin admin = createAdminClient();
+             Producer<byte[], byte[]> producer = createProducer()) {
+            try (ShareConsumer<byte[], byte[]> consumer1 = createShareConsumer(groupId);
+                 ShareConsumer<byte[], byte[]> consumer2 = createShareConsumer(groupId)) {
+                List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer1, consumer2);
+                consumer1.subscribe(Set.of(topic));
+                consumer2.subscribe(Set.of(topic));
+                pollUntilAssigned(consumers, groupId, new TopicPartition(topic, 0), received);
+
+                // The latest start offset is resolved when the share partition is first fetched. Write probe records
+                // until one is delivered, so that it is resolved before the records the test counts are written.
+                int probes = 0;
+                long deadline = System.currentTimeMillis() + 60000;
+                while (received.stream().noneMatch(v -> v.startsWith("probe")) && System.currentTimeMillis() < deadline) {
+                    produceValues(producer, topic, "probe" + probes++, 1);
+                    pollValues(consumers, 1000, received);
+                }
+                produceValues(producer, topic, "before", 10);
+                pollValues(consumers, 10000, received);
+                assertEquals(10, received.stream().filter(v -> v.startsWith("before-")).count(),
+                    "records written while the group consumed the topic were not all delivered");
+            }
+
+            // All the consumers have left. The topic gains a partition, and both partitions get records.
+            waitForCondition(() -> admin.describeShareGroups(List.of(groupId)).describedGroups().get(groupId).get().members().isEmpty(),
+                60000, "the consumers did not leave the group");
+            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2))).all().get();
+            cluster.waitTopicCreation(topic, 2);
+            produceValues(producer, topic, 0, "empty0", 10);
+            produceValues(producer, topic, 1, "empty1", 10);
+
+            received.clear();
+            try (ShareConsumer<byte[], byte[]> consumer3 = createShareConsumer(groupId);
+                 ShareConsumer<byte[], byte[]> consumer4 = createShareConsumer(groupId)) {
+                List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer3, consumer4);
+                consumer3.subscribe(Set.of(topic));
+                consumer4.subscribe(Set.of(topic));
+                pollUntilAssigned(consumers, groupId, new TopicPartition(topic, 1), received);
+                pollValues(consumers, 20000, received);
+            }
+
+            assertEquals(0, received.stream().filter(v -> v.startsWith("before-")).count(),
+                "records acknowledged before the consumers left were delivered again");
+            assertEquals(10, received.stream().filter(v -> v.startsWith("empty0-")).count(),
+                "the consumed partition did not continue where the group stopped");
+            assertEquals(10, received.stream().filter(v -> v.startsWith("empty1-")).count(),
+                "the partition added while the group had no member did not start at offset 0");
+        }
+    }
+
     private void produceValues(Producer<byte[], byte[]> producer, String topic, String prefix, int count) {
         produceValues(producer, topic, 0, prefix, count);
     }
