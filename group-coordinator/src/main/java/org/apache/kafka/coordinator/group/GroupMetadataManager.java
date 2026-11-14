@@ -3422,13 +3422,19 @@ public class GroupMetadataManager {
      * Adds the partitions to the initializing topics for alterShareGroupOffsets, whose request gives the start
      * offsets. If that request fails, the partitions stay initializing, and a later heartbeat retries their
      * initialization from offset 0, so 0 is stored for the partitions which do not have a stored start offset yet.
-     * The topic is then known to the group, so its other partitions start at 0 as well. Visibility for tests.
+     * The topic is then known to the group, so its other partitions start at 0 as well. Nothing is stored for a
+     * partition which is already initialized, as the heartbeat does not initialize it again. This also applies to
+     * the partitions whose offsets were altered successfully when others failed. Visibility for tests.
      */
     void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, InitMapValue> topicPartitionMap) {
         ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, Map<Integer, Long>> startOffsets = new HashMap<>();
-        topicPartitionMap.forEach((topicId, value) -> value.partitions().forEach(partitionId ->
-            startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, 0L)));
+        topicPartitionMap.forEach((topicId, value) -> value.partitions().forEach(partitionId -> {
+            InitMapValue initialized = info == null ? null : info.initializedTopics().get(topicId);
+            if (initialized == null || !initialized.partitions().contains(partitionId)) {
+                startOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId, 0L);
+            }
+        }));
         addInitializingTopicsRecords(groupId, records, topicPartitionMap, startOffsets,
             info == null ? Map.of() : info.initializingStartOffsets());
     }
@@ -7017,8 +7023,9 @@ public class GroupMetadataManager {
             Map<Uuid, Map<Integer, Long>> initializingStartOffsets = new HashMap<>();
             if (value.initializingStartOffsets() == null) {
                 // A record written by a version which does not store the start offsets. The start offsets of the
-                // initializing partitions are derived as that version did: 0 for a topic which is initialized, and
-                // -1 for a topic seen for the first time.
+                // initializing partitions are approximated from the record: 0 for a topic which is initialized, and
+                // -1 otherwise. That version also used 0 for a partition added while its topic was initializing,
+                // which the record cannot tell apart.
                 initializingTopics.forEach((topicId, initializing) -> initializing.partitions().forEach(partitionId ->
                     initializingStartOffsets.computeIfAbsent(topicId, k -> new HashMap<>()).put(partitionId,
                         initializedTopics.containsKey(topicId) ? 0L : PartitionFactory.UNINITIALIZED_START_OFFSET)));
@@ -9786,7 +9793,13 @@ public class GroupMetadataManager {
             }
         });
 
+        // The group forgets the deleting topics: their partitions still initializing are removed with their start
+        // offsets, so that all the partitions of such a topic are initialized again as for a topic seen for the
+        // first time.
+        Map<Uuid, InitMapValue> initializingTopics = new HashMap<>(currentMap.initializingTopics());
+        initializingTopics.keySet().removeAll(deletingTopics);
         records.add(shareGroupStatePartitionMetadataRecord(groupId, currentMap
+            .withInitializingTopics(initializingTopics)
             .withInitializedTopics(initializedTopics)
             .withDeletingTopics(deletingTopics)
             .withInitializingStartOffsets(removeStartOffsetsOfTopics(currentMap.initializingStartOffsets(), deletingTopics))));

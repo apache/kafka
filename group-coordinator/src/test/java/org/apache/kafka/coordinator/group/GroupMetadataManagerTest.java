@@ -31649,8 +31649,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testShareGroupHeartbeatTreatsTopicAsNewAfterOffsetsDeletedWhileInitializing() {
         // A topic is initialized, and a partition added to it is still initializing when the offsets of the topic
-        // are deleted. The group no longer knows the topic, so all its partitions use -1 when they are initialized
-        // again, as for a topic seen for the first time.
+        // are deleted. The group forgets the topic, so when a member subscribes again, even before the retry
+        // interval, all its partitions use -1, as for a topic seen for the first time.
         int initRetryTimeoutMs = 10;
         MockTime time = new MockTime();
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -31689,8 +31689,33 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.completeDeleteShareGroupOffsets(groupId, Map.of(t1Uuid, t1Name), records);
         records.forEach(context::replay);
 
-        time.setCurrentTimeMs(time.milliseconds() + initRetryTimeoutMs + 1);
         assertEquals(Map.of(0, -1L, 1, -1L, 2, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsDoesNotStoreStartOffsetsOfInitializedPartitions() {
+        // The heartbeat never initializes an initialized partition again, so a start offset stored for it would stay.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String groupId = "share-group";
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage());
+        assertEquals(Map.of(0, -1L, 1, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(t1Uuid, Set.of(0))).records().forEach(context::replay);
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.addInitializingTopicsRecords(groupId, records,
+            Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)));
+        records.forEach(context::replay);
+        assertEquals(Map.of(t1Uuid, Map.of(1, -1L)),
+            context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingStartOffsets());
     }
 
     @Test
