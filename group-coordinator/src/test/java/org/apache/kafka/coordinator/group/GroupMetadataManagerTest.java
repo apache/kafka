@@ -30654,6 +30654,38 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupHeartbeatKeepsStartOffsetsWhileMetadataImageIsEmpty() {
+        // The first initialization of a brand-new topic fails with an error, and a member joins while the metadata
+        // image is empty. The subscribed topic cannot be resolved, so its start offsets must not be removed: once
+        // the image is back, the retry keeps -1 for the first partitions, and the partition added since starts at 0.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String groupId = "share-group";
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .buildCoordinatorMetadataImage());
+
+        assertEquals(Map.of(0, -1L, 1, -1L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+        context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Uuid, Set.of(0, 1))).records().forEach(context::replay);
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), CoordinatorMetadataImage.EMPTY);
+        assertTrue(shareGroupHeartbeatOfNewMember(context, groupId, t1Name).response().getValue().isEmpty());
+        assertEquals(Map.of(t1Uuid, Map.of(0, -1L, 1, -1L)),
+            context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId).initializingStartOffsets());
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 3)
+            .buildCoordinatorMetadataImage());
+        assertEquals(Map.of(0, -1L, 1, -1L, 2, 0L), initializeStartOffsets(shareGroupHeartbeatOfNewMember(context, groupId, t1Name), t1Uuid));
+    }
+
+    @Test
     public void testShareGroupHeartbeatTreatsTopicAsNewAfterFailedInitializationAndUnsubscription() {
         // The first initialization of a brand-new topic fails with an error, and the group then unsubscribes from
         // the topic. The topic gains partitions while the group is not subscribed. The group never consumed the

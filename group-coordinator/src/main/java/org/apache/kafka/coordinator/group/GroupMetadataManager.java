@@ -3284,6 +3284,10 @@ public class GroupMetadataManager {
         if (info == null) {
             return Map.of();
         }
+        // The topics cannot be resolved without a metadata image, so nothing is removed.
+        if (info.initializingStartOffsets().isEmpty() || metadataImage.isEmpty()) {
+            return info.initializingStartOffsets();
+        }
         Set<Uuid> subscribedTopicIds = new HashSet<>();
         if (subscriptionTopicNames != null) {
             subscriptionTopicNames.forEach(topicName -> metadataImage.topicMetadata(topicName)
