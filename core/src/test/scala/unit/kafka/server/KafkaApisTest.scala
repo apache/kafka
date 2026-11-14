@@ -10502,7 +10502,7 @@ class KafkaApisTest extends Logging {
     val context = new RequestContext(header, "1", clientAddress, Optional.empty(),
       principal, listenerName, SecurityProtocol.SSL,
       ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
-    new Request(1, context, 0, MemoryPool.NONE, buffer, requestMetrics)
+    new Request(1, context, time, 0, MemoryPool.NONE, buffer, requestMetrics)
   }
 
   private def verifyNoThrottling[T <: AbstractResponse](

@@ -279,7 +279,7 @@ public class ForwardingManagerTest {
                 Optional.of(principalBuilder)
         );
 
-        return new Request(1, requestContext, time.nanoseconds(), MemoryPool.NONE, requestBuffer, new RequestChannelMetrics(ApiMessageType.ListenerType.CONTROLLER));
+        return new Request(1, requestContext, time, time.nanoseconds(), MemoryPool.NONE, requestBuffer, new RequestChannelMetrics(ApiMessageType.ListenerType.CONTROLLER));
     }
 
     private AlterConfigsRequest testAlterConfigRequest() {

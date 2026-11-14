@@ -94,6 +94,7 @@ public final class EnvelopeUtils {
             Request forwardedRequest = new Request(
                 envelope.processor(),
                 forwardedContext,
+                envelope.time(),
                 envelope.startTimeNanos(),
                 envelope.memoryPool(),
                 buffer,
