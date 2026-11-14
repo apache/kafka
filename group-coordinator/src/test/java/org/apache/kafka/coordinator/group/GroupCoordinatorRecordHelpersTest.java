@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -57,6 +59,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -88,6 +91,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GroupCoordinatorRecordHelpersTest {
@@ -238,7 +242,8 @@ public class GroupCoordinatorRecordHelpersTest {
                                 .setTopicId(topicId2)
                                 .setTopicName(topicName2)
                         )
-                    ),
+                    )
+                    .setInitializingStartOffsets(List.of()),
                 (short) 0
             )
         );
@@ -257,6 +262,24 @@ public class GroupCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testShareGroupStatePartitionMetadataStartOffsetsAreNullOnlyWhenAbsent() {
+        // An empty list of start offsets is written, so that it can be told apart from a record written by a
+        // version which does not store the start offsets.
+        ShareGroupStatePartitionMetadataValue value = (ShareGroupStatePartitionMetadataValue) GroupCoordinatorRecordHelpers
+            .newShareGroupStatePartitionMetadataRecord("group", Map.of(), Map.of(), Map.of(), Map.of()).value().message();
+        assertEquals(List.of(), roundTrip(value).initializingStartOffsets());
+        assertNull(roundTrip(new ShareGroupStatePartitionMetadataValue()).initializingStartOffsets());
+    }
+
+    private static ShareGroupStatePartitionMetadataValue roundTrip(ShareGroupStatePartitionMetadataValue value) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(value.size(cache, (short) 0));
+        value.write(new ByteBufferAccessor(buffer), cache, (short) 0);
+        buffer.flip();
+        return new ShareGroupStatePartitionMetadataValue(new ByteBufferAccessor(buffer), (short) 0);
     }
 
     @Test

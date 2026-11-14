@@ -777,6 +777,26 @@ public class GroupCoordinatorRecordHelpers {
         Map<Uuid, InitMapValue> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
+        return newShareGroupStatePartitionMetadataRecord(groupId, initializingTopics, initializedTopics, deletingTopics, Map.of());
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata record.
+     *
+     * @param groupId                  The share group id.
+     * @param initializingTopics       Topics which are being initialized.
+     * @param initializedTopics        Topics which have been initialized.
+     * @param deletingTopics           Topics which are being deleted.
+     * @param initializingStartOffsets The start offsets sent to initialize the partitions which are not initialized yet.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
+        String groupId,
+        Map<Uuid, InitMapValue> initializingTopics,
+        Map<Uuid, InitMapValue> initializedTopics,
+        Map<Uuid, String> deletingTopics,
+        Map<Uuid, Map<Integer, Long>> initializingStartOffsets
+    ) {
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
@@ -797,6 +817,19 @@ public class GroupCoordinatorRecordHelpers {
                 .setTopicName(entry.getValue()))
             .toList();
 
+        // Sorted, so that the same start offsets always give the same record.
+        List<ShareGroupStatePartitionMetadataValue.TopicStartOffsets> startOffsetsInfo = initializingStartOffsets.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicStartOffsets()
+                .setTopicId(entry.getKey())
+                .setPartitions(entry.getValue().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(partition -> new ShareGroupStatePartitionMetadataValue.PartitionStartOffset()
+                        .setPartition(partition.getKey())
+                        .setStartOffset(partition.getValue()))
+                    .toList()))
+            .toList();
+
         return CoordinatorRecord.record(
             new ShareGroupStatePartitionMetadataKey()
                 .setGroupId(groupId),
@@ -804,7 +837,8 @@ public class GroupCoordinatorRecordHelpers {
                 new ShareGroupStatePartitionMetadataValue()
                     .setInitializingTopics(initializingTopicPartitionInfo)
                     .setInitializedTopics(initializedTopicPartitionInfo)
-                    .setDeletingTopics(deletingTopicsInfo),
+                    .setDeletingTopics(deletingTopicsInfo)
+                    .setInitializingStartOffsets(startOffsetsInfo),
                 (short) 0
             )
         );

@@ -737,7 +737,7 @@ public abstract class ShareConsumerTestBase {
         }
     }
 
-    private Set<TopicPartition> assignedPartitions(String groupId) {
+    protected Set<TopicPartition> assignedPartitions(String groupId) {
         try (Admin admin = createAdminClient()) {
             Collection<ShareMemberDescription> members = admin.describeShareGroups(List.of(groupId),
                 new DescribeShareGroupsOptions().includeAuthorizedOperations(true)
