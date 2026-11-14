@@ -28,7 +28,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.time.Duration;
@@ -38,16 +39,65 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * A task whose segmented store was opened and never written leaves the store's empty directory behind.
- * Under exactly-once the task must not be treated as corrupted when it is initialized on that directory.
- * The directory is created by hand, because {@link TopologyTestDriver#close()} deletes the state directory.
- */
+// TopologyTestDriver#close deletes the state, so the empty directory a never-written store leaves is made by hand
 public class SegmentedStoreWithoutSegmentsTest {
 
     private static final String APPLICATION_ID = "segmented-store-without-segments";
     private static final String STORE_NAME = "never-written";
     private static final Duration RETENTION = Duration.ofDays(2);
+    private static final Duration WINDOW_SIZE = Duration.ofDays(1);
+
+    private enum StoreType {
+        WINDOW,
+        TIMESTAMPED_WINDOW,
+        TIMESTAMPED_WINDOW_WITH_HEADERS,
+        TIME_ORDERED_WINDOW,
+        SESSION,
+        SESSION_WITH_HEADERS,
+        TIME_ORDERED_SESSION
+    }
+
+    private static StoreBuilder<?> storeBuilder(final StoreType storeType) {
+        switch (storeType) {
+            case WINDOW:
+                return Stores.windowStoreBuilder(
+                    Stores.persistentWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                    Serdes.String(),
+                    Serdes.Long());
+            case TIMESTAMPED_WINDOW:
+                return Stores.timestampedWindowStoreBuilder(
+                    Stores.persistentTimestampedWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                    Serdes.String(),
+                    Serdes.Long());
+            case TIMESTAMPED_WINDOW_WITH_HEADERS:
+                return Stores.timestampedWindowStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                    Serdes.String(),
+                    Serdes.Long());
+            case TIME_ORDERED_WINDOW:
+                return Stores.timestampedWindowStoreBuilder(
+                    RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(STORE_NAME, RETENTION, WINDOW_SIZE, false, true),
+                    Serdes.String(),
+                    Serdes.Long());
+            case SESSION:
+                return Stores.sessionStoreBuilder(
+                    Stores.persistentSessionStore(STORE_NAME, RETENTION),
+                    Serdes.String(),
+                    Serdes.Long());
+            case SESSION_WITH_HEADERS:
+                return Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(STORE_NAME, RETENTION),
+                    Serdes.String(),
+                    Serdes.Long());
+            case TIME_ORDERED_SESSION:
+                return Stores.sessionStoreBuilder(
+                    new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION.toMillis(), true),
+                    Serdes.String(),
+                    Serdes.Long());
+            default:
+                throw new IllegalArgumentException("unknown store type: " + storeType);
+        }
+    }
 
     private static class NoOpProcessor implements Processor<String, String, Void, Void> {
         @Override
@@ -55,26 +105,12 @@ public class SegmentedStoreWithoutSegmentsTest {
         }
     }
 
-    private static Topology topology(final StoreBuilder<?> storeBuilder) {
+    private static Topology topology(final StoreType storeType) {
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addProcessor("processor", NoOpProcessor::new, "source");
-        topology.addStateStore(storeBuilder, "processor");
+        topology.addStateStore(storeBuilder(storeType), "processor");
         return topology;
-    }
-
-    private static StoreBuilder<?> windowStore() {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(STORE_NAME, RETENTION, Duration.ofDays(1), false),
-            Serdes.String(),
-            Serdes.Long());
-    }
-
-    private static StoreBuilder<?> sessionStore() {
-        return Stores.sessionStoreBuilder(
-            Stores.persistentSessionStore(STORE_NAME, RETENTION),
-            Serdes.String(),
-            Serdes.Long());
     }
 
     private static Properties exactlyOnce(final File stateDir) {
@@ -91,30 +127,24 @@ public class SegmentedStoreWithoutSegmentsTest {
         return new File(stateDir, APPLICATION_ID + File.separator + "0_0" + File.separator + STORE_NAME);
     }
 
-    @Test
-    public void shouldInitializeTaskWhoseWindowStoreHasNoSegments() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldInitializeTaskWhoseStoreHasNoSegments(final StoreType storeType) {
         final File stateDir = TestUtils.tempDirectory();
         assertTrue(storeDir(stateDir).mkdirs());
 
-        assertDoesNotThrow(() -> new TopologyTestDriver(topology(windowStore()), exactlyOnce(stateDir)).close());
-    }
-
-    @Test
-    public void shouldInitializeTaskWhoseSessionStoreHasNoSegments() {
-        final File stateDir = TestUtils.tempDirectory();
-        assertTrue(storeDir(stateDir).mkdirs());
-
-        assertDoesNotThrow(() -> new TopologyTestDriver(topology(sessionStore()), exactlyOnce(stateDir)).close());
+        assertDoesNotThrow(() -> new TopologyTestDriver(topology(storeType), exactlyOnce(stateDir)).close());
     }
 
     // a segment that holds no offset may hold uncommitted writes
-    @Test
-    public void shouldTreatTaskAsCorruptedWhenSegmentHasNoOffset() {
+    @ParameterizedTest
+    @EnumSource(StoreType.class)
+    public void shouldTreatTaskAsCorruptedWhenSegmentHasNoOffset(final StoreType storeType) {
         final File stateDir = TestUtils.tempDirectory();
         assertTrue(new File(storeDir(stateDir), STORE_NAME + ".0").mkdirs());
 
         assertThrows(
             TaskCorruptedException.class,
-            () -> new TopologyTestDriver(topology(windowStore()), exactlyOnce(stateDir)).close());
+            () -> new TopologyTestDriver(topology(storeType), exactlyOnce(stateDir)).close());
     }
 }

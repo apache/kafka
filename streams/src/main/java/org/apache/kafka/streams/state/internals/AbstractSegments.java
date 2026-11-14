@@ -197,7 +197,9 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
-        // offsets are kept in the segments: without one there is no offset, but no uncommitted data either
+        // Offsets are stored only in segments. With no segments, any committed offset was dropped and
+        // there is no local data, so report OFFSET_UNKNOWN (restore from the start) rather than null
+        // (which under EOS would treat the task as corrupted).
         if (segments.isEmpty()) {
             return OffsetCheckpoint.OFFSET_UNKNOWN;
         }
