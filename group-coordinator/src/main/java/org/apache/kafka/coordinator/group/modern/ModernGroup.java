@@ -354,6 +354,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      */
     public void clearTargetAssignment() {
         targetAssignment.clear();
+        invertedTargetAssignment.clear();
     }
 
     /**

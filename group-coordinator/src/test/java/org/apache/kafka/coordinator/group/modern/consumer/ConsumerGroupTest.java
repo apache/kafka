@@ -206,6 +206,7 @@ public class ConsumerGroupTest {
 
         consumerGroup.clearTargetAssignment();
         assertEquals(Map.of(), consumerGroup.targetAssignment());
+        assertEquals(Map.of(), consumerGroup.invertedTargetAssignment());
     }
 
     @Test
