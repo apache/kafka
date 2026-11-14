@@ -258,6 +258,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     @Override
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
