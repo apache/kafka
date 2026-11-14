@@ -3310,7 +3310,7 @@ public class KafkaConsumerTest {
      * assigned partition to 0, which both avoids an offset lookup and leaves an observable trace
      * of the callback having run.
      */
-    private static class SeekToZeroRebalanceListener extends MockRebalanceListener {
+    private static class CountingSeekToZeroRebalanceListener extends MockRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             super.onPartitionsAssigned(partitions, rebalanceConsumer);
@@ -3932,7 +3932,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        SeekToZeroRebalanceListener listener = new SeekToZeroRebalanceListener();
+        CountingSeekToZeroRebalanceListener listener = new CountingSeekToZeroRebalanceListener();
         initMetadata(client, Map.of(topic, 1, topic2, 1));
 
         consumer.setRebalanceListener(listener);
@@ -3981,7 +3981,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         Node node = metadata.fetch().nodes().get(0);
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
-        SeekToZeroRebalanceListener listener = new SeekToZeroRebalanceListener();
+        CountingSeekToZeroRebalanceListener listener = new CountingSeekToZeroRebalanceListener();
         initializeSubscriptionWithSingleTopic(consumer, listener);
         prepareRebalance(client, node, assignor, List.of(tp0), null);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -4008,7 +4008,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer = newConsumer(
             groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        SeekToZeroRebalanceListener listener = new SeekToZeroRebalanceListener();
+        CountingSeekToZeroRebalanceListener listener = new CountingSeekToZeroRebalanceListener();
         initializeSubscriptionWithSingleTopic(consumer, listener);
         prepareRebalance(client, node, assignor, List.of(tp0), null);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
