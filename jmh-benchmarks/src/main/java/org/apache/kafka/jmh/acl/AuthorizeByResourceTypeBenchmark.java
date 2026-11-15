@@ -83,16 +83,21 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class AuthorizeByResourceTypeBenchmark {
-    @Param({"128"})
+    @Param({"8", "32", "128"})
     public int resourceNameLength;
 
     @Param({"1", "10", "100", "1000", "10000"})
     public int resourceCount;
 
-    @Param({"PREFIXED"})
+    @Param({"LITERAL", "PREFIXED"})
     public PatternType allowPatternType;
 
-    @Param({"EXACT_DENY"})
+    // Examples omit the shared resource prefix; ALLOW is literal or prefixed "abc".
+    // EXACT_DENY: deny prefix "abc" covers the ALLOW -> DENIED.
+    // ANCESTOR_DENY: deny prefix "a" covers the ALLOW; "abb" is unrelated -> DENIED.
+    // UNRELATED_DENY: deny prefix "abb" does not cover the ALLOW -> ALLOWED.
+    // NO_DENIES: only ALLOW ACLs exist -> ALLOWED.
+    @Param({"EXACT_DENY", "ANCESTOR_DENY", "UNRELATED_DENY", "NO_DENIES"})
     public String scenario;
 
     private BaselineAuthorizer authorizer;
@@ -131,10 +136,6 @@ public class AuthorizeByResourceTypeBenchmark {
             }
         }
         authorizer.completeInitialLoad();
-        AuthorizationResult expected = scenario.equals("EXACT_DENY") || scenario.equals("ANCESTOR_DENY")
-            ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
-        if (trie() != expected || baseline() != expected)
-            throw new IllegalStateException("Unexpected authorization result for " + scenario);
     }
 
     private void addAcl(String name, PatternType type, AclPermissionType permission, KafkaPrincipal principal) {

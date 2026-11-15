@@ -134,8 +134,7 @@ public class AuthorizeByResourceTypeSearch {
         // Add one Allow
         makeAllow(allowPattern, aclEntries, PatternType.PREFIXED);
 
-
-        //    makeDeny(denyPattern1, aclEntries);
+        //  makeDeny(denyPattern1, aclEntries);
         setupAcls(aclEntries);
     }
 
