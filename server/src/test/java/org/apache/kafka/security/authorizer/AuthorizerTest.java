@@ -54,11 +54,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -100,6 +102,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class AuthorizerTest {
 
@@ -321,6 +327,90 @@ public class AuthorizerTest {
 
         removeAcls(authorizer, Set.of(denyReadAcl), firstDeny);
         assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "abc, LITERAL, abc, LITERAL, false",
+        "abc, PREFIXED, abc, LITERAL, true",
+        "abc, LITERAL, abc, PREFIXED, false",
+        "abc, PREFIXED, abc, PREFIXED, false",
+        "abcd, LITERAL, ab, PREFIXED, false",
+        "abcd, PREFIXED, ab, PREFIXED, false",
+        "abc, LITERAL, abb, PREFIXED, true",
+        "abc, PREFIXED, abb, PREFIXED, true",
+        "a, LITERAL, ab, PREFIXED, true",
+        "a, PREFIXED, ab, PREFIXED, true",
+        "ba, LITERAL, b, PREFIXED, false",
+        "élan, LITERAL, é, PREFIXED, false",
+        "é, PREFIXED, élan, PREFIXED, true",
+        "東京, PREFIXED, 東, PREFIXED, false",
+        "'a\0', LITERAL, a, LITERAL, true",
+        "a, LITERAL, 'a\0', LITERAL, true",
+        "'a\0', LITERAL, a, PREFIXED, false",
+        "a, PREFIXED, 'a\0', PREFIXED, true",
+        "'a\0b', LITERAL, 'a\0', PREFIXED, false",
+        "'a\1b', PREFIXED, 'a\1', PREFIXED, false",
+        "'a\0b', LITERAL, 'a\1', PREFIXED, true",
+        "'a\1b', PREFIXED, 'a\0', PREFIXED, true",
+        "'\0', LITERAL, '\0\0', LITERAL, true",
+        "'\0', PREFIXED, '\0\0', PREFIXED, true",
+        "'\0\0', PREFIXED, '\0', PREFIXED, false"
+    })
+    public void testAuthorizeByResourceTypePatternMatchingIndependentOfAclOrder(
+            String allowName, PatternType allowType, String denyName, PatternType denyType, boolean expected) {
+        Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);
+        when(authorizer.authorize(any(), any())).thenReturn(List.of(AuthorizationResult.DENIED));
+        List<AclBinding> bindings = new ArrayList<>(List.of(
+            new AclBinding(new ResourcePattern(GROUP, allowName, allowType), allowReadAcl),
+            new AclBinding(new ResourcePattern(GROUP, denyName, denyType), denyReadAcl)));
+        when(authorizer.acls(any())).thenReturn(bindings);
+
+        assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+        Collections.reverse(bindings);
+        assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+    }
+
+    @Test
+    public void testAuthorizeByResourceTypePrefixedAllowSurvivesLiteralDenyInAnyOrder() {
+        Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);
+        when(authorizer.authorize(any(), any())).thenReturn(List.of(AuthorizationResult.DENIED));
+        ResourcePattern literal = new ResourcePattern(GROUP, "abc", LITERAL);
+        List<AclBinding> bindings = new ArrayList<>(List.of(
+            new AclBinding(literal, allowReadAcl),
+            new AclBinding(new ResourcePattern(GROUP, "abc", PREFIXED), allowReadAcl),
+            new AclBinding(literal, denyReadAcl)));
+        when(authorizer.acls(any())).thenReturn(bindings);
+
+        for (int i = 0; i < bindings.size(); i++) {
+            assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+            Collections.reverse(bindings);
+            assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+            Collections.reverse(bindings);
+            Collections.rotate(bindings, 1);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PatternType.class, names = {"LITERAL", "PREFIXED"})
+    public void testAuthorizeByResourceTypePrefixDenyRemovesWholeSubtree(PatternType allowType) {
+        Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);
+        when(authorizer.authorize(any(), any())).thenReturn(List.of(AuthorizationResult.DENIED));
+        List<AclBinding> bindings = new ArrayList<>();
+        for (int i = 0; i < 32; i++) {
+            bindings.add(new AclBinding(new ResourcePattern(GROUP, "abc-" + i, allowType), allowReadAcl));
+        }
+        bindings.add(new AclBinding(new ResourcePattern(GROUP, "abc-", PREFIXED), denyReadAcl));
+        when(authorizer.acls(any())).thenReturn(bindings);
+
+        for (int order = 0; order < 2; order++) {
+            assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+            AclBinding unrelatedAllow = new AclBinding(new ResourcePattern(GROUP, "abd", allowType), allowReadAcl);
+            bindings.add(unrelatedAllow);
+            assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+            bindings.remove(unrelatedAllow);
+            Collections.reverse(bindings);
+        }
     }
 
     @Test

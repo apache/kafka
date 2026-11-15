@@ -273,11 +273,14 @@ public interface Authorizer extends Configurable, Closeable {
         }
 
         // A prefixed deny dominates every literal or prefixed allow starting with it.
-        // Querying the allowed names by prefix also handles nested and sibling deny prefixes.
+        // Snapshot matching keys: prefixMap.clear() scans the entire trie, while its iterator.remove()
+        // can fail when removing the last entry in a subtree.
         for (String denyStr : denyPatternsPrefixed) {
             if (allowPatterns.isEmpty())
                 return AuthorizationResult.DENIED;
-            allowPatterns.prefixMap(resourceNameForTrie(denyStr)).clear();
+            for (String allowName : allowPatterns.prefixMap(resourceNameForTrie(denyStr)).keySet().toArray(String[]::new)) {
+                allowPatterns.remove(allowName);
+            }
         }
         return allowPatterns.isEmpty() ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
     }
