@@ -78,11 +78,18 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldIgnoreUserSpecifiedBootstrapResolveTimeout() {
+    public void shouldHonorUserSpecifiedBootstrapResolveTimeout() {
         Map<String, String> configs = configs();
         configs.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
         DistributedConfig config = new DistributedConfig(configs);
-        assertEquals(0L, config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+        assertEquals(120000L, config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldDefaultBootstrapResolveTimeoutToTenSeconds() {
+        DistributedConfig config = new DistributedConfig(configs());
+        assertEquals(DistributedConfig.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DEFAULT,
+                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
     }
 
     @Test

@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1145,8 +1146,27 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8));
+        PrintStream printStream = new PrintStream(output, false, StandardCharsets.UTF_8);
+        BootstrapResolutionException bootstrapResolutionException = findBootstrapResolutionException(t);
+        if (bootstrapResolutionException != null) {
+            printStream.println("Failed because the Kafka bootstrap servers could not be resolved within "
+                    + "bootstrap.resolve.timeout.ms: " + bootstrapResolutionException.getMessage());
+            printStream.println();
+        }
+        t.printStackTrace(printStream);
         return output.toString(StandardCharsets.UTF_8);
+    }
+
+    // Walks the cause chain (bounded, to guard against a maliciously/accidentally cyclic chain)
+    // looking for a BootstrapResolutionException, so its message can be surfaced as a short,
+    // human-readable summary ahead of the full stack trace.
+    private static BootstrapResolutionException findBootstrapResolutionException(Throwable t) {
+        for (int i = 0; t != null && i < 20; i++, t = t.getCause()) {
+            if (t instanceof BootstrapResolutionException) {
+                return (BootstrapResolutionException) t;
+            }
+        }
+        return null;
     }
 
     /*

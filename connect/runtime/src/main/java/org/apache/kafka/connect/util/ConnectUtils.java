@@ -54,19 +54,6 @@ public final class ConnectUtils {
     }
 
     /**
-     * Force synchronous bootstrap DNS resolution ({@code bootstrap.resolve.timeout.ms=0}) for a client
-     * created by the Connect framework, logging a warning if a user-supplied value is overridden.
-     * Kafka Connect does not support the asynchronous bootstrap resolution mode.
-     */
-    public static void enforceSynchronousBootstrapResolution(Map<String, Object> clientProps) {
-        ensureProperty(
-                clientProps, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "0",
-                "in Kafka Connect, which does not support asynchronous bootstrap resolution",
-                true
-        );
-    }
-
-    /**
      * Ensure that the {@link Map properties} contain an expected value for the given key, inserting the
      * expected value into the properties if necessary.
      *
@@ -131,6 +118,27 @@ public final class ConnectUtils {
                         + "The value '%s' will be used instead.",
                 value, key, justification, expectedValue
         ));
+    }
+
+    // Public so tests across the connect/runtime module can assert on the exact value. One minute: long
+    // enough for a task to ride out a transient DNS blip and recover on its own (the client keeps
+    // retrying resolution internally up to this grace period) without needing operator intervention, but
+    // bounded so a persistently broken bootstrap.servers still surfaces as a task failure in a
+    // reasonable time.
+    public static final long TASK_CLIENT_DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 60_000L;
+
+    /**
+     * Apply a default (not forced) {@code bootstrap.resolve.timeout.ms} of one minute for task-level
+     * clients (source/sink task producers, consumers, and admin clients), so a task can tolerate a
+     * transient DNS resolution problem and recover on its own instead of failing immediately. Unlike
+     * {@link #ensureProperty}, this only applies when the property is absent: a value supplied by the
+     * user at any level (worker config, connector-level override) is left untouched.
+     *
+     * @param props the configuration properties for a task-level client; may not be null
+     */
+    public static void applyDefaultTaskBootstrapResolveTimeout(Map<String, Object> props) {
+        props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                String.valueOf(TASK_CLIENT_DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS));
     }
 
     /**
