@@ -55,6 +55,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleReadOperation(
             "streams-group-topology-description-validate",
             partitioner.apply(groupId),
+            null,
+            null,
             (coordinator, lastCommittedOffset) -> {
                 coordinator.validateStreamsGroupTopologyDescriptionUpdate(
                     groupId, memberId, topologyEpoch, lastCommittedOffset);
@@ -67,6 +69,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleWriteOperation(
             "mark-topology-uncertain",
             partitioner.apply(groupId),
+            null,
+            null,
             coordinator -> coordinator.markStoredDescriptionTopologyEpochUncertain(groupId, markWhenNone));
     }
 
@@ -75,6 +79,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleWriteOperation(
             "streams-group-set-stored-topology-epoch",
             partitioner.apply(groupId),
+            null,
+            null,
             coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, topologyEpoch));
     }
 
@@ -83,6 +89,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleWriteOperation(
             "streams-group-set-failed-topology-epoch",
             partitioner.apply(groupId),
+            null,
+            null,
             coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, topologyEpoch));
     }
 
@@ -90,6 +98,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
     public List<CompletableFuture<Set<String>>> listGroupsNeedingCleanupBatches() {
         return runtime.scheduleReadAllOperation(
             "list-streams-groups-needing-topology-cleanup",
+            null,
+            null,
             GroupCoordinatorShard::listStreamsGroupsNeedingTopologyCleanup);
     }
 
@@ -99,6 +109,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleWriteOperation(
             "mark-topology-uncertain-batch",
             partitioner.apply(groupIds.iterator().next()),
+            null,
+            null,
             coordinator -> coordinator.markStoredDescriptionTopologyEpochUncertainBatch(groupIds));
     }
 
@@ -108,6 +120,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.<Void>scheduleWriteOperation(
             "finalize-stored-topology-epoch-after-delete-batch",
             partitioner.apply(groupIds.iterator().next()),
+            null,
+            null,
             coordinator -> coordinator.finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(groupIds));
     }
 
@@ -117,6 +131,8 @@ class CoordinatorRuntimeTopologyDescriptionRuntime implements TopologyDescriptio
         return runtime.scheduleReadOperation(
             "streams-group-topology-pre-delete",
             partitioner.apply(groupIds.get(0)),
+            null,
+            null,
             (coordinator, lastCommittedOffset) ->
                 coordinator.streamsGroupsWithStoredTopologyDescription(groupIds, lastCommittedOffset));
     }

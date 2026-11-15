@@ -110,6 +110,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
@@ -514,12 +515,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#consumerGroupHeartbeat(AuthorizableRequestContext, ConsumerGroupHeartbeatRequestData)}.
+     * See {@link GroupCoordinator#consumerGroupHeartbeat(AuthorizableRequestContext, ConsumerGroupHeartbeatRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         AuthorizableRequestContext context,
-        ConsumerGroupHeartbeatRequestData request
+        ConsumerGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ConsumerGroupHeartbeatResponseData()
@@ -540,6 +542,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "consumer-group-heartbeat",
@@ -626,12 +630,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * See
-     * {@link GroupCoordinator#streamsGroupHeartbeat(AuthorizableRequestContext, StreamsGroupHeartbeatRequestData)}.
+     * {@link GroupCoordinator#streamsGroupHeartbeat(AuthorizableRequestContext, StreamsGroupHeartbeatRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
         AuthorizableRequestContext context,
-        StreamsGroupHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -658,6 +663,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<StreamsGroupHeartbeatResult> heartbeat = runtime.scheduleWriteOperation(
             "streams-group-heartbeat",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.streamsGroupHeartbeat(context, request));
 
         heartbeat = streamsGroupTopologyDescriptionManager.decorateHeartbeatResult(
@@ -678,7 +685,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupTopologyDescriptionUpdate(AuthorizableRequestContext, StreamsGroupTopologyDescriptionUpdateRequestData)}.
+     * See {@link GroupCoordinator#streamsGroupTopologyDescriptionUpdate(AuthorizableRequestContext, StreamsGroupTopologyDescriptionUpdateRequestData, RequestTimeRecorder)}.
      *
      * <p>The push pipeline lives on {@link StreamsGroupTopologyDescriptionManager#pushTopology};
      * this method is responsible only for short-circuiting on a non-active coordinator, request
@@ -687,7 +694,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     @Override
     public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
         AuthorizableRequestContext context,
-        StreamsGroupTopologyDescriptionUpdateRequestData request
+        StreamsGroupTopologyDescriptionUpdateRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -769,12 +777,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#shareGroupHeartbeat(AuthorizableRequestContext, ShareGroupHeartbeatRequestData)}.
+     * See {@link GroupCoordinator#shareGroupHeartbeat(AuthorizableRequestContext, ShareGroupHeartbeatRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
         AuthorizableRequestContext context,
-        ShareGroupHeartbeatRequestData request
+        ShareGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
@@ -795,6 +804,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "share-group-heartbeat",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
         ).thenApply(result -> {
             if (result.getValue().isPresent()) {
@@ -974,6 +985,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "uninitialize-share-group-state",
             topicPartitionFor(groupId),
+            null,
+            null,
             coordinator -> coordinator.uninitializeShareGroupState(groupId, topicPartitionMap)
         ).thenApply(__ -> new ShareGroupHeartbeatResponseData()
             .setErrorCode(error.code())
@@ -995,6 +1008,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "initialize-share-group-state",
             topicPartitionFor(groupId),
+            null,
+            null,
             coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
         ).handle((__, exp) -> {
             if (exp == null) {
@@ -1007,13 +1022,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#joinGroup(AuthorizableRequestContext, JoinGroupRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#joinGroup(AuthorizableRequestContext, JoinGroupRequestData, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<JoinGroupResponseData> joinGroup(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new JoinGroupResponseData()
@@ -1046,12 +1062,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // Then the join runs again. With no plugin configured there is nothing to delete, so we
         // pass topologyCleanupHandled = true and the group is converted right away.
         runClassicGroupJoin(context, request, responseFuture, tp,
-            !streamsGroupTopologyDescriptionManager.isPluginConfigured()
+            !streamsGroupTopologyDescriptionManager.isPluginConfigured(),
+            requestTimeRecorder
         ).thenCompose(needsCleanup -> {
             if (!needsCleanup) {
                 return CompletableFuture.completedFuture(null);
             }
-            return cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
+            return cleanupTopologyBeforeConversion(context, request, responseFuture, tp, requestTimeRecorder);
         }).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
@@ -1081,7 +1098,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
-        TopicPartition tp
+        TopicPartition tp,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         return streamsGroupTopologyDescriptionManager.cleanupTopologyBeforeConversion(request.groupId())
             .thenCompose(cleaned -> {
@@ -1095,7 +1113,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 // Then the join fails with INCONSISTENT_GROUP_PROTOCOL and the group stays
                 // a streams group. The finalize then fixes its epoch (NONE, or UNCERTAIN if
                 // a push finished), so the broker does not record a topology the delete removed.
-                return runClassicGroupJoin(context, request, responseFuture, tp, true)
+                return runClassicGroupJoin(context, request, responseFuture, tp, true, requestTimeRecorder)
                     .thenCompose(__ -> streamsGroupTopologyDescriptionManager.finalizeAfterDelete(request.groupId()));
             });
     }
@@ -1132,11 +1150,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
         TopicPartition tp,
-        boolean topologyCleanupHandled
+        boolean topologyCleanupHandled,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         return runtime.scheduleWriteOperation(
             "classic-group-join",
             tp,
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.classicGroupJoin(context, request, responseFuture, topologyCleanupHandled)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
@@ -1153,13 +1174,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#syncGroup(AuthorizableRequestContext, SyncGroupRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#syncGroup(AuthorizableRequestContext, SyncGroupRequestData, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<SyncGroupResponseData> syncGroup(
         AuthorizableRequestContext context,
         SyncGroupRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new SyncGroupResponseData()
@@ -1178,6 +1200,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         runtime.scheduleWriteOperation(
             "classic-group-sync",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
@@ -1209,12 +1233,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#heartbeat(AuthorizableRequestContext, HeartbeatRequestData)}.
+     * See {@link GroupCoordinator#heartbeat(AuthorizableRequestContext, HeartbeatRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<HeartbeatResponseData> heartbeat(
         AuthorizableRequestContext context,
-        HeartbeatRequestData request
+        HeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new HeartbeatResponseData()
@@ -1231,6 +1256,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "classic-group-heartbeat",
@@ -1251,12 +1278,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#leaveGroup(AuthorizableRequestContext, LeaveGroupRequestData)}.
+     * See {@link GroupCoordinator#leaveGroup(AuthorizableRequestContext, LeaveGroupRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<LeaveGroupResponseData> leaveGroup(
         AuthorizableRequestContext context,
-        LeaveGroupRequestData request
+        LeaveGroupRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new LeaveGroupResponseData()
@@ -1273,6 +1301,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "classic-group-leave",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.classicGroupLeave(context, request)
         ).exceptionally(exception -> handleOperationException(
             "classic-group-leave",
@@ -1299,12 +1329,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#listGroups(AuthorizableRequestContext, ListGroupsRequestData)}.
+     * See {@link GroupCoordinator#listGroups(AuthorizableRequestContext, ListGroupsRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<ListGroupsResponseData> listGroups(
         AuthorizableRequestContext context,
-        ListGroupsRequestData request
+        ListGroupsRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ListGroupsResponseData()
@@ -1315,6 +1346,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures = FutureUtils.mapExceptionally(
             runtime.scheduleReadAllOperation(
                 "list-groups",
+                requestTimeRecorder::beginLocalTime,
+                requestTimeRecorder::endLocalTime,
                 (coordinator, lastCommittedOffset) -> coordinator.listGroups(
                     request.statesFilter(),
                     request.typesFilter(),
@@ -1345,12 +1378,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#consumerGroupDescribe(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#consumerGroupDescribe(AuthorizableRequestContext, List, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1381,6 +1415,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleReadOperation(
                     "consumer-group-describe",
                     topicPartition,
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupList, lastCommittedOffset)
                 ).exceptionally(exception -> handleOperationException(
                     "consumer-group-describe",
@@ -1397,13 +1433,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List, boolean)}.
+     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List, boolean, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
         List<String> groupIds,
-        boolean includeTopologyDescription
+        boolean includeTopologyDescription,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(StreamsGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1434,6 +1471,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleReadOperation(
                     "streams-group-describe",
                     topicPartition,
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
                 ).thenCompose(result -> includeTopologyDescription
                     ? streamsGroupTopologyDescriptionManager.attachTopologyDescriptions(result)
@@ -1453,12 +1492,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
     
     /**
-     * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<List<DescribedGroup>> shareGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(ShareGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1489,6 +1529,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleReadOperation(
                     "share-group-describe",
                     topicPartition,
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     (coordinator, lastCommittedOffset) -> coordinator.shareGroupDescribe(groupList, lastCommittedOffset)
                 ).exceptionally(exception -> handleOperationException(
                     "share-group-describe",
@@ -1505,13 +1547,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData)}.
+     * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
         AuthorizableRequestContext context,
         String groupId,
-        AlterShareGroupOffsetsRequestData request
+        AlterShareGroupOffsetsRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
@@ -1528,6 +1571,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "share-group-offsets-alter",
             topicPartitionFor(groupId),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
         ).thenCompose(result ->
             persisterInitialize(result.getValue(), result.getKey())
@@ -1541,12 +1586,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeGroups(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#describeGroups(AuthorizableRequestContext, List, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(DescribeGroupsRequest.getErrorDescribedGroupList(
@@ -1579,6 +1625,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleReadOperation(
                     "describe-groups",
                     topicPartition,
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
                 ).exceptionally(exception -> handleOperationException(
                     "describe-groups",
@@ -1595,13 +1643,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteGroups(AuthorizableRequestContext, List, BufferSupplier)}.
+     * See {@link GroupCoordinator#deleteGroups(AuthorizableRequestContext, List, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         AuthorizableRequestContext context,
         List<String> groupIds,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
@@ -1634,7 +1683,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // The sequence of these deletions is important: the initial share group deletion should
             // not error if the group ID isn't found, whereas the subsequent consumer group deletion
             // (the final operation) must return an error if its corresponding group ID is not found.
-            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList, requestTimeRecorder).thenCompose(groupErrMap -> {
                 DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults = new DeleteGroupsResponseData.DeletableGroupResultCollection();
                 List<String> retainedGroupIds = updateResponseAndGetNonErrorGroupList(groupErrMap, groupList, deletableGroupResults);
                 if (retainedGroupIds.isEmpty()) {
@@ -1648,7 +1697,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         if (afterStreams.isEmpty()) {
                             return CompletableFuture.completedFuture(deletableGroupResults);
                         }
-                        return handleDeleteGroups(context, topicPartition, afterStreams)
+                        return handleDeleteGroups(context, topicPartition, afterStreams, requestTimeRecorder)
                             .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
                             .thenApply(__ -> deletableGroupResults);
                     })
@@ -1799,11 +1848,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
         AuthorizableRequestContext context,
         TopicPartition topicPartition,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         return runtime.scheduleWriteOperation(
             "delete-groups",
             topicPartition,
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.deleteGroups(context, groupIds)
         ).exceptionally(exception -> handleOperationException(
             "delete-groups",
@@ -1816,12 +1868,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private CompletableFuture<Map<String, Errors>> deleteShareGroups(
         TopicPartition topicPartition,
-        List<String> groupList
+        List<String> groupList,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         // topicPartition refers to internal topic __consumer_offsets.
         return runtime.scheduleWriteOperation(
             "delete-share-groups",
             topicPartition,
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.sharePartitionDeleteRequests(groupList)
         ).thenCompose(
             this::performShareGroupsDeletion
@@ -1913,13 +1968,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#fetchOffsets(AuthorizableRequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
+     * See {@link GroupCoordinator#fetchOffsets(AuthorizableRequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
         AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
+        boolean requireStable,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
@@ -1952,6 +2008,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return runtime.scheduleWriteOperation(
                 name,
                 topicPartitionFor(request.groupId()),
+                requestTimeRecorder::beginLocalTime,
+                requestTimeRecorder::endLocalTime,
                 coordinator -> new CoordinatorResult<>(
                     List.of(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
@@ -1966,18 +2024,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return runtime.scheduleReadOperation(
                 name,
                 topicPartitionFor(request.groupId()),
+                requestTimeRecorder::beginLocalTime,
+                requestTimeRecorder::endLocalTime,
                 (coordinator, offset) -> coordinator.fetchOffsets(request, offset)
             );
         }
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
+     * See {@link GroupCoordinator#describeShareGroupOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         AuthorizableRequestContext context,
-        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -2035,12 +2096,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupAllOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
+     * See {@link GroupCoordinator#describeShareGroupAllOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
         AuthorizableRequestContext context,
-        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -2055,6 +2117,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleReadOperation(
             "share-group-initialized-partitions",
             topicPartitionFor(requestData.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             (coordinator, offset) -> coordinator.initializedShareGroupPartitions(requestData.groupId())
         ).thenCompose(topicPartitionMap -> {
             Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
@@ -2229,12 +2293,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteShareGroupOffsets(AuthorizableRequestContext, DeleteShareGroupOffsetsRequestData)}.
+     * See {@link GroupCoordinator#deleteShareGroupOffsets(AuthorizableRequestContext, DeleteShareGroupOffsetsRequestData, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsets(
         AuthorizableRequestContext context,
-        DeleteShareGroupOffsetsRequestData requestData
+        DeleteShareGroupOffsetsRequestData requestData,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
@@ -2254,8 +2319,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "initiate-delete-share-group-offsets",
             topicPartitionFor(groupId),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.initiateDeleteShareGroupOffsets(groupId, requestData)
-        ).thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder)
+        ).thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder, requestTimeRecorder)
         ).exceptionally(exception -> handleOperationException(
             "initiate-delete-share-group-offsets",
             groupId,
@@ -2267,7 +2334,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsetsState(
         String groupId,
-        GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder resultHolder
+        GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder resultHolder,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (resultHolder == null) {
             log.error("Failed to retrieve deleteState request parameters from group coordinator for the group {}", groupId);
@@ -2296,7 +2364,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         return persister.deleteState(resultHolder.deleteStateRequestParameters())
-            .thenCompose(result -> handleDeleteShareGroupOffsetStateResult(groupId, result, errorTopicResponseList))
+            .thenCompose(result -> handleDeleteShareGroupOffsetStateResult(groupId, result, errorTopicResponseList, requestTimeRecorder))
             .exceptionally(throwable -> {
                 log.error("Failed to delete share group state due to: {}", throwable.getMessage(), throwable);
                 return DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable));
@@ -2306,7 +2374,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<DeleteShareGroupOffsetsResponseData> handleDeleteShareGroupOffsetStateResult(
         String groupId,
         DeleteShareGroupStateResult result,
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponses
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponses,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (result == null || result.topicsData() == null) {
             log.error("Result is null for the delete share group state");
@@ -2347,17 +2416,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        return completeDeleteShareGroupOffsets(groupId, successTopics, errorTopicResponses);
+        return completeDeleteShareGroupOffsets(groupId, successTopics, errorTopicResponses, requestTimeRecorder);
     }
 
     private CompletableFuture<DeleteShareGroupOffsetsResponseData> completeDeleteShareGroupOffsets(
         String groupId,
         Map<Uuid, String> successTopics,
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponses
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponses,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         return runtime.scheduleWriteOperation(
             "complete-delete-share-group-offsets",
             topicPartitionFor(groupId),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.completeDeleteShareGroupOffsets(groupId, successTopics, errorTopicResponses)
         ).exceptionally(exception -> handleOperationException(
             "complete-delete-share-group-offsets",
@@ -2369,13 +2441,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#commitOffsets(AuthorizableRequestContext, OffsetCommitRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#commitOffsets(AuthorizableRequestContext, OffsetCommitRequestData, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<OffsetCommitResponseData> commitOffsets(
         AuthorizableRequestContext context,
         OffsetCommitRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(OffsetCommitRequest.getErrorResponse(
@@ -2395,6 +2468,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "commit-offset",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.commitOffset(context, request)
         ).exceptionally(exception -> handleOperationException(
             "commit-offset",
@@ -2406,13 +2481,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#commitTransactionalOffsets(AuthorizableRequestContext, TxnOffsetCommitRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#commitTransactionalOffsets(AuthorizableRequestContext, TxnOffsetCommitRequestData, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
         AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(TxnOffsetCommitRequest.getErrorResponse(
@@ -2431,6 +2507,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleTransactionalWriteOperation(
             "txn-commit-offset",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             request.transactionalId(),
             request.producerId(),
             request.producerEpoch(),
@@ -2446,13 +2524,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteOffsets(AuthorizableRequestContext, OffsetDeleteRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#deleteOffsets(AuthorizableRequestContext, OffsetDeleteRequestData, BufferSupplier, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
         AuthorizableRequestContext context,
         OffsetDeleteRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new OffsetDeleteResponseData()
@@ -2469,6 +2548,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "delete-offsets",
             topicPartitionFor(request.groupId()),
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception -> handleOperationException(
             "delete-offsets",
@@ -2480,7 +2561,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, short)}.
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, short, RequestTimeRecorder)}.
      */
     @Override
     public CompletableFuture<Void> completeTransaction(
@@ -2489,7 +2570,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion
+        short transactionVersion,
+        RequestTimeRecorder requestTimeRecorder
     ) {
         if (!isActive.get()) {
             return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
@@ -2504,6 +2586,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleTransactionCompletion(
             "write-txn-marker",
             tp,
+            requestTimeRecorder::beginLocalTime,
+            requestTimeRecorder::endLocalTime,
             producerId,
             producerEpoch,
             coordinatorEpoch,
@@ -2591,6 +2675,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "on-topics-deleted",
+                        null,
+                        null,
                         coordinator -> coordinator.onTopicsDeleted(deletedTopics)
                     ),
                     exception -> {
@@ -2608,6 +2694,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "maybe-cleanup-share-group-state",
+                        null,
+                        null,
                         coordinator -> coordinator.maybeCleanupShareGroupState(deletedTopicIds)
                     ),
                     exception -> {
