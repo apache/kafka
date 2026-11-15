@@ -16,12 +16,18 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
+import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -376,7 +382,7 @@ public class FeatureCommandTest {
                         "upgrade", "--release-version", "3.9-IV0"))
         );
 
-        assertEquals("kraft.version was upgraded to 1.\n" +
+        assertEquals("kraft.version is not upgraded because it is 0, which keeps the static controller quorum. Use --feature kraft.version=1 to make the quorum dynamic.\n" +
                 "metadata.version was upgraded to 21.", commandOutput);
     }
 
@@ -456,6 +462,12 @@ public class FeatureCommandTest {
         maxSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_5_IV0.featureLevel());
         maxSupportedFeatureLevels.put("foo.bar", (short) 10);
 
+        return buildAdminClient(minSupportedFeatureLevels, featureLevels, maxSupportedFeatureLevels);
+    }
+
+    private static MockAdminClient buildAdminClient(Map<String, Short> minSupportedFeatureLevels,
+                                                    Map<String, Short> featureLevels,
+                                                    Map<String, Short> maxSupportedFeatureLevels) {
         return new MockAdminClient.Builder().
             minSupportedFeatureLevels(minSupportedFeatureLevels).
             featureLevels(featureLevels).
@@ -595,6 +607,73 @@ public class FeatureCommandTest {
         ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("Unknown metadata.version 'foo'."));
+        });
+    }
+
+    @Test
+    public void testUpgradeWithReleaseVersionKeepsStaticQuorum() {
+        String upgradeOutput = upgradeToReleaseVersion("3.9-IV0", buildAdminClient(KRaftVersion.KRAFT_VERSION_0), false);
+        assertEquals(format("kraft.version is not upgraded because it is 0, which keeps the static controller quorum. Use --feature kraft.version=1 to make the quorum dynamic.%n" +
+            "metadata.version was upgraded to 21."), upgradeOutput);
+    }
+
+    @Test
+    public void testUpgradeWithReleaseVersionKeepsStaticQuorumOnDryRun() {
+        String upgradeOutput = upgradeToReleaseVersion("3.9-IV0", buildAdminClient(KRaftVersion.KRAFT_VERSION_0), true);
+        assertEquals(format("kraft.version is not upgraded because it is 0, which keeps the static controller quorum. Use --feature kraft.version=1 to make the quorum dynamic.%n" +
+            "metadata.version can be upgraded to 21."), upgradeOutput);
+    }
+
+    @Test
+    public void testUpgradeWithReleaseVersionUpgradesDynamicQuorum() {
+        String upgradeOutput = upgradeToReleaseVersion("3.9-IV0", buildAdminClient(KRaftVersion.KRAFT_VERSION_1), false);
+        assertEquals(format("kraft.version was upgraded to 1.%n" +
+            "metadata.version was upgraded to 21."), upgradeOutput);
+    }
+
+    @Test
+    public void testUpgradeWithReleaseVersionFailsIfKRaftVersionCannotBeDescribed() {
+        MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
+                KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException("Timed out waiting for a node assignment."));
+                return new DescribeFeaturesResult(future) { };
+            }
+        };
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "3.9-IV0");
+        namespace.put("dry_run", false);
+        Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), adminClient));
+        assertEquals("Could not describe the finalized level of kraft.version: Timed out waiting for a node assignment.", t.getMessage());
+    }
+
+    private static MockAdminClient buildAdminClient(KRaftVersion kraftVersion) {
+        Map<String, Short> minSupportedFeatureLevels = new HashMap<>();
+        minSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_VERSION.featureLevel());
+        minSupportedFeatureLevels.put(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_0.featureLevel());
+
+        Map<String, Short> featureLevels = new HashMap<>();
+        featureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_8_IV0.featureLevel());
+        featureLevels.put(KRaftVersion.FEATURE_NAME, kraftVersion.featureLevel());
+
+        Map<String, Short> maxSupportedFeatureLevels = new HashMap<>();
+        maxSupportedFeatureLevels.put(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
+        maxSupportedFeatureLevels.put(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel());
+
+        return buildAdminClient(minSupportedFeatureLevels, featureLevels, maxSupportedFeatureLevels);
+    }
+
+    private static String upgradeToReleaseVersion(String releaseVersion, MockAdminClient adminClient, boolean dryRun) {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", releaseVersion);
+        namespace.put("dry_run", dryRun);
+        return ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleUpgrade(new Namespace(namespace), adminClient);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         });
     }
 
