@@ -764,6 +764,20 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    public void testRebalanceListenerNotInvokedWithManualAssignment(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
+        RebalanceListener listener = mock(RebalanceListener.class);
+        consumer.setRebalanceListener(listener);
+
+        consumer.assign(List.of(tp0));
+        consumer.unsubscribe();
+        consumer.close();
+
+        Mockito.verifyNoInteractions(listener);
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
