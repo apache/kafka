@@ -670,8 +670,7 @@ public class KafkaConfigBackingStoreTest {
                         CONFIGS_SERIALIZED.get(5), new RecordHeaders(), Optional.empty()),
                 new ConsumerRecord<>(TOPIC, 0, 6, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_TASK_COUNT_RECORD_KEYS.get(1),
                         CONFIGS_SERIALIZED.get(6), new RecordHeaders(), Optional.empty()),
-                // Re-reading the same connector config after the task commit should make it through;
-                // the task update without a subsequent commit shouldn't
+                // Connector after root update should make it through, task update shouldn't
                 new ConsumerRecord<>(TOPIC, 0, 7, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(7), new RecordHeaders(), Optional.empty()),
                 new ConsumerRecord<>(TOPIC, 0, 8, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
@@ -684,7 +683,7 @@ public class KafkaConfigBackingStoreTest {
         deserialized.put(CONFIGS_SERIALIZED.get(4), CONNECTOR_CONFIG_STRUCTS.get(1));
         deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(6), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(7), CONNECTOR_CONFIG_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(7), CONNECTOR_CONFIG_STRUCTS.get(2));
         deserialized.put(CONFIGS_SERIALIZED.get(8), TASK_CONFIG_STRUCTS.get(1));
         logOffset = 9;
 
@@ -700,21 +699,52 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(logOffset, configState.offset()); // Should always be next to be read, even if uncommitted
         assertEquals(List.of(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
-        // CONNECTOR_CONFIG_STRUCTS[1] -> SAMPLE_CONFIGS[1]
-        assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
+        assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         // Should see 2 tasks for that connector. Only config updates before the root key update should be reflected
         assertEquals(List.of(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
-        // The connector config after the task commit invalidates the applied connector config so the
-        // connector will republish its task configs even if they are otherwise unchanged.
-        assertNull(configState.appliedConnectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(9, (int) configState.taskCountRecord(CONNECTOR_IDS.get(1)));
         assertEquals(Set.of(), configState.inconsistentConnectors());
         assertEquals(Set.of("connector1"), configState.connectorsPendingFencing);
 
         // Shouldn't see any callbacks since this is during startup
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
+    public void testRestoreIdenticalConnectorConfigInvalidatesAppliedConfig() {
+        List<ConsumerRecord<String, byte[]>> existingRecords = List.of(
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, COMMIT_TASKS_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
+        Struct oneTaskCommit = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 1);
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), oneTaskCommit);
+        deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_CONFIG_STRUCTS.get(0));
+
+        expectStart(existingRecords, deserialized);
+        when(configLog.partitionCount()).thenReturn(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
+        assertNull(configState.appliedConnectorConfig(CONNECTOR_IDS.get(0)));
+
         configStorage.stop();
         verify(configLog).stop();
     }
