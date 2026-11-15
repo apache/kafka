@@ -74,7 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class ReplicationControlTestContext {
+class ReplicationControlTestContext {
     private static final int BROKER_SESSION_TIMEOUT_MS = 1000;
 
     static class Builder {
