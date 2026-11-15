@@ -110,6 +110,10 @@ public class TaskManager {
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
+    // input partitions that a revived task was going to seek back to their committed offsets, but the task
+    // was closed while pending initialization; the task created in its place must do the seek instead
+    private final Set<TopicPartition> partitionsPendingOffsetReset = new HashSet<>();
+
     // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
     // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
     // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
@@ -475,8 +479,28 @@ public class TaskManager {
         final Collection<StreamTask> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
         final Collection<StandbyTask> newStandbyTasks = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
+        handOverPendingOffsetResets(newActiveTasks);
         tasks.addPendingTasksToInit(newActiveTasks);
         tasks.addPendingTasksToInit(newStandbyTasks);
+    }
+
+    private void handOverPendingOffsetResets(final Collection<StreamTask> newActiveTasks) {
+        if (partitionsPendingOffsetReset.isEmpty()) {
+            return;
+        }
+        final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
+        for (final StreamTask task : newActiveTasks) {
+            final Set<TopicPartition> partitionsToReset =
+                intersection(HashSet::new, partitionsPendingOffsetReset, task.inputPartitions(), currentAssignment);
+            if (!partitionsToReset.isEmpty()) {
+                log.info("Task {} replaces a revived task that was closed before it reset the offsets of its " +
+                    "input partitions {}; the new task will reset them instead", task.id(), partitionsToReset);
+                task.addPartitionsForOffsetReset(partitionsToReset);
+            }
+        }
+        // partitions not picked up by a new task are no longer owned by this thread, and their next owner
+        // starts from the committed offsets anyway
+        partitionsPendingOffsetReset.clear();
     }
 
     private void updateInputPartitionsOfStandbyTaskIfTheyChanged(final Task task,
@@ -517,6 +541,10 @@ public class TaskManager {
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
         for (final Task task : tasks.drainPendingTasksToInit()) {
+            // a revived task seeks its input partitions back to the committed offsets only after it is initialized,
+            // so remember them, otherwise the task created in its place starts from the current consumer position
+            // and skips the records the revived task dropped when it was closed dirty
+            partitionsPendingOffsetReset.addAll(task.partitionsForOffsetReset());
             closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
         }
         for (final Task task : tasksToCloseDirty) {
