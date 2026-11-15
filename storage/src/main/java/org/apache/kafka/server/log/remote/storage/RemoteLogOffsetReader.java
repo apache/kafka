@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.record.internal.FileRecords;
-import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataNotReadyException;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;

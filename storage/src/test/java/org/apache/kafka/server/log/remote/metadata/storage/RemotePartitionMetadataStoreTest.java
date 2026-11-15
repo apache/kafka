@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataNotReadyException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

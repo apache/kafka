@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log.remote.metadata.storage;
-
-import org.apache.kafka.server.log.remote.storage.RemoteStorageNotReadyException;
+package org.apache.kafka.server.log.remote.storage;
 
 /**
  * Thrown when the remote log metadata cache of a partition is not yet initialized.

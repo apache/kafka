@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataNotReadyException;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
