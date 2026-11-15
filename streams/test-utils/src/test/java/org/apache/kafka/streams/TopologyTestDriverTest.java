@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -53,6 +54,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
@@ -1631,6 +1633,47 @@ public abstract class TopologyTestDriverTest {
 
         store = testDriver.getKeyValueStore("aggStore");
         store.put("a", 21L);
+    }
+
+    @Test
+    public void shouldCloseWhenProcessorUpdatesCachedUpstreamStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream("input-topic", Consumed.with(Serdes.String(), Serdes.Integer()))
+            .groupByKey()
+            .aggregate(
+                () -> 0,
+                (key, value, aggregate) -> aggregate + value,
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("aggregate-store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Integer())
+            )
+            .toStream()
+            .process(() -> new Processor<String, Integer, Void, Void>() {
+                private KeyValueStore<String, ValueAndTimestamp<Integer>> aggregateStore;
+
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    aggregateStore = context.getStateStore("aggregate-store");
+                }
+
+                @Override
+                public void process(final Record<String, Integer> record) {
+                    final ValueAndTimestamp<Integer> aggregate = aggregateStore.get(record.key());
+                    aggregateStore.put(record.key(), aggregate);
+                }
+            }, "aggregate-store");
+
+        testDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build();
+        testDriver.pipeRecord(
+            "input-topic",
+            new TestRecord<>("key", 1),
+            new StringSerializer(),
+            new IntegerSerializer(),
+            Instant.now()
+        );
+
+        testDriver.close();
+        testDriver = null;
     }
 
     @Test
