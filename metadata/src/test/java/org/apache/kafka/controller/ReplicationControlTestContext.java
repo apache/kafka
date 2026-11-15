@@ -20,13 +20,20 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
+import org.apache.kafka.common.message.AlterPartitionRequestData.PartitionData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.TopicData;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData;
-import org.apache.kafka.common.message.CreatePartitionsResponseData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -73,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 class ReplicationControlTestContext {
     private static final int BROKER_SESSION_TIMEOUT_MS = 1000;
 
@@ -162,9 +168,9 @@ class ReplicationControlTestContext {
             setFeatureLevel(metadataVersion.featureLevel()));
         featureControl.replay(new FeatureLevelRecord()
             .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
-            .setFeatureLevel(isElrEnabled ?
-                EligibleLeaderReplicasVersion.ELRV_1.featureLevel() :
-                EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
+                .setFeatureLevel(isElrEnabled ?
+                    EligibleLeaderReplicasVersion.ELRV_1.featureLevel() :
+                    EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
         );
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -202,18 +208,18 @@ class ReplicationControlTestContext {
         replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
     }
 
-    CreateTopicsResponseData.CreatableTopicResult createTestTopic(String name,
-                                                                  int numPartitions,
-                                                                  short replicationFactor,
-                                                                  short expectedErrorCode) {
+    CreatableTopicResult createTestTopic(String name,
+                                         int numPartitions,
+                                         short replicationFactor,
+                                         short expectedErrorCode) {
         CreateTopicsRequestData request = new CreateTopicsRequestData();
-        CreateTopicsRequestData.CreatableTopic topic = new CreateTopicsRequestData.CreatableTopic().setName(name);
+        CreatableTopic topic = new CreatableTopic().setName(name);
         topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
         request.topics().add(topic);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
             replicationControl.createTopics(requestContext, request, Set.of(name), false);
-        CreateTopicsResponseData.CreatableTopicResult topicResult = result.response().topics().find(name);
+        CreatableTopicResult topicResult = result.response().topics().find(name);
         assertNotNull(topicResult);
         assertEquals(expectedErrorCode, topicResult.errorCode());
         if (expectedErrorCode == NONE.code()) {
@@ -222,37 +228,37 @@ class ReplicationControlTestContext {
         return topicResult;
     }
 
-    CreateTopicsResponseData.CreatableTopicResult createTestTopic(String name, int[][] replicas) {
+    CreatableTopicResult createTestTopic(String name, int[][] replicas) {
         return createTestTopic(name, replicas, Map.of(), (short) 0);
     }
 
-    CreateTopicsResponseData.CreatableTopicResult createTestTopic(String name, int[][] replicas,
-                                                                  short expectedErrorCode) {
+    CreatableTopicResult createTestTopic(String name, int[][] replicas,
+                                         short expectedErrorCode) {
         return createTestTopic(name, replicas, Map.of(), expectedErrorCode);
     }
 
-    CreateTopicsResponseData.CreatableTopicResult createTestTopic(String name, int[][] replicas,
-                                                                  Map<String, String> configs,
-                                                                  short expectedErrorCode) {
+    CreatableTopicResult createTestTopic(String name, int[][] replicas,
+                                         Map<String, String> configs,
+                                         short expectedErrorCode) {
         assertNotEquals(0, replicas.length);
         CreateTopicsRequestData request = new CreateTopicsRequestData();
-        CreateTopicsRequestData.CreatableTopic topic = new CreateTopicsRequestData.CreatableTopic().setName(name);
+        CreatableTopic topic = new CreatableTopic().setName(name);
         topic.setNumPartitions(-1).setReplicationFactor((short) -1);
         for (int i = 0; i < replicas.length; i++) {
-            topic.assignments().add(new CreateTopicsRequestData.CreatableReplicaAssignment().
+            topic.assignments().add(new CreatableReplicaAssignment().
                 setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
         }
         configs.forEach((key, value) -> topic.configs().add(
                 new CreateTopicsRequestData.CreatableTopicConfig()
-                    .setName(key)
-                    .setValue(value)
-            )
+                        .setName(key)
+                        .setValue(value)
+                )
         );
         request.topics().add(topic);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> result =
             replicationControl.createTopics(requestContext, request, Set.of(name), false);
-        CreateTopicsResponseData.CreatableTopicResult topicResult = result.response().topics().find(name);
+        CreatableTopicResult topicResult = result.response().topics().find(name);
         assertNotNull(topicResult);
         assertEquals(expectedErrorCode, topicResult.errorCode());
         if (expectedErrorCode == NONE.code()) {
@@ -280,18 +286,18 @@ class ReplicationControlTestContext {
 
     void createPartitions(int count, String name, int[][] replicas, short expectedErrorCode) {
         assertNotEquals(0, replicas.length);
-        CreatePartitionsRequestData.CreatePartitionsTopic topic = new CreatePartitionsRequestData.CreatePartitionsTopic().
+        CreatePartitionsTopic topic = new CreatePartitionsTopic().
             setName(name).
             setCount(count);
         for (int[] replica : replicas) {
-            topic.assignments().add(new CreatePartitionsRequestData.CreatePartitionsAssignment().
+            topic.assignments().add(new CreatePartitionsAssignment().
                 setBrokerIds(Replicas.toList(replica)));
         }
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
-        ControllerResult<List<CreatePartitionsResponseData.CreatePartitionsTopicResult>> result =
+        ControllerResult<List<CreatePartitionsTopicResult>> result =
             replicationControl.createPartitions(requestContext, List.of(topic));
         assertEquals(1, result.response().size());
-        CreatePartitionsResponseData.CreatePartitionsTopicResult topicResult = result.response().get(0);
+        CreatePartitionsTopicResult topicResult = result.response().get(0);
         assertEquals(name, topicResult.name());
         assertEquals(expectedErrorCode, topicResult.errorCode());
         replay(result.records());
@@ -318,7 +324,7 @@ class ReplicationControlTestContext {
             List<Uuid> logDirs = (List<Uuid>) brokerIdsAndDirs[i * 2 + 1];
             RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
                 setBrokerEpoch(defaultBrokerEpoch(brokerId)).setBrokerId(brokerId).
-                setRack(null).setLogDirs(logDirs);
+                    setRack(null).setLogDirs(logDirs);
             brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                 setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                 setPort((short) 9092 + brokerId).
@@ -339,7 +345,7 @@ class ReplicationControlTestContext {
     void alterPartition(
         TopicIdPartition topicIdPartition,
         int leaderId,
-        List<AlterPartitionRequestData.BrokerState> isrWithEpoch,
+        List<BrokerState> isrWithEpoch,
         LeaderRecoveryState leaderRecoveryState
     ) {
         BrokerRegistration registration = clusterControl.brokerRegistrations().get(leaderId);
@@ -352,14 +358,14 @@ class ReplicationControlTestContext {
         assertNotNull(partition);
         assertEquals(leaderId, partition.leader);
 
-        AlterPartitionRequestData.PartitionData partitionData = new AlterPartitionRequestData.PartitionData()
+        PartitionData partitionData = new PartitionData()
             .setPartitionIndex(topicIdPartition.partitionId())
             .setPartitionEpoch(partition.partitionEpoch)
             .setLeaderEpoch(partition.leaderEpoch)
             .setLeaderRecoveryState(leaderRecoveryState.value())
             .setNewIsrWithEpochs(isrWithEpoch);
 
-        AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
+        TopicData topicData = new TopicData()
             .setTopicId(topicIdPartition.topicId())
             .setPartitions(List.of(partitionData));
 
@@ -447,7 +453,7 @@ class ReplicationControlTestContext {
 
     ControllerResult<AssignReplicasToDirsResponseData> assignReplicasToDirs(int brokerId, Map<TopicIdPartition, Uuid> assignment) {
         ControllerResult<AssignReplicasToDirsResponseData> result = replicationControl.handleAssignReplicasToDirs(
-            AssignmentsHelper.buildRequestData(brokerId, defaultBrokerEpoch(brokerId), assignment));
+                AssignmentsHelper.buildRequestData(brokerId, defaultBrokerEpoch(brokerId), assignment));
         assertNotNull(result.response());
         assertEquals(NONE.code(), result.response().errorCode());
         replay(result.records());
@@ -456,10 +462,10 @@ class ReplicationControlTestContext {
 
     Set<Integer> fencedBrokerIds() {
         return clusterControl.brokerRegistrations().values()
-            .stream()
-            .filter(BrokerRegistration::fenced)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
+                .stream()
+                .filter(BrokerRegistration::fenced)
+                .map(BrokerRegistration::id)
+                .collect(Collectors.toSet());
     }
 
     void cordonBroker(int brokerId) {
@@ -470,6 +476,7 @@ class ReplicationControlTestContext {
             .setCordonedLogDirs(dirs);
         clusterControl.replay(record);
     }
+
 
     static Long defaultBrokerEpoch(int brokerId) {
         return brokerId + 100L;
