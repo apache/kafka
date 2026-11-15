@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.Map;
@@ -69,42 +70,47 @@ public interface ShareCoordinator {
      * Handle write share state call
      * @param context - represents the incoming write request context
      * @param request - actual RPC request object
+     * @param requestTimeRecorder - the recorder for the timings of the request
      * @return completable future comprising write RPC response data
      */
-    CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request);
+    CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder);
 
 
     /**
      * Handle read share state call
      * @param context - represents the incoming read request context
      * @param request - actual RPC request object
+     * @param requestTimeRecorder - the recorder for the timings of the request
      * @return completable future comprising read RPC response data
      */
-    CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request);
+    CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder);
 
     /**
      * Handle read share state summary call
      * @param context - represents the incoming read summary request context
      * @param request - actual RPC request object
+     * @param requestTimeRecorder - the recorder for the timings of the request
      * @return completable future comprising ReadShareGroupStateSummaryRequestData
      */
-    CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request);
+    CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request, RequestTimeRecorder requestTimeRecorder);
 
     /**
      * Handle delete share group state call
      * @param context - represents the incoming delete share group request context
      * @param request - actual RPC request object
+     * @param requestTimeRecorder - the recorder for the timings of the request
      * @return completable future representing delete share group RPC response data
      */
-    CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request);
+    CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder);
 
     /**
      * Handle initialize share group state call
      * @param context - represents the incoming initialize share group request context
      * @param request - actual RPC request object
+     * @param requestTimeRecorder - the recorder for the timings of the request
      * @return completable future representing initialize share group RPC response data
      */
-    CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request);
+    CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder);
 
     /**
      * Called when new coordinator is elected
