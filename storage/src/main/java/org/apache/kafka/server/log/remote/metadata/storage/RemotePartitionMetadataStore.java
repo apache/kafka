@@ -24,7 +24,6 @@ import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageNotReadyException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,8 +126,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             try {
                 boolean initialized = remoteLogMetadataCache.awaitInitialized(100, TimeUnit.MILLISECONDS);
                 if (!initialized) {
-                    // Throwing a retriable RemoteStorageNotReadyException here for clients retry.
-                    throw new RemoteStorageNotReadyException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+                    throw new RemoteLogMetadataNotReadyException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
                 }
             } catch (InterruptedException ex) {
                 throw new RemoteResourceNotFoundException("Couldn't initialize remote log metadata cache for partition: " + topicIdPartition);
