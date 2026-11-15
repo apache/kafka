@@ -19,11 +19,13 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -57,6 +59,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -326,6 +329,76 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
+    public void shouldClearInterruptStatusBeforeInvokingUncaughtExceptionHandler() {
+        final AtomicBoolean interruptedInHandler = new AtomicBoolean(true);
+        initializeConsumer();
+        interruptOnNextPoll(mockConsumer);
+        globalStreamThread.setUncaughtExceptionHandler(
+            e -> interruptedInHandler.set(Thread.currentThread().isInterrupted())
+        );
+
+        try {
+            globalStreamThread.run();
+
+            assertFalse(interruptedInHandler.get());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldClearInterruptStatusDuringShutdownAndRestoreItAfterwards() {
+        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
+        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
+        interruptOnNextPoll(consumer);
+        globalStreamThread = globalStreamThread(consumer);
+
+        try {
+            globalStreamThread.run();
+
+            assertFalse(interruptedOnClose.get());
+            assertEquals(DEAD, globalStreamThread.state());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldClearInterruptStatusSetByUncaughtExceptionHandlerDuringShutdown() {
+        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
+        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
+        // fail without an interrupt, so that the only interrupt is the one set by the handler
+        consumer.setPollException(new KafkaException("KABOOM!"));
+        globalStreamThread = globalStreamThread(consumer);
+        globalStreamThread.setUncaughtExceptionHandler(e -> Thread.currentThread().interrupt());
+
+        try {
+            globalStreamThread.run();
+
+            assertFalse(interruptedOnClose.get());
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
+    public void shouldRestoreInterruptStatusWhenShutdownThrows() {
+        initializeConsumer();
+        interruptOnNextPoll(mockConsumer);
+        globalStreamThread.setStateListener((thread, newState, oldState) -> {
+            if (newState == DEAD) {
+                throw new RuntimeException("KABOOM!");
+            }
+        });
+
+        try {
+            assertThrows(RuntimeException.class, globalStreamThread::run);
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+    }
+
+    @Test
     public void shouldGetGlobalConsumerClientInstanceId() throws Exception {
         initializeConsumer();
         startAndSwallowError();
@@ -466,7 +539,11 @@ public class GlobalStreamThreadTest {
     }
 
     private void initializeConsumer() {
-        mockConsumer.updatePartitions(
+        initializeConsumer(mockConsumer);
+    }
+
+    private void initializeConsumer(final MockConsumer<byte[], byte[]> consumer) {
+        consumer.updatePartitions(
             GLOBAL_STORE_TOPIC_NAME,
             Collections.singletonList(new PartitionInfo(
                 GLOBAL_STORE_TOPIC_NAME,
@@ -474,9 +551,44 @@ public class GlobalStreamThreadTest {
                 null,
                 new Node[0],
                 new Node[0])));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
-        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
-        mockConsumer.assign(Collections.singleton(topicPartition));
+        consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
+        consumer.assign(Collections.singleton(topicPartition));
+    }
+
+    private static void interruptOnNextPoll(final MockConsumer<byte[], byte[]> consumer) {
+        // the exception is created on the polling thread, since its constructor sets the interrupt status
+        consumer.schedulePollTask(() -> {
+            throw new InterruptException(new InterruptedException());
+        });
+    }
+
+    private MockConsumer<byte[], byte[]> consumerRecordingInterruptStatusOnClose(final AtomicBoolean interruptedOnClose) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public void close() {
+                interruptedOnClose.set(Thread.currentThread().isInterrupted());
+                super.close();
+            }
+        };
+        initializeConsumer(consumer);
+        return consumer;
+    }
+
+    private GlobalStreamThread globalStreamThread(final MockConsumer<byte[], byte[]> consumer) {
+        return new GlobalStreamThread(
+            builder.buildGlobalStateTopology(),
+            config,
+            consumer,
+            new StateDirectory(config, time, true, false),
+            0,
+            -1L,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> { }
+        );
     }
 
     private void startAndSwallowError() {
