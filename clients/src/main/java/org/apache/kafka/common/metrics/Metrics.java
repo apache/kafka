@@ -43,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.emptyList;
 
@@ -79,6 +80,7 @@ public final class Metrics implements Closeable {
     private final List<MetricsReporter> reporters;
     private final Time time;
     private final ScheduledThreadPoolExecutor metricsScheduler;
+    private final AtomicBoolean closed = new AtomicBoolean();
     private static final Logger log = LoggerFactory.getLogger(Metrics.class);
 
     /**
@@ -686,6 +688,9 @@ public final class Metrics implements Closeable {
      */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         if (this.metricsScheduler != null) {
             this.metricsScheduler.shutdown();
             try {
