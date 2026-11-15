@@ -1367,16 +1367,18 @@ public class DumpLogSegmentsTest {
             Arguments.of(
                 epochsKey,
                 new LastMirrorEpochsValue()
+                    .setLeaderEpoch(11)
+                    .setStateEpoch(5)
                     .setLastMirrorEpoch(42)
                     .setLastMirrorOffset(4_294_967_313L), // Verify offsets larger than a 32-bit integer.
                 epochsKeyJson,
-                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":42,\"lastMirrorOffset\":4294967313}}"
+                "{\"version\":\"0\",\"data\":{\"leaderEpoch\":11,\"stateEpoch\":5,\"lastMirrorEpoch\":42,\"lastMirrorOffset\":4294967313}}"
             ),
             Arguments.of(
                 epochsKey,
                 new LastMirrorEpochsValue(),
                 epochsKeyJson,
-                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"
+                "{\"version\":\"0\",\"data\":{\"leaderEpoch\":-1,\"stateEpoch\":0,\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"
             ),
             Arguments.of(stateKey, null, stateKeyJson, "<DELETE>"),
             Arguments.of(epochsKey, null, epochsKeyJson, "<DELETE>")
@@ -1496,7 +1498,7 @@ public class DumpLogSegmentsTest {
         assertTrue(output.contains("Unknown record type 2 at offset 0, skipping."), output);
         assertTrue(output.contains("Error at offset 1, skipping."), output);
         assertTrue(output.contains(DumpLogSegments.RECORD_INDENT + " offset: 2"), output);
-        assertTrue(output.contains("payload: {\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"), output);
+        assertTrue(output.contains("payload: {\"version\":\"0\",\"data\":{\"leaderEpoch\":-1,\"stateEpoch\":0,\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"), output);
     }
 
     private MetadataLogConfig createMetadataLogConfig(

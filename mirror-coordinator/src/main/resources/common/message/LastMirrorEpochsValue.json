@@ -20,6 +20,10 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
+    { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The leader epoch of the partition leader that wrote this record, or -1 if not available." },
+    { "name": "StateEpoch", "type": "int32", "versions": "0+", "default": "0",
+      "about": "Monotonically increasing epoch incremented on every last mirror epochs write." },
     { "name": "LastMirrorEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The last mirror leader epoch for this partition." },
     { "name": "LastMirrorOffset", "type": "int64", "versions": "0+", "default": "-1",

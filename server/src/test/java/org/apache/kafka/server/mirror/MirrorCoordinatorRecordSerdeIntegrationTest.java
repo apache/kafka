@@ -134,7 +134,11 @@ class MirrorCoordinatorRecordSerdeIntegrationTest {
         return CoordinatorRecord.record(
             new LastMirrorEpochsKey().setMirrorName("source-to-destination").setTopicId(TOPIC_ID).setPartition(0),
             new ApiMessageAndVersion(
-                new LastMirrorEpochsValue().setLastMirrorEpoch(epoch).setLastMirrorOffset(offset),
+                new LastMirrorEpochsValue()
+                    .setLeaderEpoch(11)
+                    .setStateEpoch(2)
+                    .setLastMirrorEpoch(epoch)
+                    .setLastMirrorOffset(offset),
                 (short) 0
             )
         );
