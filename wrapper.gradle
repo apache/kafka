@@ -18,34 +18,83 @@
  */
 
 // This file contains tasks for the gradle wrapper generation.
-
-// Ensure the wrapper script is generated based on the version defined in the project
-// and not the version installed on the machine running the task.
+//
+// To upgrade Gradle, run:
+//   ./gradlew wrapper --gradle-version <version>
+// The published distribution checksum, the published wrapper jar checksum and the gradle/gradle commit to
+// fetch the wrapper jar from are looked up automatically and written into gradle/wrapper/gradle-wrapper.properties
+// and gradlew.
 // Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
-wrapper {
-    gradleVersion = versions.gradle
+
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+def fetchBytes = { String url ->
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection()
+    conn.connectTimeout = 15_000
+    conn.readTimeout = 60_000
+    conn.setRequestProperty("User-Agent", "apache-kafka-build")
+    def token = System.getenv("GITHUB_TOKEN")
+    if (token && url.startsWith("https://api.github.com/")) {
+        conn.setRequestProperty("Authorization", "Bearer $token")
+    }
+    try {
+        conn.inputStream.withCloseable { it.bytes }
+    } catch (IOException e) {
+        // Without this the failure surfaces as a bare FileNotFoundException or IOException holding just the URL.
+        int code = -1
+        try { code = conn.responseCode } catch (IOException ignored) { }
+        String hint = (code == 403 || code == 429) && url.startsWith("https://api.github.com/")
+            ? ", the GitHub API rate limit was likely hit: set GITHUB_TOKEN to a token with public read access and re-run"
+            : ""
+        throw new GradleException("Failed to fetch $url${code > 0 ? " (HTTP $code)" : ""}$hint", e)
+    }
+}
+def fetchText = { String url -> new String(fetchBytes(url), "UTF-8").trim() }
+def sha256 = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes).encodeHex().toString() }
+
+// Pin the distribution checksum to the published one. This has to happen before the wrapper task runs,
+// because it refuses to change the version when the existing gradle-wrapper.properties has a checksum
+// but the task configuration doesn't.
+wrapper.doFirst {
+    String distChecksum = fetchText("${wrapper.distributionUrl}.sha256")
+    wrapper.distributionSha256Sum = distChecksum
+    logger.lifecycle("Gradle ${wrapper.gradleVersion} distribution: $distChecksum")
 }
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
 // This allows us to avoid checking in the jar to our repository.
 task bootstrapWrapper() {
+    // A finalizer runs even if the wrapper task failed; don't patch gradlew in that case.
+    onlyIf { wrapper.state.failure == null }
     // In the doLast block so this runs when the task is called and not during project configuration.
     doLast {
+        // The wrapper task writes the jar of the Gradle version currently running it, not of the target
+        // version, so the checksum must come from the published checksum of the target version.
+        String gradleVersion = wrapper.gradleVersion
+        String wrapperChecksum = fetchText("https://services.gradle.org/distributions/gradle-${gradleVersion}-wrapper.jar.sha256")
+
+        // Gradle doesn't publish the wrapper jar as a standalone download, so fetch it from the gradle/gradle
+        // repository. A release tag contains the bootstrap jar Gradle uses to build itself, which may be from
+        // the previous version (e.g. v9.8.1), so search the master history for a commit whose jar matches the
+        // published checksum instead. See https://issues.apache.org/jira/browse/KAFKA-21299.
+        // Using raw.githubusercontent.com instead of github.com because github.com servers deprecated
+        // TLSv1/TLSv1.1 support some time ago, so older versions of curl (built against OpenSSL library that
+        // doesn't support TLSv1.2) would fail to fetch the jar.
+        def commits = new JsonSlurper().parse(fetchBytes(
+            "https://api.github.com/repos/gradle/gradle/commits?sha=master&path=gradle/wrapper/gradle-wrapper.jar&per_page=30"))*.sha
+        String wrapperJarCommit = commits.find {
+            sha256(fetchBytes("https://raw.githubusercontent.com/gradle/gradle/$it/gradle/wrapper/gradle-wrapper.jar")) == wrapperChecksum
+        }
+        if (wrapperJarCommit == null) {
+            throw new GradleException("None of the last ${commits.size()} gradle/gradle master commits touching the wrapper jar " +
+                "has one matching the published checksum $wrapperChecksum of Gradle $gradleVersion")
+        }
+        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"
+        logger.lifecycle("Gradle $gradleVersion wrapper jar: $wrapperChecksum from gradle/gradle@$wrapperJarCommit")
+
         def wrapperBasePath = "\$APP_HOME/gradle/wrapper"
         def wrapperJarPath = wrapperBasePath + "/gradle-wrapper.jar"
-
-        // Leverages the wrapper jar checked into the gradle project on github because the jar isn't
-        // available elsewhere. Using raw.githubusercontent.com instead of github.com because
-        // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
-        // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
-        // fetch the jar.
-        // The jar is fetched from a pinned commit rather than the release tag: a release tag contains
-        // the bootstrap jar Gradle uses to build itself, which may be from the previous version and then
-        // doesn't match the published wrapper checksum; for more details see gradle/wrapper/README.md
-        // and https://issues.apache.org/jira/browse/KAFKA-21299
-        String wrapperJarCommit = "dcc5ee0ec88270575344e6afd490f96d96f84ab3"
-        String wrapperChecksum = "3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98"
-        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
       # Loop in case we encounter an error.
