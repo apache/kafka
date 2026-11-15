@@ -151,7 +151,7 @@ public class JmxTool {
         } while (System.currentTimeMillis() - connectTestStarted < connectTimeoutMs && !connected);
 
         if (!connected) {
-            throw new TerseException(String.format("Could not connect to JMX url %s after %d ms.",
+            throw new TerseException(String.format(Locale.ROOT, "Could not connect to JMX url %s after %d ms.",
                     options.jmxServiceURL(), connectTimeoutMs));
         }
         return serverConn;
@@ -177,7 +177,7 @@ public class JmxTool {
         if (!hasPatternQueries && options.hasWait() && !foundAllObjects.test(querySet, result)) {
             querySet.removeAll(result);
             String missing = mkString(querySet.stream().map(Object::toString), ",");
-            throw new TerseException(String.format("Could not find all requested object names after %d ms. Missing %s", waitTimeoutMs, missing));
+            throw new TerseException(String.format(Locale.ROOT, "Could not find all requested object names after %d ms. Missing %s", waitTimeoutMs, missing));
         }
         return result;
     }
@@ -235,7 +235,7 @@ public class JmxTool {
         }
 
         if (result.isEmpty()) {
-            throw new TerseException(String.format("No matched attributes for the queried objects %s.", queries));
+            throw new TerseException(String.format(Locale.ROOT, "No matched attributes for the queried objects %s.", queries));
         }
         return result;
     }
@@ -251,11 +251,11 @@ public class JmxTool {
             for (Attribute attribute : attributes.asList()) {
                 if (attributesInclude.isPresent()) {
                     if (List.of(attributesInclude.get()).contains(attribute.getName())) {
-                        result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
+                        result.put(String.format(Locale.ROOT, "%s:%s", objectName.toString(), attribute.getName()),
                                 attribute.getValue());
                     }
                 } else {
-                    result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
+                    result.put(String.format(Locale.ROOT, "%s:%s", objectName.toString(), attribute.getName()),
                             attribute.getValue());
                 }
             }
@@ -265,7 +265,7 @@ public class JmxTool {
 
     private static void maybePrintCsvHeader(String reportFormat, List<String> keys, Map<ObjectName, Integer> numExpectedAttributes) {
         if (reportFormat.equals("original") && keys.size() == sumValues(numExpectedAttributes) + 1) {
-            System.out.println(mkString(keys.stream().map(key -> String.format("\"%s\"", key)), ","));
+            System.out.println(mkString(keys.stream().map(key -> String.format(Locale.ROOT, "\"%s\"", key)), ","));
         }
     }
 

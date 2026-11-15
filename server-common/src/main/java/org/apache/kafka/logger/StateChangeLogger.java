@@ -19,6 +19,8 @@ package org.apache.kafka.logger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
+
 /**
  * Simple class that sets logIdent appropriately depending on whether the state change logger is being used in the
  * context of the broker (e.g. ReplicaManager and Partition).
@@ -29,7 +31,7 @@ public class StateChangeLogger {
     private final String logIdent;
 
     public StateChangeLogger(int brokerId) {
-        this.logIdent = String.format("[Broker id=%d] ", brokerId);
+        this.logIdent = String.format(Locale.ROOT, "[Broker id=%d] ", brokerId);
     }
 
     public void trace(String message) {

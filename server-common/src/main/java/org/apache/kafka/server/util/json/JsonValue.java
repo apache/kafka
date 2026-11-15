@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -54,7 +55,7 @@ public interface JsonValue {
      */
     default JsonObject asJsonObject() throws JsonMappingException {
         return asJsonObjectOptional()
-                .orElseThrow(() -> new JsonMappingException(null, String.format("Expected JSON object, received %s", node())));
+                .orElseThrow(() -> new JsonMappingException(null, String.format(Locale.ROOT, "Expected JSON object, received %s", node())));
     }
 
     /**
@@ -76,7 +77,7 @@ public interface JsonValue {
      */
     default JsonArray asJsonArray() throws JsonMappingException {
         return asJsonArrayOptional()
-                .orElseThrow(() -> new JsonMappingException(null, String.format("Expected JSON array, received %s", node())));
+                .orElseThrow(() -> new JsonMappingException(null, String.format(Locale.ROOT, "Expected JSON array, received %s", node())));
 
     }
 

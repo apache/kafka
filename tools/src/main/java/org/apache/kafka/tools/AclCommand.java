@@ -44,6 +44,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -401,7 +402,7 @@ public class AclCommand {
                 }
             }
             if (!unsupportedOps.isEmpty()) {
-                String msg = String.format("ResourceType %s only supports operations %s", resource.resourceType(), validOps);
+                String msg = String.format(Locale.ROOT, "ResourceType %s only supports operations %s", resource.resourceType(), validOps);
                 CommandLineUtils.printUsageAndExit(opts.parser, msg);
             }
         }
