@@ -31,7 +31,7 @@ import java.util.OptionalLong;
  * many records otherwise. Newer versions (magic versions 2 and above) will generally contain many records
  * regardless of compression.
  */
-public interface RecordBatch {
+public interface RecordBatch extends Iterable<Record> {
 
     /**
      * The "magic" values

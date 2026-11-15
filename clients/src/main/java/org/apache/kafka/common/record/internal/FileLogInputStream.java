@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.internals.CloseableIterator;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Iterator;
 import java.util.Objects;
 
 import static org.apache.kafka.common.record.internal.Records.HEADER_SIZE_UP_TO_MAGIC;
@@ -146,6 +147,15 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         @Override
         public byte magic() {
             return magic;
+        }
+
+        /**
+         * @deprecated Use {@link #streamingIterator(BufferSupplier)} and close the returned iterator.
+         */
+        @Deprecated
+        @Override
+        public Iterator<Record> iterator() {
+            return loadFullBatch().iterator();
         }
 
         @Override

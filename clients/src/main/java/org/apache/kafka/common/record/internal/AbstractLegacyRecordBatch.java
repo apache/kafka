@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -220,6 +221,19 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public OptionalLong deleteHorizonMs() {
         return OptionalLong.empty();
+    }
+
+    /**
+     * @deprecated Use {@link #streamingIterator(BufferSupplier)} and close the returned iterator.
+     * Get an iterator for the nested entries contained within this batch. Note that
+     * if the batch is not compressed, then this method will return an iterator over the
+     * shallow record only (i.e. this object).
+     * @return An iterator over the records contained within this batch
+     */
+    @Deprecated
+    @Override
+    public Iterator<Record> iterator() {
+        return streamingIterator(BufferSupplier.NO_CACHING);
     }
 
     /**
