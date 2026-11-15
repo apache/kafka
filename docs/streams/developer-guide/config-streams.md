@@ -918,7 +918,7 @@ Low
 </td>  
 <td>
 
-The strategy used for rack aware assignment. Acceptable value are `"none"` (default), `"min_traffic"`, and `"balance_suttopology"`. See Rack Aware Assignment Strategy.
+The strategy used for rack aware assignment. Acceptable value are `"none"` (default), `"min_traffic"`, and `"balance_subtopology"`. See Rack Aware Assignment Strategy.
 </td>  
 <td>
 
@@ -961,7 +961,7 @@ Cost associated with moving tasks from existing assignment. See Rack Aware Assig
 <tr>  
 <td>
 
-rack.aware.assignment.non_overlap_cost
+rack.aware.assignment.traffic_cost
 </td>  
 <td>
 
@@ -1638,7 +1638,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers, which is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../../core-concepts#streams_processing_guarantee). 
 > 
 > Recommendation:
->     While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with `min.in.sync.replicas=2`). This recommendation applies to all topics (i.e. `__transaction_state`, `__consumer_offsets`, Kafka Streams internal topics, and user topics).
+>     While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with `min.insync.replicas=2`). This recommendation applies to all topics (i.e. `__transaction_state`, `__consumer_offsets`, Kafka Streams internal topics, and user topics).
 
 > When exactly-once processing is enabled, Kafka Streams sets `transaction.timeout.ms` to 10000 (10 seconds) by default. This bounds how long a transaction may remain open before the broker aborts it and fences the producer. If your application requires longer processing times per poll-process-commit cycle, you can increase this value via `StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG)`, but note that when EOS is enabled Kafka Streams also requires `transaction.timeout.ms` to be greater than or equal to `commit.interval.ms`, otherwise the application will fail to start. In addition, the value must not exceed the broker's `transaction.max.timeout.ms`. Keep in mind that a higher transaction timeout delays fencing of zombie producers and may extend how long `read_committed` consumers block on uncommitted data, so it should only be increased when necessary.
 
@@ -1796,7 +1796,7 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.restoreConsumerPrefix("PARAMETER_NAME"), "restore-consumer-value");
  
- Same applied to `main.consumer.` and `main.consumer.`, if you only want to specify one consumer type config.
+ Same applied to `main.consumer.` and `global.consumer.`, if you only want to specify one consumer type config.
  
  Additionally, to configure the internal repartition/changelog topics, you could use the `topic.` prefix, followed by any of the standard topic configs.
      
