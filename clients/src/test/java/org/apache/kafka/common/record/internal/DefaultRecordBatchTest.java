@@ -388,42 +388,42 @@ public class DefaultRecordBatchTest {
         assertEquals(marker, EndTransactionMarker.deserialize(commitRecord));
     }
 
-        @ParameterizedTest
-        @EnumSource(value = CompressionType.class)
-        public void testStreamingIterator(CompressionType compressionType) {
-            Compression compression = Compression.of(compressionType).build();
-            MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                    compression, TimestampType.CREATE_TIME,
-                    new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                    new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                    new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
-            DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
-            try (CloseableIterator<Record> streamingIterator = batch.streamingIterator(BufferSupplier.create())) {
-                List<Record> decoded = Utils.toList(streamingIterator);
-                assertEquals(List.of(0L, 1L, 2L), decoded.stream().map(Record::offset).collect(Collectors.toList()));
-                assertEquals(List.of(1L, 2L, 3L), decoded.stream().map(Record::timestamp).collect(Collectors.toList()));
-                assertEquals(List.of("a", "b", "c"), decoded.stream().map(record -> Utils.utf8(record.key())).collect(Collectors.toList()));
-                assertEquals(List.of("1", "2", "3"), decoded.stream().map(record -> Utils.utf8(record.value())).collect(Collectors.toList()));
-            }
+    @ParameterizedTest
+    @EnumSource(value = CompressionType.class)
+    public void testStreamingIterator(CompressionType compressionType) {
+        Compression compression = Compression.of(compressionType).build();
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+                compression, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        try (CloseableIterator<Record> streamingIterator = batch.streamingIterator(BufferSupplier.create())) {
+            List<Record> decoded = Utils.toList(streamingIterator);
+            assertEquals(List.of(0L, 1L, 2L), decoded.stream().map(Record::offset).collect(Collectors.toList()));
+            assertEquals(List.of(1L, 2L, 3L), decoded.stream().map(Record::timestamp).collect(Collectors.toList()));
+            assertEquals(List.of("a", "b", "c"), decoded.stream().map(record -> Utils.utf8(record.key())).collect(Collectors.toList()));
+            assertEquals(List.of("1", "2", "3"), decoded.stream().map(record -> Utils.utf8(record.value())).collect(Collectors.toList()));
         }
+    }
 
-        @Test
-        public void testStreamingIteratorDoesNotOpenStreamForEmptyBatch() {
-            DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
-                RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, 0));
-            try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                assertFalse(iterator.hasNext());
-            }
-            verify(batch, never()).recordInputStream(any());
+    @Test
+    public void testStreamingIteratorDoesNotOpenStreamForEmptyBatch() {
+        DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
+            RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, 0));
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            assertFalse(iterator.hasNext());
         }
+        verify(batch, never()).recordInputStream(any());
+    }
 
-        @Test
-        public void testStreamingIteratorRejectsNegativeCountBeforeOpeningStream() {
-            DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
-                RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, -1));
-            assertThrows(InvalidRecordException.class, () -> batch.streamingIterator(BufferSupplier.NO_CACHING));
-            verify(batch, never()).recordInputStream(any());
-        }
+    @Test
+    public void testStreamingIteratorRejectsNegativeCountBeforeOpeningStream() {
+        DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
+            RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, -1));
+        assertThrows(InvalidRecordException.class, () -> batch.streamingIterator(BufferSupplier.NO_CACHING));
+        verify(batch, never()).recordInputStream(any());
+    }
 
     @ParameterizedTest
     @EnumSource(value = CompressionType.class)
