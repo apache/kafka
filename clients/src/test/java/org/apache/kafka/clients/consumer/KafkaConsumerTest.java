@@ -756,6 +756,14 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    public void testSetRebalanceListenerWithoutGroupId(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
+
+        assertDoesNotThrow(() -> consumer.setRebalanceListener(mock(RebalanceListener.class)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
