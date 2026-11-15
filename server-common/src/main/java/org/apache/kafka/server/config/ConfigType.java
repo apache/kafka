@@ -24,6 +24,7 @@ public enum ConfigType {
     CLIENT("clients"),
     USER("users"),
     BROKER("brokers"),
+    CONTROLLER("controllers"),
     IP("ips"),
     CLIENT_METRICS("client-metrics"),
     GROUP("groups");
