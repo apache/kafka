@@ -901,7 +901,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * The listener is only invoked when the consumer uses group management through {@code subscribe()}.
-     * Calling this method does not throw if the consumer does not use group management.
+     * It is safe to call this method without group management; the listener is simply never invoked.
      *
      * <p>
      * The listener can be updated at any time. The change takes effect on the next {@link #poll(Duration)}
