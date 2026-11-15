@@ -19,6 +19,8 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -77,15 +79,25 @@ public abstract class AbstractRecords implements Records {
 
             @Override
             protected Record makeNext() {
-                if (records != null && records.hasNext())
-                    return records.next();
+                while (records == null || !records.hasNext()) {
+                    if (!batches.hasNext()) {
+                        return allDone();
+                    }
 
-                if (batches.hasNext()) {
-                    records = batches.next().iterator();
-                    return makeNext();
+                    RecordBatch batch = batches.next();
+                    // The Iterable API has no close method. Compressed batches must release the
+                    // decompression stream before handing records to a caller that may stop early.
+                    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && batch.isCompressed()) {
+                        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                            records = Utils.toList(iterator).iterator();
+                        }
+                    } else {
+                        // Uncompressed and legacy iterators do not hold decompression resources.
+                        records = batch.streamingIterator(BufferSupplier.NO_CACHING);
+                    }
                 }
 
-                return allDone();
+                return records.next();
             }
         };
     }

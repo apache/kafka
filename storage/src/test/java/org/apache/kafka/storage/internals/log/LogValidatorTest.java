@@ -411,13 +411,13 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
+            assertEquals(batch.maxTimestamp(), TestUtils.records(batch).stream().map(Record::timestamp).max(Long::compare).get());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
 
-            for (Record record : batch) {
+            for (Record record : TestUtils.records(batch)) {
                 record.ensureValid();
                 assertEquals((long) timestampSeq.get(i), record.timestamp());
                 i++;
@@ -602,13 +602,13 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
+            assertEquals(batch.maxTimestamp(), TestUtils.records(batch).stream().map(Record::timestamp).max(Long::compare).get());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
 
-            for (Record record : batch) {
+            for (Record record : TestUtils.records(batch)) {
                 record.ensureValid();
                 assertEquals((long) timestampSeq.get(i), record.timestamp());
                 i++;
@@ -2029,14 +2029,14 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq[0], batch);
-            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
+            assertEquals(batch.maxTimestamp(), TestUtils.records(batch).stream().map(Record::timestamp).max(Long::compare).get());
 
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(isTransactional, batch.isTransactional());
             assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
-            for (Record record : batch) {
+            for (Record record : TestUtils.records(batch)) {
                 record.ensureValid();
                 assertEquals(timestampSeq[i], record.timestamp());
                 i += 1;
@@ -2225,7 +2225,7 @@ public class LogValidatorTest {
         assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
         assertEquals(expectedLogAppendTime, batch.maxTimestamp(), "Unexpected max timestamp of batch $batch");
         maybeCheckBaseTimestamp(expectedBaseTimestamp, batch);
-        batch.forEach(record -> {
+        TestUtils.records(batch).forEach(record -> {
             record.ensureValid();
             assertEquals(expectedLogAppendTime, record.timestamp(), String.format("Unexpected timestamp of record %s", record));
         });

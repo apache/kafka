@@ -1169,7 +1169,7 @@ public class DumpLogSegmentsTest {
             assertEquals(Optional.of(batch.compressionType().name), Optional.ofNullable(parsedBatch.get("compresscodec")));
 
             Iterator<String> parsedRecordIter = readBatchRecords(lines).iterator();
-            for (Record record : batch) {
+            for (Record record : TestUtils.records(batch)) {
                 assertTrue(parsedRecordIter.hasNext());
                 Map<String, String> parsedRecord = parseMetadataFields(parsedRecordIter.next());
                 assertEquals(Optional.of(record.offset()), optionalLong(parsedRecord.get("offset")));

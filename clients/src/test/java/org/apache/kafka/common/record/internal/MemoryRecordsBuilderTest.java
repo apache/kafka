@@ -384,7 +384,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(logAppendTime, record.timestamp());
             }
         }
@@ -425,7 +425,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(expectedTimestamps[i++], record.timestamp());
             }
         }
@@ -507,7 +507,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(i++, record.timestamp());
             }
         }

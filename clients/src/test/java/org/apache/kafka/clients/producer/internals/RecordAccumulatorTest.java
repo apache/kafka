@@ -323,7 +323,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
-        List<Record> records = TestUtils.toList(recordBatch);
+        List<Record> records = TestUtils.records(recordBatch);
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
@@ -362,7 +362,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
-        List<Record> records = TestUtils.toList(recordBatch);
+        List<Record> records = TestUtils.records(recordBatch);
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());

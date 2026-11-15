@@ -85,7 +85,6 @@ import java.util.stream.LongStream;
 import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1622,7 +1621,7 @@ public class LogCleanerTest {
         RecordBatch retainedBatch = batchList.get(0);
         assertEquals(log.logSegments().get(log.logSegments().size() - 1).baseOffset() - 1, retainedBatch.lastOffset(),
             "the retained batch should be the last batch");
-        assertFalse(retainedBatch.iterator().hasNext(), "the retained batch should be an empty batch");
+        assertTrue(TestUtils.records(retainedBatch).isEmpty(), "the retained batch should be an empty batch");
     }
 
     /**
@@ -2223,7 +2222,7 @@ public class LogCleanerTest {
 
         for (LogSegment segment : log.logSegments()) {
             for (RecordBatch batch : segment.log().batches()) {
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     assertTrue(record.hasMagic(batch.magic()));
                     long value = Long.parseLong(Utils.utf8(record.value()));
                     assertEquals(record.offset(), value);

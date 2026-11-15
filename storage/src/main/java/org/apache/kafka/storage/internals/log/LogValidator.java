@@ -204,17 +204,20 @@ public class LogValidator {
 
             List<ApiRecordError> recordErrors = new ArrayList<>(0);
             int recordIndex = 0;
-            for (Record record : batch) {
-                Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
-                    record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
-                    metricsRecorder);
-                recordError.ifPresent(recordErrors::add);
-                if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
-                    break;
-                // we fail the batch if any record fails, so we stop appending if any record fails
-                if (recordErrors.isEmpty())
-                    builder.appendWithOffset(offsetCounter.value++, record);
-                ++recordIndex;
+            try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
+                        record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
+                        metricsRecorder);
+                    recordError.ifPresent(recordErrors::add);
+                    if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
+                        break;
+                    // we fail the batch if any record fails, so we stop appending if any record fails
+                    if (recordErrors.isEmpty())
+                        builder.appendWithOffset(offsetCounter.value++, record);
+                    ++recordIndex;
+                }
             }
 
             processRecordErrors(recordErrors);
@@ -251,17 +254,20 @@ public class LogValidator {
             // That said, there is no benefit in using `skipKeyValueIterator` for the uncompressed
             // case since we don't do key/value copies in this path (we just slice the ByteBuffer)
             int recordIndex = 0;
-            for (Record record : batch) {
-                Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition, record,
-                    recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
-                recordError.ifPresent(recordErrors::add);
-                if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
-                    break;
+            try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition, record,
+                        recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
+                    recordError.ifPresent(recordErrors::add);
+                    if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
+                        break;
 
-                offsetCounter.value++;
-                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp)
-                    maxBatchTimestamp = record.timestamp();
-                ++recordIndex;
+                    offsetCounter.value++;
+                    if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp)
+                        maxBatchTimestamp = record.timestamp();
+                    ++recordIndex;
+                }
             }
 
             processRecordErrors(recordErrors);

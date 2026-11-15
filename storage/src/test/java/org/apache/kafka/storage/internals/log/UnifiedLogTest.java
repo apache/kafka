@@ -2453,7 +2453,7 @@ public class UnifiedLogTest {
         for (int i = 0; i < values.length; i++) {
             RecordBatch read = log.read(i, 1, FetchIsolation.LOG_END, true).records.batches().iterator().next();
             assertEquals(i, read.lastOffset(), "Offset read should match order appended.");
-            Record actual = read.iterator().next();
+            Record actual = TestUtils.records(read).get(0);
             assertNull(actual.key(), "Key should be null");
             assertEquals(ByteBuffer.wrap(values[i]), actual.value(), "Values not equal");
         }
@@ -3045,7 +3045,7 @@ public class UnifiedLogTest {
             assertEquals(offset, head.lastOffset(), "Offsets not equal");
 
             Record expected = messageSets[i].records().iterator().next();
-            Record actual = head.iterator().next();
+            Record actual = TestUtils.records(head).get(0);
             assertEquals(expected.key(), actual.key(), "Keys not equal at offset " + offset);
             assertEquals(expected.value(), actual.value(), "Values not equal at offset " + offset);
             assertEquals(expected.timestamp(), actual.timestamp(), "Timestamps not equal at offset " + offset);
@@ -4512,7 +4512,7 @@ public class UnifiedLogTest {
         List<Record> recordsFound = new ArrayList<>();
         for (LogSegment logSegment : log.logSegments()) {
             for (RecordBatch batch : logSegment.log().batches()) {
-                batch.iterator().forEachRemaining(recordsFound::add);
+                recordsFound.addAll(TestUtils.records(batch));
             }
         }
         return recordsFound;

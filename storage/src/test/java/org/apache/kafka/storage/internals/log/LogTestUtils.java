@@ -293,7 +293,7 @@ public class LogTestUtils {
                 if (batch.isControlBatch()) {
                     continue;
                 }
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     if (record.hasValue() && record.hasKey()) {
                         keys.add(Long.parseLong(readString(record.key())));
                     }

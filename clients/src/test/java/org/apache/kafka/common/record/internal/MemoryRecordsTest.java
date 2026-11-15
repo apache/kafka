@@ -197,7 +197,7 @@ public class MemoryRecordsTest {
                 }
 
                 int recordCount = 0;
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     record.ensureValid();
                     assertTrue(record.hasMagic(batch.magic()));
                     assertFalse(record.isCompressed());
@@ -509,7 +509,7 @@ public class MemoryRecordsTest {
         assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
         assertTrue(batch.isValid());
 
-        List<Record> createdRecords = TestUtils.toList(batch);
+        List<Record> createdRecords = TestUtils.records(batch);
         assertEquals(1, createdRecords.size());
 
         Record record = createdRecords.get(0);
@@ -595,7 +595,7 @@ public class MemoryRecordsTest {
         assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
         assertTrue(batch.isValid());
 
-        List<Record> createdRecords = TestUtils.toList(batch);
+        List<Record> createdRecords = TestUtils.records(batch);
         assertEquals(1, createdRecords.size());
 
         Record record = createdRecords.get(0);
@@ -694,7 +694,7 @@ public class MemoryRecordsTest {
         assertEquals(1, batches.size());
 
         MutableRecordBatch batch = batches.get(0);
-        List<Record> records = TestUtils.toList(batch);
+        List<Record> records = TestUtils.records(batch);
         assertEquals(1, records.size());
         assertEquals(8L, records.get(0).offset());
 
@@ -778,7 +778,7 @@ public class MemoryRecordsTest {
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
             assertFalse(firstBatch.isTransactional());
-            List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
+            List<Record> firstBatchRecords = TestUtils.records(firstBatch);
             assertEquals(1, firstBatchRecords.size());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(firstBatchRecords.get(0)));
@@ -792,7 +792,7 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence1, secondBatch.baseSequence());
             assertEquals(baseSequence1 + 2, secondBatch.lastSequence());
             assertFalse(secondBatch.isTransactional());
-            List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
+            List<Record> secondBatchRecords = TestUtils.records(secondBatch);
             assertEquals(2, secondBatchRecords.size());
             assertEquals(baseSequence1 + 1, secondBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()), new SimpleRecord(secondBatchRecords.get(0)));
@@ -808,7 +808,7 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence2, thirdBatch.baseSequence());
             assertEquals(baseSequence2 + 2, thirdBatch.lastSequence());
             assertTrue(thirdBatch.isTransactional());
-            List<Record> thirdBatchRecords = TestUtils.toList(thirdBatch);
+            List<Record> thirdBatchRecords = TestUtils.records(thirdBatch);
             assertEquals(2, thirdBatchRecords.size());
             assertEquals(baseSequence2, thirdBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(16L, "6".getBytes(), "g".getBytes()), new SimpleRecord(thirdBatchRecords.get(0)));
@@ -1074,7 +1074,7 @@ public class MemoryRecordsTest {
         byte magic = args.magic;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
                 new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
-        String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
+        String key = Utils.utf8(memoryRecords.records().iterator().next().key());
         assertEquals("key1", key);
     }
 

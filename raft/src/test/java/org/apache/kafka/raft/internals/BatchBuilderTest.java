@@ -15,13 +15,13 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft.internals;
-
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -83,7 +83,7 @@ class BatchBuilderTest {
         assertFalse(batch.isControlBatch());
         assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
 
-        List<String> builtRecords = Utils.toList(batch).stream()
+        List<String> builtRecords = TestUtils.records(batch).stream()
             .map(record -> Utils.utf8(record.value()))
             .collect(Collectors.toList());
         assertEquals(records, builtRecords);

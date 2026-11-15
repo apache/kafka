@@ -1868,7 +1868,7 @@ class ShareGroupDLQStateManagerTest {
     // hardcoded, so a test can size dlqTopicMaxMessageBytes precisely against a record's own raw size.
     private static int recordSizeInBytes(SimpleRecord simpleRecord) {
         MemoryRecords batch = MemoryRecords.withRecords(Compression.NONE, simpleRecord);
-        return batch.batches().iterator().next().iterator().next().sizeInBytes();
+        return batch.records().iterator().next().sizeInBytes();
     }
 
     // A read result carrying the given data and error. Other read metadata is irrelevant to the fetcher.

@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package kafka.server.share;
-
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.GapWindow;
 import kafka.server.share.SharePartition.SharePartitionState;
@@ -51,6 +50,8 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
@@ -98,7 +99,6 @@ import org.mockito.Mockito;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -9453,15 +9453,15 @@ public class SharePartitionTest {
 
         // Record batch is a control batch but doesn't contain any records.
         recordBatch = mock(RecordBatch.class);
-        Iterator batchIterator = mock(Iterator.class);
+        CloseableIterator batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(false);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertFalse(sharePartition.containsAbortMarker(recordBatch));
 
         // Record batch is a control batch which contains a record of type ControlRecordType.ABORT.
         recordBatch = mock(RecordBatch.class);
-        batchIterator = mock(Iterator.class);
+        batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(true);
         DefaultRecord record = mock(DefaultRecord.class);
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -9472,13 +9472,14 @@ public class SharePartitionTest {
         buffer.flip();
         when(record.key()).thenReturn(buffer);
         when(batchIterator.next()).thenReturn(record);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertTrue(sharePartition.containsAbortMarker(recordBatch));
+        Mockito.verify(batchIterator).close();
 
         // Record batch is a control batch which contains a record of type ControlRecordType.COMMIT.
         recordBatch = mock(RecordBatch.class);
-        batchIterator = mock(Iterator.class);
+        batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(true);
         record = mock(DefaultRecord.class);
         buffer = ByteBuffer.allocate(4096);
@@ -9489,7 +9490,7 @@ public class SharePartitionTest {
         buffer.flip();
         when(record.key()).thenReturn(buffer);
         when(batchIterator.next()).thenReturn(record);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertFalse(sharePartition.containsAbortMarker(recordBatch));
     }

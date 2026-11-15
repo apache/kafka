@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1240,7 +1240,7 @@ public class MockLogTest {
                 assertEquals(currentOffset, batch.baseOffset());
                 assertEquals(currentOffset + batch.countOrNull() - 1, batch.lastOffset());
 
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     assertEquals(currentOffset, record.offset());
                     assertEquals(expectedRecords.get(currentOffset), new SimpleRecord(record));
                     currentOffset += 1;
