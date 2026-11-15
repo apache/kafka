@@ -252,7 +252,7 @@ public class MockLog implements RaftLog {
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
         List<LogEntry> entries = new ArrayList<>();
-            try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
                 long offset = offsetSupplier.apply(record);
