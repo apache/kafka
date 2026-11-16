@@ -58,13 +58,19 @@ public class KafkaRebalanceListenerDemo {
     private static final Duration CALLBACK_OPERATION_TIMEOUT = Duration.ofSeconds(10);
 
     public static void main(String[] args) {
+        if (args.length > 1) {
+            Utils.printHelp("Usage: KafkaRebalanceListenerDemo [classic|consumer]");
+            return;
+        }
+
+        String groupProtocol = args.length == 0 ? ConsumerConfig.DEFAULT_GROUP_PROTOCOL : args[0];
         String clientId = "rebalance-consumer-" + UUID.randomUUID().toString().substring(0, 8);
-        KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(consumerProperties(clientId));
+        KafkaConsumer<Integer, String> consumer = new KafkaConsumer<>(consumerProperties(clientId, groupProtocol));
         AtomicBoolean closing = new AtomicBoolean();
         Thread shutdownHook = registerShutdownHook(consumer, clientId, closing);
 
         try {
-            consume(consumer, clientId, closing);
+            consume(consumer, clientId, groupProtocol, closing);
         } finally {
             removeShutdownHook(shutdownHook, closing);
             consumer.close();
@@ -73,10 +79,12 @@ public class KafkaRebalanceListenerDemo {
 
     private static void consume(KafkaConsumer<Integer, String> consumer,
                                 String clientId,
+                                String groupProtocol,
                                 AtomicBoolean closing) {
         consumer.setRebalanceListener(new OffsetManagementRebalanceListener(clientId));
         consumer.subscribe(List.of(TOPIC_NAME));
-        Utils.printOut("clientId=%s subscribed to %s in group %s", clientId, TOPIC_NAME, GROUP_NAME);
+        Utils.printOut("clientId=%s subscribed to %s in group %s with groupProtocol=%s",
+            clientId, TOPIC_NAME, GROUP_NAME, groupProtocol);
 
         try {
             // Return to poll after processing so that the consumer thread observes a shutdown wakeup.
@@ -133,10 +141,11 @@ public class KafkaRebalanceListenerDemo {
         }
     }
 
-    private static Properties consumerProperties(String clientId) {
+    private static Properties consumerProperties(String clientId, String groupProtocol) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.BOOTSTRAP_SERVERS);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_NAME);
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -186,8 +195,9 @@ public class KafkaRebalanceListenerDemo {
 
         @Override
         public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
-            // These partitions may already have a new owner, so their offsets must not be committed here.
-            Utils.printOut("[onPartitionsLost] clientId=%s lost %s without committing offsets", clientId, partitions);
+            // These partitions are no longer owned by this consumer, so do not perform offset management
+            // operations on them, such as committing offsets, querying positions, or seeking.
+            Utils.printOut("[onPartitionsLost] clientId=%s lost %s", clientId, partitions);
         }
     }
 }
