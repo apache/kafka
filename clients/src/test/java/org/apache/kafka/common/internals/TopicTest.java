@@ -107,4 +107,18 @@ public class TopicTest {
         for (int i = 0; i < periodFirstMiddleLastNone.size(); ++i)
             assertFalse(Topic.hasCollision(periodFirstMiddleLastNone.get(i), underscoreFirstMiddleLastNone.get(i)));
     }
+
+    @Test
+    public void testIsInternal() {
+        List<String> falseTopics = Arrays.asList("__cluster_metadata", "foo");
+        List<String> trueTopics = Arrays.asList(
+                "__consumer_offsets", "__transaction_state", "__share_group_state", "__mirror_state"
+        );
+
+        for (String topic : falseTopics)
+            assertFalse(Topic.isInternal(topic));
+
+        for (String topic : trueTopics)
+            assertTrue(Topic.isInternal(topic));
+    }
 }
