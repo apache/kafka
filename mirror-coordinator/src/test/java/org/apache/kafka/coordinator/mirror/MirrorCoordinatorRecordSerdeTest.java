@@ -71,10 +71,10 @@ class MirrorCoordinatorRecordSerdeTest {
         CoordinatorRecord record = epochRecord();
         byte[] value = ByteBuffer.allocate(23)
             .putShort((short) 0) // Value schema version.
-            .putInt(11) // LeaderEpoch.
-            .putInt(5) // StateEpoch.
             .putInt(42) // LastMirrorEpoch.
             .putLong(4_294_967_313L) // LastMirrorOffset: exceeds the 32-bit integer range.
+            .putInt(11) // LeaderEpoch.
+            .putInt(5) // StateEpoch.
             .put((byte) 0) // Number of tagged fields.
             .array();
 
@@ -98,10 +98,10 @@ class MirrorCoordinatorRecordSerdeTest {
         assertEquals((byte) -1, state.previousState());
 
         LastMirrorEpochsValue epochs = new LastMirrorEpochsValue();
-        assertEquals(-1, epochs.leaderEpoch());
-        assertEquals(0, epochs.stateEpoch());
         assertEquals(-1, epochs.lastMirrorEpoch());
         assertEquals(-1L, epochs.lastMirrorOffset());
+        assertEquals(-1, epochs.leaderEpoch());
+        assertEquals(0, epochs.stateEpoch());
 
         assertRoundTrip(CoordinatorRecord.record(stateRecord(null).key(), new ApiMessageAndVersion(state, (short) 0)));
         assertRoundTrip(CoordinatorRecord.record(epochRecord().key(), new ApiMessageAndVersion(epochs, (short) 0)));
@@ -221,10 +221,10 @@ class MirrorCoordinatorRecordSerdeTest {
             new LastMirrorEpochsKey().setMirrorName("mirror").setTopicId(TOPIC_ID).setPartition(4),
             new ApiMessageAndVersion(
                 new LastMirrorEpochsValue()
-                    .setLeaderEpoch(11)
-                    .setStateEpoch(5)
                     .setLastMirrorEpoch(42)
-                    .setLastMirrorOffset(4_294_967_313L),
+                    .setLastMirrorOffset(4_294_967_313L)
+                    .setLeaderEpoch(11)
+                    .setStateEpoch(5),
                 (short) 0
             )
         );
