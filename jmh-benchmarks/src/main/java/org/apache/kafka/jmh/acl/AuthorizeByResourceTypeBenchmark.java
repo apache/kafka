@@ -83,11 +83,15 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class AuthorizeByResourceTypeBenchmark {
-    @Param({"8"})
+    // Complete name length; the surviving mixed ALLOW and ancestor DENYs may be shorter.
+    @Param({"8", "32", "128"})
     public int resourceNameLength;
 
-    @Param({"10000"})
-    // Number of independent resource groups, or nested ALLOW/DENY pairs for MIXED_PATTERNS.
+    @Param({"1"})
+    public int sharedPrefixLength;
+
+    @Param({"1000", "10000"})
+    // Number of independent resource groups, or ALLOW/DENY pairs for MIXED_PATTERNS.
     public int resourceCount;
 
     @Param({"LITERAL", "PREFIXED"})
@@ -98,7 +102,7 @@ public class AuthorizeByResourceTypeBenchmark {
     // ANCESTOR_DENY: deny prefix "a" covers the ALLOW; "abb" is unrelated -> DENIED.
     // UNRELATED_DENY: deny prefix "abb" does not cover the ALLOW -> ALLOWED.
     // NO_DENIES: only ALLOW ACLs exist -> ALLOWED.
-    // MIXED_PATTERNS: N literal ALLOWs at P + "a", P + "aa", ... each have a matching
+    // MIXED_PATTERNS: N literal ALLOWs at distinct names of resourceNameLength each have a matching
     // prefixed DENY, while an ALLOW at P survives -> ALLOWED. With allowPatternType=PREFIXED,
     // the baseline must check all N literal ALLOWs before reaching the surviving prefixed ALLOW.
     @Param({"MIXED_PATTERNS"})
@@ -110,6 +114,16 @@ public class AuthorizeByResourceTypeBenchmark {
 
     @Setup
     public void setup() throws Exception {
+        if (resourceCount < 1 || sharedPrefixLength < 1) {
+            throw new IllegalArgumentException("resourceCount and sharedPrefixLength must be positive");
+        }
+        int identifierLength = Integer.toString(resourceCount - 1, Character.MAX_RADIX).length();
+        int suffixLength = scenario.equals("MIXED_PATTERNS") ? 0 : 3;
+        if (resourceNameLength < sharedPrefixLength + identifierLength + suffixLength) {
+            throw new IllegalArgumentException("resourceNameLength must fit the shared prefix, "
+                + "a unique resource identifier, and the scenario suffix");
+        }
+
         authorizer = new BaselineAuthorizer();
         metrics = new Metrics();
         authorizer.configure(Map.of());
@@ -134,12 +148,10 @@ public class AuthorizeByResourceTypeBenchmark {
     }
 
     private void setupMixedPatterns(KafkaPrincipal principal) {
-        String prefix = "x".repeat(resourceNameLength);
+        String prefix = "x".repeat(sharedPrefixLength);
         addAcl(prefix, allowPatternType, AclPermissionType.ALLOW, principal);
-        // As in AuthorizeByResourceTypeSearch, resourceCount grows both the number of
-        // pairs and the longest suffix. Total resource-name characters grow quadratically.
-        for (int i = 1; i <= resourceCount; i++) {
-            String name = prefix + "a".repeat(i);
+        for (int i = 0; i < resourceCount; i++) {
+            String name = resourceNamePrefix(i, 0);
             addAcl(name, PatternType.LITERAL, AclPermissionType.ALLOW, principal);
             addAcl(name, PatternType.PREFIXED, AclPermissionType.DENY, principal);
         }
@@ -147,7 +159,7 @@ public class AuthorizeByResourceTypeBenchmark {
 
     private void setupIndependentPatterns(KafkaPrincipal principal) {
         for (int i = 0; i < resourceCount; i++) {
-            String prefix = "x".repeat(resourceNameLength) + "-" + i + "-";
+            String prefix = resourceNamePrefix(i, 3);
             addAcl(prefix + "abc", allowPatternType, AclPermissionType.ALLOW, principal);
             switch (scenario) {
                 case "EXACT_DENY":
@@ -166,6 +178,15 @@ public class AuthorizeByResourceTypeBenchmark {
                     throw new IllegalArgumentException("Unknown scenario " + scenario);
             }
         }
+    }
+
+    private String resourceNamePrefix(int index, int suffixLength) {
+        int identifierLength = Integer.toString(resourceCount - 1, Character.MAX_RADIX).length();
+        String identifier = Integer.toString(index, Character.MAX_RADIX);
+        // Put the identifier before the padding so the common prefix does not grow with name length.
+        return "x".repeat(sharedPrefixLength)
+            + "0".repeat(identifierLength - identifier.length()) + identifier
+            + "x".repeat(resourceNameLength - sharedPrefixLength - identifierLength - suffixLength);
     }
 
     private void addAcl(String name, PatternType type, AclPermissionType permission, KafkaPrincipal principal) {
