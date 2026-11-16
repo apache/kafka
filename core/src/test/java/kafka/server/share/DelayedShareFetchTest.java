@@ -1813,10 +1813,6 @@ public class DelayedShareFetchTest {
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-
         // Mocking local log read result for tp0 and tp1, and remote storage read result for tp2.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp0, tp1), Set.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
