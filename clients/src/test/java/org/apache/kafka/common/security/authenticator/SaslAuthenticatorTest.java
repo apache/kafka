@@ -1286,7 +1286,8 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         try {
-            IOException expected = assertThrows(IOException.class, () -> createAndCheckClientConnectionFailure(securityProtocol, node));
+            IOException expected = assertThrows(IOException.class, () -> createAndCheckClientConnectionFailure(securityProtocol, node),
+                "Did not generate exception prior to creating channel");
             server.verifyAuthenticationMetrics(0, 0);
             server.verifyReauthenticationMetrics(0, 0);
             Throwable underlyingCause = expected.getCause().getCause().getCause();
