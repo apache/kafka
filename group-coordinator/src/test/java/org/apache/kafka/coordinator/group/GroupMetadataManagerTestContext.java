@@ -302,17 +302,17 @@ public class GroupMetadataManagerTestContext {
         CompletableFuture<JoinGroupResponseData> joinFuture;
         List<CoordinatorRecord> records;
         CompletableFuture<Void> appendFuture;
-        // The outcome classicGroupJoin returned, e.g. whether a step is needed before conversion.
-        ClassicGroupJoinOutcome outcome;
+        // The step classicGroupJoin returned to run before conversion, or empty if the join was handled.
+        Optional<ClassicGroupConversionStep> step;
 
         public JoinResult(
             CompletableFuture<JoinGroupResponseData> joinFuture,
-            CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> coordinatorResult
+            CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> coordinatorResult
         ) {
             this.joinFuture = joinFuture;
             this.records = coordinatorResult.records();
             this.appendFuture = coordinatorResult.appendFuture();
-            this.outcome = coordinatorResult.response();
+            this.step = coordinatorResult.response();
         }
     }
 
@@ -962,7 +962,7 @@ public class GroupMetadataManagerTestContext {
         );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
+        CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture,

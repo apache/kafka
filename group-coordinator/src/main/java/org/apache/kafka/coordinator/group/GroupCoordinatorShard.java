@@ -567,13 +567,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *                               {@link Group#stepBeforeClassicConversion()} was already run,
      *                               or does not apply, so the group can be converted right away.
      *
-     * @return A Result with a list of records to update the state machine. Its response is
-     *         {@link ClassicGroupJoinOutcome#COMPLETED} if the join was handled. Otherwise it is
-     *         the step returned by {@link Group#stepBeforeClassicConversion()}: nothing is
-     *         changed, and the caller must run that step and call again with
-     *         {@code preConversionStepDone = true}.
+     * @return A Result with a list of records to update the state machine. Its response is empty
+     *         if the join was handled. Otherwise it is the step returned by
+     *         {@link Group#stepBeforeClassicConversion()}: nothing is changed, and the caller
+     *         must run that step and call again with {@code preConversionStepDone = true}.
      */
-    public CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,

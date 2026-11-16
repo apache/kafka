@@ -176,10 +176,13 @@ public interface Group {
      * to a classic group, for example to release state held outside the coordinator that the
      * conversion would otherwise orphan.
      *
-     * @return The step to run first, or empty if the group can be converted right away. Must not
-     *         be {@link ClassicGroupJoinOutcome#COMPLETED}, which is not a step.
+     * <p>This is called on every classic join to an existing group, before it is known whether
+     * the join will convert the group. An override must therefore return empty whenever the
+     * group will not be converted (e.g. because it is not empty).
+     *
+     * @return The step to run first, or empty if there is nothing to run.
      */
-    default Optional<ClassicGroupJoinOutcome> stepBeforeClassicConversion() {
+    default Optional<ClassicGroupConversionStep> stepBeforeClassicConversion() {
         return Optional.empty();
     }
 

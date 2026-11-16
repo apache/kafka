@@ -25662,9 +25662,9 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext.JoinResult result =
             context.sendClassicGroupJoin(request, false, false, false);
 
-        // Detection fired: the outcome is DELETE_STREAMS_TOPOLOGY_FIRST, no coordinator records emitted, and
+        // Detection fired: the step is DELETE_STREAMS_TOPOLOGY, no coordinator records emitted, and
         // responseFuture is left untouched (the join is not completed — cleanup must happen first).
-        assertEquals(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST, result.outcome);
+        assertEquals(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY), result.step);
         assertEquals(List.of(), result.records);
         assertFalse(result.joinFuture.isDone());
     }
@@ -25691,8 +25691,8 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext.JoinResult result =
             context.sendClassicGroupJoin(request, false, false, true);
 
-        // No cleanup signal: the outcome is COMPLETED and conversion records were emitted.
-        assertEquals(ClassicGroupJoinOutcome.COMPLETED, result.outcome);
+        // No cleanup signal: no step is returned and conversion records were emitted.
+        assertEquals(Optional.empty(), result.step);
         assertFalse(result.records.isEmpty());
     }
 
@@ -25701,7 +25701,7 @@ public class GroupMetadataManagerTest {
         // The detection predicate must fire only for an empty streams group whose stored epoch is
         // non-NONE. Under preConversionStepDone=false (the value production passes on every classic
         // join with a plugin configured) each of the following must fall through to a normal join —
-        // outcome COMPLETED — rather than signalling cleanup:
+        // no step returned — rather than signalling cleanup:
         //   (a) no such group,
         //   (b) a non-streams (classic) group,
         //   (c) a non-empty streams group,
@@ -25710,12 +25710,12 @@ public class GroupMetadataManagerTest {
 
         // (a) Missing group.
         GroupMetadataManagerTestContext missing = new GroupMetadataManagerTestContext.Builder().build();
-        assertEquals(ClassicGroupJoinOutcome.COMPLETED, sendJoinForCleanupDetection(missing, groupId).outcome);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(missing, groupId).step);
 
         // (b) Classic group.
         GroupMetadataManagerTestContext classic = new GroupMetadataManagerTestContext.Builder().build();
         classic.createClassicGroup(groupId);
-        assertEquals(ClassicGroupJoinOutcome.COMPLETED, sendJoinForCleanupDetection(classic, groupId).outcome);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(classic, groupId).step);
 
         // (c) Non-empty streams group (a live member), even with a stored epoch set.
         String memberId = Uuid.randomUuid().toString();
@@ -25729,7 +25729,7 @@ public class GroupMetadataManagerTest {
             .build();
         nonEmpty.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
-        assertEquals(ClassicGroupJoinOutcome.COMPLETED, sendJoinForCleanupDetection(nonEmpty, groupId).outcome);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(nonEmpty, groupId).step);
 
         // (d) Empty streams group at stored == NONE (nothing in the plugin to clean up).
         GroupMetadataManagerTestContext storedNone = new GroupMetadataManagerTestContext.Builder()
@@ -25737,7 +25737,7 @@ public class GroupMetadataManagerTest {
             .build();
         storedNone.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
-        assertEquals(ClassicGroupJoinOutcome.COMPLETED, sendJoinForCleanupDetection(storedNone, groupId).outcome);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(storedNone, groupId).step);
     }
 
     private static GroupMetadataManagerTestContext.JoinResult sendJoinForCleanupDetection(

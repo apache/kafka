@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
-import org.apache.kafka.coordinator.group.ClassicGroupJoinOutcome;
+import org.apache.kafka.coordinator.group.ClassicGroupConversionStep;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -958,13 +958,14 @@ public class StreamsGroup implements Group {
      * metadata. If the topology description plugin (KIP-1331) may still hold a topology for the
      * group, that topology would be orphaned, so it must be deleted from the plugin first.
      *
-     * @return {@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST} if the group is empty
-     *         and the plugin may hold a topology for it, otherwise empty.
+     * @return {@link ClassicGroupConversionStep#DELETE_STREAMS_TOPOLOGY} if the group is empty
+     *         and the plugin may hold a topology for it, otherwise empty. A non-empty group is
+     *         not converted, so it has no step.
      */
     @Override
-    public Optional<ClassicGroupJoinOutcome> stepBeforeClassicConversion() {
+    public Optional<ClassicGroupConversionStep> stepBeforeClassicConversion() {
         if (isEmpty() && mayHaveTopologyDescription()) {
-            return Optional.of(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST);
+            return Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY);
         }
         return Optional.empty();
     }

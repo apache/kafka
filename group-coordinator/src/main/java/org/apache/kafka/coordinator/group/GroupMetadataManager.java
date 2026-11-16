@@ -7202,13 +7202,12 @@ public class GroupMetadataManager {
      *                               or does not apply (e.g. no topology description plugin is
      *                               configured), so the group can be converted right away.
      *
-     * @return A result with the records produced by the join. Its response is
-     *         {@link ClassicGroupJoinOutcome#COMPLETED} if the join was handled. Otherwise it is
-     *         the step returned by {@link Group#stepBeforeClassicConversion()}: nothing is
-     *         changed, and the caller must run that step and call again with
-     *         {@code preConversionStepDone = true}.
+     * @return A result with the records produced by the join. Its response is empty if the join
+     *         was handled. Otherwise it is the step returned by
+     *         {@link Group#stepBeforeClassicConversion()}: nothing is changed, and the caller
+     *         must run that step and call again with {@code preConversionStepDone = true}.
      */
-    public CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
@@ -7217,14 +7216,9 @@ public class GroupMetadataManager {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
         if (group != null) {
             if (!preConversionStepDone) {
-                Optional<ClassicGroupJoinOutcome> step = group.stepBeforeClassicConversion();
+                Optional<ClassicGroupConversionStep> step = group.stepBeforeClassicConversion();
                 if (step.isPresent()) {
-                    if (step.get() == ClassicGroupJoinOutcome.COMPLETED) {
-                        // COMPLETED is not a step. Returning it would leave responseFuture open forever.
-                        throw new IllegalStateException("Group " + request.groupId() + " returned "
-                            + ClassicGroupJoinOutcome.COMPLETED + " as a step before classic conversion.");
-                    }
-                    return new CoordinatorResult<>(List.of(), step.get());
+                    return new CoordinatorResult<>(List.of(), step);
                 }
             }
             if (group.type() == CONSUMER && !group.isEmpty()) {
@@ -7245,7 +7239,7 @@ public class GroupMetadataManager {
                     .setMemberId(UNKNOWN_MEMBER_ID)
                     .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
                 );
-                return new CoordinatorResult<>(List.of(), ClassicGroupJoinOutcome.COMPLETED);
+                return new CoordinatorResult<>(List.of(), Optional.empty());
             }
         } else {
             return completed(classicGroupJoinToClassicGroup(context, request, responseFuture));
@@ -7253,13 +7247,13 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Returns the given join result unchanged, but with response
-     * {@link ClassicGroupJoinOutcome#COMPLETED}.
+     * Returns the given join result unchanged, but with an empty response, meaning the join was
+     * handled and there is no step to run.
      */
-    private static CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> completed(
+    private static CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> completed(
         CoordinatorResult<Void, CoordinatorRecord> r
     ) {
-        return new CoordinatorResult<>(r.records(), ClassicGroupJoinOutcome.COMPLETED, r.appendFuture(), r.replayRecords(), r.isAtomic());
+        return new CoordinatorResult<>(r.records(), Optional.empty(), r.appendFuture(), r.replayRecords(), r.isAtomic());
     }
 
     /**

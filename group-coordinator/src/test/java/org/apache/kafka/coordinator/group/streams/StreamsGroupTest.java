@@ -33,7 +33,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.ClassicGroupJoinOutcome;
+import org.apache.kafka.coordinator.group.ClassicGroupConversionStep;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
@@ -1713,7 +1713,7 @@ public class StreamsGroupTest {
         streamsGroup.setStoredDescriptionTopologyEpoch(storedEpoch);
 
         assertEquals(
-            Optional.of(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST),
+            Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY),
             streamsGroup.stepBeforeClassicConversion()
         );
     }

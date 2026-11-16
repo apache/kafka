@@ -1092,7 +1092,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.COMPLETED));
+        )).thenReturn(CompletableFuture.completedFuture(Optional.<ClassicGroupConversionStep>empty()));
 
         CompletableFuture<JoinGroupResponseData> responseFuture = service.joinGroup(
             requestContext(ApiKeys.JOIN_GROUP),
