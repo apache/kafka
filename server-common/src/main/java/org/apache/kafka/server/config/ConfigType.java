@@ -26,7 +26,8 @@ public enum ConfigType {
     BROKER("brokers"),
     IP("ips"),
     CLIENT_METRICS("client-metrics"),
-    GROUP("groups");
+    GROUP("groups"),
+    CLUSTER_MIRROR("cluster-mirrors");
 
     private final String value;
 
