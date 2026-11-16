@@ -214,6 +214,8 @@ public class RecordQueue {
 
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
+            // Copy before deserializing: deserializers, timestamp extractors and processors can
+            // change raw.headers() in place, and the exception handlers need the original headers.
             final Headers sourceRawHeaders = new RecordHeaders(raw.headers());
             final ConsumerRecord<Object, Object> deserialized =
                 recordDeserializer.deserialize(processorContext, raw, sourceRawHeaders);
