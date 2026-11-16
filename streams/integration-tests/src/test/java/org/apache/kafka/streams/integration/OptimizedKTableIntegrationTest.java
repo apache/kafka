@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -33,6 +38,9 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -54,10 +62,15 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -126,7 +139,7 @@ public class OptimizedKTableIntegrationTest {
         try {
             startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
-            produceValueRange(key, 0, batch1NumMessages);
+            produceValueRange(INPUT_TOPIC_NAME, key, 0, batch1NumMessages);
 
             // Assert that all messages in the first batch were processed in a timely manner
             assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
@@ -166,7 +179,7 @@ public class OptimizedKTableIntegrationTest {
 
             final int totalNumMessages = batch1NumMessages + batch2NumMessages;
 
-            produceValueRange(key, batch1NumMessages, totalNumMessages);
+            produceValueRange(INPUT_TOPIC_NAME, key, batch1NumMessages, totalNumMessages);
 
             // Assert that all messages in the second batch were processed in a timely manner
             assertTrue(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS));
@@ -181,19 +194,113 @@ public class OptimizedKTableIntegrationTest {
         }
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) {
+    @Test
+    public void shouldNotFetchBeyondCommittedOffsetForStandby(final TestInfo testInfo) throws Exception {
+        final String topic = "standby-limit-input-topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
+        CLUSTER.createTopic(topic, 1, 1);
+        produceValueRange(topic, 1, 0, 1_000);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(topic, Consumed.with(Serdes.Integer(), Serdes.Integer()),
+            Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME).withCachingDisabled());
+
+        final String safeTestName = safeUniqueTestName(testInfo);
+        final AtomicLong standbyNextOffset = new AtomicLong();
+        final RestorePolls restorePolls1 = new RestorePolls();
+        final RestorePolls restorePolls2 = new RestorePolls();
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName), restorePolls1, standbyNextOffset);
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName), restorePolls2, standbyNextOffset);
+        startApplicationAndWaitUntilRunning(Arrays.asList(kafkaStreams1, kafkaStreams2), Duration.ofSeconds(60));
+
+        TestUtils.waitForCondition(
+            () -> standbyNextOffset.get() >= 1_000L,
+            () -> "Standby did not catch up with the active task, next offset: " + standbyNextOffset.get());
+
+        final boolean firstIsActive = kafkaStreams1.metadataForLocalThreads().stream().anyMatch(t -> !t.activeTasks().isEmpty());
+        final KafkaStreams active = firstIsActive ? kafkaStreams1 : kafkaStreams2;
+        final RestorePolls standbyPolls = firstIsActive ? restorePolls2 : restorePolls1;
+
+        // the active task stops making progress, so its committed offset (the limit of the standby) stays at 1,000
+        active.pause();
+        final long polledBefore = standbyPolls.records.get();
+        produceValueRange(topic, 1, 1_000, 2_000);
+
+        // the new records are beyond the limit and cannot be applied, so the standby must pause the partition
+        // after the first poll instead of fetching all of them
+        TestUtils.waitForCondition(
+            () -> standbyPolls.records.get() > polledBefore && standbyPolls.paused.contains(partition),
+            () -> "Standby did not pause the partition, records polled beyond the limit: " + (standbyPolls.records.get() - polledBefore));
+        final long polled = standbyPolls.records.get() - polledBefore;
+        assertTrue(polled <= 100, "Standby polled " + polled + " records beyond the committed offset of the active task");
+    }
+
+    // records returned by the restore consumer, and the partitions it currently has paused
+    private static final class RestorePolls {
+        private final AtomicLong records = new AtomicLong();
+        private final Set<TopicPartition> paused = ConcurrentHashMap.newKeySet();
+    }
+
+    private void produceValueRange(final String topic, final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            INPUT_TOPIC_NAME,
+            topic,
             IntStream.range(start, endExclusive)
                 .mapToObj(i -> KeyValue.pair(key, i))
                 .collect(Collectors.toList()),
             producerProps,
             mockTime);
+    }
+
+    private KafkaStreams createKafkaStreams(final StreamsBuilder builder,
+                                            final Properties config,
+                                            final RestorePolls restorePolls,
+                                            final AtomicLong standbyNextOffset) {
+        final KafkaStreams streams = new KafkaStreams(builder.build(config), config, new DefaultKafkaClientSupplier() {
+            @Override
+            public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> consumerConfig) {
+                return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                        final ConsumerRecords<byte[], byte[]> records = super.poll(timeout);
+                        restorePolls.records.addAndGet(records.count());
+                        return records;
+                    }
+
+                    @Override
+                    public void pause(final Collection<TopicPartition> partitions) {
+                        super.pause(partitions);
+                        restorePolls.paused.addAll(partitions);
+                    }
+
+                    @Override
+                    public void resume(final Collection<TopicPartition> partitions) {
+                        super.resume(partitions);
+                        restorePolls.paused.removeAll(partitions);
+                    }
+                };
+            }
+        });
+        streams.setStandbyUpdateListener(new StandbyUpdateListener() {
+            @Override
+            public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) { }
+
+            @Override
+            public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId,
+                                      final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+                standbyNextOffset.accumulateAndGet(batchEndOffset + 1, Math::max);
+            }
+
+            @Override
+            public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset,
+                                          final long currentEndOffset, final SuspendReason reason) { }
+        });
+        streamsToCleanup.add(streams);
+        return streams;
     }
 
     private KafkaStreams createKafkaStreams(final StreamsBuilder builder, final Properties config) {
