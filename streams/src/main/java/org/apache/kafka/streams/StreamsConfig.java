@@ -571,7 +571,7 @@ public class StreamsConfig extends AbstractConfig {
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
     static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
-    /** {@code dsl.store.suppliers.class } */
+    /** {@code dsl.store.format } */
     public static final String DSL_STORE_FORMAT_CONFIG = "dsl.store.format";
     public static final String DSL_STORE_FORMAT_DEFAULT = "DEFAULT";
     public static final String DSL_STORE_FORMAT_HEADERS = "HEADERS";
