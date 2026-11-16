@@ -264,6 +264,76 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
+    public void testSetRebalanceListenerNullRemovesListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        List<TopicPartition> assigned = new ArrayList<>();
+        List<TopicPartition> revoked = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revoked.addAll(partitions);
+            }
+        });
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(List.of(tp0, tp1), assigned);
+
+        consumer.setRebalanceListener(null);
+        consumer.rebalance(List.of(tp0));
+
+        // the narrowed assignment proves the rebalance ran, so the silence is the listener
+        // having been removed rather than nothing having happened
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(List.of(tp0, tp1), assigned);
+        assertTrue(revoked.isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSetRebalanceListenerOverridesListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        List<TopicPartition> deprecatedAssigned = new ArrayList<>();
+        List<TopicPartition> assigned = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                deprecatedAssigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+        });
+        consumer.rebalance(List.of(tp0));
+        assertEquals(List.of(tp0), deprecatedAssigned);
+
+        consumer.setRebalanceListener(new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                assigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+            }
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+            }
+        });
+        consumer.rebalance(List.of(tp1));
+
+        // both registration styles write the same listener slot, so the second one wins
+        assertEquals(List.of(tp1), assigned);
+        assertEquals(List.of(tp0), deprecatedAssigned);
+    }
+
+    @Test
     public void testSetRebalanceListenerNullStopsCallbacks() {
         TopicPartition tp0 = new TopicPartition("test", 0);
         TopicPartition tp1 = new TopicPartition("test", 1);

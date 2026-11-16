@@ -552,7 +552,7 @@ public class PlaintextConsumerCallbackTest {
         var revokedCount = new AtomicInteger(0);
         var totalRecords = 10;
         var consumer = createConsumer(groupProtocol);
-        try {
+        try (consumer) {
             consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
@@ -605,8 +605,6 @@ public class PlaintextConsumerCallbackTest {
             consumeAndVerifyRecords(consumer, tp, totalRecords, 0);
             assertEquals(2, assignedCount.get(), "re-subscribing should not invoke the removed listener");
             assertEquals(1, revokedCount.get());
-        } finally {
-            consumer.close();
         }
         // close() gives up the assignment, again without invoking the removed listener
         assertThrows(IllegalStateException.class, consumer::assignment, "close() should have closed the consumer");

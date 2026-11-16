@@ -3974,6 +3974,69 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @SuppressWarnings("removal")
+    public void testSetRebalanceListenerNullRemovesListenerFromDeprecatedSubscribe(GroupProtocol groupProtocol) {
+        Time time = new MockTime(1L);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
+        AtomicInteger assignedCount = new AtomicInteger();
+        AtomicInteger revokedCount = new AtomicInteger();
+        initMetadata(client, Map.of(topic, 1, topic2, 1));
+
+        // a ConsumerRebalanceListener cannot seek through a RebalanceConsumer, so it seeks through
+        // the consumer itself, which is what the deprecated callbacks have always done
+        consumer.subscribe(Arrays.asList(topic, topic2), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assignedCount.incrementAndGet();
+                // set initial position so we don't need a lookup
+                for (TopicPartition partition : partitions)
+                    consumer.seek(partition, 0);
+            }
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revokedCount.incrementAndGet();
+            }
+        });
+        Node node = metadata.fetch().nodes().get(0);
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // two poll calls, since the first rebalance needs two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
+        assertEquals(1, assignedCount.get());
+        assertEquals(0, revokedCount.get());
+        // the listener seeks what it is given, so the positions are the externally visible proof it ran
+        assertEquals(0L, consumer.position(tp0));
+        assertEquals(0L, consumer.position(t2p0));
+
+        // the deprecated overload and setRebalanceListener write the same listener slot, so passing
+        // null removes a listener that was registered the old way too
+        consumer.setRebalanceListener(null);
+        prepareRebalance(client, node, assignor, List.of(tp0), coordinator);
+        consumer.enforceRebalance();
+        consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
+
+        // the narrowed assignment proves the second rebalance really completed
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(1, assignedCount.get());
+        assertEquals(0, revokedCount.get());
+        // see testSetRebalanceListenerNullSkipsCallbacksOnRebalance: the eager rebalance drops the
+        // position and, with the listener removed, nothing seeks it back
+        assertThrows(
+            org.apache.kafka.common.errors.TimeoutException.class,
+            () -> consumer.position(tp0, Duration.ZERO)
+        );
+    }
+
+    // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testUnsubscribeAfterNullRebalanceListenerSkipsRevoked(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
