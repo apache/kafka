@@ -25670,7 +25670,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testClassicGroupJoinDoesNotDetectWhenTopologyCleanupHandled() {
+    public void testClassicGroupJoinSkipsStepWhenPreConversionStepDone() {
         // When preConversionStepDone=true the detection predicate is suppressed, so classicGroupJoin
         // must proceed with the conversion even when storedDescriptionTopologyEpoch is set. This is
         // the re-invocation path after the caller has already run the plugin cleanup.

@@ -176,7 +176,8 @@ public interface Group {
      * to a classic group, for example to release state held outside the coordinator that the
      * conversion would otherwise orphan.
      *
-     * @return The step to run first, or empty if the group can be converted right away.
+     * @return The step to run first, or empty if the group can be converted right away. Must not
+     *         be {@link ClassicGroupJoinOutcome#COMPLETED}, which is not a step.
      */
     default Optional<ClassicGroupJoinOutcome> stepBeforeClassicConversion() {
         return Optional.empty();

@@ -7219,6 +7219,11 @@ public class GroupMetadataManager {
             if (!preConversionStepDone) {
                 Optional<ClassicGroupJoinOutcome> step = group.stepBeforeClassicConversion();
                 if (step.isPresent()) {
+                    if (step.get() == ClassicGroupJoinOutcome.COMPLETED) {
+                        // COMPLETED is not a step. Returning it would leave responseFuture open forever.
+                        throw new IllegalStateException("Group " + request.groupId() + " returned "
+                            + ClassicGroupJoinOutcome.COMPLETED + " as a step before classic conversion.");
+                    }
                     return new CoordinatorResult<>(List.of(), step.get());
                 }
             }

@@ -2108,8 +2108,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
         // The first classic-group-join detects the empty streams group with a stored topology and
-        // returns true (cleanup needed, no conversion); the second runs after cleanup and converts,
-        // returning false.
+        // returns DELETE_STREAMS_TOPOLOGY_FIRST (no conversion); the second runs after cleanup and
+        // converts, returning COMPLETED.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST))
             .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.COMPLETED));
@@ -2140,7 +2140,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("boom")));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
-        // The single classic-group-join detects the empty streams group and returns true; the
+        // The single classic-group-join detects the empty streams group and returns
+        // DELETE_STREAMS_TOPOLOGY_FIRST; the
         // post-cleanup conversion never runs because the plugin delete fails.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST));
@@ -2213,7 +2214,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         // The single classic-group-join finds an already-classic group, completes the response and
-        // returns false (no cleanup needed).
+        // returns COMPLETED (no cleanup needed).
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.COMPLETED));
 
