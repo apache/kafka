@@ -3322,19 +3322,6 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testHasCommittedOffsetsIgnoresAbortedTransactionalOffsets() {
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        long producerId = 10L;
-        context.commitOffset(producerId, "group-id", "foo", 0, 100L, 1, context.time.milliseconds());
-        context.commit();
-        assertFalse(context.hasCommittedOffsets("group-id"));
-
-        context.replayEndTransactionMarker(producerId, TransactionResult.ABORT);
-        context.commit();
-        assertFalse(context.hasCommittedOffsets("group-id"));
-    }
-
-    @Test
     public void testHasCommittedOffsetsUntilExpiredOffsetsAreDeleted() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
             .withOffsetsRetentionMinutes(1)
@@ -3354,8 +3341,9 @@ public class OffsetMetadataManagerTest {
         assertFalse(context.hasCommittedOffsets("group-id"));
     }
 
-    @Test
-    public void testHasCommittedOffsetsIgnoresPendingTransactionalOffsets() {
+    @ParameterizedTest
+    @EnumSource(TransactionResult.class)
+    public void testHasCommittedOffsetsIgnoresPendingTransactionalOffsets(TransactionResult result) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         long producerId = 10L;
         context.commitOffset(producerId, "group-id", "foo", 0, 100L, 1, context.time.milliseconds());
@@ -3364,9 +3352,10 @@ public class OffsetMetadataManagerTest {
         assertFalse(context.hasCommittedOffsets("group-id"));
         assertFalse(context.groupHasNoOffsets("group-id"));
 
-        context.replayEndTransactionMarker(producerId, TransactionResult.COMMIT);
+        // The offset counts only if the transaction commits.
+        context.replayEndTransactionMarker(producerId, result);
         context.commit();
-        assertTrue(context.hasCommittedOffsets("group-id"));
+        assertEquals(result == TransactionResult.COMMIT, context.hasCommittedOffsets("group-id"));
     }
 
     private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(

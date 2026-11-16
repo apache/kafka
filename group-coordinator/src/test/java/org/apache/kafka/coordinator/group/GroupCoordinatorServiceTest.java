@@ -1506,9 +1506,13 @@ public class GroupCoordinatorServiceTest {
                 .setGroupType("consumer")
         );
 
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ListGroupsResponseData.ListedGroup>>> readOperationCaptor =
+            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
+
         when(runtime.scheduleReadAllOperation(
             ArgumentMatchers.eq("list-groups"),
-            ArgumentMatchers.any()
+            readOperationCaptor.capture()
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(List.of(expectedResults.get(0))),
             CompletableFuture.completedFuture(List.of(expectedResults.get(1))),
@@ -1517,35 +1521,12 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
-            new ListGroupsRequestData()
-        );
-
-        assertEquals(expectedResults, responseFuture.get(5, TimeUnit.SECONDS).groups());
-    }
-
-    @Test
-    public void testListGroupsForwardsRequireCommittedOffsets() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setConfig(createConfig())
-            .setRuntime(runtime)
-            .build();
-        service.startup(() -> 1);
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ListGroupsResponseData.ListedGroup>>> readOperationCaptor =
-            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
-
-        when(runtime.scheduleReadAllOperation(
-            ArgumentMatchers.eq("list-groups"),
-            readOperationCaptor.capture()
-        )).thenReturn(List.of(CompletableFuture.completedFuture(List.of())));
-
-        service.listGroups(
-            requestContext(ApiKeys.LIST_GROUPS),
             new ListGroupsRequestData().setRequireCommittedOffsets(true)
         );
 
+        assertEquals(expectedResults, responseFuture.get(5, TimeUnit.SECONDS).groups());
+
+        // The read operation passes the filter and its committed offset to the shard.
         GroupCoordinatorShard shard = mock(GroupCoordinatorShard.class);
         readOperationCaptor.getValue().generateResponse(shard, 42L);
         verify(shard).listGroups(List.of(), List.of(), true, 42L);

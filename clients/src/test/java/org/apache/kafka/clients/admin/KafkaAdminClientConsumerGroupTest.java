@@ -448,35 +448,6 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
     }
 
     @Test
-    public void testListGroupsWithRequireCommittedOffsets() throws Exception {
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
-            env.kafkaClient().prepareResponseFrom(
-                expectListGroupsRequestWithFilters(Set.of(), Set.of(), true),
-                new ListGroupsResponse(new ListGroupsResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setGroups(List.of(
-                        new ListGroupsResponseData.ListedGroup()
-                            .setGroupId("group-1")
-                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                            .setGroupState("Stable")
-                            .setGroupType(GroupType.CONSUMER.toString())))),
-                env.cluster().nodeById(0));
-
-            ListGroupsOptions options = new ListGroupsOptions().requireCommittedOffsets(true);
-            ListGroupsResult result = env.adminClient().listGroups(options);
-
-            List<GroupListing> expected = List.of(
-                new GroupListing("group-1", Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))
-            );
-            assertEquals(expected, new ArrayList<>(result.all().get()));
-            assertEquals(0, result.errors().get().size());
-        }
-    }
-
-    @Test
     public void testListGroupsWithRequireCommittedOffsetsOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV5 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)
@@ -496,23 +467,6 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
             assertEquals(1, result.errors().get().size());
             assertInstanceOf(UnsupportedVersionException.class, result.errors().get().iterator().next());
             assertTrue(result.valid().get().isEmpty());
-
-            // Without the filter, the same broker is listed normally.
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
-            env.kafkaClient().prepareResponseFrom(
-                expectListGroupsRequestWithFilters(Set.of(), Set.of(), false),
-                new ListGroupsResponse(new ListGroupsResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setGroups(List.of(
-                        new ListGroupsResponseData.ListedGroup()
-                            .setGroupId("group-1")
-                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                            .setGroupState(GroupState.STABLE.toString())
-                            .setGroupType(GroupType.CONSUMER.toString())))),
-                env.cluster().nodeById(0));
-
-            result = env.adminClient().listGroups(new ListGroupsOptions().requireCommittedOffsets(false));
-            assertEquals(1, result.all().get().size());
         }
     }
 

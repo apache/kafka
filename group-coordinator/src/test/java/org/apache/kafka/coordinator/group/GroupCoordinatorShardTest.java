@@ -2846,35 +2846,15 @@ public class GroupCoordinatorShardTest {
         ListGroupsResponseData.ListedGroup withOffsets = new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets");
         ListGroupsResponseData.ListedGroup withoutOffsets = new ListGroupsResponseData.ListedGroup().setGroupId("without-offsets");
         when(groupMetadataManager.listGroups(Set.of(), Set.of(), 100L)).thenReturn(List.of(withOffsets, withoutOffsets));
+
+        // Without the filter, the offsets are not read.
+        assertEquals(List.of(withOffsets, withoutOffsets), coordinator.listGroups(List.of(), List.of(), false, 100L));
+        verifyNoInteractions(offsetMetadataManager);
+
+        // With the filter, the groups and the offsets are read at the same committed offset.
         when(offsetMetadataManager.hasCommittedOffsets("with-offsets", 100L)).thenReturn(true);
         when(offsetMetadataManager.hasCommittedOffsets("without-offsets", 100L)).thenReturn(false);
-
         assertEquals(List.of(withOffsets), coordinator.listGroups(List.of(), List.of(), true, 100L));
-    }
-
-    @Test
-    public void testListGroupsWithoutRequireCommittedOffsetsDoesNotReadOffsets() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
-            mock(GroupCoordinatorConfig.class),
-            mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class)
-        );
-
-        List<ListGroupsResponseData.ListedGroup> allGroups = List.of(
-            new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets"),
-            new ListGroupsResponseData.ListedGroup().setGroupId("without-offsets")
-        );
-        when(groupMetadataManager.listGroups(Set.of(), Set.of(), 100L)).thenReturn(allGroups);
-
-        assertEquals(allGroups, coordinator.listGroups(List.of(), List.of(), false, 100L));
-        verifyNoInteractions(offsetMetadataManager);
     }
 
     @Test

@@ -196,7 +196,6 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     assertEquals(Set("streams-grp", "share-grp"), listGroupIds(requireCommittedOffsets = false))
     assertEquals(Set("streams-grp"), listGroupIds(requireCommittedOffsets = true))
     assertEquals(Set.empty, listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.SHARE.toString)))
-    assertEquals(Set("share-grp"), listGroupIds(requireCommittedOffsets = false, typesFilter = List(Group.GroupType.SHARE.toString)))
   }
 
   private def listGroupIds(

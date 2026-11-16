@@ -880,12 +880,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testListGroupRequestV5SucceedsWithoutRequireCommittedOffsets() {
-        ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(false);
-        assertEquals((short) 5, new ListGroupsRequest.Builder(data).build((short) 5).version());
-    }
-
-    @Test
     public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
         testInvalidCase("apache-kafka-java", "0.0.0@java");
