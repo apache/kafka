@@ -40,8 +40,7 @@ import org.mockito.quality.Strictness;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -133,13 +132,13 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldDelegateReadOnlyUncommittedToInner() {
         when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
-        assertThat(store.readOnly(IsolationLevel.READ_UNCOMMITTED), sameInstance(view));
+        assertSame(view, store.readOnly(IsolationLevel.READ_UNCOMMITTED));
     }
 
     @Test
     public void shouldDelegateReadOnlyCommittedToInner() {
         when(inner.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
-        assertThat(store.readOnly(IsolationLevel.READ_COMMITTED), sameInstance(view));
+        assertSame(view, store.readOnly(IsolationLevel.READ_COMMITTED));
     }
 
     @Test

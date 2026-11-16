@@ -43,6 +43,7 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, 60000);
         configs.put(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, 1000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_FETCHER_THREAD_COUNT_CONFIG, 4);
 
         ShareGroupConfig config = createConfig(configs);
 
@@ -53,6 +54,12 @@ public class ShareGroupConfigTest {
         assertEquals(60000, config.shareGroupMaxRecordLockDurationMs());
         assertEquals(1000, config.shareFetchPurgatoryPurgeIntervalRequests());
         assertEquals(1000, config.shareGroupMaxShareSessions());
+        assertEquals(4, config.shareGroupDLQManagerFetcherNumThreads());
+    }
+
+    @Test
+    public void testDlqManagerFetcherThreadCountDefaultsToTwo() {
+        assertEquals(2, createConfig(new HashMap<>()).shareGroupDLQManagerFetcherNumThreads());
     }
 
     @Test
@@ -130,6 +137,12 @@ public class ShareGroupConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
         assertEquals("Invalid value 2000 for configuration group.share.max.size: Value must be no more than 1000",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_DLQ_MANAGER_FETCHER_THREAD_COUNT_CONFIG is less than 1
+        configs.put(ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_FETCHER_THREAD_COUNT_CONFIG, 0);
+        assertEquals("Invalid value 0 for configuration group.share.dlq.manager.fetcher.num.threads: Value must be at least 1",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 

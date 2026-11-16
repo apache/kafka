@@ -32,9 +32,8 @@ import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -74,7 +73,7 @@ public class VersionedKeyValueStoreBuilderTest {
         setUp();
         final VersionedKeyValueStore<String, String> store = builder.build();
 
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
     }
 
     @Test
@@ -82,9 +81,9 @@ public class VersionedKeyValueStoreBuilderTest {
         setUp();
         final VersionedKeyValueStore<String, String> store = builder.build();
 
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingVersionedKeyValueBytesStore.class));
+        assertInstanceOf(ChangeLoggingVersionedKeyValueBytesStore.class, next);
     }
 
     @Test
@@ -94,9 +93,9 @@ public class VersionedKeyValueStoreBuilderTest {
             .withLoggingDisabled()
             .build();
 
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, equalTo(inner));
+        assertEquals(inner, next);
 
     }
 
@@ -107,10 +106,10 @@ public class VersionedKeyValueStoreBuilderTest {
             .withLoggingEnabled(Collections.emptyMap())
             .build();
 
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingVersionedKeyValueBytesStore.class));
-        assertThat(((WrappedStateStore) next).wrapped(), equalTo(inner));
+        assertInstanceOf(ChangeLoggingVersionedKeyValueBytesStore.class, next);
+        assertEquals(inner, ((WrappedStateStore) next).wrapped());
     }
 
     @Test

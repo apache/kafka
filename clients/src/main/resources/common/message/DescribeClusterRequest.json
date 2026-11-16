@@ -24,6 +24,9 @@
   //
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "0+",
       "about": "Whether to include cluster authorized operations." },

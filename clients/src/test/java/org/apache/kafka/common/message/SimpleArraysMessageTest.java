@@ -17,6 +17,7 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 
 import org.junit.jupiter.api.Test;
 
@@ -51,5 +52,118 @@ public class SimpleArraysMessageTest {
         ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
         assertEquals("Tried to allocate a collection of size 125, but there are only 6 bytes remaining.",
                 assertThrows(RuntimeException.class, () -> out.read(accessor, (short) 2)).getMessage());
+    }
+
+    @Test
+    public void testDeclaredLengthAboveInitialCapacityStillParses() {
+        final int count = 1010;
+        final ByteBuffer buf = ByteBuffer.allocate(4 + (count * 4));
+        buf.putInt(count);
+        for (int i = 0; i < count; i++) {
+            buf.putInt(i);
+        }
+        buf.flip();
+        final SimpleArraysMessageData out = new SimpleArraysMessageData();
+        out.read(new ByteBufferAccessor(buf), (short) 0);
+        assertEquals(count, out.sheep().size());
+    }
+
+    @Test
+    public void testKeyedDeclaredLengthAboveInitialCapacityStillParses() {
+        final int count = 1010;
+        final ByteBuffer buf = ByteBuffer.allocate(4 + (count * 8));
+        buf.putInt(count);
+        for (int i = 0; i < count; i++) {
+            buf.putInt(i);
+            buf.putInt(i * 2);
+        }
+        buf.flip();
+        final SimpleKeyedArraysMessageData out = new SimpleKeyedArraysMessageData();
+        out.read(new ByteBufferAccessor(buf), (short) 0);
+        assertEquals(count, out.keyedStructs().size());
+    }
+
+    @Test
+    public void testArrayLengthAboveMaxIsRejected() {
+        final int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        final ByteBuffer buf = ByteBuffer.allocate(4 + count);
+        buf.putInt(count);
+        buf.rewind();
+        final SimpleArraysMessageData out = new SimpleArraysMessageData();
+        final ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        assertEquals("Tried to read a collection of size " + count + ", which exceeds the maximum allowed size of "
+                        + MessageUtil.MAX_ARRAY_LENGTH + ".",
+                assertThrows(RuntimeException.class, () -> out.read(accessor, (short) 0)).getMessage());
+    }
+
+    @Test
+    public void testKeyedArrayLengthAboveMaxIsRejected() {
+        final int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        final ByteBuffer buf = ByteBuffer.allocate(4 + count);
+        buf.putInt(count);
+        buf.rewind();
+        final SimpleKeyedArraysMessageData out = new SimpleKeyedArraysMessageData();
+        final ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        assertEquals("Tried to read a collection of size " + count + ", which exceeds the maximum allowed size of "
+                        + MessageUtil.MAX_ARRAY_LENGTH + ".",
+                assertThrows(RuntimeException.class, () -> out.read(accessor, (short) 0)).getMessage());
+    }
+
+    private static ByteBuffer int32Array(int count) {
+        final ByteBuffer buf = ByteBuffer.allocate(4 + count * 4);
+        buf.putInt(count);
+        for (int i = 0; i < count; i++) {
+            buf.putInt(i);
+        }
+        return buf.flip();
+    }
+
+    private static ByteBuffer keyedInt32Array(int count) {
+        final ByteBuffer buf = ByteBuffer.allocate(4 + count * 8);
+        buf.putInt(count);
+        for (int i = 0; i < count; i++) {
+            buf.putInt(i);
+            buf.putInt(i * 2);
+        }
+        return buf.flip();
+    }
+
+    @Test
+    public void testArrayLengthHonorsLoweredMax() {
+        try {
+            MessageUtil.setMaxArrayLength(10);
+
+            final SimpleArraysMessageData atMax = new SimpleArraysMessageData();
+            atMax.read(new ByteBufferAccessor(int32Array(10)), (short) 0);
+            assertEquals(10, atMax.sheep().size());
+            final SimpleKeyedArraysMessageData keyedAtMax = new SimpleKeyedArraysMessageData();
+            keyedAtMax.read(new ByteBufferAccessor(keyedInt32Array(10)), (short) 0);
+            assertEquals(10, keyedAtMax.keyedStructs().size());
+
+            final String expected = "Tried to read a collection of size 11, which exceeds the maximum allowed size of 10.";
+            assertEquals(expected, assertThrows(RuntimeException.class,
+                    () -> new SimpleArraysMessageData().read(new ByteBufferAccessor(int32Array(11)), (short) 0)).getMessage());
+            assertEquals(expected, assertThrows(RuntimeException.class,
+                    () -> new SimpleKeyedArraysMessageData().read(new ByteBufferAccessor(keyedInt32Array(11)), (short) 0)).getMessage());
+        } finally {
+            MessageUtil.setMaxArrayLength(MessageUtil.MAX_ARRAY_LENGTH);
+        }
+    }
+
+    @Test
+    public void testArrayLengthAboveDefaultMaxIsAcceptedWhenRaised() {
+        final int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        try {
+            MessageUtil.setMaxArrayLength(count);
+
+            final SimpleArraysMessageData out = new SimpleArraysMessageData();
+            out.read(new ByteBufferAccessor(int32Array(count)), (short) 0);
+            assertEquals(count, out.sheep().size());
+            final SimpleKeyedArraysMessageData keyed = new SimpleKeyedArraysMessageData();
+            keyed.read(new ByteBufferAccessor(keyedInt32Array(count)), (short) 0);
+            assertEquals(count, keyed.keyedStructs().size());
+        } finally {
+            MessageUtil.setMaxArrayLength(MessageUtil.MAX_ARRAY_LENGTH);
+        }
     }
 }

@@ -38,7 +38,6 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -59,8 +58,8 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class StandbyTaskEOSMultiRebalanceIntegrationTest {
@@ -215,11 +214,12 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
         outputRecords.stream().collect(Collectors.groupingBy(ConsumerRecord::value)).forEach(this::logIfDuplicate);
 
-        assertThat("Each output should correspond to one distinct value", outputRecords.stream().map(ConsumerRecord::value).distinct().count(), is(Matchers.equalTo((long) outputRecords.size())));
+        assertEquals((long) outputRecords.size(), outputRecords.stream().map(ConsumerRecord::value).distinct().count(),
+            "Each output should correspond to one distinct value");
     }
 
     private void logIfDuplicate(final Integer id, final List<ConsumerRecord<Integer, Integer>> record) {
-        assertThat("The id and the value in the records must match", record.stream().allMatch(r -> id.equals(r.value())));
+        assertTrue(record.stream().allMatch(r -> id.equals(r.value())), "The id and the value in the records must match");
         if (record.size() > 1) {
             LOG.warn("Id : " + id + " is assigned to the following " + record.stream().map(ConsumerRecord::key).collect(Collectors.toList()));
         }
@@ -256,7 +256,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
                             public void process(final Record<Integer, Integer> record) {
                                 final Integer key = record.key();
                                 final Integer unused = record.value();
-                                assertThat("Key and value mus be equal", key.equals(unused));
+                                assertEquals(key, unused, "Key and value mus be equal");
                                 Integer id = store.get(key);
                                 // Only assign a new id if the value have not been observed before
                                 if (id == null) {

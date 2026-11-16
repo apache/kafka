@@ -325,14 +325,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
-            globalConsumer.assign(Collections.singletonList(topicPartition));
+            globalConsumer.assign(List.of(topicPartition));
             long offset;
             final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
             } else {
-                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                globalConsumer.seekToBeginning(List.of(topicPartition));
                 offset = getGlobalConsumerOffset(topicPartition);
             }
             final Long highWatermark = storeMetadata.highWatermarks.get(topicPartition);
@@ -467,14 +467,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
-            globalConsumer.assign(Collections.singletonList(topicPartition));
+            globalConsumer.assign(List.of(topicPartition));
             long offset;
             final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
             } else {
-                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                globalConsumer.seekToBeginning(List.of(topicPartition));
                 offset = getGlobalConsumerOffset(topicPartition);
             }
 
@@ -579,6 +579,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             }
         }
         return total;
+    }
+
+    @Override
+    public long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Optional<StateStore> entry : globalStores.values()) {
+            if (entry.isPresent()) {
+                max = Math.max(max, entry.get().approximateNumUncommittedBytes());
+            }
+        }
+        return max;
     }
 
     @Override

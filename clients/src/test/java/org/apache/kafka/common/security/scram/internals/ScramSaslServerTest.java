@@ -18,11 +18,15 @@ package org.apache.kafka.common.security.scram.internals;
 
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,10 +36,14 @@ import org.mockito.Mockito;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.security.sasl.SaslException;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,6 +54,7 @@ public class ScramSaslServerTest {
     private static final String USER_B = "userB";
 
     private ScramFormatter formatter;
+    private ScramServerCallbackHandler callbackHandler;
     private ScramSaslServer saslServer;
 
     @BeforeEach
@@ -55,7 +64,8 @@ public class ScramSaslServerTest {
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
-        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        callbackHandler.configure(new HashMap<>(), mechanism.mechanismName(), List.of());
         saslServer = new ScramSaslServer(mechanism, new HashMap<>(), callbackHandler);
     }
 
@@ -74,6 +84,52 @@ public class ScramSaslServerTest {
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
+    }
+
+    @Test
+    public void unknownUserAuthorizationIdNotEqualsAuthenticationId() {
+        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage("unknownUser", USER_B)));
+    }
+
+    @Test
+    public void unknownUserFailsOnClientFinalMessage() throws Exception {
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(saslServer.evaluateResponse(clientFirstMessage("unknownUser", null)));
+        assertEquals(4096, serverFirstMessage.iterations());
+
+        ScramSaslServer otherSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
+        ServerFirstMessage otherServerFirstMessage = new ServerFirstMessage(otherSaslServer.evaluateResponse(clientFirstMessage("unknownUser", null)));
+        assertArrayEquals(serverFirstMessage.salt(), otherServerFirstMessage.salt());
+
+        ScramSaslServer tokenSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
+        String tokenClientFirstMessage = "n,,n=unknownTokenId,r=" + formatter.secureRandomString() + ",tokenauth=true";
+        assertEquals(4096, new ServerFirstMessage(tokenSaslServer.evaluateResponse(tokenClientFirstMessage.getBytes(StandardCharsets.UTF_8))).iterations());
+
+        assertThrows(SaslException.class, () -> saslServer.evaluateResponse(clientFinalMessage(serverFirstMessage.nonce())));
+
+        ScramSaslServer knownUserSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), callbackHandler);
+        ServerFirstMessage knownUserServerFirstMessage = new ServerFirstMessage(knownUserSaslServer.evaluateResponse(clientFirstMessage(USER_A, null)));
+        assertThrows(SaslException.class, () -> knownUserSaslServer.evaluateResponse(clientFinalMessage(knownUserServerFirstMessage.nonce())));
+    }
+
+    @Test
+    public void tokenWithoutOwnerFailsOnClientFinalMessage() throws Exception {
+        String tokenHmac = "tokenHmac";
+        DelegationTokenCache tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
+        TokenInformation tokenInfo = new TokenInformation("tokenId", new KafkaPrincipal(KafkaPrincipal.USER_TYPE, USER_A), List.of(), 0L, Long.MAX_VALUE, Long.MAX_VALUE);
+        tokenCache.updateCache(new DelegationToken(tokenInfo, ScramFormatter.toBytes(tokenHmac)), Map.of(ScramMechanism.SCRAM_SHA_256.mechanismName(), formatter.generateCredential(tokenHmac, 4096)));
+        tokenCache.removeToken("tokenId");
+        ScramServerCallbackHandler tokenCallbackHandler = new ScramServerCallbackHandler(new CredentialCache().createCache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class), tokenCache);
+        tokenCallbackHandler.configure(Map.of(), ScramMechanism.SCRAM_SHA_256.mechanismName(), List.of());
+        ScramSaslServer tokenSaslServer = new ScramSaslServer(ScramMechanism.SCRAM_SHA_256, new HashMap<>(), tokenCallbackHandler);
+
+        ClientFirstMessage clientFirstMessage = new ClientFirstMessage(ScramFormatter.toBytes("n,,n=tokenId,r=" + formatter.secureRandomString() + ",tokenauth=true"));
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(tokenSaslServer.evaluateResponse(clientFirstMessage.toBytes()));
+        ClientFinalMessage clientFinalMessage = new ClientFinalMessage(ScramFormatter.toBytes("n,,"), serverFirstMessage.nonce());
+        byte[] saltedPassword = formatter.saltedPassword(tokenHmac, serverFirstMessage.salt(), serverFirstMessage.iterations());
+        clientFinalMessage.proof(formatter.clientProof(saltedPassword, clientFirstMessage, serverFirstMessage, clientFinalMessage));
+
+        assertThrows(SaslException.class, () -> tokenSaslServer.evaluateResponse(clientFinalMessage.toBytes()));
+        assertFalse(tokenSaslServer.isComplete());
     }
 
     /**

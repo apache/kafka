@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ControlRecordType;
@@ -230,6 +231,65 @@ public class CoordinatorRuntimeTest {
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
+    }
+
+    @Test
+    public void testScheduleLoadingWhenOnLoadedFails() {
+        MockTimer timer = new MockTimer();
+        MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
+        MockCoordinatorShardBuilderSupplier supplier =
+            mock(MockCoordinatorShardBuilderSupplier.class);
+        MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+
+        try (
+            Metrics metrics = new Metrics();
+            CoordinatorRuntimeMetricsImpl runtimeMetrics =
+                new CoordinatorRuntimeMetricsImpl(metrics, "test-group", false)
+        ) {
+            CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+                new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                    .withTime(timer.time())
+                    .withTimer(timer)
+                    .withLoader(loader)
+                    .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                    .withEventProcessor(new DirectEventProcessor())
+                    .withPartitionWriter(new MockPartitionWriter())
+                    .withCoordinatorShardBuilderSupplier(supplier)
+                    .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                    .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                    .withSerializer(new StringSerializer())
+                    .withExecutorService(mock(ExecutorService.class))
+                    .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                    .build();
+
+            when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+            when(builder.withLogContext(any())).thenReturn(builder);
+            when(builder.withTime(any())).thenReturn(builder);
+            when(builder.withTimer(any())).thenReturn(builder);
+            when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+            when(builder.withTopicPartition(any())).thenReturn(builder);
+            when(builder.withExecutor(any())).thenReturn(builder);
+            when(builder.build()).thenReturn(coordinator);
+            when(supplier.get()).thenReturn(builder);
+            doThrow(new IllegalStateException("onLoaded failed")).when(coordinator).onLoaded(any());
+            CompletableFuture<CoordinatorLoader.LoadSummary> future = new CompletableFuture<>();
+            when(loader.load(eq(TP), any())).thenReturn(future);
+
+            runtime.scheduleLoadOperation(TP, 0);
+            future.complete(null);
+
+            assertEquals(FAILED, runtime.contextOrThrow(TP).state);
+            assertEquals(
+                Map.of("loading", 0L, "active", 0L, "failed", 1L),
+                Stream.of("loading", "active", "failed").collect(Collectors.toMap(
+                    state -> state,
+                    state -> metrics.metric(
+                        metrics.metricName("num-partitions", "test-group", "", "state", state)
+                    ).metricValue()
+                ))
+            );
+        }
     }
 
     @Test
@@ -5336,6 +5396,74 @@ public class CoordinatorRuntimeTest {
         assertEquals(3L, ctx.coordinator.lastCommittedOffset());
         assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
         assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testLargeCompressibleRecordDoesNotFlushEmptyBatch() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        Compression compression = Compression.gzip().build();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(Duration.ofMillis(30))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withCompression(compression)
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+        assertEquals(0, ctx.batchEpoch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create a large record of highly compressible data.
+        List<String> largeRecord = List.of("a".repeat(3 * maxBatchSize));
+
+        // Write the large record. The record does not fit in an empty batch uncompressed,
+        // but it fits once compressed, so it goes into a batch on its own. The batch is
+        // flushed immediately because it has no room left.
+        long batchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorResult<>(largeRecord, "response1")
+        );
+
+        // Verify the state.
+        assertEquals(1L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, largeRecord.get(0))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(batchTimestamp, compression, largeRecord)
+        ), writer.entries(TP));
+
+        // KAFKA-20845: Only a single batch must have been created and flushed. When the write is
+        //              non-replaying and has made in-memory changes, both the in-memory changes and
+        //              the records must be attached to the same batch.
+        assertEquals(1, ctx.batchEpoch);
+
+        // Commit and verify that the write is completed.
+        writer.commit(TP);
+        assertTrue(write.isDone());
+        assertEquals(1L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write.get(5, TimeUnit.SECONDS));
     }
 
     @Test

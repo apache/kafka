@@ -26,9 +26,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
@@ -50,11 +49,11 @@ public class TimestampedKeyAndJoinSideSerializerTest {
 
         final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, timestampedKeyAndJoinSide);
 
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
-        assertThat(deserialized, is(timestampedKeyAndJoinSide));
+        assertEquals(timestampedKeyAndJoinSide, deserialized);
     }
 
     @Test
@@ -65,11 +64,11 @@ public class TimestampedKeyAndJoinSideSerializerTest {
 
         final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, timestampedKeyAndJoinSide);
 
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         final TimestampedKeyAndJoinSide<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
-        assertThat(deserialized, is(timestampedKeyAndJoinSide));
+        assertEquals(timestampedKeyAndJoinSide, deserialized);
     }
 
     @Test

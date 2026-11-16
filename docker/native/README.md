@@ -2,7 +2,7 @@
 
 ## Introduction
 - The Native Apache Kafka Docker Image can launch brokers with sub-second startup time and minimal memory footprint by leveraging native Kafka executable.
-- The native Kafka executable is built by compiling Apache Kafka code ahead-of-time using the [GraalVM native-image tool](https://www.graalvm.org/jdk21/reference-manual/native-image/).
+- The native Kafka executable is built by compiling Apache Kafka code ahead-of-time using the [GraalVM native-image tool](https://www.graalvm.org/jdk25/reference-manual/native-image/).
 - This image is experimental and intended for local development and testing purposes only; it is not recommended for production use.
 - This is introduced with [KIP-974](https://cwiki.apache.org/confluence/x/KZizDw).
 

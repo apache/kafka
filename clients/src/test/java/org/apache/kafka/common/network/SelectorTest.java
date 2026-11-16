@@ -38,6 +38,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
@@ -157,12 +158,7 @@ public class SelectorTest {
         String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
-        try {
-            selector.send(createSend(node, "test2"));
-            fail("IllegalStateException not thrown when sending a request with one in flight");
-        } catch (IllegalStateException e) {
-            // Expected exception
-        }
+        assertThrows(IllegalStateException.class, () -> selector.send(createSend(node, "test2")), "IllegalStateException not thrown when sending a request with one in flight");
         selector.poll(0);
         assertTrue(selector.disconnected().containsKey(node), "Channel not closed");
         assertEquals(ChannelState.FAILED_SEND, selector.disconnected().get(node));
@@ -688,7 +684,7 @@ public class SelectorTest {
             new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
-            ss.bind(new InetSocketAddress(0));
+            ss.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
 
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
@@ -822,7 +818,7 @@ public class SelectorTest {
         int conns = 5;
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
-            ss.bind(new InetSocketAddress(0));
+            ss.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
             for (int i = 0; i < conns; i++) {
@@ -849,7 +845,7 @@ public class SelectorTest {
         Map<String, String> knownNameAndVersion = softwareNameAndVersionTags("A", "B");
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
-            ss.bind(new InetSocketAddress(0));
+            ss.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
             Thread sender = createSender(serverAddress, randomPayload(1));

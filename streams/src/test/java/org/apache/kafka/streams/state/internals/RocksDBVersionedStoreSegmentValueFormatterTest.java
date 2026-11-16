@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RocksDBVersionedStoreSegmentValueFormatterTest {
@@ -216,10 +216,10 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
             final SegmentSearchResult result = segmentValue.find(entry.getKey(), true);
 
-            assertThat(result.index(), equalTo(entry.getValue()));
-            assertThat(result.value(), equalTo(expectedRecord.value));
-            assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));
-            assertThat(result.validTo(), equalTo(expectedValidTo));
+            assertEquals(entry.getValue(), result.index());
+            assertArrayEquals(expectedRecord.value, result.value());
+            assertEquals(expectedRecord.timestamp, result.validFrom());
+            assertEquals(expectedValidTo, result.validTo());
         }
 
         // verify exception when timestamp is out of range
@@ -251,10 +251,10 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                 continue;
             }
             final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
-            assertThat(results.get(i).index(), equalTo(index));
-            assertThat(results.get(i).value(), equalTo(expectedRecord.value));
-            assertThat(results.get(i).validFrom(), equalTo(expectedRecord.timestamp));
-            assertThat(results.get(i).validTo(), equalTo(expectedValidTo));
+            assertEquals(index, results.get(i).index());
+            assertArrayEquals(expectedRecord.value, results.get(i).value());
+            assertEquals(expectedRecord.timestamp, results.get(i).validFrom());
+            assertEquals(expectedValidTo, results.get(i).validTo());
             i++;
             index++;
         }
@@ -270,8 +270,8 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
     public void shouldGetTimestamps(final TestCase testCase) {
         final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
 
-        assertThat(RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(segmentValue), equalTo(testCase.nextTimestamp));
-        assertThat(RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(segmentValue), equalTo(testCase.minTimestamp));
+        assertEquals(testCase.nextTimestamp, RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(segmentValue));
+        assertEquals(testCase.minTimestamp, RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(segmentValue));
     }
 
     @ParameterizedTest
@@ -356,10 +356,10 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
                 final SegmentSearchResult result = segmentValue.find(expectedRecord.timestamp, true);
 
-                assertThat(result.index(), equalTo(recordIdx));
-                assertThat(result.value(), equalTo(expectedRecord.value));
-                assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));
-                assertThat(result.validTo(), equalTo(expectedValidTo));
+                assertEquals(recordIdx, result.index());
+                assertArrayEquals(expectedRecord.value, result.value());
+                assertEquals(expectedRecord.timestamp, result.validFrom());
+                assertEquals(expectedValidTo, result.validTo());
             }
         }
 

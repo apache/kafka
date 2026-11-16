@@ -415,6 +415,9 @@ public interface Controller extends AclMutator, AutoCloseable {
     /**
      * Attempt to unregister the given controller.
      *
+     * The request fails with an {@code InvalidRequestException} if the given controller
+     * is part of the voter set.
+     *
      * @param context       The controller request context.
      * @param controllerId  The controller id to unregister.
      *

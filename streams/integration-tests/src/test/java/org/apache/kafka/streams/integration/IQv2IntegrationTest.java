@@ -85,11 +85,9 @@ import java.util.stream.Stream;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -138,7 +136,7 @@ public class IQv2IntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
+                assertTrue(recordMetadata.hasOffset());
                 INPUT_POSITION.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
@@ -147,12 +145,12 @@ public class IQv2IntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 0L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 0L),
+            INPUT_POSITION);
     }
 
     private void setup(final String groupProtocol, final TestInfo testInfo) {
@@ -260,17 +258,13 @@ public class IQv2IntegrationTest {
                     partitions
                 );
 
-            assertThat(result.getPartitionResults().keySet(), is(partitions));
+            assertEquals(partitions, result.getPartitionResults().keySet());
             for (final Integer partition : partitions) {
-                assertThat(result.getPartitionResults().get(partition).isFailure(), is(true));
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureReason(),
-                    is(FailureReason.NOT_ACTIVE)
-                );
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureMessage(),
-                    is("Query requires a running active task,"
-                        + " but partition was in state PARTITIONS_ASSIGNED and was active.")
+                assertTrue(result.getPartitionResults().get(partition).isFailure());
+                assertEquals(FailureReason.NOT_ACTIVE, result.getPartitionResults().get(partition).getFailureReason());
+                assertEquals(
+                    "Query requires a running active task, but partition was in state PARTITIONS_ASSIGNED and was active.",
+                    result.getPartitionResults().get(partition).getFailureMessage()
                 );
             }
         }
@@ -290,7 +284,7 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
     @ParameterizedTest(name = "{1}")
@@ -306,7 +300,7 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
     @ParameterizedTest(name = "{1}")
@@ -458,9 +452,9 @@ public class IQv2IntegrationTest {
 
         final QueryResult<ValueAndTimestamp<Integer>> queryResult =
             result.getPartitionResults().get(partition);
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-        assertThat(queryResult.getFailureMessage(), matchesPattern(
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, queryResult.getFailureReason());
+        assertTrue(queryResult.getFailureMessage().matches(
             "This store (.*) doesn't know how to execute the given query (.*)."
                 + " Contact the store maintainer if you need support for a new query type."
         ));

@@ -1236,15 +1236,18 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return columnFamilyOptions.paranoidFileChecks();
     }
 
-    @Override
-    public Options setMaxWriteBufferNumberToMaintain(final int maxWriteBufferNumberToMaintain) {
-        columnFamilyOptions.setMaxWriteBufferNumberToMaintain(maxWriteBufferNumberToMaintain);
+    @Deprecated(since = "4.5", forRemoval = true)
+    public Options setMaxWriteBufferNumberToMaintain(final int ignored) {
+        log.warn("max_write_buffer_number_to_maintain has been removed in RocksDB v10.5.0." +
+                " See https://github.com/facebook/rocksdb/pull/13491");
         return this;
     }
 
-    @Override
+    @Deprecated(since = "4.5", forRemoval = true)
     public int maxWriteBufferNumberToMaintain() {
-        return columnFamilyOptions.maxWriteBufferNumberToMaintain();
+        log.warn("max_write_buffer_number_to_maintain has been removed in RocksDB v10.5.0." +
+                " See https://github.com/facebook/rocksdb/pull/13491");
+        return 0;
     }
 
     @Override

@@ -39,9 +39,13 @@ task bootstrapWrapper() {
         // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
         // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
         // fetch the jar.
-        // IMPORTANT: This checksum **must** be updated whenever the Gradle version changes.
-        String wrapperChecksum = "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7"
-        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper/gradle-wrapper.jar"
+        // The jar is fetched from a pinned commit rather than the release tag: a release tag contains
+        // the bootstrap jar Gradle uses to build itself, which may be from the previous version and then
+        // doesn't match the published wrapper checksum; for more details see gradle/wrapper/README.md
+        // and https://issues.apache.org/jira/browse/KAFKA-21299
+        String wrapperJarCommit = "dcc5ee0ec88270575344e6afd490f96d96f84ab3"
+        String wrapperChecksum = "3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98"
+        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
       # Loop in case we encounter an error.

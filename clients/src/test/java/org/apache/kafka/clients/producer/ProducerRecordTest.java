@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerRecordTest {
 
@@ -53,26 +53,11 @@ public class ProducerRecordTest {
 
     @Test
     public void testInvalidRecords() {
-        try {
-            new ProducerRecord<>(null, 0, "key", 1);
-            fail("Expected IllegalArgumentException to be raised because topic is null");
-        } catch (IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 0, "key", 1));
 
-        try {
-            new ProducerRecord<>("test", 0, -1L, "key", 1);
-            fail("Expected IllegalArgumentException to be raised because of negative timestamp");
-        } catch (IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>("test", 0, -1L, "key", 1));
 
-        try {
-            new ProducerRecord<>("test", -1, "key", 1);
-            fail("Expected IllegalArgumentException to be raised because of negative partition");
-        } catch (IllegalArgumentException e) {
-            //expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>("test", -1, "key", 1));
     }
 
 }

@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -57,7 +58,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -76,20 +76,25 @@ public class StreamsGroup implements Group {
      */
     private static final String PROTOCOL_TYPE = "streams";
 
-    /** Stored topology epoch meaning the plugin definitely holds no topology for this group. */
+    /** Stored topology epoch meaning the plugin holds no topology for this group. */
     public static final int STORED_TOPOLOGY_EPOCH_NONE = -1;
     /**
-     * Stored topology epoch meaning the plugin may or may not hold a topology: written durably
-     * before any plugin-disturbing operation. Treated like {@link #STORED_TOPOLOGY_EPOCH_NONE}
-     * for the "solicit a push" decision and like a real (>= 0) epoch for "delete-eligible".
+     * Stored topology epoch meaning we don't know whether the plugin holds a topology. It is
+     * written before any plugin call that changes the group's topology, and it stays if that
+     * call fails or the broker crashes. The group is then treated both ways:
+     * <ul>
+     *   <li>like {@link #STORED_TOPOLOGY_EPOCH_NONE}: the heartbeat asks the client to send its
+     *       topology again (TopologyDescriptionRequired=true).</li>
+     *   <li>like a real epoch: the plugin entry can still be deleted.</li>
+     * </ul>
      */
     public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
 
     /**
-     * @return true when {@code storedEpoch} is a real, reliably-stored topology epoch — i.e. the
-     *         plugin definitely holds exactly that topology. Real epochs are non-negative; every
-     *         sentinel ({@link #STORED_TOPOLOGY_EPOCH_NONE}, {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
-     *         and any added later) is negative and therefore not reliably stored.
+     * @return true if {@code storedEpoch} is a real topology epoch ({@code >= 0}), meaning the
+     *         plugin holds exactly that topology. All sentinel values, such as
+     *         {@link #STORED_TOPOLOGY_EPOCH_NONE} and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     *         are negative.
      */
     public static boolean isReliablyStoredTopologyEpoch(int storedEpoch) {
         return storedEpoch >= 0;
@@ -168,6 +173,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, StreamsGroupMember> members;
 
     /**
+     * The number of stable members at each member epoch.
+     */
+    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
      * The static group members.
      */
     private final TimelineHashMap<String, String> staticMembers;
@@ -178,11 +188,14 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The broker's record of which topology the group's plugin entry holds (KIP-1331): a real epoch
-     * ({@code >= 0}) when the plugin definitely holds that topology, {@link #STORED_TOPOLOGY_EPOCH_NONE}
-     * when it definitely holds nothing, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} when a barrier was
-     * written before a plugin operation that may not have completed. Drives the heartbeat-side decision
-     * to set TopologyDescriptionRequired=true and the eligibility for plugin deletion.
+     * The topology the group's plugin entry holds, as recorded by the broker (KIP-1331):
+     * <ul>
+     *   <li>{@code >= 0}: the plugin holds this topology epoch.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_NONE}: the plugin holds no topology.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}: unknown, because a plugin operation may not have completed.</li>
+     * </ul>
+     * This value decides whether the heartbeat sets TopologyDescriptionRequired=true, and
+     * whether the plugin entry can be deleted.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
@@ -193,7 +206,7 @@ public class StreamsGroup implements Group {
     private final TimelineInteger failedDescriptionTopologyEpoch;
 
     /**
-     * The metadata hash which is computed based on the all subscribed topics.
+     * The metadata hash which is computed based on all the subscribed topics.
      */
     protected final TimelineLong metadataHash;
 
@@ -224,6 +237,15 @@ public class StreamsGroup implements Group {
      * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
      */
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
+
+    /**
+     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
+     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
+     * since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written in the heartbeat
+     * path, dropped when the member is removed and lost on coordinator failover. It is not persisted, so that it can
+     * never outlive the client that sent it.
+     */
+    private final Map<String, Integer> heartbeatVersions = new HashMap<>();
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
@@ -265,10 +287,11 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * The last used assignment configurations for this streams group.
+     * The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT} if the
+     * group metadata record has none.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
-    private final TimelineHashMap<String, String> lastAssignmentConfigs;
+    private final TimelineObject<AssignmentConfigsImpl> lastAssignmentConfigs;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -312,6 +335,7 @@ public class StreamsGroup implements Group {
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         // Match the schema default (-1) so a freshly-created in-memory group is indistinguishable
@@ -331,7 +355,7 @@ public class StreamsGroup implements Group {
         this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
     }
 
     /**
@@ -353,6 +377,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -360,6 +385,7 @@ public class StreamsGroup implements Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -557,6 +583,7 @@ public class StreamsGroup implements Group {
         StreamsGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(oldMember, newMember);
+        maybeUpdateNumStableMembers(oldMember, newMember);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(newMember.memberId());
     }
@@ -584,11 +611,19 @@ public class StreamsGroup implements Group {
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
+        maybeUpdateNumStableMembers(oldMember, null);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
+        heartbeatVersions.remove(memberId);
     }
 
     /**
@@ -599,6 +634,20 @@ public class StreamsGroup implements Group {
      */
     public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
         taskOffsets.put(memberId, memberOffsets);
+    }
+
+    /**
+     * Records the version of the latest streams group heartbeat of a member.
+     */
+    public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
+        heartbeatVersions.put(memberId, heartbeatVersion);
+    }
+
+    /**
+     * @return An immutable view of the latest heartbeat version of each member, keyed by member ID.
+     */
+    public Map<String, Integer> heartbeatVersions() {
+        return Collections.unmodifiableMap(heartbeatVersions);
     }
 
     /**
@@ -694,6 +743,7 @@ public class StreamsGroup implements Group {
      * @param memberId The member ID.
      * @return A boolean indicating whether the member exists or not.
      */
+    @Override
     public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
@@ -701,6 +751,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The number of members.
      */
+    @Override
     public int numMembers() {
         return members.size();
     }
@@ -739,9 +790,9 @@ public class StreamsGroup implements Group {
      * associated with that static member instance ID.
      *
      * @param memberId The member id.
-     * @param instanceId The instance id.                   
-     * 
-     * @return The StreamsGroupMemberAssignment for the resolved member ID, or {@link TasksTuple#EMPTY}
+     * @param instanceId The instance id.
+     *
+     * @return The target assignment for the resolved member ID, or {@link TasksTuple#EMPTY}
      *         if no assignment exists or no static member exists for {@code instanceId}.
      */
     public TasksTuple targetAssignment(String memberId, Optional<String> instanceId) {
@@ -776,6 +827,13 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Removes the target assignment of every member.
+     */
+    public void clearTargetAssignment() {
+        targetAssignment.clear();
+    }
+
+    /**
      * @return An immutable map containing all the target assignment keyed by member ID.
      */
     public Map<String, TasksTuple> targetAssignment() {
@@ -785,7 +843,7 @@ public class StreamsGroup implements Group {
     /**
      * Returns the current process ID of a task or null if the task does not have one.
      *
-     * @param subtopologyId  The topic ID.
+     * @param subtopologyId  The subtopology ID.
      * @param taskId         The task ID.
      * @return The process ID or null.
      */
@@ -803,7 +861,7 @@ public class StreamsGroup implements Group {
     /**
      * Returns the current process IDs of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId The topic ID.
+     * @param subtopologyId The subtopology ID.
      * @param taskId        The task ID.
      * @return The process IDs or empty set.
      */
@@ -819,11 +877,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current process ID of a task or empty set if the task does not have one.
+     * Returns the current process IDs of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId The topic ID.
-     * @param taskId        The process ID.
-     * @return The member IDs or empty set.
+     * @param subtopologyId The subtopology ID.
+     * @param taskId        The task ID.
+     * @return The process IDs or empty set.
      */
     public Set<String> currentWarmupTaskProcessIds(
         String subtopologyId, int taskId
@@ -878,23 +936,41 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Defer tombstoning of an empty streams group while the broker-level topology-description
-     * cleanup cycle still has work to do for it: a plugin is configured and the persisted
-     * {@code StoredDescriptionTopologyEpoch} is not {@link #STORED_TOPOLOGY_EPOCH_NONE}. Both a
-     * real epoch and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} defer — an UNCERTAIN group may
-     * still hold plugin data, so it must stay reclaimable by the cycle. The cycle drives
-     * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
-     * with tombstoning. When no plugin is configured the gate never holds, so deferring
-     * indefinitely is not possible.
+     * @return True if the topology description plugin may hold a topology for this group, i.e. the
+     *         stored epoch is a real epoch or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
+     */
+    public boolean mayHaveTopologyDescription() {
+        return storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE;
+    }
+
+    /**
+     * @param committedOffset The offset at which to read the stored epoch.
+     * @return True if the topology description plugin may hold a topology for this group as of
+     *         the given offset. See {@link #mayHaveTopologyDescription()}.
+     */
+    public boolean mayHaveTopologyDescription(long committedOffset) {
+        return storedDescriptionTopologyEpoch(committedOffset) != STORED_TOPOLOGY_EPOCH_NONE;
+    }
+
+    /**
+     * Delays tombstoning an empty streams group until the topology-description cleanup cycle
+     * has cleared its plugin data. This applies when a plugin is configured and
+     * {@code StoredDescriptionTopologyEpoch} is anything other than {@link #STORED_TOPOLOGY_EPOCH_NONE}:
+     * <ul>
+     *   <li>a real epoch: the plugin holds data to delete.</li>
+     *   <li>{@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}: the plugin may hold data, so the cycle must still be able to clean it up.</li>
+     * </ul>
+     * The cycle calls {@code plugin.deleteTopology} and clears the stored epoch. The next sweep
+     * then tombstones the group. When no plugin is configured, tombstoning is never delayed.
      *
-     * <p>Per the {@link Group#shouldExpire(GroupCoordinatorConfig)} contract this only gates the
-     * group-metadata tombstone — committed offsets are still expired by the sweep regardless of
-     * what this returns, which is what feeds the topology-cleanup cycle's eligibility check.
+     * <p>Following the {@link Group#shouldExpire(GroupCoordinatorConfig)} contract, this only
+     * delays the group-metadata tombstone. The sweep still expires committed offsets, and the
+     * cleanup cycle relies on that when it checks which groups are eligible.
      */
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
         return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
-            && storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE);
+            && mayHaveTopologyDescription());
     }
 
     /**
@@ -955,7 +1031,7 @@ public class StreamsGroup implements Group {
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
+        Map<String, Long> topicHash = Utils.newHashMap(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(__ ->
                 topicHash.put(
@@ -1138,8 +1214,10 @@ public class StreamsGroup implements Group {
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
+        // The topology tombstone must precede the group epoch tombstone: replaying it unsubscribes
+        // the group from its topics, which is only possible while the group still exists.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
     }
 
     /**
@@ -1215,15 +1293,44 @@ public class StreamsGroup implements Group {
         } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
-            for (StreamsGroupMember member : members.values()) {
-                if (!member.isReconciledTo(assignmentEpoch())) {
-                    newState = RECONCILING;
-                    break;
-                }
+            Integer numStableMembers = numStableMembersByEpoch.get(assignmentEpoch());
+            if (numStableMembers == null || numStableMembers < members.size()) {
+                newState = RECONCILING;
             }
         }
 
         state.set(newState);
+    }
+
+    /**
+     * Updates the number of stable members at each member epoch.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateNumStableMembers(
+        StreamsGroupMember oldMember,
+        StreamsGroupMember newMember
+    ) {
+        boolean oldStable = oldMember != null && oldMember.state() == MemberState.STABLE;
+        boolean newStable = newMember != null && newMember.state() == MemberState.STABLE;
+
+        if (oldStable && newStable && oldMember.memberEpoch().equals(newMember.memberEpoch())) {
+            // The member is stable at the same member epoch before and after
+            // the update, so the counts do not change.
+            return;
+        }
+
+        if (oldStable) {
+            // The old member is no longer counted at its member epoch. The
+            // entry is removed when its count drops to zero.
+            numStableMembersByEpoch.compute(oldMember.memberEpoch(), Utils::decValue);
+        }
+
+        if (newStable) {
+            // The new member is counted at its member epoch.
+            numStableMembersByEpoch.compute(newMember.memberEpoch(), Utils::incValue);
+        }
     }
 
     /**
@@ -1275,9 +1382,9 @@ public class StreamsGroup implements Group {
     /**
      * Removes the task process IDs based on the provided assignment.
      *
-     * @param assignment    The assignment.
-     * @param expectedProcessId The expected process ID.
-     * package-private for testing.
+     * @param assignment            The assignment.
+     * @param currentTasksProcessId The current process ID of each task, which is updated.
+     * @param expectedProcessId     The expected process ID.
      */
     private void removeTaskProcessIds(
         Map<String, Map<Integer, Integer>> assignment,
@@ -1313,9 +1420,9 @@ public class StreamsGroup implements Group {
     /**
      * Removes the task process IDs based on the provided assignment.
      *
-     * @param assignment    The assignment.
-     * @param processIdToRemove The expected process ID.
-     * package-private for testing.
+     * @param assignment            The assignment.
+     * @param currentTasksProcessId The current process IDs of each task, which is updated.
+     * @param processIdToRemove     The process ID to remove.
      */
     private void removeTaskProcessIdsFromSet(
         Map<String, Set<Integer>> assignment,
@@ -1346,7 +1453,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Adds the partition epoch based on the provided assignment.
+     * Adds the process ID of the tasks based on the provided assignment.
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
@@ -1422,8 +1529,8 @@ public class StreamsGroup implements Group {
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)
                     .map(ConfiguredTopology::asStreamsGroupDescribeTopology)
-                    .orElse(
-                        topology.get(committedOffset)
+                    .orElseGet(
+                        () -> topology.get(committedOffset)
                             .map(StreamsTopology::asStreamsGroupDescribeTopology)
                             .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
                     )
@@ -1548,10 +1655,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The assignment configurations for this streams group.
+     * @return The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT}
+     *         if the group metadata record has none.
      */
-    public Map<String, String> lastAssignmentConfigs() {
-        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
+    public AssignmentConfigsImpl lastAssignmentConfigs() {
+        return lastAssignmentConfigs.get();
     }
 
     /**
@@ -1559,11 +1667,8 @@ public class StreamsGroup implements Group {
      *
      * @param lastAssignmentConfigs The last assignment configurations to set.
      */
-    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
-        this.lastAssignmentConfigs.clear();
-        if (lastAssignmentConfigs != null) {
-            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
-        }
+    public void setLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.set(Objects.requireNonNull(lastAssignmentConfigs));
     }
 
     /**

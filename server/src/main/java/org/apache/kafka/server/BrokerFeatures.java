@@ -64,17 +64,17 @@ public class BrokerFeatures {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> VersionRange.of(e.getValue().min(), e.getValue().max())));
     }
 
-    public static Features<SupportedVersionRange> defaultSupportedFeatures(boolean unstableFeatureVersionsEnabled) {
+    public static Features<SupportedVersionRange> defaultSupportedFeatures(boolean includeUnstable) {
         Map<String, SupportedVersionRange> features = new HashMap<>();
         features.put(MetadataVersion.FEATURE_NAME,
                 new SupportedVersionRange(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
-                        unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting().featureLevel()
+                        includeUnstable ? MetadataVersion.latestTesting().featureLevel()
                                 : MetadataVersion.latestProduction().featureLevel()));
         PRODUCTION_FEATURES.forEach(feature -> {
-            int maxVersion = unstableFeatureVersionsEnabled ? feature.latestTesting() : feature.latestProduction();
-            if (maxVersion > 0) {
-                features.put(feature.featureName(), new SupportedVersionRange(feature.minimumProduction(), (short) maxVersion));
+            var range = feature.supportedVersionRange(includeUnstable);
+            if (range.max() > 0) {
+                features.put(feature.featureName(), range);
             }
         });
         return Features.supportedFeatures(features);

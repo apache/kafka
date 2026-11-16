@@ -68,8 +68,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class SuppressScenarioTest {
@@ -858,7 +857,7 @@ public class SuppressScenarioTest {
         for (final TestRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected = expectedIterator.next();
             try {
-                assertThat(result, equalTo(new TestRecord<>(expected.key(), expected.value(), null, expected.timestamp())));
+                assertEquals(new TestRecord<>(expected.key(), expected.value(), null, expected.timestamp()), result);
             } catch (final AssertionError e) {
                 throw new AssertionError(printRecords(results) + " != " + expectedResults, e);
             }

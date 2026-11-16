@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -31,7 +30,6 @@ import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
-import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -43,7 +41,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -76,8 +73,9 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneMemberNoTopic() {
+        CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            CoordinatorMetadataImage.EMPTY
+            metadataImage
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -90,10 +88,10 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            Map.of()
+            HOMOGENEOUS
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -111,11 +109,11 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneMemberSubscribedToNonExistentTopic() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -128,10 +126,10 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            Map.of()
+            HOMOGENEOUS
         );
 
         assertThrows(PartitionAssignorException.class,
@@ -140,10 +138,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testFirstAssignmentTwoMembersTwoTopicsSameSubscriptions() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -161,13 +159,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -190,11 +188,11 @@ public class RangeAssignorTest {
 
     @Test
     public void testFirstAssignmentThreeMembersThreeTopicsDifferentSubscriptions() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -219,13 +217,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            HETEROGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -251,10 +249,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testFirstAssignmentNumMembersGreaterThanNumPartitions() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -279,13 +277,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -312,11 +310,11 @@ public class RangeAssignorTest {
 
     @Test
     public void testStaticMembership() throws PartitionAssignorException {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -333,10 +331,10 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            SubscriptionType.HOMOGENEOUS
         );
 
         GroupAssignment initialAssignment = assignor.assign(
@@ -353,10 +351,10 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            SubscriptionType.HOMOGENEOUS
         );
 
         GroupAssignment reassignedAssignment = assignor.assign(
@@ -378,11 +376,11 @@ public class RangeAssignorTest {
 
     @Test
     public void testMixedStaticMembership() throws PartitionAssignorException {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 5)
-            .build();
+            .buildCoordinatorMetadataImage();
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         // Initialize members with instance Ids.
@@ -408,10 +406,10 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            SubscriptionType.HOMOGENEOUS
         );
 
         GroupAssignment initialAssignment = assignor.assign(
@@ -428,10 +426,10 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            SubscriptionType.HOMOGENEOUS
         );
 
         GroupAssignment reassignedAssignment = assignor.assign(
@@ -458,10 +456,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testReassignmentNumMembersGreaterThanNumPartitionsWhenOneMemberAdded() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 2)
             .addTopic(topic2Uuid, topic2Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -493,13 +491,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -525,10 +523,10 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOnePartitionAddedForTwoMembersTwoTopics() {
         // Simulating adding a partition - originally T1 -> 3 Partitions and T2 -> 3 Partitions
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 4)
             .addTopic(topic2Uuid, topic2Name, 4)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -552,13 +550,13 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -581,10 +579,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testReassignmentWhenOneMemberAddedAfterInitialAssignmentWithTwoMembersTwoTopics() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -616,13 +614,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -650,10 +648,10 @@ public class RangeAssignorTest {
     @Test
     public void testReassignmentWhenOneMemberAddedAndOnePartitionAfterInitialAssignmentWithTwoMembersTwoTopics() {
         // Add a new partition to topic 1, initially T1 -> 3 partitions
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 4)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -685,13 +683,13 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            HETEROGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -717,10 +715,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testReassignmentWhenOneMemberRemovedAfterInitialAssignmentWithTwoMembersTwoTopics() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -736,13 +734,13 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            HOMOGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -761,11 +759,11 @@ public class RangeAssignorTest {
 
     @Test
     public void testReassignmentWhenMultipleSubscriptionsRemovedAfterInitialAssignmentWithThreeMembersTwoTopics() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topic1Uuid, topic1Name, 3)
             .addTopic(topic2Uuid, topic2Name, 3)
             .addTopic(topic3Uuid, topic3Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
@@ -800,13 +798,13 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             members,
-            HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            HETEROGENEOUS
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         GroupAssignment computedAssignment = assignor.assign(

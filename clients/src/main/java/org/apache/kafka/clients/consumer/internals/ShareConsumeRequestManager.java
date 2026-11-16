@@ -89,7 +89,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final LogContext logContext;
     private final String groupId;
     private final ShareConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ShareSubscriptionState subscriptions;
     private final ShareFetchConfig shareFetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final ShareAcknowledgementEventHandler acknowledgeEventHandler;
@@ -117,7 +117,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                final LogContext logContext,
                                final String groupId,
                                final ShareConsumerMetadata metadata,
-                               final SubscriptionState subscriptions,
+                               final ShareSubscriptionState subscriptions,
                                final ShareFetchConfig shareFetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,
                                final ShareAcknowledgementEventHandler acknowledgeEventHandler,
@@ -169,7 +169,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         Map<Node, ShareSessionHandler> handlerMap = new HashMap<>();
         Cluster cluster = metadata.fetch();
         Map<String, Uuid> topicIds = metadata.topicIds();
-        for (TopicPartition partition : partitionsToFetch()) {
+        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
             TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
             if (tip == null) {
                 Uuid topicId = topicIds.get(partition.topic());
@@ -198,7 +198,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         Set<Integer> missingNodes = new HashSet<>();
-        for (TopicPartition partition : partitionsToFetch()) {
+        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
             TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
             if (tip == null) {
                 continue;
@@ -1331,10 +1331,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return new TopicIdPartition(topicId, partitionIndex, topicName);
     }
 
-    private List<TopicPartition> partitionsToFetch() {
-        return subscriptions.fetchablePartitions(tp -> true);
-    }
-
     public ShareSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }
@@ -1652,6 +1648,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final Map<TopicIdPartition, Acknowledgements> result;
         private final AtomicInteger remainingResults;
         private final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future;
+        private boolean anyRenewAcknowledgements = false;
 
         ResultHandler(final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
             this(null, future);
@@ -1677,8 +1674,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (acknowledgements != null) {
                     result.put(partition, acknowledgements);
                 }
+                // The results for a commitSync or close arrive one node at a time, and the renew flag is per-node.
+                // The single event sent when all results are known must reflect every node, rather than taken from
+                // whichever node happened to complete last.
+                if (checkForRenewAcknowledgements) {
+                    anyRenewAcknowledgements = true;
+                }
                 if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
-                    maybeSendShareAcknowledgementEvent(result, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(result, anyRenewAcknowledgements, acquisitionLockTimeoutMs);
                     future.ifPresent(future -> future.complete(result));
                 }
             }

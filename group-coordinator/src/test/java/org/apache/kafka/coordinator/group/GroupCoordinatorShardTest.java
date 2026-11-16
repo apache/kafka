@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
-import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -266,10 +266,10 @@ public class GroupCoordinatorShardTest {
         assertThrows(UnknownMemberIdException.class,
             () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "stranger", 3, 100L));
 
-        // Stale topology epoch propagates as INVALID_REQUEST.
+        // Stale topology epoch propagates as STREAMS_INVALID_TOPOLOGY_EPOCH.
         when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L))
-            .thenThrow(new InvalidRequestException("stale epoch"));
-        assertThrows(InvalidRequestException.class,
+            .thenThrow(new StreamsInvalidTopologyEpochException("stale epoch"));
+        assertThrows(StreamsInvalidTopologyEpochException.class,
             () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L));
     }
 
@@ -1570,6 +1570,7 @@ public class GroupCoordinatorShardTest {
         when(defaultStored.type()).thenReturn(Group.GroupType.STREAMS);
         when(defaultStored.isEmpty(committedOffset)).thenReturn(true);
         when(defaultStored.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(-1);
+        when(defaultStored.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("default-stored", committedOffset)).thenReturn(defaultStored);
 
         // unexpired-offsets: STREAMS, empty, storedEpoch=5, but offsets are not all expired
@@ -1577,6 +1578,7 @@ public class GroupCoordinatorShardTest {
         when(unexpired.type()).thenReturn(Group.GroupType.STREAMS);
         when(unexpired.isEmpty(committedOffset)).thenReturn(true);
         when(unexpired.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(5);
+        when(unexpired.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("unexpired-offsets", committedOffset)).thenReturn(unexpired);
         when(offsetMetadataManager.groupHasNoOffsets(eq("unexpired-offsets"), anyLong())).thenReturn(false);
 
@@ -1585,6 +1587,7 @@ public class GroupCoordinatorShardTest {
         when(eligible.type()).thenReturn(Group.GroupType.STREAMS);
         when(eligible.isEmpty(committedOffset)).thenReturn(true);
         when(eligible.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(7);
+        when(eligible.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("eligible", committedOffset)).thenReturn(eligible);
         when(offsetMetadataManager.groupHasNoOffsets(eq("eligible"), anyLong())).thenReturn(true);
 
@@ -1611,6 +1614,7 @@ public class GroupCoordinatorShardTest {
         when(uncertain.isEmpty(committedOffset)).thenReturn(true);
         when(uncertain.storedDescriptionTopologyEpoch(committedOffset))
             .thenReturn(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        when(uncertain.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("uncertain", committedOffset)).thenReturn(uncertain);
         when(offsetMetadataManager.groupHasNoOffsets(eq("uncertain"), anyLong())).thenReturn(true);
 
@@ -1653,6 +1657,7 @@ public class GroupCoordinatorShardTest {
         when(good.type()).thenReturn(Group.GroupType.STREAMS);
         when(good.isEmpty(committedOffset)).thenReturn(true);
         when(good.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(3);
+        when(good.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("good", committedOffset)).thenReturn(good);
         when(offsetMetadataManager.groupHasNoOffsets(eq("good"), anyLong())).thenReturn(true);
 
