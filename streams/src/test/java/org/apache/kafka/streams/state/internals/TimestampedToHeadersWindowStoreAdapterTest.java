@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -55,6 +57,7 @@ import java.util.stream.Stream;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -378,4 +381,15 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(RETENTION_PERIOD, ((WithRetentionPeriod) store).retentionPeriod());
     }
+
+    @Test
+    public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
+        underlyingStore.put(KEY, TIMESTAMPED_VALUE, 1000L);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertNotSame(adapter, view);
+        assertArrayEquals(convertToHeaderFormat(TIMESTAMPED_VALUE), view.fetch(KEY, 1000L));
+    }
+
 }

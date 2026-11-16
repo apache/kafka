@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -33,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -260,5 +262,72 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @Override
     public Position getPosition() {
         return store.getPosition();
+    }
+
+    @Override
+    public ReadOnlyWindowStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new TimestampedToHeadersWindowReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    private static final class TimestampedToHeadersWindowReadOnlyView implements ReadOnlyWindowStore<Bytes, byte[]> {
+
+        private final ReadOnlyWindowStore<Bytes, byte[]> underlying;
+
+        TimestampedToHeadersWindowReadOnlyView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] fetch(final Bytes key, final long timestamp) {
+            return convertToHeaderFormat(underlying.fetch(key, timestamp));
+        }
+
+
+        @Override
+        public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeadersWindow(underlying.fetch(key, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeadersWindow(underlying.backwardFetch(key, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
+                                                               final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
+                                                                       final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.fetchAll(timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.backwardFetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.backwardAll());
+        }
     }
 }
