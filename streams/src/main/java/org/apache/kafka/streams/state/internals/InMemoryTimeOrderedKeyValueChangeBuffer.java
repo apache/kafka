@@ -540,7 +540,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             headers,
             context.sourceRawKey(),
             context.sourceRawValue(),
-            context.sourceRawHeaders()
+            context.sourceRawHeadersOrNull()
         );
     }
 

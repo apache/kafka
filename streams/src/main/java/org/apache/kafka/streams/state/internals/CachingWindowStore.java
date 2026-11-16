@@ -167,7 +167,7 @@ public class CachingWindowStore
                 internalContext.recordContext().topic(),
                 internalContext.recordContext().sourceRawKey(),
                 internalContext.recordContext().sourceRawValue(),
-                internalContext.recordContext().sourceRawHeaders()
+                internalContext.recordContext().sourceRawHeadersOrNull()
             );
         internalContext.cache().put(cacheName, cacheFunction.cacheKey(keyBytes), entry);
 

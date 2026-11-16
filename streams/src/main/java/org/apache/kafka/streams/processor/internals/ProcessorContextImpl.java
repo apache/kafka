@@ -263,7 +263,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                     record.headers(),
                     recordContext.sourceRawKey(),
                     recordContext.sourceRawValue(),
-                    recordContext.sourceRawHeaders()
+                    recordContext.sourceRawHeadersOrNull()
                 );
             }
 

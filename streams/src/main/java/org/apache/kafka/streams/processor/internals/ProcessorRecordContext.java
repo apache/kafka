@@ -123,6 +123,15 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         return sourceRawHeaders == null ? headers : sourceRawHeaders;
     }
 
+    /**
+     * Returns the source header snapshot, or {@code null} if there is none. Copy this one into
+     * a new context: a missing snapshot then stays missing, so {@link #sourceRawHeaders()} on the
+     * copy falls back to the copy's own headers instead of this context's headers.
+     */
+    public Headers sourceRawHeadersOrNull() {
+        return sourceRawHeaders;
+    }
+
     public long residentMemorySizeEstimate() {
         long size = 0;
         size += Long.BYTES; // value.context.timestamp

@@ -42,7 +42,9 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -84,6 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProcessingExceptionHandlerIntegrationTest {
     private static final String SOURCE_HEADER = "source-only";
     private static final byte[] SOURCE_HEADER_VALUE = "kept".getBytes(UTF_8);
+    private static final String PUNCTUATOR_HEADER = "punctuator-header";
+    private static final byte[] PUNCTUATOR_HEADER_VALUE = "forwarded".getBytes(UTF_8);
     private final String threadId = Thread.currentThread().getName();
 
     private static final Instant TIMESTAMP = Instant.now();
@@ -480,6 +484,43 @@ public class ProcessingExceptionHandlerIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldExposeForwardedHeadersWhenPunctuatorForwardFailsDownstream() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void init(final ProcessorContext<String, String> context) {
+                    super.init(context);
+                    context.schedule(Duration.ofMillis(10), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+                        final RecordHeaders headers = new RecordHeaders();
+                        headers.add(PUNCTUATOR_HEADER, PUNCTUATOR_HEADER_VALUE);
+                        context().forward(new Record<>("punctuated-key", "punctuated-value", timestamp, headers));
+                    });
+                }
+
+                @Override
+                public void process(final Record<String, String> record) {
+                }
+            })
+            .mapValues(value -> {
+                throw new RuntimeException("Downstream failure");
+            });
+
+        final Properties properties = new Properties();
+        properties.put(
+            StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+            AssertPunctuatorHeadersProcessingExceptionHandler.class
+        );
+        AssertPunctuatorHeadersProcessingExceptionHandler.INVOKED.set(false);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
+            assertThrows(StreamsException.class, () -> driver.advanceWallClockTime(Duration.ofMillis(10)));
+            assertTrue(AssertPunctuatorHeadersProcessingExceptionHandler.INVOKED.get());
+        }
+    }
+
     static Stream<Arguments> sourceRawRecordTopologyTestCases() {
         // Validate source raw key and source raw value for fully stateless topology
         final List<ProducerRecord<String, String>> statelessTopologyEvent = List.of(new ProducerRecord<>("TOPIC_NAME", "ID123-1", "ID123-A1"));
@@ -697,6 +738,26 @@ public class ProcessingExceptionHandlerIntegrationTest {
             assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
             assertEquals("ID123-1", Serdes.String().deserializer().deserialize("topic", context.sourceRawKey()));
             assertEquals("ID123-A1", Serdes.String().deserializer().deserialize("topic", context.sourceRawValue()));
+            INVOKED.set(true);
+            return Response.fail();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    public static class AssertPunctuatorHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        static final AtomicBoolean INVOKED = new AtomicBoolean(false);
+
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final Record<?, ?> record,
+                                    final Exception exception) {
+            assertNotNull(record.headers().lastHeader(PUNCTUATOR_HEADER));
+            assertNotNull(context.headers().lastHeader(PUNCTUATOR_HEADER));
+            assertArrayEquals(PUNCTUATOR_HEADER_VALUE, context.headers().lastHeader(PUNCTUATOR_HEADER).value());
             INVOKED.set(true);
             return Response.fail();
         }

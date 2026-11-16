@@ -283,7 +283,7 @@ public class CachingKeyValueStore
                     internalContext.recordContext().topic(),
                     internalContext.recordContext().sourceRawKey(),
                     internalContext.recordContext().sourceRawValue(),
-                    internalContext.recordContext().sourceRawHeaders()
+                    internalContext.recordContext().sourceRawHeadersOrNull()
                 )
             );
 
