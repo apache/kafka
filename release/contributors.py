@@ -221,9 +221,13 @@ def parse_person(text):
 def apply_mailmap(credits, mailmap, cwd=repo_dir):
     """
     Replace names and emails as told by the mailmap. This uses git check-mailmap, as git log
-    does not apply a mailmap to trailers.
+    does not apply a mailmap to trailers. Credits without an email but with a GitHub login are
+    looked up by login@users.noreply.github.com, so that they can also have explicit overrides.
     """
-    idents = list({(credit.name, credit.email) for credit in credits if credit.email})
+    def contact(credit):
+        return credit.name, credit.email or f"{credit.login.lower()}@users.noreply.github.com"
+
+    idents = list({contact(credit) for credit in credits if credit.email or credit.login})
     contacts = "".join(f"{name} <{email}>\n" if name else f"<{email}>\n" for name, email in idents)
     output = _git(["-c", f"mailmap.file={mailmap}", "check-mailmap", "--stdin"], cwd, input=contacts)
     lines = output.splitlines()
@@ -234,10 +238,16 @@ def apply_mailmap(credits, mailmap, cwd=repo_dir):
         name, _, email = line.rpartition("<")
         mapped[ident] = (name.strip() or None, email.rstrip(">"))
     for credit in credits:
-        if credit.email:
-            name, credit.email = mapped[(credit.name, credit.email)]
+        if credit.email or credit.login:
+            ident = contact(credit)
+            name, email = mapped[ident]
+            if not credit.email and (name, email) == ident:
+                continue
             credit.renamed = name != credit.name
             credit.name = name
+            # The login's noreply address is only a lookup key, not a new email for the credit.
+            if credit.email or email != ident[1]:
+                credit.email = email
     return credits
 
 
