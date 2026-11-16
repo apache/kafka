@@ -428,6 +428,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
             AssertSourceRawHeadersProcessingExceptionHandler.class
         );
+        AssertSourceRawHeadersProcessingExceptionHandler.INVOKED.set(false);
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
             final TestInputTopic<String, String> inputTopic =
@@ -438,6 +439,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
                 StreamsException.class,
                 () -> inputTopic.pipeInput(new TestRecord<>(event.key(), event.value(), event.headers(), TIMESTAMP))
             );
+            assertTrue(AssertSourceRawHeadersProcessingExceptionHandler.INVOKED.get());
         }
     }
 
@@ -463,6 +465,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
             AssertForwardedHeadersProcessingExceptionHandler.class
         );
+        AssertForwardedHeadersProcessingExceptionHandler.INVOKED.set(false);
 
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
             final TestInputTopic<String, String> inputTopic =
@@ -473,6 +476,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
                 StreamsException.class,
                 () -> inputTopic.pipeInput(new TestRecord<>(event.key(), event.value(), event.headers(), TIMESTAMP))
             );
+            assertTrue(AssertForwardedHeadersProcessingExceptionHandler.INVOKED.get());
         }
     }
 
@@ -661,6 +665,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     public static class AssertSourceRawHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        static final AtomicBoolean INVOKED = new AtomicBoolean(false);
+
         @Override
         public Response handleError(final ErrorHandlerContext context,
                                     final Record<?, ?> record,
@@ -668,6 +674,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             assertNull(record.headers().lastHeader(SOURCE_HEADER));
             assertNotNull(context.headers().lastHeader(SOURCE_HEADER));
             assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
+            INVOKED.set(true);
             return Response.fail();
         }
 
@@ -678,6 +685,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     public static class AssertForwardedHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        static final AtomicBoolean INVOKED = new AtomicBoolean(false);
+
         @Override
         public Response handleError(final ErrorHandlerContext context,
                                     final Record<?, ?> record,
@@ -688,6 +697,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
             assertEquals("ID123-1", Serdes.String().deserializer().deserialize("topic", context.sourceRawKey()));
             assertEquals("ID123-A1", Serdes.String().deserializer().deserialize("topic", context.sourceRawValue()));
+            INVOKED.set(true);
             return Response.fail();
         }
 
