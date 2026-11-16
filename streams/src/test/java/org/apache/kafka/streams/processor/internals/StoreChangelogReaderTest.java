@@ -1314,6 +1314,14 @@ public class StoreChangelogReaderTest {
         assertEquals(lookupsBeforePause, lookups.get());
         assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(3, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+
+        // once the task is resumed, its limit offset is updated again
+        failLookups.set(false);
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 9L));
+        changelogReader.restore(tasks);
+
+        assertEquals(lookupsBeforePause + 1, lookups.get());
+        assertEquals(9L, (long) changelogReader.changelogMetadata(tp).endOffset());
     }
 
     @Test
