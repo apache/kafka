@@ -26,6 +26,9 @@
 #
 # The format is the one of git mailmap (see https://git-scm.com/docs/gitmailmap), but this
 # file is only used by contributors.py and does not change how git shows names elsewhere.
+# For credits without an email, such as "@login" or "Name (github:login)", use
+# "Canonical Name <login@users.noreply.github.com>". The address is only used to look up
+# explicit mappings; an unmapped login keeps its original name and email.
 
 # 1. Asked for in https://github.com/apache/kafka-site/pull/928
 Gabriella Fu <100360154+gabriellefu@users.noreply.github.com>
@@ -33,3 +36,6 @@ Jiayao Sun <jiayao.s@outlook.com>
 
 # 2. The GitHub account imavishek also commits as Avishek Das <avishek.akd@gmail.com>
 Avishek Das <imavishek@users.noreply.github.com>
+
+# 2. Chia-Ping Tsai is credited as @chia7712 in commit 0bc2c6e69994.
+Chia-Ping Tsai <chia7712@users.noreply.github.com>

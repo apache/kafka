@@ -244,6 +244,51 @@ class OfReleaseTest(unittest.TestCase):
         self.assertEqual((["Ann Lee", "Gabriella Fu"], []),
                          self._release("Gabriella Fu <100+gabriellefu@users.noreply.github.com>"))
 
+    def test_mailmap_resolves_email_less_github_logins(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "Reviewers: @AnnLee, annlee (github:annlee), A. Lee (@annlee)")
+        self.assertEqual((["Ann Lee"], []),
+                         self._release("Ann Lee <annlee@users.noreply.github.com>"))
+
+    def test_mailmap_preserves_unmapped_email_less_github_logins(self):
+        credits = [contributors.Credit("commit", "reviewer", *contributors.parse_person(person))
+                   for person in ("@annlee", "annlee (github:annlee)", "A. Lee (@annlee)")]
+        credits[-1].renamed = True
+        expected = [(credit.name, credit.email, credit.login, credit.renamed) for credit in credits]
+        with open(self.mailmap, "w") as f:
+            f.write("Bo Kim <bo@users.noreply.github.com>\n")
+        mapped = contributors.apply_mailmap(credits, self.mailmap, cwd=self.repo)
+        self.assertEqual(expected, [(credit.name, credit.email, credit.login, credit.renamed) for credit in mapped])
+
+    def test_mailmap_does_not_treat_a_plain_name_as_a_github_login(self):
+        self._commit("Bo Kim <bo@example.com>", "Reviewers: Ann")
+        self.assertEqual((["Ann", "Bo Kim"], []),
+                         self._release("Ann Lee <Ann@users.noreply.github.com>"))
+
+    def test_mailmap_name_override_does_not_store_a_lookup_email(self):
+        credit = contributors.Credit("commit", "reviewer", login="annlee")
+        with open(self.mailmap, "w") as f:
+            f.write("Ann Lee <annlee@users.noreply.github.com>\n")
+        mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
+        self.assertEqual(("Ann Lee", None, "annlee", True),
+                         (mapped.name, mapped.email, mapped.login, mapped.renamed))
+
+    def test_mailmap_maps_email_less_login_to_a_canonical_email(self):
+        credit = contributors.Credit("commit", "reviewer", login="annlee")
+        with open(self.mailmap, "w") as f:
+            f.write("Ann Lee <ann@example.com> <annlee@users.noreply.github.com>\n")
+        mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
+        self.assertEqual(("Ann Lee", "ann@example.com", "annlee", True),
+                         (mapped.name, mapped.email, mapped.login, mapped.renamed))
+
+    def test_mailmap_prefers_an_existing_email_over_the_github_login(self):
+        credit = contributors.Credit("commit", "reviewer", "Existing Name", "existing@example.com", "annlee")
+        with open(self.mailmap, "w") as f:
+            f.write("Ann Lee <annlee@users.noreply.github.com>\n")
+        mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
+        self.assertEqual(("Existing Name", "existing@example.com", "annlee", False),
+                         (mapped.name, mapped.email, mapped.login, mapped.renamed))
+
     def test_mailmap_groups_people_that_share_nothing(self):
         self._commit("Avishek Das <avishek@example.com>",
                      "Co-authored-by: imavishek <789+imavishek@users.noreply.github.com>")
