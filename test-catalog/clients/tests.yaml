@@ -5346,6 +5346,7 @@ org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
 - testFailsFastWhenJwksUrlAbsent
 - testFailsToStartWhenExpectedAudienceMissingWithJwksUrl
 - testFailsToStartWhenExpectedIssuerMissingWithJwksUrl
+- testFailsToStartWithClientJwtValidator
 - testHandlerCloseDoesNotThrowException
 - testHandlerConfigureThrowsException
 - testInvalidAccessToken
