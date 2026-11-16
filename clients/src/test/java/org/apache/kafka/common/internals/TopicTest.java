@@ -20,6 +20,8 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -108,17 +110,20 @@ public class TopicTest {
             assertFalse(Topic.hasCollision(periodFirstMiddleLastNone.get(i), underscoreFirstMiddleLastNone.get(i)));
     }
 
-    @Test
-    public void testIsInternal() {
-        List<String> falseTopics = Arrays.asList("__cluster_metadata", "foo");
-        List<String> trueTopics = Arrays.asList(
-                "__consumer_offsets", "__transaction_state", "__share_group_state", "__mirror_state"
-        );
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "__consumer_offsets",
+        "__transaction_state",
+        "__share_group_state",
+        "__mirror_state"
+    })
+    public void testIsInternal(String topic) {
+        assertTrue(Topic.isInternal(topic));
+    }
 
-        for (String topic : falseTopics)
-            assertFalse(Topic.isInternal(topic));
-
-        for (String topic : trueTopics)
-            assertTrue(Topic.isInternal(topic));
+    @ParameterizedTest
+    @ValueSource(strings = {Topic.CLUSTER_METADATA_TOPIC_NAME, "foo"})
+    public void testIsNotInternal(String topic) {
+        assertFalse(Topic.isInternal(topic));
     }
 }
