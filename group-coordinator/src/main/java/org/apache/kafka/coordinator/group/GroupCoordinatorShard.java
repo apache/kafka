@@ -72,6 +72,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -568,11 +569,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *                               from the plugin, or no plugin is configured.
      *
      * @return A Result with a list of records to update the state machine. Its response is
-     *         true if the group is an empty streams group whose topology must first be deleted
-     *         from the plugin. In that case nothing is changed, and the caller must delete the
-     *         topology and call again with {@code topologyCleanupHandled = true}.
+     *         {@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST} if the group is an
+     *         empty streams group whose topology must first be deleted from the plugin. In that
+     *         case nothing is changed, and the caller must delete the topology and call again
+     *         with {@code topologyCleanupHandled = true}. Otherwise it is
+     *         {@link ClassicGroupJoinOutcome#COMPLETED}.
      */
-    public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,

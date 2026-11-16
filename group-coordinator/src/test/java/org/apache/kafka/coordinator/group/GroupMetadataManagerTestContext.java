@@ -62,6 +62,7 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -302,17 +303,17 @@ public class GroupMetadataManagerTestContext {
         CompletableFuture<JoinGroupResponseData> joinFuture;
         List<CoordinatorRecord> records;
         CompletableFuture<Void> appendFuture;
-        // Whether classicGroupJoin signalled that streams-topology cleanup is needed before conversion.
-        boolean needsTopologyCleanup;
+        // The outcome classicGroupJoin returned, e.g. whether a step is needed before conversion.
+        ClassicGroupJoinOutcome outcome;
 
         public JoinResult(
             CompletableFuture<JoinGroupResponseData> joinFuture,
-            CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult
+            CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> coordinatorResult
         ) {
             this.joinFuture = joinFuture;
             this.records = coordinatorResult.records();
             this.appendFuture = coordinatorResult.appendFuture();
-            this.needsTopologyCleanup = coordinatorResult.response();
+            this.outcome = coordinatorResult.response();
         }
     }
 
@@ -962,7 +963,7 @@ public class GroupMetadataManagerTestContext {
         );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
+        CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture,

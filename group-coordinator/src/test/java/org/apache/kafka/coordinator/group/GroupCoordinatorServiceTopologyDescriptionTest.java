@@ -41,6 +41,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -2111,8 +2112,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // returns true (cleanup needed, no conversion); the second runs after cleanup and converts,
         // returning false.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST))
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.COMPLETED));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // classicGroupJoin completes responseFuture internally; with a mock runtime that operation
@@ -2143,7 +2144,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // The single classic-group-join detects the empty streams group and returns true; the
         // post-cleanup conversion never runs because the plugin delete fails.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData resp = service.joinGroup(
@@ -2168,7 +2169,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         // Every join detects the empty streams group with a stored topology (cleanup needed).
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData first = service.joinGroup(
@@ -2196,7 +2197,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData resp = service.joinGroup(
@@ -2215,7 +2216,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // The single classic-group-join finds an already-classic group, completes the response and
         // returns false (no cleanup needed).
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+            .thenReturn(CompletableFuture.completedFuture(ClassicGroupJoinOutcome.COMPLETED));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.joinGroup(requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING);

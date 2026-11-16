@@ -102,6 +102,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionManager;
@@ -1040,18 +1041,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         TopicPartition tp = topicPartitionFor(request.groupId());
 
-        // Usually the join completes in this first call and returns false. It returns true only
-        // for an empty streams group whose topology is still in the plugin. That group is about
-        // to become a classic group, so its topology must be deleted from the plugin first.
-        // Then the join runs again. With no plugin configured there is nothing to delete, so we
-        // pass topologyCleanupHandled = true and the group is converted right away.
+        // Usually the join completes in this first call. Otherwise the outcome names a step to
+        // run before the join can run again. Today the only such step is for an empty streams
+        // group whose topology is still in the plugin: the group is about to become a classic
+        // group, so its topology must be deleted from the plugin first. With no plugin
+        // configured there is nothing to delete, so we pass topologyCleanupHandled = true and
+        // the group is converted right away.
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
-        ).thenCompose(needsCleanup -> {
-            if (!needsCleanup) {
-                return CompletableFuture.completedFuture(null);
-            }
-            return cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
+        ).thenCompose(outcome -> switch (outcome) {
+            case COMPLETED -> CompletableFuture.<Void>completedFuture(null);
+            case DELETE_STREAMS_TOPOLOGY_FIRST -> cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
         }).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
@@ -1119,15 +1119,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * Runs the classic-group-join write operation. The returned future yields:
      * <ul>
-     *   <li>{@code false}: the join is done and {@code responseFuture} is completed, either
-     *       with a result or with an error.</li>
-     *   <li>{@code true}: the group is an empty streams group whose topology is still in the
-     *       plugin, and {@code topologyCleanupHandled} is {@code false}. Nothing is changed and
+     *   <li>{@link ClassicGroupJoinOutcome#COMPLETED}: the join is done and
+     *       {@code responseFuture} is completed, either with a result or with an error.</li>
+     *   <li>{@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST}: the group is an
+     *       empty streams group whose topology is still in the plugin, and
+     *       {@code topologyCleanupHandled} is {@code false}. Nothing is changed and
      *       {@code responseFuture} stays open. The caller must delete the topology and call
      *       this method again with {@code topologyCleanupHandled = true}.</li>
      * </ul>
      */
-    private CompletableFuture<Boolean> runClassicGroupJoin(
+    private CompletableFuture<ClassicGroupJoinOutcome> runClassicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
@@ -1148,7 +1149,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     log
                 ));
             }
-            return Boolean.FALSE;
+            return ClassicGroupJoinOutcome.COMPLETED;
         });
     }
 
