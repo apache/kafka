@@ -27,9 +27,10 @@ class MirrorPartitionMetadataTest {
     @Test
     void testAccessors() {
         MirrorPartitionMetadata metadata = new MirrorPartitionMetadata(
-            MirrorPartitionState.FAILED, 7, 42, 4_294_967_313L, "error", (short) 3, MirrorPartitionState.MIRRORING);
+            MirrorPartitionState.FAILED, 11, 7, 42, 4_294_967_313L, "error", (short) 3, MirrorPartitionState.MIRRORING);
 
         assertEquals(MirrorPartitionState.FAILED, metadata.state());
+        assertEquals(11, metadata.leaderEpoch());
         assertEquals(7, metadata.stateEpoch());
         assertEquals(42, metadata.lastMirrorEpoch());
         assertEquals(4_294_967_313L, metadata.lastMirrorOffset());
@@ -41,7 +42,7 @@ class MirrorPartitionMetadataTest {
     @Test
     void testNullErrorMessage() {
         MirrorPartitionMetadata metadata = new MirrorPartitionMetadata(
-            MirrorPartitionState.MIRRORING, 1, -1, -1L, null, (short) 0, MirrorPartitionState.UNKNOWN);
+            MirrorPartitionState.MIRRORING, -1, 1, -1, -1L, null, (short) 0, MirrorPartitionState.UNKNOWN);
 
         assertNull(metadata.errorMessage());
     }
@@ -49,21 +50,21 @@ class MirrorPartitionMetadataTest {
     @Test
     void testNullStateIsRejected() {
         assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata(
-            null, 0, -1, -1L, null, (short) 0, MirrorPartitionState.UNKNOWN));
+            null, -1, 0, -1, -1L, null, (short) 0, MirrorPartitionState.UNKNOWN));
         assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata(
-            MirrorPartitionState.MIRRORING, 0, -1, -1L, null, (short) 0, null));
+            MirrorPartitionState.MIRRORING, -1, 0, -1, -1L, null, (short) 0, null));
     }
 
     @Test
     void testEquality() {
         MirrorPartitionMetadata metadata = new MirrorPartitionMetadata(
-            MirrorPartitionState.STOPPED, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING);
+            MirrorPartitionState.STOPPED, 5, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING);
 
         assertEquals(metadata, new MirrorPartitionMetadata(
-            MirrorPartitionState.STOPPED, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING));
+            MirrorPartitionState.STOPPED, 5, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING));
         assertEquals(metadata.hashCode(), new MirrorPartitionMetadata(
-            MirrorPartitionState.STOPPED, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING).hashCode());
+            MirrorPartitionState.STOPPED, 5, 2, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING).hashCode());
         assertNotEquals(metadata, new MirrorPartitionMetadata(
-            MirrorPartitionState.STOPPED, 3, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING));
+            MirrorPartitionState.STOPPED, 5, 3, 10, 100L, null, (short) 0, MirrorPartitionState.STOPPING));
     }
 }

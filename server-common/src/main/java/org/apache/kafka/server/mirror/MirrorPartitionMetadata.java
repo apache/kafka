@@ -21,17 +21,20 @@ import java.util.Objects;
 /**
  * An immutable snapshot of the mirror metadata of a partition.
  *
- * @param state             The current mirror state.
- * @param stateEpoch        The state epoch, incremented on every state transition.
- * @param lastMirrorEpoch   The last mirror leader epoch, or -1 if not available.
+ * @param state             The mirror partition state.
+ * @param leaderEpoch       The highest leader epoch seen for the partition, or -1 if not available.
+ * @param stateEpoch        The current state epoch for the partition.
+ * @param lastMirrorEpoch   The last mirror epoch, or -1 if not available.
  * @param lastMirrorOffset  The last mirror offset, or -1 if not available.
  * @param errorMessage      The error message when in {@link MirrorPartitionState#FAILED} state, or null otherwise.
- * @param retryAttempt      The number of automatic retry attempts while in {@link MirrorPartitionState#FAILED} state,
- *                          or -1 for a non-retryable failure.
- * @param previousState     The state before the last transition, or {@link MirrorPartitionState#UNKNOWN} if not recorded.
+ * @param retryAttempt      The retry attempt count in {@link MirrorPartitionState#FAILED} state, 0 if not failed,
+ *                          or -1 if non-retryable.
+ * @param previousState     The mirror partition state before entering {@link MirrorPartitionState#FAILED},
+ *                          or {@link MirrorPartitionState#UNKNOWN} if not recorded.
  */
 public record MirrorPartitionMetadata(
     MirrorPartitionState state,
+    int leaderEpoch,
     int stateEpoch,
     int lastMirrorEpoch,
     long lastMirrorOffset,
@@ -40,7 +43,7 @@ public record MirrorPartitionMetadata(
     MirrorPartitionState previousState
 ) {
     public MirrorPartitionMetadata {
-        Objects.requireNonNull(state, "state must not be null");
-        Objects.requireNonNull(previousState, "previousState must not be null");
+        Objects.requireNonNull(state);
+        Objects.requireNonNull(previousState);
     }
 }
