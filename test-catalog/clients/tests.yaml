@@ -5110,6 +5110,8 @@ org.apache.kafka.common.security.authenticator.ClientAuthenticationFailureTest:
 - testConsumerWithInvalidCredentials
 - testProducerWithInvalidCredentials
 - testTransactionalProducerWithInvalidCredentials
+org.apache.kafka.common.security.authenticator.CredentialCacheTest:
+- testScramCredentialCache
 org.apache.kafka.common.security.authenticator.LoginManagerTest:
 - testClientLoginManager
 - testLoginManagerWithDifferentConfigs
@@ -5572,8 +5574,6 @@ org.apache.kafka.common.security.plain.internals.PlainSaslServerTest:
 - noAuthorizationIdSpecified
 - passwordIsComparedForUnknownUser
 - unknownUserOrInvalidPassword
-org.apache.kafka.common.security.scram.internals.ScramCredentialUtilsTest:
-- scramCredentialCache
 org.apache.kafka.common.security.scram.internals.ScramFormatterTest:
 - rfc7677Example
 - saslName
@@ -5703,6 +5703,13 @@ org.apache.kafka.common.security.token.delegation.TokenInformationTest:
 - testEqualsAndHashCode
 - testHashCodeIgnoresExpiryTimestampLikeEquals
 - testHashCodeIsStableAcrossRenewal
+org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCacheTest:
+- testAddTokenDropsReplacedHmacMapping
+- testCredentialsOnlyCachedForEnabledMechanisms
+- testRemoveCache
+- testRemoveTokenDropsHmacMapping
+- testUpdateCache
+- testUpdateCacheWithRenewedToken
 org.apache.kafka.common.serialization.ListDeserializerTest:
 - shouldDeserializeListEndingInEmptyEntry
 - shouldPassHeadersToUnderlyingDeserializer

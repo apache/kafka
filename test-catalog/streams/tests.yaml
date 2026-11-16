@@ -2300,6 +2300,7 @@ org.apache.kafka.streams.processor.internals.PartitionGroupTest:
 - shouldEmptyPartitionsOnClear
 - shouldIdleAsSpecifiedWhenLagIsZero
 - shouldNeverWaitIfIdlingIsDisabled
+- shouldNotBuildTraceLogArgumentsInNextRecordWhenTraceIsDisabled
 - shouldNotFormatNotReadyLogMessageUntilRequested
 - shouldSetPartitionTimestampAndStreamTime
 - shouldThrowIllegalStateExceptionUponAddRecordsIfPartitionUnknown
@@ -3306,6 +3307,7 @@ org.apache.kafka.streams.processor.internals.TaskAndActionTest:
 - shouldThrowIfRemoveTaskActionIsCreatedWithNullFuture
 - shouldThrowIfRemoveTaskActionIsCreatedWithNullTaskId
 org.apache.kafka.streams.processor.internals.TaskExecutionMetadataTest:
+- shouldNotFormatLogMessageUntilItIsLogged
 - testCanProcessWithoutNamedTopologies
 - testNamedTopologiesCanBackoff
 - testNamedTopologiesCanBePausedIndependently

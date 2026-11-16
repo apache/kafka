@@ -219,6 +219,7 @@ org.apache.kafka.tools.ConsumerPerformanceTest:
 - testConfigWithUnrecognizedOption
 - testConfigWithoutTopicAndInclude
 - testConsumerConfigDeprecated
+- testConsumerListenerResetJoinTimeInSingleRound
 - testConsumerListenerWithAllPartitionRevokedAndAssigned
 - testConsumerListenerWithPartialPartitionRevokedAndAssigned
 - testConsumerListenerWithoutPartitionRevoked
