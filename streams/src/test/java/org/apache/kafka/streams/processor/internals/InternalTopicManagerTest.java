@@ -148,40 +148,6 @@ public class InternalTopicManagerTest {
 
     @Test
     @Timeout(30)
-    public void shouldBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
-        mockAdminClient.addTopic(
-            false,
-            topic1,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            null);
-        mockAdminClient.markTopicForDeletion(topic1);
-        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
-
-        final long before = time.milliseconds();
-        // The clock has no auto-tick, so only the round backoff can advance it toward the
-        // deadline: reaching the timeout at all proves the round backs off instead of spinning.
-        assertThrows(
-            TimeoutException.class,
-            () -> internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
-        );
-
-        // The timeout is 50 ms and retry.backoff.ms is 10 ms. The backoff doubles each round
-        // (10, 20, 40 ms), each with +/- jitter. The deadline is only checked before a sleep,
-        // so exactly three sleeps happen: after two sleeps the clock is at most 36 ms (< 50),
-        // and after three it is at least 56 ms (>= 50).
-        final long elapsed = time.milliseconds() - before;
-        long minElapsed = 0;
-        long maxElapsed = 0;
-        for (int round = 0; round < 3; round++) {
-            minElapsed += backoffBoundMs(10, round, 1 - CommonClientConfigs.RETRY_BACKOFF_JITTER);
-            maxElapsed += backoffBoundMs(10, round, 1 + CommonClientConfigs.RETRY_BACKOFF_JITTER);
-        }
-        assertTrue(elapsed >= minElapsed && elapsed <= maxElapsed,
-            "Elapsed time " + elapsed + " is outside [" + minElapsed + ", " + maxElapsed + "]");
-    }
-
-    @Test
-    @Timeout(30)
     public void shouldIncreaseBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
         mockAdminClient.addTopic(
             false,
@@ -191,36 +157,75 @@ public class InternalTopicManagerTest {
         mockAdminClient.markTopicForDeletion(topic1);
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
-        final List<Long> sleeps = new ArrayList<>();
-        final MockTime recordingTime = new MockTime(0) {
+        final List<Long> sleepsMs = new ArrayList<>();
+        final InternalTopicManager topicManager =
+            new InternalTopicManager(mockTimeRecordingSleeps(sleepsMs), mockAdminClient, new StreamsConfig(config));
+
+        // The clock has no auto-tick, so only the round backoff can advance it toward the
+        // deadline: reaching the timeout at all proves the round backs off instead of spinning.
+        assertThrows(
+            TimeoutException.class,
+            () -> topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+
+        assertSleepsFollowExponentialBackoff(sleepsMs);
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldIncreaseBackOffBetweenRoundsWhenGettingTopicPartitionInfoTimesOut() {
+        mockAdminClient.timeoutNextRequest(Integer.MAX_VALUE);
+
+        final List<Long> sleepsMs = new ArrayList<>();
+        final InternalTopicManager topicManager =
+            new InternalTopicManager(mockTimeRecordingSleeps(sleepsMs), mockAdminClient, new StreamsConfig(config));
+
+        // The clock has no auto-tick, so only the round backoff can advance it toward the
+        // deadline: reaching the timeout at all proves the loop backs off instead of spinning.
+        assertThrows(
+            TimeoutException.class,
+            () -> topicManager.getTopicPartitionInfo(Collections.singleton(topic1))
+        );
+
+        assertSleepsFollowExponentialBackoff(sleepsMs);
+    }
+
+    /**
+     * A clock without auto-tick that records every requested sleep.
+     */
+    private static MockTime mockTimeRecordingSleeps(final List<Long> sleepsMs) {
+        return new MockTime(0) {
             @Override
             public void sleep(final long ms) {
-                sleeps.add(ms);
+                sleepsMs.add(ms);
                 super.sleep(ms);
             }
         };
-        final InternalTopicManager manager =
-            new InternalTopicManager(recordingTime, mockAdminClient, new StreamsConfig(config));
+    }
 
-        assertThrows(
-            TimeoutException.class,
-            () -> manager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
-        );
-
-        assertEquals(3, sleeps.size());
-        for (int round = 0; round < sleeps.size(); round++) {
-            final long lower = backoffBoundMs(10, round, 1 - CommonClientConfigs.RETRY_BACKOFF_JITTER);
-            final long upper = backoffBoundMs(10, round, 1 + CommonClientConfigs.RETRY_BACKOFF_JITTER);
-            final long sleep = sleeps.get(round);
-            assertTrue(sleep >= lower && sleep <= upper,
-                "Backoff " + sleep + " of round " + round + " is outside [" + lower + ", " + upper + "]");
+    /**
+     * Asserts that the recorded sleeps are the exponential backoff of a retry loop that runs until
+     * the 50 ms timeout with retry.backoff.ms of 10 ms. The backoff doubles each round
+     * (10, 20, 40 ms), each with +/- jitter. The deadline is only checked before a sleep, so
+     * exactly three sleeps happen: after two sleeps the clock is at most 36 ms (< 50), and after
+     * three it is at least 56 ms (>= 50).
+     */
+    private void assertSleepsFollowExponentialBackoff(final List<Long> sleepsMs) {
+        final long initialBackoffMs = new StreamsConfig(config).getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        assertEquals(3, sleepsMs.size());
+        for (int round = 0; round < sleepsMs.size(); round++) {
+            final long minBackoffMs = expectedBackoffMs(initialBackoffMs, round, 1 - CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            final long maxBackoffMs = expectedBackoffMs(initialBackoffMs, round, 1 + CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            final long actualBackoffMs = sleepsMs.get(round);
+            assertTrue(actualBackoffMs >= minBackoffMs && actualBackoffMs <= maxBackoffMs,
+                "Backoff " + actualBackoffMs + " of round " + round + " is outside [" + minBackoffMs + ", " + maxBackoffMs + "]");
         }
     }
 
     /**
      * The backoff of the given (0-based) retry round when the jitter scales it by {@code jitterFactor}.
      */
-    private static long backoffBoundMs(final long initialBackoffMs, final int round, final double jitterFactor) {
+    private static long expectedBackoffMs(final long initialBackoffMs, final int round, final double jitterFactor) {
         return (long) (initialBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, round) * jitterFactor);
     }
 
