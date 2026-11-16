@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
@@ -54,6 +55,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1692,5 +1694,38 @@ public class StreamsGroupTest {
         when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
 
         assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testStepBeforeClassicConversionEmptyWhenNoTopologyStored() {
+        // Empty group, stored epoch NONE: the plugin holds nothing, so it can be converted right away.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+
+        assertEquals(Optional.empty(), streamsGroup.stepBeforeClassicConversion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {4, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN})
+    public void testStepBeforeClassicConversionDeletesTopologyWhenEmptyAndTopologyMayBeStored(int storedEpoch) {
+        // Empty group whose topology the plugin holds (real epoch) or may hold (UNCERTAIN): it
+        // must be deleted from the plugin before the group is converted.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(storedEpoch);
+
+        assertEquals(
+            Optional.of(ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST),
+            streamsGroup.stepBeforeClassicConversion()
+        );
+    }
+
+    @Test
+    public void testStepBeforeClassicConversionEmptyWhenGroupNotEmpty() {
+        // A non-empty streams group is never converted, so there is no step to run first.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+
+        assertFalse(streamsGroup.isEmpty());
+        assertEquals(Optional.empty(), streamsGroup.stepBeforeClassicConversion());
     }
 }

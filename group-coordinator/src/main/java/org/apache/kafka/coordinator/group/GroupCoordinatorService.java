@@ -1045,6 +1045,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // runs again and converts the group. Today the only such step is deleting an empty
         // streams group's topology from the plugin. It needs the plugin, so with no plugin
         // configured there is nothing to run and we pass preConversionStepDone = true.
+        // Note that this initial value skips every step, not only the streams one. If another
+        // group type adds a step, decide per step instead (e.g. treat
+        // DELETE_STREAMS_TOPOLOGY_FIRST as a no-op when no plugin is configured).
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
         ).thenCompose(outcome -> switch (outcome) {
