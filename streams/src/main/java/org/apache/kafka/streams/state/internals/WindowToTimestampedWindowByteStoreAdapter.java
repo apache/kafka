@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -237,4 +239,74 @@ public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<By
         }
     }
 
+    @Override
+    public ReadOnlyWindowStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new ReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    private static final class ReadOnlyView implements ReadOnlyWindowStore<Bytes, byte[]> {
+
+        private final ReadOnlyWindowStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] fetch(final Bytes key, final long timestamp) {
+            return convertToTimestampedFormat(underlying.fetch(key, timestamp));
+        }
+
+        @Override
+        public WindowStoreIterator<byte[]> fetch(final Bytes key,
+                                                 final Instant timeFrom,
+                                                 final Instant timeTo) throws IllegalArgumentException {
+            return new WindowToTimestampedWindowIteratorAdapter(underlying.fetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
+                                                         final Instant timeFrom,
+                                                         final Instant timeTo) throws IllegalArgumentException {
+            return new WindowToTimestampedWindowIteratorAdapter(underlying.backwardFetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                               final Bytes keyTo,
+                                                               final Instant timeFrom,
+                                                               final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
+                                                                       final Bytes keyTo,
+                                                                       final Instant timeFrom,
+                                                                       final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom,
+                                                                  final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.fetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom,
+                                                                          final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.backwardFetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.backwardAll());
+        }
+    }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,7 @@ import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -306,4 +309,21 @@ public class SessionToHeadersStoreAdapterTest {
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
     }
+
+    @Test
+    public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
+        final ReadOnlySessionStore<Bytes, byte[]> innerView = mock(ReadOnlySessionStore.class);
+        final Bytes key = new Bytes("k".getBytes());
+        final byte[] committedPlain = "committed".getBytes();
+
+        when(innerStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+        when(innerView.fetchSession(key, 0L, 10L)).thenReturn(committedPlain);
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertNotSame(adapter, view);
+        assertArrayEquals(convertToHeaderFormat(committedPlain), view.fetchSession(key, 0L, 10L));
+        verify(innerStore).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
 }

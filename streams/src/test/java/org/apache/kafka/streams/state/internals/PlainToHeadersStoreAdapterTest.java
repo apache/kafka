@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -25,6 +26,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,12 +42,14 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainT
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -412,5 +416,22 @@ public class PlainToHeadersStoreAdapterTest {
         adapter.getPosition();
 
         verify(mockStore).getPosition();
+    }
+
+    @Test
+    public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
+        final PlainToHeadersStoreAdapter adapter = createAdapter();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        final Bytes key = new Bytes("k".getBytes());
+        final byte[] committedPlain = "committed".getBytes();
+
+        when(mockStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+        when(innerView.get(key)).thenReturn(committedPlain);
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertNotSame(adapter, view);
+        assertArrayEquals(convertFromPlainToHeaderFormat(committedPlain), view.get(key));
+        verify(mockStore).readOnly(IsolationLevel.READ_COMMITTED);
     }
 }
