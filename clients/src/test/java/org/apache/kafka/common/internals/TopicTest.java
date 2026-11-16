@@ -117,13 +117,13 @@ public class TopicTest {
         "__share_group_state",
         "__mirror_state"
     })
-    public void testIsInternal(String topic) {
+    public void testCoordinatorTopicsAreInternal(String topic) {
         assertTrue(Topic.isInternal(topic));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {Topic.CLUSTER_METADATA_TOPIC_NAME, "foo"})
-    public void testIsNotInternal(String topic) {
+    @ValueSource(strings = {"foo", "bar"})
+    public void testUserTopicsAreNotInternal(String topic) {
         assertFalse(Topic.isInternal(topic));
     }
 }
