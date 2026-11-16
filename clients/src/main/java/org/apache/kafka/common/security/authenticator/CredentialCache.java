@@ -20,20 +20,22 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class CredentialCache {
 
-    private final ConcurrentHashMap<String, Cache> cacheMap = new ConcurrentHashMap<>();
+    private final Map<String, Cache> cacheMap;
 
     /**
      * Creates a cache for each SCRAM mechanism in {@code mechanisms}. Other mechanisms are ignored.
      */
     public CredentialCache(Collection<String> mechanisms) {
-        for (String mechanism : ScramMechanism.mechanismNames()) {
-            if (mechanisms.contains(mechanism))
-                cacheMap.put(mechanism, new Cache());
-        }
+        this.cacheMap = ScramMechanism.mechanismNames().stream()
+            .filter(mechanisms::contains)
+            .collect(Collectors.toUnmodifiableMap(Function.identity(), mechanism -> new Cache()));
     }
 
     public Cache cache(String mechanism) {
