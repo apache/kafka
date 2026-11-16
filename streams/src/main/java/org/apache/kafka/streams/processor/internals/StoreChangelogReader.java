@@ -677,9 +677,12 @@ public class StoreChangelogReader implements ChangelogReader {
             // for other changelog partitions we do not need to update limit offset at all since we never need to
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
             // standby never need to stop
+            // changelogs of paused tasks, which are not in tasks, are skipped: they are not restored until resumed,
+            // and a failed lookup of committed offsets is charged to the tasks of the looked-up changelogs
             final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
                 .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
-                    entry.getValue().stateManager.changelogAsSource(entry.getKey()))
+                    entry.getValue().stateManager.changelogAsSource(entry.getKey()) &&
+                    tasks.containsKey(entry.getValue().stateManager.taskId()))
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
 
             if (changelogsWithLimitOffsets.stream().anyMatch(partition -> !changelogs.get(partition).bufferedRecords().isEmpty())) {
