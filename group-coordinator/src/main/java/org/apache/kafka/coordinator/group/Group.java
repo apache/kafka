@@ -176,9 +176,14 @@ public interface Group {
      * to a classic group, for example to release state held outside the coordinator that the
      * conversion would otherwise orphan.
      *
-     * <p>This is called on every classic join to an existing group, before it is known whether
-     * the join will convert the group. An override must therefore return empty whenever the
-     * group will not be converted (e.g. because it is not empty).
+     * <p>This is called on a classic join to an existing group, before it is known whether the
+     * join will convert the group. An override must therefore return empty whenever the group
+     * will not be converted (e.g. because it is not empty).
+     *
+     * <p>It is not called when the caller passes {@code preConversionStepDone = true}. Today that
+     * is always the case when no streams group topology description plugin is configured, so on
+     * such a broker no step runs, for any group type. A step added for another group type must
+     * change how {@code GroupCoordinatorService} sets that flag, or it would never run there.
      *
      * @return The step to run first, or empty if there is nothing to run.
      */
