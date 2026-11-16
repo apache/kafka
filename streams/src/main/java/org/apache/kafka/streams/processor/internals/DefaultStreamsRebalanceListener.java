@@ -89,13 +89,14 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     }
 
     @Override
-    public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
-        log.debug("Received broker assignment {}", assignment);
+    public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment, final SortedSet<TopicPartition> assignedPartitions) {
+        log.debug("Received broker assignment {}, assigned Partitions {}", assignment, assignedPartitions);
 
         final long start = time.milliseconds();
         final StreamsRebalanceData.Assignment runningAssignment = deduplicateTasks(assignment);
         final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
             pairWithTopicPartitions(runningAssignment.activeTasks().stream());
+        activeTasksWithPartitions.values().forEach(partitions -> partitions.retainAll(assignedPartitions));
         final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
             pairWithTopicPartitions(Stream.concat(
                 runningAssignment.standbyTasks().stream(),

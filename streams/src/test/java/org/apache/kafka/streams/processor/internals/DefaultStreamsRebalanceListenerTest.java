@@ -34,10 +34,14 @@ import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -206,8 +210,13 @@ public class DefaultStreamsRebalanceListenerTest {
             false
         );
 
+        final SortedSet<TopicPartition> assignedPartitions = sortedPartitions(
+            new TopicPartition("source1", 0),
+            new TopicPartition("repartition1", 0)
+        );
+
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultStreamsRebalanceListener.class)) {
-            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
+            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment, assignedPartitions));
 
             assertTrue(appender.getMessages(Level.WARN).isEmpty(),
                 "No warning should be logged for an assignment without overlapping roles: " + appender.getMessages(Level.WARN));
@@ -238,9 +247,10 @@ public class DefaultStreamsRebalanceListenerTest {
             Set.of(new StreamsRebalanceData.TaskId("1", 0), new StreamsRebalanceData.TaskId("3", 0), new StreamsRebalanceData.TaskId("4", 0)),
             true
         );
+        final SortedSet<TopicPartition> assignedPartitions = sortedPartitions(new TopicPartition("source1", 0));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultStreamsRebalanceListener.class)) {
-            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
+            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment, assignedPartitions));
 
             final String mergedWarning = warningContaining(appender, MERGED_WARNING);
             assertTrue(mergedWarning.contains("[1_0, 3_0]"), "Only the merged task should be named: " + mergedWarning);
@@ -276,7 +286,7 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false), Collections.emptySortedSet()
         ));
 
         assertEquals(exception, actualException);
@@ -386,7 +396,8 @@ public class DefaultStreamsRebalanceListenerTest {
                 Set.of(),
                 Set.of(),
                 true
-            )
+            ),
+            sortedPartitions(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))
         );
 
         verify(tasksAssignedSensor).record(150L);
@@ -463,7 +474,8 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of));
 
         assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false),
+            Collections.emptySortedSet()
         ));
 
         verify(tasksAssignedSensor).record(75L);
@@ -490,5 +502,14 @@ public class DefaultStreamsRebalanceListenerTest {
         verify(tasksLostSensor).record(125L);
         verify(taskManager).handleLostAll();
         verify(streamsRebalanceData, never()).setReconciledAssignment(any());
+    }
+
+    private static SortedSet<TopicPartition> sortedPartitions(final TopicPartition... partitions) {
+        final SortedSet<TopicPartition> result = new TreeSet<>(
+            Comparator.comparing(TopicPartition::topic)
+                .thenComparingInt(TopicPartition::partition)
+        );
+        Collections.addAll(result, partitions);
+        return result;
     }
 }
