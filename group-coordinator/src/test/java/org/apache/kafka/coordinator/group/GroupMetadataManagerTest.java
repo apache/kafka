@@ -24808,6 +24808,82 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsDeletedBeforeAssignmentChanges() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Assignment updates are delayed, so the tasks of the member stay unchanged after the topic is deleted.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 10_000)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The first heartbeat of a new group runs on a group that is not retained, so the topology is configured
+        // again on the second heartbeat.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+        int endpointInformationEpoch = result.response().data().endpointInformationEpoch();
+
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // The topology is no longer ready, so the member refetches the endpoint information although its tasks are unchanged.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(endpointInformationEpoch));
+        assertNull(result.response().data().activeTasks());
+        assertEquals(endpointInformationEpoch + 1, result.response().data().endpointInformationEpoch());
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
     public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsRecreatedBeforeAssignmentChanges() {
         String groupId = "fooup";
         String memberIdA = Uuid.randomUuid().toString();
