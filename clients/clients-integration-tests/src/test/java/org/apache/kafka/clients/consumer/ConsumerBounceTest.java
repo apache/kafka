@@ -19,11 +19,14 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -59,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -470,6 +474,78 @@ public class ConsumerBounceTest {
                 () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
                 10000L, "The consumers in the group could not fetch the expected records"
         );
+    }
+
+    @ClusterTest
+    public void testClassicRebalanceCompletesWhenOverCapacityMemberIsRejected() throws Exception {
+        String group = "group-max-size-shrink-test";
+        String topic = "group-max-size-shrink-test";
+        int newMaxGroupSize = 2;
+        int consumerCount = newMaxGroupSize + 1;
+        int partitionCount = consumerCount * 2;
+        long rebalanceTimeoutMs = 120000L;
+
+        Map<String, String> consumerConfig = new HashMap<>();
+        consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name);
+        consumerConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Long.toString(rebalanceTimeoutMs));
+        consumerConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+        consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        clusterInstance.createTopic(topic, partitionCount, (short) BROKER_COUNT);
+        Set<TopicPartition> partitions = new HashSet<>();
+        for (int i = 0; i < partitionCount; ++i)
+            partitions.add(new TopicPartition(topic, i));
+
+        addConsumersToGroupAndWaitForGroupAssignment(consumerCount, List.of(topic), partitions, group, consumerConfig);
+
+        int coordinatorId = findCoordinators(List.of(group)).iterator().next();
+        List<Integer> brokerIds = new ArrayList<>(clusterInstance.brokers().keySet());
+        brokerIds.remove(Integer.valueOf(coordinatorId));
+        brokerIds.add(coordinatorId);
+        Map<String, Object> newConfig = Map.of(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, Integer.toString(newMaxGroupSize));
+        for (int brokerId : brokerIds) {
+            clusterInstance.restartBroker(brokerId, newConfig);
+            clusterInstance.waitForReadyBrokers();
+            waitForGroupMetadataTopicFullyReplicated();
+        }
+
+        TestUtils.waitForCondition(
+            () -> consumerPollers.stream().anyMatch(poller -> poller.getThrownException().isPresent()),
+            30000L, "No consumer was rejected after the max group size was reduced");
+        List<ConsumerAssignmentPoller> rejectedPollers = consumerPollers.stream()
+            .filter(poller -> poller.getThrownException().isPresent())
+            .toList();
+        assertEquals(1, rejectedPollers.size());
+        assertInstanceOf(GroupMaxSizeReachedException.class, rejectedPollers.get(0).getThrownException().get());
+        consumerPollers.removeAll(rejectedPollers);
+
+        validateGroupAssignment(consumerPollers, partitions,
+            Optional.of("The rebalance did not complete right after the over-capacity member was rejected"),
+            30000L, List.of());
+
+        assertEquals(newMaxGroupSize, consumerPollers.size());
+        assertTrue(consumerPollers.stream().noneMatch(poller -> poller.getThrownException().isPresent()),
+            "More consumers than expected were removed from the group");
+
+        try (Admin admin = clusterInstance.admin()) {
+            assertEquals(newMaxGroupSize,
+                admin.describeConsumerGroups(List.of(group)).describedGroups().get(group).get().members().size());
+        }
+    }
+
+    private void waitForGroupMetadataTopicFullyReplicated() throws InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            TestUtils.waitForCondition(() -> {
+                try {
+                    TopicDescription description = admin.describeTopics(List.of(Topic.GROUP_METADATA_TOPIC_NAME))
+                        .allTopicNames().get().get(Topic.GROUP_METADATA_TOPIC_NAME);
+                    return description.partitions().stream()
+                        .allMatch(info -> info.leader() != null && info.isr().size() == BROKER_COUNT);
+                } catch (ExecutionException e) {
+                    return false;
+                }
+            }, 30000L, Topic.GROUP_METADATA_TOPIC_NAME + " did not become fully replicated");
+        }
     }
 
     /**
