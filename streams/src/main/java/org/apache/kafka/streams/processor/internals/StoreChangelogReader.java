@@ -707,7 +707,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 return !metadata.bufferedRecords().isEmpty() || metadata.awaitsLimitOffset();
             })) {
                 updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
-                lastUpdateOffsetTime = time.milliseconds();
             }
         }
     }
@@ -935,6 +934,9 @@ public class StoreChangelogReader implements ChangelogReader {
             return Map.of();
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve committed offsets for %s", partitions), e);
+        } finally {
+            // the periodic update of standby limit offsets waits a full interval after any lookup, also a failed one
+            lastUpdateOffsetTime = time.milliseconds();
         }
     }
 

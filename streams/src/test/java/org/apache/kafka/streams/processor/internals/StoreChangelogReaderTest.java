@@ -1272,9 +1272,11 @@ public class StoreChangelogReaderTest {
         when(storeMetadata.offset()).thenReturn(3L);
 
         final AtomicBoolean failLookups = new AtomicBoolean(true);
+        final AtomicInteger lookups = new AtomicInteger();
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
             public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                lookups.incrementAndGet();
                 if (failLookups.get()) {
                     return AdminClientTestUtils.listConsumerGroupOffsetsResult(groupSpecs.keySet().iterator().next(), new TimeoutException("KABOOM!"));
                 }
@@ -1300,11 +1302,19 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+        assertEquals(1, lookups.get());
 
-        // the lookup is retried once the interval has elapsed, even though no records are buffered
+        // the lookup is not retried before the interval has elapsed
         failLookups.set(false);
+        time.setCurrentTimeMs(now + 100L);
+        changelogReader.restore(tasks);
+        assertEquals(1, lookups.get());
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+
+        // once the interval has elapsed, the lookup is retried, even though no records are buffered
         time.setCurrentTimeMs(now + 101L);
         changelogReader.restore(tasks);
+        assertEquals(2, lookups.get());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(10L, changelogReader.logicalChangelogEndOffsets().get(tp));
     }
