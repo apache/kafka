@@ -83,10 +83,11 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class AuthorizeByResourceTypeBenchmark {
-    @Param({"8", "32", "128"})
+    @Param({"8"})
     public int resourceNameLength;
 
-    @Param({"1", "10", "100", "1000", "10000"})
+    @Param({"10000"})
+    // Number of independent resource groups, or nested ALLOW/DENY pairs for MIXED_PATTERNS.
     public int resourceCount;
 
     @Param({"LITERAL", "PREFIXED"})
@@ -97,7 +98,10 @@ public class AuthorizeByResourceTypeBenchmark {
     // ANCESTOR_DENY: deny prefix "a" covers the ALLOW; "abb" is unrelated -> DENIED.
     // UNRELATED_DENY: deny prefix "abb" does not cover the ALLOW -> ALLOWED.
     // NO_DENIES: only ALLOW ACLs exist -> ALLOWED.
-    @Param({"EXACT_DENY", "ANCESTOR_DENY", "UNRELATED_DENY", "NO_DENIES"})
+    // MIXED_PATTERNS: N literal ALLOWs at P + "a", P + "aa", ... each have a matching
+    // prefixed DENY, while an ALLOW at P survives -> ALLOWED. With allowPatternType=PREFIXED,
+    // the baseline must check all N literal ALLOWs before reaching the surviving prefixed ALLOW.
+    @Param({"MIXED_PATTERNS"})
     public String scenario;
 
     private BaselineAuthorizer authorizer;
@@ -115,6 +119,33 @@ public class AuthorizeByResourceTypeBenchmark {
             "1", InetAddress.getLoopbackAddress(), principal, ListenerName.normalised("listener"),
             SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
 
+        if (scenario.equals("MIXED_PATTERNS")) {
+            setupMixedPatterns(principal);
+        } else {
+            setupIndependentPatterns(principal);
+        }
+        authorizer.completeInitialLoad();
+
+        AuthorizationResult expected = scenario.equals("EXACT_DENY") || scenario.equals("ANCESTOR_DENY")
+            ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
+        if (trie() != expected || baseline() != expected) {
+            throw new IllegalStateException("Unexpected authorization result for " + scenario);
+        }
+    }
+
+    private void setupMixedPatterns(KafkaPrincipal principal) {
+        String prefix = "x".repeat(resourceNameLength);
+        addAcl(prefix, allowPatternType, AclPermissionType.ALLOW, principal);
+        // As in AuthorizeByResourceTypeSearch, resourceCount grows both the number of
+        // pairs and the longest suffix. Total resource-name characters grow quadratically.
+        for (int i = 1; i <= resourceCount; i++) {
+            String name = prefix + "a".repeat(i);
+            addAcl(name, PatternType.LITERAL, AclPermissionType.ALLOW, principal);
+            addAcl(name, PatternType.PREFIXED, AclPermissionType.DENY, principal);
+        }
+    }
+
+    private void setupIndependentPatterns(KafkaPrincipal principal) {
         for (int i = 0; i < resourceCount; i++) {
             String prefix = "x".repeat(resourceNameLength) + "-" + i + "-";
             addAcl(prefix + "abc", allowPatternType, AclPermissionType.ALLOW, principal);
@@ -135,7 +166,6 @@ public class AuthorizeByResourceTypeBenchmark {
                     throw new IllegalArgumentException("Unknown scenario " + scenario);
             }
         }
-        authorizer.completeInitialLoad();
     }
 
     private void addAcl(String name, PatternType type, AclPermissionType permission, KafkaPrincipal principal) {
