@@ -788,7 +788,7 @@ public class StoreChangelogReader implements ChangelogReader {
      * offset — the limit offset for changelogs piggy-backed on a source topic. A zero-record poll is
      * not sufficient: retention seeks, source buffering, and incomplete fetches can leave the consumer
      * at a non-zero position while records remain to apply. A dedicated changelog that has reached its end also
-     * records its end offset.
+     * records its last changelog offset.
      */
     private void maybeAdvanceStandbyRestoredOffset(final ProcessorStateManager stateManager,
                                                    final ChangelogMetadata changelogMetadata,
