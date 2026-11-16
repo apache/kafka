@@ -775,6 +775,9 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
+
+        consumer.unsubscribe();
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
         assertEquals(0, listener.assignedCount);
         assertEquals(0, listener.revokedCount);
         assertEquals(0, listener.lostCount);
