@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -105,6 +106,14 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             return lowerCaseName;
         }
     }
+
+    /**
+     * Orders the server assignors by their number of votes. Assignors with the
+     * same number of votes are ordered by name.
+     */
+    private static final Comparator<Map.Entry<String, Integer>> SERVER_ASSIGNOR_VOTES_COMPARATOR =
+        Map.Entry.<String, Integer>comparingByValue()
+            .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder()));
 
     /**
      * The logger.
@@ -627,7 +636,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateServerAssignors(counts, oldMember, newMember);
 
         return counts.entrySet().stream()
-            .max(Map.Entry.comparingByValue())
+            .max(SERVER_ASSIGNOR_VOTES_COMPARATOR)
             .map(Map.Entry::getKey);
     }
 
@@ -643,7 +652,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     public Optional<String> preferredServerAssignor(long committedOffset) {
         return serverAssignors.entrySet(committedOffset).stream()
-            .max(Map.Entry.comparingByValue())
+            .max(SERVER_ASSIGNOR_VOTES_COMPARATOR)
             .map(Map.Entry::getKey);
     }
 

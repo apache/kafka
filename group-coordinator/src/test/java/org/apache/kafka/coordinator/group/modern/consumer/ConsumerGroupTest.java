@@ -687,15 +687,24 @@ public class ConsumerGroupTest {
             .build();
 
         // Member 1 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be range or uniform.
-        Optional<String> assignor = consumerGroup.computePreferredServerAssignor(member1, updatedMember1);
-        assertTrue(assignor.equals(Optional.of("range")) || assignor.equals(Optional.of("uniform")));
+        // we pass the updated member. Range and uniform have one vote each so the assignor
+        // should be range, the name that sorts first.
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.computePreferredServerAssignor(member1, updatedMember1)
+        );
 
         // Update the group.
         consumerGroup.updateMember(updatedMember1);
 
+        // The assignor should be range.
+        assertEquals(
+            Optional.of("range"),
+            consumerGroup.preferredServerAssignor()
+        );
+
         // Member 2 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be range or uniform.
+        // we pass the updated member. The assignor should be uniform.
         assertEquals(
             Optional.of("uniform"),
             consumerGroup.computePreferredServerAssignor(member2, updatedMember2)
@@ -725,6 +734,32 @@ public class ConsumerGroupTest {
             Optional.empty(),
             consumerGroup.preferredServerAssignor()
         );
+    }
+
+    @Test
+    public void testPreferredServerAssignorWithTiedVote() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setServerAssignorName("uniform")
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setServerAssignorName("range")
+            .build();
+
+        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member2);
+
+        // Range and uniform have one vote each. Updating a member removes its vote and adds it
+        // back, which reorders the stored votes. The preferred assignor should be range every time.
+        for (int i = 0; i < 10; i++) {
+            ConsumerGroupMember member = i % 2 == 0 ? member1 : member2;
+
+            assertEquals(Optional.of("range"), consumerGroup.preferredServerAssignor());
+            assertEquals(Optional.of("range"), consumerGroup.computePreferredServerAssignor(member, member));
+
+            consumerGroup.updateMember(member);
+        }
     }
 
     @Test
