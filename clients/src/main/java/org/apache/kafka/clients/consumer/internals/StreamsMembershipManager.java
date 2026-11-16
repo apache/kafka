@@ -1250,7 +1250,8 @@ public class StreamsMembershipManager implements RequestManager {
         return currentAssignment.reconcilingCompleted(targetAssignment);
     }
 
-    private boolean isPartialAssignmentReconciled() {
+    // Visible For Testing.
+    boolean isPartialAssignmentReconciled() {
         return !targetAssignmentReconciled() && currentAssignment.localEpoch == targetAssignment.localEpoch;
     }
 
@@ -1574,19 +1575,26 @@ public class StreamsMembershipManager implements RequestManager {
                 subtopology.repartitionSourceTopics().keySet().stream()
             ).allMatch(topic -> partitionCount(topic, metadataSnapshot).isPresent());
 
-            // Resolve a task once the partition counts of all its source and repartition source
-            // topics are known, even if none has a partition matching the task's partition ID.
-            // Custom assignors may return such tasks, and the client must not wait indefinitely
-            // for a matching partition to appear. Task assignment decisions belong to the broker;
-            // the client uses local metadata to determine the corresponding input partitions.
-            //
+            final boolean hasAtLeastValidTopicKnown = Stream.concat(
+                subtopology.sourceTopics().stream(),
+                subtopology.repartitionSourceTopics().keySet().stream()
+            ).anyMatch(topic -> {
+                Optional<Integer> maybePartitionCount = partitionCount(topic, metadataSnapshot);
+                if (maybePartitionCount.isEmpty()) {
+                    return false;
+                }
+                return taskId.partitionId() < maybePartitionCount.get();
+            });
+
+            // Resolve a task only if all input topic partition counts are known and at least one
+            // input topic contains the task's partition.
             // Partition counts are assumed to only increase; deleting and recreating a topic with
             // fewer partitions is not handled.
-            // Cached counts may lag behind partition increases, so knowing all topic partition counts
-            // does not guarantee that all input partitions have been identified.
+            // Cached counts may lag behind partition increases, so this check prevents tasks with
+            // no valid input partitions but does not guarantee that all input partitions are known.
             // For task 0_2, actual counts A=1, B=3, C=5 and cached counts A=1, B=3, C=1
             // resolve to {B-2}, missing C-2. Detecting this requires additional broker information.
-            if (allCountKnowns) {
+            if (allCountKnowns && hasAtLeastValidTopicKnown) {
                 resolvedTasks.add(taskId);
             }
         }
@@ -1751,7 +1759,8 @@ public class StreamsMembershipManager implements RequestManager {
         return unmodifiableList(stateUpdatesListeners);
     }
 
-    private boolean isReconciliationInProgress() {
+    // visible for testing
+    boolean isReconciliationInProgress() {
         return this.reconcilingAssignment != LocalAssignment.NONE;
     }
 

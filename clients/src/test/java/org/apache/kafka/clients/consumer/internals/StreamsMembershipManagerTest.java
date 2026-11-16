@@ -105,6 +105,7 @@ public class StreamsMembershipManagerTest {
 
     private static final int PARTITION_0 = 0;
     private static final int PARTITION_1 = 1;
+    private static final int PARTITION_2 = 2;
 
     private final Time time = new MockTime(0);
     private final Metrics metrics = new Metrics(time);

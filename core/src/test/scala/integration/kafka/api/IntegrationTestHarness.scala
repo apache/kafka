@@ -29,6 +29,7 @@ import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData, StreamsRebalanceListener}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Utils
@@ -280,7 +281,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer.subscribe(inputTopics.asJava,
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment, assignedPartitions: util.SortedSet[TopicPartition]): Unit = ()
         override def onAllTasksLost(): Unit = ()
       })
     consumer
