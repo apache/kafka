@@ -102,7 +102,6 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionManager;
@@ -1041,12 +1040,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         TopicPartition tp = topicPartitionFor(request.groupId());
 
-        // Usually the join completes in this first call. Otherwise the outcome names a step to
-        // run before the join can run again. Today the only such step is for an empty streams
-        // group whose topology is still in the plugin: the group is about to become a classic
-        // group, so its topology must be deleted from the plugin first. With no plugin
-        // configured there is nothing to delete, so we pass topologyCleanupHandled = true and
-        // the group is converted right away.
+        // Usually the join completes in this first call. Otherwise the outcome is the step the
+        // group reported via Group#stepBeforeClassicConversion, which must run before the join
+        // runs again and converts the group. Today the only such step is deleting an empty
+        // streams group's topology from the plugin. It needs the plugin, so with no plugin
+        // configured there is nothing to run and we pass preConversionStepDone = true.
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
         ).thenCompose(outcome -> switch (outcome) {
@@ -1123,9 +1121,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
      *       {@code responseFuture} is completed, either with a result or with an error.</li>
      *   <li>{@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST}: the group is an
      *       empty streams group whose topology is still in the plugin, and
-     *       {@code topologyCleanupHandled} is {@code false}. Nothing is changed and
+     *       {@code preConversionStepDone} is {@code false}. Nothing is changed and
      *       {@code responseFuture} stays open. The caller must delete the topology and call
-     *       this method again with {@code topologyCleanupHandled = true}.</li>
+     *       this method again with {@code preConversionStepDone = true}.</li>
      * </ul>
      */
     private CompletableFuture<ClassicGroupJoinOutcome> runClassicGroupJoin(
@@ -1133,12 +1131,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
         TopicPartition tp,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         return runtime.scheduleWriteOperation(
             "classic-group-join",
             tp,
-            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture, topologyCleanupHandled)
+            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture, preConversionStepDone)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(

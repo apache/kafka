@@ -109,7 +109,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -25645,7 +25644,7 @@ public class GroupMetadataManagerTest {
     public void testClassicGroupJoinDetectsEmptyStreamsGroupWithStoredTopology() {
         // classicGroupJoin must signal topology cleanup when an empty streams group has a stored
         // description topology epoch set (i.e. the plugin may still hold topology data). The caller
-        // is expected to run the plugin cleanup before re-invoking with topologyCleanupHandled=true.
+        // is expected to run the plugin cleanup before re-invoking with preConversionStepDone=true.
         String groupId = "streams-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
@@ -25672,7 +25671,7 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testClassicGroupJoinDoesNotDetectWhenTopologyCleanupHandled() {
-        // When topologyCleanupHandled=true the detection predicate is suppressed, so classicGroupJoin
+        // When preConversionStepDone=true the detection predicate is suppressed, so classicGroupJoin
         // must proceed with the conversion even when storedDescriptionTopologyEpoch is set. This is
         // the re-invocation path after the caller has already run the plugin cleanup.
         String groupId = "streams-group-id";
@@ -25688,7 +25687,7 @@ public class GroupMetadataManagerTest {
             .withDefaultProtocolTypeAndProtocols()
             .build();
 
-        // topologyCleanupHandled=true suppresses detection; the join proceeds to conversion.
+        // preConversionStepDone=true suppresses detection; the join proceeds to conversion.
         GroupMetadataManagerTestContext.JoinResult result =
             context.sendClassicGroupJoin(request, false, false, true);
 
@@ -25700,7 +25699,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testClassicGroupJoinDoesNotDetectForNonEligibleGroups() {
         // The detection predicate must fire only for an empty streams group whose stored epoch is
-        // non-NONE. Under topologyCleanupHandled=false (the value production passes on every classic
+        // non-NONE. Under preConversionStepDone=false (the value production passes on every classic
         // join with a plugin configured) each of the following must fall through to a normal join —
         // outcome COMPLETED — rather than signalling cleanup:
         //   (a) no such group,

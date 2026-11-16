@@ -62,7 +62,6 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -933,7 +932,7 @@ public class GroupMetadataManagerTestContext {
         JoinGroupRequestData request,
         boolean requireKnownMemberId,
         boolean supportSkippingAssignment,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         // requireKnownMemberId is true: version >= 4 (See JoinGroupRequest#requiresKnownMemberId())
         // supportSkippingAssignment is true: version >= 9 (See JoinGroupRequest#supportsSkippingAssignment())
@@ -967,7 +966,7 @@ public class GroupMetadataManagerTestContext {
             context,
             request,
             responseFuture,
-            topologyCleanupHandled
+            preConversionStepDone
         );
 
         if (coordinatorResult.replayRecords()) {

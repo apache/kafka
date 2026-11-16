@@ -172,6 +172,17 @@ public interface Group {
     default void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {}
 
     /**
+     * Returns the step that must run before a classic JoinGroup request may convert this group
+     * to a classic group, for example to release state held outside the coordinator that the
+     * conversion would otherwise orphan.
+     *
+     * @return The step to run first, or empty if the group can be converted right away.
+     */
+    default Optional<ClassicGroupJoinOutcome> stepBeforeClassicConversion() {
+        return Optional.empty();
+    }
+
+    /**
      * @return Whether the group is in Empty state.
      */
     boolean isEmpty();

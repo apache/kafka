@@ -98,7 +98,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -7198,37 +7197,36 @@ public class GroupMetadataManager {
      * @param context                The request context.
      * @param request                The actual JoinGroup request.
      * @param responseFuture         The join group response future.
-     * @param topologyCleanupHandled True if an empty streams group can be converted to a
-     *                               classic group right away: its topology was already deleted
-     *                               from the plugin, or no plugin is configured.
+     * @param preConversionStepDone  True if the step returned by
+     *                               {@link Group#stepBeforeClassicConversion()} was already run,
+     *                               or does not apply (e.g. no topology description plugin is
+     *                               configured), so the group can be converted right away.
      *
      * @return A result with the records produced by the join. Its response is
-     *         {@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST} if the group is an
-     *         empty streams group whose topology must first be deleted from the plugin. In that
-     *         case nothing is changed, and the caller must delete the topology and call again
-     *         with {@code topologyCleanupHandled = true}. Otherwise it is
-     *         {@link ClassicGroupJoinOutcome#COMPLETED}.
+     *         {@link ClassicGroupJoinOutcome#COMPLETED} if the join was handled. Otherwise it is
+     *         the step returned by {@link Group#stepBeforeClassicConversion()}: nothing is
+     *         changed, and the caller must run that step and call again with
+     *         {@code preConversionStepDone = true}.
      */
     public CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
         if (group != null) {
+            if (!preConversionStepDone) {
+                Optional<ClassicGroupJoinOutcome> step = group.stepBeforeClassicConversion();
+                if (step.isPresent()) {
+                    return new CoordinatorResult<>(List.of(), step.get());
+                }
+            }
             if (group.type() == CONSUMER && !group.isEmpty()) {
                 // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return completed(classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture));
             } else if (group.type() == STREAMS && group.isEmpty()) {
-                if (!topologyCleanupHandled && ((StreamsGroup) group).mayHaveTopologyDescription()) {
-                    // A classic join converts this empty streams group to classic and deletes its streams
-                    // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
-                    // group, that data would be orphaned. So change nothing and tell the caller to delete the
-                    // topology from the plugin first, then call again with topologyCleanupHandled = true to convert.
-                    return new CoordinatorResult<>(List.of(), ClassicGroupJoinOutcome.DELETE_STREAMS_TOPOLOGY_FIRST);
-                }
                 // Empty streams groups are converted to classic groups in classicGroupJoinToClassicGroup.
                 return completed(classicGroupJoinToClassicGroup(context, request, responseFuture));
             } else if (group.type() == CONSUMER || group.type() == CLASSIC) {

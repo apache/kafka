@@ -72,7 +72,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupJoinOutcome;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -564,28 +563,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context                The request context.
      * @param request                The actual JoinGroup request.
      * @param responseFuture         The join group response future.
-     * @param topologyCleanupHandled True if an empty streams group can be converted to a
-     *                               classic group right away: its topology was already deleted
-     *                               from the plugin, or no plugin is configured.
+     * @param preConversionStepDone  True if the step returned by
+     *                               {@link Group#stepBeforeClassicConversion()} was already run,
+     *                               or does not apply, so the group can be converted right away.
      *
      * @return A Result with a list of records to update the state machine. Its response is
-     *         {@link ClassicGroupJoinOutcome#DELETE_STREAMS_TOPOLOGY_FIRST} if the group is an
-     *         empty streams group whose topology must first be deleted from the plugin. In that
-     *         case nothing is changed, and the caller must delete the topology and call again
-     *         with {@code topologyCleanupHandled = true}. Otherwise it is
-     *         {@link ClassicGroupJoinOutcome#COMPLETED}.
+     *         {@link ClassicGroupJoinOutcome#COMPLETED} if the join was handled. Otherwise it is
+     *         the step returned by {@link Group#stepBeforeClassicConversion()}: nothing is
+     *         changed, and the caller must run that step and call again with
+     *         {@code preConversionStepDone = true}.
      */
     public CoordinatorResult<ClassicGroupJoinOutcome, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         return groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture,
-            topologyCleanupHandled
+            preConversionStepDone
         );
     }
 
