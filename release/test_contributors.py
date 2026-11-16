@@ -92,6 +92,78 @@ class OfReleaseTest(unittest.TestCase):
                      "Reviewers: Cy Park <cy@example.com>, Di Wu <di@example.com>, Ed Fox <ed@example.com>")
         self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park", "Di Wu", "Ed Fox"], []), self._release())
 
+    def test_credits_reviewers_before_a_separate_co_author_paragraph(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "Reviewers: Bo Kim <bo@example.com>, Cy Park <cy@example.com>",
+                     "",
+                     "Co-authored-by: Di Wu <di@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park", "Di Wu"], []), self._release())
+
+    def test_credit_headers_allow_case_and_spacing_variations(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "reviewers : Bo Kim <bo@example.com>",
+                     "CO-AUTHORED-BY : Cy Park <cy@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park"], []), self._release())
+
+    def test_unfolds_indented_and_unindented_credit_lines(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "Reviewers: Bo Kim",
+                     " <bo@example.com>, Cy Park",
+                     "<cy@example.com>",
+                     "",
+                     "Co-authored-by: Di Wu",
+                     " <di@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park", "Di Wu"], []), self._release())
+
+    def test_does_not_credit_body_mentions_other_trailers_or_separate_prose(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "The description mentions Reviewers: Nobody <nobody@example.com>.",
+                     "",
+                     "Reviewer: Bo Kim <bo@example.com>",
+                     "Signed-off-by: Cy Park",
+                     " <cy@example.com>",
+                     "",
+                     "Di Wu <di@example.com>",
+                     "",
+                     "Co-authored-by: Ed Fox <ed@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim", "Ed Fox"], []), self._release())
+
+    def test_does_not_credit_examples_in_completed_code_fences(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "```text",
+                     "Reviewers: Nobody <nobody@example.com>",
+                     "```",
+                     "",
+                     "~~~text",
+                     "Reviewers: Someone Else <someone@example.com>",
+                     "~~~",
+                     "",
+                     "Reviewers: Bo Kim <bo@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim"], []), self._release())
+
+    def test_unclosed_code_fence_does_not_hide_final_reviewers(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "```text",
+                     "An example whose closing fence was omitted.",
+                     "",
+                     "Reviewers: Bo Kim <bo@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim"], []), self._release())
+
+    def test_markdown_boundaries_end_credit_continuations(self):
+        self._commit("Ann Lee <ann@example.com>",
+                     "Reviewer: Bo Kim <bo@example.com>",
+                     "---",
+                     "Ed Fox <ed@example.com>",
+                     "",
+                     "Reviewer: Cy Park <cy@example.com>",
+                     "### Notes",
+                     "Fay Lin <fay@example.com>",
+                     "",
+                     "Reviewer: Di Wu <di@example.com>",
+                     "```text",
+                     "Gus Hill <gus@example.com>")
+        self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park", "Di Wu"], []), self._release())
+
     def test_only_credits_commits_of_the_release(self):
         self._commit_before_release("Old Timer <old@example.com>")
         self._commit("Ann Lee <ann@example.com>")
@@ -117,11 +189,10 @@ class OfReleaseTest(unittest.TestCase):
         self._commit("ChoMinGi <456+ChoMinGi@users.noreply.github.com>")
         self.assertEqual((["Mingi Cho", "Uladzislau Blok"], []), self._release())
 
-    def test_groups_github_logins_with_the_local_part_of_emails(self):
-        self._commit("Chia-Ping Tsai <chia7712@example.com>", "Reviewers: @chia7712")
-        self._commit("Ann Lee <mail@example.com>")
-        self._commit("Bo Kim <mail@example.org>")
-        self.assertEqual((["Ann Lee", "Bo Kim", "Chia-Ping Tsai"], []), self._release())
+    def test_does_not_group_github_logins_with_the_local_part_of_emails(self):
+        self._commit("John Smith <john@example.com>", "Reviewers: @john")
+        self._commit("John Jones <john@example.org>")
+        self.assertEqual((["john", "John Jones", "John Smith"], []), self._release())
 
     def test_does_not_group_people_by_placeholder_names(self):
         self._commit("Zhiyan Tang <zhiyan@example.com>")
@@ -202,7 +273,7 @@ class OfReleaseTest(unittest.TestCase):
                           "  Swapnil Ghike <= Sriram Subramanian, Swapnil Ghike",
                           "Check whether these names are of the same person:",
                           "  khyativ, KhyatiVaghamshi"], lines[:-1])
-        self.assertTrue(lines[-1].startswith("Fix any mistake in "))
+        self.assertEqual(f"Fix any mistake in {os.path.relpath(self.mailmap, contributors.repo_dir)}", lines[-1])
 
     def test_reports_nothing_when_there_is_nothing_to_check(self):
         self._commit("Ann Lee <ann@example.com>")

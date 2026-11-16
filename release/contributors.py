@@ -129,7 +129,7 @@ def of_release(from_rev, to_rev, mailmap=MAILMAP, cwd=repo_dir, report=None):
 
     groups = [group for group in group_people(humans) if any(credit.commit in release_commits for credit in group)]
     if report:
-        for line in names_to_check(groups, release_commits):
+        for line in names_to_check(groups, release_commits, mailmap):
             report(line)
     people = {best_name(group, release_commits) for group in groups}
     return sorted(people, key=str.casefold), sorted(ais, key=str.casefold)
@@ -139,16 +139,14 @@ def read_credits(rev, cwd=repo_dir):
     """
     Return the credits of the non-merge commits reachable from rev, from the newest commit.
     """
-    log = _git(["log", "--no-merges", "--format=%H%x1f%an%x1f%ae%x1f%(trailers:unfold)%x1e", rev], cwd)
+    log = _git(["log", "--no-merges", "--format=%H%x1f%an%x1f%ae%x1f%B%x1e", rev], cwd)
     credits = []
     for record in log.split("\x1e"):
         if not record.strip():
             continue
-        commit, name, email, trailers = record.strip("\n").split("\x1f")
+        commit, name, email, message = record.strip("\n").split("\x1f", 3)
         credits.append(Credit(commit, "author", name, email))
-        for trailer in trailers.splitlines():
-            key, _, value = trailer.partition(":")
-            role = CREDIT_TRAILERS.get(key.strip().lower())
+        for role, value in _credit_trailers(message):
             if role == "reviewer":
                 # Reviewers lists several people, and the value sometimes repeats "Reviewers:".
                 value = re.sub(r"^\s*reviewers?\s*:", "", value, flags=re.IGNORECASE)
@@ -156,6 +154,28 @@ def read_credits(rev, cwd=repo_dir):
             elif role:
                 credits.append(Credit(commit, role, *parse_person(value)))
     return credits
+
+
+def _credit_trailers(message):
+    """
+    Read credit fields anywhere in the message, including before a separate final paragraph.
+    Unfold wrapped values even when their continuation lines are not indented.
+    """
+    # Ignore examples in complete code blocks. Some messages leave a code fence open before
+    # the real credits, so an unmatched opening fence must not hide the rest of the message.
+    message = re.sub(r"(?ms)^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*\n.*?"
+                     r"^[ \t]*(?P=fence)[ \t]*(?:\n|$)", "\n", message)
+    role, value = None, []
+    for line in message.splitlines() + [""]:
+        trailer = re.match(r"^([\w-]+)\s*:\s*(.*)$", line.strip())
+        boundary = re.match(r"^(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-*_]{3,}\s*$)", line.strip())
+        if trailer or boundary or not line.strip():
+            if role:
+                yield role, " ".join(value)
+            role = CREDIT_TRAILERS.get(trailer.group(1).lower()) if trailer else None
+            value = [trailer.group(2)] if role else []
+        elif role:
+            value.append(line.strip())
 
 
 def split_people(value):
@@ -226,7 +246,6 @@ def group_people(credits):
     Group the credits of the same person, which share an email, a normalized name or a GitHub
     login with each other, directly or through other credits of that person.
     """
-    logins = {_normalize(credit.github_login()) for credit in credits if credit.github_login()}
     parent = {}
 
     def root(key):
@@ -238,7 +257,7 @@ def group_people(credits):
 
     first_keys = []
     for credit in credits:
-        keys = _identity_keys(credit, logins)
+        keys = _identity_keys(credit)
         for key in keys[1:]:
             parent[root(key)] = root(keys[0])
         first_keys.append(keys[0] if keys else None)
@@ -279,7 +298,7 @@ def best_name(credits, release_commits):
     return max(total, key=preference)
 
 
-def names_to_check(groups, release_commits):
+def names_to_check(groups, release_commits, mailmap=MAILMAP):
     """
     Return the lines that tell the release manager where the grouping may be wrong, as it can
     go wrong both ways without anything looking off in the list:
@@ -301,7 +320,7 @@ def names_to_check(groups, release_commits):
     if similar:
         lines += ["Check whether these names are of the same person:"] + similar
     if lines:
-        lines.append(f"Fix any mistake in {os.path.relpath(MAILMAP, repo_dir)}")
+        lines.append(f"Fix any mistake in {os.path.relpath(mailmap, repo_dir)}")
     return lines
 
 
@@ -321,7 +340,7 @@ def _may_be_same_person(a, b):
     return len(a) >= 5 and b.startswith(a)
 
 
-def _identity_keys(credit, logins):
+def _identity_keys(credit):
     """
     Return the keys that identify the person of a credit. Names and logins share keys, as many
     people use their login as their name.
@@ -329,12 +348,6 @@ def _identity_keys(credit, logins):
     keys = []
     if credit.email:
         keys.append("email:" + credit.email.lower())
-        # Many people use their login as the local part of their email, which is the only way to
-        # match a reviewer written as "@login". It is only used when some credit has that login,
-        # as different people may use the same local part with different domains.
-        local_part = _normalize(credit.email.split("@")[0])
-        if local_part in logins:
-            keys.append("name:" + local_part)
     for name in (credit.name, credit.github_login()):
         if name and _normalize(name) and _normalize(name) not in PLACEHOLDER_NAMES:
             keys.append("name:" + _normalize(name))
