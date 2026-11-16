@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -532,6 +533,38 @@ public class GlobalStateTaskTest {
         assertTrue(handlerInvoked.get());
         assertEquals(1, sourceForward.numReceived);
 
+    }
+
+    @Test
+    public void shouldExposeSourceRawKeyAndValueToProcessingExceptionHandler() {
+        final AtomicReference<ErrorHandlerContext> capturedContext = new AtomicReference<>();
+        final ProcessingExceptionHandler exceptionHandler = new ProcessingExceptionHandler() {
+            @Override
+            public void configure(final Map<String, ?> configs) { }
+
+            @Override
+            public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+                capturedContext.set(context);
+                return Response.resume();
+            }
+        };
+
+        setupTopologyWithThrowingProcessor(createThrowingProcessor());
+        globalStateTask = new GlobalStateUpdateTask(
+                logContext,
+                topology,
+                createForwardingContext(),
+                stateMgr,
+                new LogAndContinueExceptionHandler(),
+                exceptionHandler,
+                time,
+                flushInterval
+        );
+        globalStateTask.initialize();
+        globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
+
+        assertArrayEquals("foo".getBytes(), capturedContext.get().sourceRawKey());
+        assertArrayEquals("bar".getBytes(), capturedContext.get().sourceRawValue());
     }
 
     @Test
