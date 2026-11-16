@@ -157,7 +157,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                             "Partition " + partition + " has fetched lag of " + fetchedLag +
                                 "\nPartition " + partition + " has current lag 0 and current time is " + wallClockTime +
                                 ". Waiting for new data to be produced for configured idle time " + maxTaskIdleMs +
-                                " (deadline is " + deadline + ")."));
+                                " (deadline is " + deadline + ")."), true);
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
                         logger.trace("Partition {} is ready for processing due to the task idling deadline passing", partition);
@@ -176,7 +176,7 @@ class PartitionGroup extends AbstractPartitionGroup {
             final Map<TopicPartition, Long> gaveUpWaiting = enforced;
             return new ReadyToProcessResult(false, Optional.of(() ->
                 "Partitions we gave up waiting for, with their corresponding deadlines: " + gaveUpWaiting +
-                    "\nNo partitions were buffered locally, so this task is not ready for processing."));
+                    "\nNo partitions were buffered locally, so this task is not ready for processing."), true);
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
