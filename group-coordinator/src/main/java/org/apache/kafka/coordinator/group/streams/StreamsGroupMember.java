@@ -80,7 +80,7 @@ public record StreamsGroupMember(String memberId,
     /**
      * A builder that facilitates the creation of a new member or the update of an existing one.
      * <p>
-     * Please refer to the javadoc of {{@link StreamsGroupMember}} for the definition of the fields.
+     * Please refer to the javadoc of {@link StreamsGroupMember} for the definition of the fields.
      */
     public static class Builder {
 

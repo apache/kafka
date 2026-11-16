@@ -1180,6 +1180,7 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testDefaultDelegationFromTwoArgToOneArg() {
         List<String> calls = new ArrayList<>();
         ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {

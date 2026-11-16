@@ -151,6 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -1608,7 +1609,7 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        setUpRemoteSegmentForFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no
         // messages starting with the startOffset and with `ts`.
@@ -1642,7 +1643,7 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        setUpRemoteSegmentForFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // Fetch offsets for this segment returns empty as the segment epochs are not with in the leader epoch cache.
         Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
@@ -1672,15 +1673,146 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
+        setUpRemoteSegmentForFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
 
         Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
         assertEquals(Optional.empty(), maybeTimestampAndOffset);
     }
 
-    private void doTestFindOffsetByTimestamp(long ts, long startOffset, int targetLeaderEpoch,
-                                             TreeMap<Integer, Long> validSegmentEpochs,
-                                             RemoteLogSegmentState state) throws IOException, RemoteStorageException {
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "true, true"})
+    void testFindOffsetByTimestampSearchesNextRemoteSegmentWhenMatchIsBelowLogStartOffset(boolean nextEpoch, boolean spansEpochs) throws Exception {
+        // Register the partition without starting background tasks while the lookup mocks are configured.
+        remoteLogManager = spy(remoteLogManager);
+        doNothing().when(remoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition), eq(false));
+        long timestamp = time.milliseconds();
+        long baseOffset = 120L;
+        int leaderEpoch = 10;
+        int laterEpoch = nextEpoch ? leaderEpoch + (spansEpochs ? 2 : 1) : leaderEpoch;
+        TreeMap<Integer, Long> firstSegmentEpochs = new TreeMap<>(Map.of(leaderEpoch, baseOffset));
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        cache.assign(leaderEpoch, baseOffset);
+        if (spansEpochs) {
+            firstSegmentEpochs.put(leaderEpoch + 1, baseOffset + 2);
+            cache.assign(leaderEpoch + 1, baseOffset + 2);
+        }
+        if (nextEpoch) {
+            cache.assign(laterEpoch, baseOffset + 3);
+        }
+
+        RemoteLogSegmentMetadata firstSegment = setUpRemoteSegmentForFindOffsetByTimestamp(timestamp, baseOffset, leaderEpoch,
+                firstSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        RemoteLogSegmentMetadata laterSegment = new RemoteLogSegmentMetadata(
+                new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()), baseOffset + 3, baseOffset + 5,
+                timestamp + 2, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                new TreeMap<>(Map.of(laterEpoch, baseOffset + 3)));
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenAnswer(invocation -> {
+                    int epoch = invocation.getArgument(1);
+                    return (nextEpoch
+                            ? (epoch < laterEpoch ? List.of(firstSegment) : List.of(laterSegment))
+                            : List.of(firstSegment, laterSegment)).iterator();
+                });
+        // The first segment's maximum belongs to a record below the requested starting offset.
+        MemoryRecords firstBatch = MemoryRecords.withRecords(baseOffset, Compression.NONE, leaderEpoch,
+                new SimpleRecord(timestamp + 2, new byte[0]), new SimpleRecord(timestamp - 1, new byte[0]));
+        MemoryRecords secondBatch = MemoryRecords.withRecords(baseOffset + 2, Compression.NONE,
+                spansEpochs ? leaderEpoch + 1 : leaderEpoch, new SimpleRecord(timestamp - 1, new byte[0]));
+        ByteBuffer firstSegmentRecords = ByteBuffer.allocate(firstBatch.sizeInBytes() + secondBatch.sizeInBytes());
+        firstSegmentRecords.put(firstBatch.buffer()).put(secondBatch.buffer());
+        when(remoteStorageManager.fetchLogSegment(firstSegment, 0)).thenAnswer(invocation ->
+                new ByteArrayInputStream(firstSegmentRecords.array()));
+        when(remoteStorageManager.fetchLogSegment(laterSegment, 0)).thenAnswer(invocation ->
+                new ByteArrayInputStream(records(timestamp, baseOffset + 3, laterEpoch).buffer().array()));
+
+        Optional<FileRecords.TimestampAndOffset> result = remoteLogManager.findOffsetByTimestamp(
+                leaderTopicIdPartition.topicPartition(), timestamp, baseOffset + 1, cache);
+        verify(remoteStorageManager).fetchLogSegment(firstSegment, 0);
+        verify(remoteStorageManager).fetchLogSegment(laterSegment, 0);
+        assertEquals(Optional.of(new FileRecords.TimestampAndOffset(timestamp + 1, baseOffset + 4, Optional.of(laterEpoch))), result);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testFindOffsetByTimestampSearchesNextLocalSegmentWhenMatchIsBelowLogStartOffset(boolean laterMatch) throws Exception {
+        long timestamp = time.milliseconds();
+        int leaderEpoch = 10;
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        cache.assign(leaderEpoch, 0L);
+        RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(
+                new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()), 0L, 1L,
+                timestamp + 1, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                new TreeMap<>(Map.of(leaderEpoch, 0L)));
+        RemoteLogSegmentMetadata laterMetadata = new RemoteLogSegmentMetadata(
+                new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()), 2L, 2L,
+                timestamp, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                new TreeMap<>(Map.of(leaderEpoch, 2L)));
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, leaderEpoch))
+                .thenAnswer(invocation -> List.of(metadata, laterMetadata).iterator());
+        when(mockLog.logEndOffset()).thenReturn(3L);
+        remoteLogManager.onLeadershipChange(Set.of(), Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+
+        try (LogSegment firstSegment = spy(LogSegment.open(new File(logDir), 0L, mockLog.config(), time, 0, false));
+             LogSegment laterSegment = LogSegment.open(new File(logDir), 2L, mockLog.config(), time, 0, false)) {
+            firstSegment.append(1L, MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(timestamp + 1, new byte[0]), new SimpleRecord(timestamp - 1, new byte[0])));
+            laterSegment.append(2L, MemoryRecords.withRecords(2L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(laterMatch ? timestamp : timestamp - 1, new byte[0])));
+            when(mockLog.logSegments()).thenReturn(List.of(firstSegment, laterSegment));
+            when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
+
+            Optional<FileRecords.TimestampAndOffset> expected = laterMatch
+                    ? Optional.of(new FileRecords.TimestampAndOffset(timestamp, 2L, Optional.of(leaderEpoch)))
+                    : Optional.empty();
+            assertEquals(expected, remoteLogManager.findOffsetByTimestamp(
+                    leaderTopicIdPartition.topicPartition(), timestamp, 1L, cache));
+            verify(firstSegment).findOffsetByTimestamp(timestamp, 1L, mockLog.config().maxDecompressedMessageBytes());
+            verify(mockLog).searchOffsetInLocalLog(List.of(firstSegment, laterSegment), timestamp, 1L);
+            verify(remoteStorageManager, never()).fetchLogSegment(any(), anyInt());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testFindOffsetByTimestampUsesLocalSegmentSnapshot(boolean laterMatch) throws Exception {
+        remoteLogManager = spy(remoteLogManager);
+        // Register the partition without starting the follower task, so background remote-offset updates
+        // do not interact with the lookup mocks.
+        doNothing().when(remoteLogManager).doHandleFollowerPartition(leaderTopicIdPartition);
+        long timestamp = time.milliseconds();
+        int leaderEpoch = 10;
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        cache.assign(leaderEpoch, 0L);
+        RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(
+                new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()), 0L, 0L,
+                timestamp, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                new TreeMap<>(Map.of(leaderEpoch, 0L)));
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, leaderEpoch))
+                .thenAnswer(invocation -> List.of(metadata).iterator());
+        when(mockLog.logEndOffset()).thenReturn(2L);
+        remoteLogManager.onLeadershipChange(Set.of(), Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+
+        try (LogSegment firstSegment = LogSegment.open(new File(logDir), 0L, mockLog.config(), time, 0, false);
+             LogSegment laterSegment = LogSegment.open(new File(logDir), 1L, mockLog.config(), time, 0, false)) {
+            firstSegment.append(0L, MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(timestamp, new byte[0])));
+            laterSegment.append(1L, MemoryRecords.withRecords(1L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(laterMatch ? timestamp + 1 : timestamp - 1, new byte[0])));
+            // Model retention removing the first segment from the local log after the coverage check.
+            when(mockLog.logSegments()).thenReturn(List.of(firstSegment, laterSegment), List.of(laterSegment));
+            when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
+
+            assertEquals(Optional.of(new FileRecords.TimestampAndOffset(timestamp, 0L, Optional.of(leaderEpoch))),
+                    remoteLogManager.findOffsetByTimestamp(leaderTopicIdPartition.topicPartition(), timestamp, 0L, cache));
+            verify(mockLog).logSegments();
+            verify(remoteStorageManager, never()).fetchLogSegment(any(), anyInt());
+        }
+    }
+
+    private RemoteLogSegmentMetadata setUpRemoteSegmentForFindOffsetByTimestamp(
+            long ts, long startOffset, int targetLeaderEpoch,
+            TreeMap<Integer, Long> validSegmentEpochs,
+            RemoteLogSegmentState state) throws IOException, RemoteStorageException {
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid());
 
@@ -1732,6 +1864,7 @@ public class RemoteLogManagerTest {
         when(mockLog.logEndOffset()).thenReturn(600L);
 
         remoteLogManager.onLeadershipChange(Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        return segmentMetadata;
     }
 
     @Test
@@ -1800,6 +1933,7 @@ public class RemoteLogManagerTest {
         });
 
         when(mockLog.logEndOffset()).thenReturn(300L);
+        when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
         remoteLogManager.close();
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),
@@ -4422,7 +4556,7 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        setUpRemoteSegmentForFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // Serve a remote segment holding a compressed record whose decompressed body exceeds the topic's limit
         MemoryRecords oversized = MemoryRecords.withRecords(startOffset, Compression.gzip().build(), targetLeaderEpoch,

@@ -211,12 +211,13 @@ public class ListOffsetsIntegrationTest {
 
         // case 1: test the offsets from follower's append path.
         // we make a follower be the new leader to handle the ListOffsetRequest
-        int previousLeader = clusterInstance.getLeaderBrokerId(new TopicPartition(topic, 0));
+        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        int previousLeader = AdminClientTestUtils.currentLeader(adminClient, topicPartition).orElseThrow();
         int newLeader = clusterInstance.brokerIds().stream().filter(id -> id != previousLeader).findAny().get();
 
         // change the leader to new one
         adminClient.alterPartitionReassignments(
-            Map.of(new TopicPartition(topic, 0), Optional.of(new NewPartitionReassignment(List.of(newLeader))))
+            Map.of(topicPartition, Optional.of(new NewPartitionReassignment(List.of(newLeader))))
         ).all().get();
         // wait for all reassignments get completed
         TestUtils.waitForCondition(() -> {
@@ -227,19 +228,9 @@ public class ListOffsetsIntegrationTest {
             }
         }, "There still are ongoing reassignments");
         // make sure we are able to see the new leader
-        TestUtils.waitForCondition(() -> {
-            try {
-                return clusterInstance.getLeaderBrokerId(new TopicPartition(topic, 0)) == newLeader;
-            } catch (InterruptedException | ExecutionException e) {
-                return false;
-            }
-        }, () -> {
-            try {
-                return String.format("expected leader: %d but actual: %d", newLeader, clusterInstance.getLeaderBrokerId(new TopicPartition(topic, 0)));
-            } catch (ExecutionException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        TestUtils.waitForCondition(
+            () -> AdminClientTestUtils.currentLeader(adminClient, topicPartition).equals(Optional.of(newLeader)),
+            "Timed out waiting for leader " + newLeader + " of " + topicPartition);
         checkListOffsets(topic, expectedMaxTimestampOffset);
 
         // case 2: test the offsets from recovery path.

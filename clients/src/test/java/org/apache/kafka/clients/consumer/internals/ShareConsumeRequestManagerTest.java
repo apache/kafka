@@ -190,7 +190,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private void assignFromSubscribed(Set<TopicPartition> partitions) {
-        subscriptions.subscribeToShareGroup(partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet()));
+        subscriptions.subscribe(partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet()));
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(initialUpdateResponse);
@@ -907,7 +907,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName2));
+        subscriptions.subscribe(Set.of(topicName2));
         subscriptions.assignFromSubscribed(Set.of(t2p0));
 
         client.updateMetadata(
@@ -943,7 +943,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName2));
+        subscriptions.subscribe(Set.of(topicName2));
         subscriptions.assignFromSubscribed(Set.of(t2p0));
 
         client.updateMetadata(
@@ -1073,7 +1073,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName2));
+        subscriptions.subscribe(Set.of(topicName2));
         subscriptions.assignFromSubscribed(Set.of(t2p0));
 
         client.updateMetadata(
@@ -1109,7 +1109,7 @@ public class ShareConsumeRequestManagerTest {
         fetchRecords();
 
         // Subscription changes.
-        subscriptions.subscribeToShareGroup(Set.of(topicName2));
+        subscriptions.subscribe(Set.of(topicName2));
         subscriptions.assignFromSubscribed(Set.of(t2p0));
 
         client.updateMetadata(
@@ -1126,7 +1126,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchWithSubscriptionChangeMultipleNodes() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -1194,7 +1194,7 @@ public class ShareConsumeRequestManagerTest {
     public void testShareFetchWithSubscriptionChangeMultipleNodesEmptyAcknowledgements() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -1473,7 +1473,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0, tp1));
 
         client.updateMetadata(
@@ -1514,7 +1514,7 @@ public class ShareConsumeRequestManagerTest {
     public void testRetryAcknowledgementsWithLeaderChange() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         subscriptions.assignFromSubscribed(partitions);
@@ -1713,7 +1713,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         client.updateMetadata(
@@ -1733,7 +1733,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         client.updateMetadata(
@@ -2191,7 +2191,7 @@ public class ShareConsumeRequestManagerTest {
     public void testWhenShareFetchResponseReturnsALeadershipChangeErrorButNoNewLeaderInformation(Errors error) {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2284,7 +2284,7 @@ public class ShareConsumeRequestManagerTest {
     public void testWhenShareFetchResponseReturnsWithALeadershipChangeErrorAndNewLeaderInformation(Errors error) {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2375,7 +2375,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2465,7 +2465,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2545,7 +2545,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0, tp1));
 
         client.updateMetadata(
@@ -2621,7 +2621,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2698,7 +2698,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2775,7 +2775,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2855,7 +2855,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -2929,7 +2929,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -3059,7 +3059,7 @@ public class ShareConsumeRequestManagerTest {
     public void testFetchRecoversWhenCachedLeaderNodeDisappearsFromMetadata() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         // Two-node cluster; tp0 is led by node 0, so the share session and the cached leader are on node 0.
@@ -3117,7 +3117,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         // Two-node cluster; tp0 is led by node 0, so the share session and the cached leader are on node 0.
@@ -3179,7 +3179,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(List.of(tp0));
 
         client.updateMetadata(
@@ -3331,7 +3331,7 @@ public class ShareConsumeRequestManagerTest {
     public void testStaleLeaderEpochDoesNotDowngradeShareSessionLeader() {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0));
 
         // tp0's leader is node0 with a high leader epoch.
@@ -3371,7 +3371,7 @@ public class ShareConsumeRequestManagerTest {
         // We will simulate two nodes, each with one partition. The first node will have more records
         buildRequestManager(ShareAcquireMode.RECORD_LIMIT);
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         Set<TopicPartition> partitions = new LinkedHashSet<>();
         partitions.add(tp0);
         partitions.add(tp1);
@@ -3548,7 +3548,7 @@ public class ShareConsumeRequestManagerTest {
     public void testCommitSyncRenewOnOneNodeAcceptOnAnother(boolean renewNodeRespondsLast) {
         buildRequestManager();
 
-        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.subscribe(Set.of(topicName));
         subscriptions.assignFromSubscribed(Set.of(tp0, tp1));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),

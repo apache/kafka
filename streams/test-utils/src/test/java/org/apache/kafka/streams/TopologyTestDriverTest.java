@@ -1784,17 +1784,15 @@ public abstract class TopologyTestDriverTest {
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
         testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
-        try {
-            pipeRecord(SOURCE_TOPIC_1, testRecord1);
-        } catch (final TopologyException exception) {
-            final String str =
-                    String.format(
-                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
-                                    "input record topic: %s and hence cannot process the message.",
-                            pattern2Source1,
-                            SOURCE_TOPIC_1);
-            assertEquals(str, exception.getMessage());
-        }
+        final TopologyException exception =
+                assertThrows(TopologyException.class, () -> pipeRecord(SOURCE_TOPIC_1, testRecord1));
+        final String str =
+                String.format(
+                        "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                "input record topic: %s and hence cannot process the message.",
+                        pattern2Source1,
+                        SOURCE_TOPIC_1);
+        assertEquals(str, exception.getMessage());
     }
 
     @Test

@@ -574,6 +574,23 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests that SASL/SCRAM clients fail authentication if the server requests more than the maximum iterations.
+     */
+    @Test
+    public void testServerIterationsAboveMaximumSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        server = createEchoServer(securityProtocol);
+        ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
+        ScramCredential credential = new ScramFormatter(mechanism).generateCredential(TestJaasConfig.PASSWORD, mechanism.maxIterations() + 1);
+        credentialCache.cache(mechanism.mechanismName(), ScramCredential.class).put(TestJaasConfig.USERNAME, credential);
+
+        Exception exception = createAndCheckClientConnectionFailure(securityProtocol, "0").exception();
+        assertInstanceOf(SaslAuthenticationException.class, exception);
+        assertTrue(exception.getMessage().contains("Requested iterations 16385 is greater than the maximum 16384"), exception.getMessage());
+    }
+
+    /**
      * Tests that SASL/SCRAM clients fail authentication if credentials are not available for
      * the specific SCRAM mechanism.
      */

@@ -188,7 +188,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(topics, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -201,7 +203,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(pattern, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -214,7 +218,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(pattern, null);
     }
 
+    @Deprecated(since = "4.5", forRemoval = true)
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");

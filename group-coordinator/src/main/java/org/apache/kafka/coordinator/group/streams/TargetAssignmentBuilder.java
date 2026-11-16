@@ -49,7 +49,7 @@ public class TargetAssignmentBuilder {
     private final int groupEpoch;
 
     /**
-     * The partition assignor used to compute the assignment.
+     * The task assignor used to compute the assignment.
      */
     private final TaskAssignor assignor;
 
@@ -107,7 +107,7 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the topology image.
+     * Adds the configured topology.
      *
      * @param topology The topology.
      * @return This object.

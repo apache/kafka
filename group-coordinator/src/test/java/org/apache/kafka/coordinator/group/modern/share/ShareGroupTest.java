@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
@@ -40,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -82,6 +86,7 @@ public class ShareGroupTest {
         // Create a member.
         member = shareGroup.getOrMaybeCreateMember("member-id", true);
         assertEquals("member-id", member.memberId());
+        assertFalse(shareGroup.hasMember("member-id"));
 
         // Add member to the group.
         shareGroup.updateMember(member);
@@ -118,9 +123,32 @@ public class ShareGroupTest {
         shareGroup.updateMember(member);
         assertTrue(shareGroup.hasMember("member"));
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        Assignment otherAssignment = new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 2, 3)));
+        shareGroup.updateTargetAssignment("member", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        shareGroup.updateTargetAssignment("other-member", otherAssignment);
+
         shareGroup.removeMember("member");
         assertFalse(shareGroup.hasMember("member"));
 
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), shareGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        ShareGroup shareGroup = createShareGroup("foo");
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        shareGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        shareGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 2, 3))));
+        assertEquals(Set.of("member1", "member2"), shareGroup.targetAssignment().keySet());
+
+        shareGroup.clearTargetAssignment();
+        assertEquals(Map.of(), shareGroup.targetAssignment());
     }
 
     @Test

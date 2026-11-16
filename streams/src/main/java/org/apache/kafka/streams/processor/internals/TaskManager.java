@@ -1787,6 +1787,14 @@ public class TaskManager {
         return total;
     }
 
+    long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Task task : allRunningTasks().values()) {
+            max = Math.max(max, task.maxStoreUncommittedBytes());
+        }
+        return max;
+    }
+
     Set<Task> readOnlyAllTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
@@ -1872,6 +1880,15 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             // Wake up sleeping task executors after every poll, in case there is processing or punctuation to-do.
             schedulingTaskManager.signalTaskExecutors();
+        }
+    }
+
+    /**
+     * Pause or resume processing and punctuation on the processing threads, if they are enabled.
+     */
+    void setProcessingThreadsPaused(final boolean paused) {
+        if (schedulingTaskManager != null) {
+            schedulingTaskManager.setProcessingPaused(paused);
         }
     }
 

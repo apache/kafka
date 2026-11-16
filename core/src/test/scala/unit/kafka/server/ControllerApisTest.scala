@@ -415,7 +415,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-        new AlterPartitionRequestData()).build(ApiKeys.ALTER_PARTITION.latestVersion)))
+        new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.latestVersion)).build(ApiKeys.ALTER_PARTITION.latestVersion)))
     })
   }
 
@@ -764,7 +764,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData()).build()))
+        new AllocateProducerIdsRequestData(), ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion)).build()))
     })
   }
 
@@ -1276,7 +1276,8 @@ class ControllerApisTest {
     val request = new AllocateProducerIdsRequest.Builder(
       new AllocateProducerIdsRequestData()
         .setBrokerId(4)
-        .setBrokerEpoch(93234)
+        .setBrokerEpoch(93234),
+      ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion)
     ).build()
 
     when(controller.allocateProducerIds(
@@ -1294,7 +1295,8 @@ class ControllerApisTest {
     val authorizer = mock(classOf[Authorizer])
     val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     controllerApis = createControllerApis(Some(authorizerPlugin), controller)
-    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(),
+      ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion)).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
       AclOperation.CLUSTER_ACTION,

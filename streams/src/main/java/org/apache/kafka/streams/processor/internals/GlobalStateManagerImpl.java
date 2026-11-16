@@ -582,6 +582,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
+    public long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Optional<StateStore> entry : globalStores.values()) {
+            if (entry.isPresent()) {
+                max = Math.max(max, entry.get().approximateNumUncommittedBytes());
+            }
+        }
+        return max;
+    }
+
+    @Override
     public void commit() {
         log.debug("Committing all global globalStores registered in the state manager");
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {

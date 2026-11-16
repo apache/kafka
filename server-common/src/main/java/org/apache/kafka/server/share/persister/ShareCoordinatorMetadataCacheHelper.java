@@ -29,5 +29,5 @@ public interface ShareCoordinatorMetadataCacheHelper {
 
     List<Node> getClusterNodes();
 
-    boolean isRequestHeaderV3Supported();
+    short requestHeaderVersion();
 }

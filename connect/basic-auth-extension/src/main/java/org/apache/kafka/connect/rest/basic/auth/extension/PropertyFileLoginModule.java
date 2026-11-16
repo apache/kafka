@@ -50,6 +50,7 @@ import javax.security.auth.spi.LoginModule;
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
     private static final String FILE_OPTIONS = "file";
+    private static final char[] UNKNOWN_USER_DUMMY_PASSWORD = {'\0'};
     private static final Map<String, Properties> CREDENTIAL_PROPERTIES = new ConcurrentHashMap<>();
 
     private CallbackHandler callbackHandler;
@@ -99,8 +100,7 @@ public class PropertyFileLoginModule implements LoginModule {
         }
 
         String username = ((NameCallback) callbacks[0]).getName();
-        char[] passwordChars = ((PasswordCallback) callbacks[1]).getPassword();
-        String password = passwordChars != null ? new String(passwordChars) : null;
+        char[] password = ((PasswordCallback) callbacks[1]).getPassword();
         Properties credentialProperties = CREDENTIAL_PROPERTIES.get(fileName);
 
         if (credentialProperties.isEmpty()) {
@@ -111,7 +111,7 @@ public class PropertyFileLoginModule implements LoginModule {
         } else if (username == null) {
             log.trace("No credentials were provided or the provided credentials were malformed");
             authenticated = false;
-        } else if (password != null && password.equals(credentialProperties.get(username))) {
+        } else if (passwordMatches(password, credentialProperties.getProperty(username))) {
             log.trace("Credentials provided for user '{}' match those present in the credential properties file '{}'",
                 username,
                 fileName);
@@ -129,6 +129,14 @@ public class PropertyFileLoginModule implements LoginModule {
         }
 
         return authenticated;
+    }
+
+    private static boolean passwordMatches(char[] password, String expectedPassword) {
+        if (password == null)
+            return false;
+        char[] comparedPassword = expectedPassword != null ? expectedPassword.toCharArray() : UNKNOWN_USER_DUMMY_PASSWORD;
+        boolean matches = Utils.isEqualConstantTime(password, comparedPassword);
+        return matches && expectedPassword != null;
     }
 
     @Override

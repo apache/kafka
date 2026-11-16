@@ -142,6 +142,7 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
@@ -190,6 +191,7 @@ public class MockConsumerTest {
     }
     
     @Test
+    @SuppressWarnings("removal")
     public void testRe2JPatternSubscription() {
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));

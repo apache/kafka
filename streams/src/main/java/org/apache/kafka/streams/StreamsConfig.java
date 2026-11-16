@@ -149,7 +149,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  *   <li>{@link ConsumerConfig#ALLOW_AUTO_CREATE_TOPICS_CONFIG "allow.auto.create.topics"} (false) - Consumers will never trigger automatic topic creation</li>
  *   <li>{@link ConsumerConfig#GROUP_PROTOCOL_CONFIG "group.protocol"} as a consumer config, e.g. {@code consumer.group.protocol} (classic) -
  *       Streams ignores it; to select the rebalance protocol, set the Streams config {@link #GROUP_PROTOCOL_CONFIG "group.protocol"} instead</li>
- *   <li>{@link CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
+ *   <li>{@link ConsumerConfig#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
  *       will always resolve bootstrap servers synchronously</li>
  * </ul>
  *
@@ -415,6 +415,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_43 = UpgradeFromValues.UPGRADE_FROM_43.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.4.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_44 = UpgradeFromValues.UPGRADE_FROM_44.toString();
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -582,6 +588,22 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
     private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. ";
+
+    /** {@code default.list.key.serde.inner} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS;
+
+    /** {@code default.list.value.serde.inner} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+
+    /** {@code default.list.key.serde.type} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS;
+
+    /** {@code default.list.value.serde.type} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
 
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
@@ -785,6 +807,18 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
+    /** {@code metadata.recovery.strategy} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+
+    /** {@code metadata.recovery.rebootstrap.trigger.ms} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+
+    /** {@code metadata.cluster.check.enable} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+
     /** {@code rocksdb.config.setter} */
     @SuppressWarnings("WeakerAccess")
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
@@ -824,7 +858,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC =
         "The maximum number of uncommitted bytes across all transactional state stores on this " +
         "application instance before an early commit is triggered, regardless of commit.interval.ms. " +
-        "The limit is divided equally across the configured number of stream threads, and the global state thread," +
+        "The check adds the uncommitted bytes of the largest single state store to the total, " +
+        "because the commit of a store can need that much extra memory. " +
+        "The limit is divided equally across the configured number of stream threads, and the global state thread, " +
         "if the topology has any global stores. Set to -1 to disable. Default is 67108864 (64 MB).";
     private static final long STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT = 67_108_864L;
 
@@ -996,22 +1032,22 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
@@ -1302,20 +1338,20 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-            .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+            .define(METADATA_RECOVERY_STRATEGY_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                     ConfigDef.CaseInsensitiveValidString
                     .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
-            .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+            .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
                     Type.LONG,
                     CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+            .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
                     Type.BOOLEAN,
                     true,
                     Importance.LOW,

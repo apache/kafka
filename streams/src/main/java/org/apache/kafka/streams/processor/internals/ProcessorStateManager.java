@@ -672,6 +672,14 @@ public class ProcessorStateManager implements StateManager {
         return total;
     }
 
+    long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            max = Math.max(max, metadata.stateStore.approximateNumUncommittedBytes());
+        }
+        return max;
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.

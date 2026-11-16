@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.PolicyViolationException;
@@ -154,6 +155,7 @@ import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymous
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -175,6 +177,7 @@ public class ReplicationControlManagerTest {
             private MetadataVersion metadataVersion = MetadataVersion.latestTesting();
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
+            private int maxRecordsPerBatch = KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT;
             private final Map<String, Object> staticConfig = new HashMap<>();
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
@@ -202,11 +205,17 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+            Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+                this.maxRecordsPerBatch = maxRecordsPerBatch;
+                return this;
+            }
+
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
                     mockTime,
                     isElrEnabled,
+                    maxRecordsPerBatch,
                     staticConfig);
             }
         }
@@ -232,6 +241,7 @@ public class ReplicationControlManagerTest {
             Optional<CreateTopicPolicy> createTopicPolicy,
             MockTime time,
             boolean isElrEnabled,
+            int maxRecordsPerBatch,
             Map<String, Object> staticConfig
         ) {
             this.time = time;
@@ -274,7 +284,7 @@ public class ReplicationControlManagerTest {
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
                 setMaxElectionsPerImbalance(Integer.MAX_VALUE).
-                setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+                setMaxRecordsPerBatch(maxRecordsPerBatch).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -2143,7 +2153,7 @@ public class ReplicationControlManagerTest {
                         setNewIsrWithEpochs(isrWithDefaultEpoch(3, 0, 2, 1))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             requestContext,
-            new AlterPartitionRequest.Builder(alterPartitionRequestData).build(version).data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version).data());
         Errors expectedError = NEW_LEADER_ELECTED;
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
             new AlterPartitionResponseData.TopicData().
@@ -2334,7 +2344,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version).data());
 
         Errors expectedError = INELIGIBLE_REPLICA;
         assertEquals(
@@ -2416,7 +2426,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version).data());
 
         // The late arrived AlterPartition request should be rejected when version >= 3.
         if (version >= 3) {
@@ -2479,7 +2489,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version).data());
 
         Errors expectedError = INELIGIBLE_REPLICA;
         assertEquals(
@@ -2648,6 +2658,47 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}},
             INVALID_REPLICA_ASSIGNMENT.code());
+    }
+
+    @Test
+    public void testValidateLogDirNameLength() {
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("a".repeat(249), 100_000));
+        assertThrows(InvalidPartitionsException.class,
+            () -> ReplicationControlManager.validateLogDirNameLength("a".repeat(249), 100_001));
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("a".repeat(248), 1_000_000));
+        assertThrows(InvalidPartitionsException.class,
+            () -> ReplicationControlManager.validateLogDirNameLength("a".repeat(248), 1_000_001));
+        assertDoesNotThrow(() -> ReplicationControlManager.validateLogDirNameLength("foo", Integer.MAX_VALUE));
+    }
+
+    @Test
+    public void testCreateTopicFailsIfLogDirNameIsTooLong() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+            setMaxRecordsPerBatch(200_000).
+            build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult result = ctx.createTestTopic("a".repeat(249), 100_001, (short) 1, INVALID_PARTITIONS.code());
+        assertEquals("The log directory name for partition 100000 would be 256 characters, which is " +
+            "longer than the max allowed length 255.", result.errorMessage());
+    }
+
+    @Test
+    public void testCreatePartitionsFailsIfLogDirNameIsTooLong() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        String topicName = "a".repeat(249);
+        ctx.createTestTopic(topicName, 1, (short) 1, NONE.code());
+        CreatePartitionsTopic topic = new CreatePartitionsTopic().
+            setName(topicName).
+            setCount(100_001).
+            setAssignments(null);
+        InvalidPartitionsException e = assertThrows(InvalidPartitionsException.class, () ->
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), topic, new ArrayList<>()));
+        assertEquals("The log directory name for partition 100000 would be 256 characters, which is " +
+            "longer than the max allowed length 255.", e.getMessage());
     }
 
     @Test
@@ -3330,7 +3381,8 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestData).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData,
+                ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.latestVersion())).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
             new AlterPartitionResponseData.TopicData().
                 setTopicId(topicId).
@@ -3405,7 +3457,8 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2, 3, 4, 5))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResultTwo = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo,
+                ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.latestVersion())).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
                 new AlterPartitionResponseData.TopicData().
                     setTopicId(topicId).

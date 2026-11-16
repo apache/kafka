@@ -150,6 +150,11 @@ public class StateConsumerTest {
         public long approximateNumUncommittedBytes() {
             return 0;
         }
+
+        @Override
+        public long maxStoreUncommittedBytes() {
+            return 0;
+        }
     }
 
 }

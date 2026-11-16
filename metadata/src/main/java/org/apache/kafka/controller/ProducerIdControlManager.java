@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import org.slf4j.Logger;
@@ -68,7 +67,6 @@ public class ProducerIdControlManager {
     private final Logger log;
     private final ClusterControlManager clusterControlManager;
     private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
-    private final TimelineLong brokerEpoch;
 
     private ProducerIdControlManager(
         LogContext logContext,
@@ -78,7 +76,6 @@ public class ProducerIdControlManager {
         this.log = logContext.logger(ProducerIdControlManager.class);
         this.clusterControlManager = clusterControlManager;
         this.nextProducerBlock = new TimelineObject<>(snapshotRegistry, ProducerIdsBlock.EMPTY);
-        this.brokerEpoch = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
@@ -116,7 +113,6 @@ public class ProducerIdControlManager {
             log.info("Replaying ProducerIdsRecord {}", record);
             nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(),
                     ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
-            brokerEpoch.set(record.brokerEpoch());
         }
     }
 }
