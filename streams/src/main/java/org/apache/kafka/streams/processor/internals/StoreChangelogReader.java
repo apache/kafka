@@ -135,6 +135,10 @@ public class StoreChangelogReader implements ChangelogReader {
         // NOTE we do not book keep the current offset since we leverage state manager as its source of truth
         private Long restoreEndOffset;
 
+        // whether the limit offset of a standby changelog that is a source topic has been looked up; until then its
+        // restoreEndOffset is 0, which keeps the standby from restoring but is not the end offset of the changelog
+        private boolean limitOffsetKnown;
+
         // buffer records polled by the restore consumer;
         private final List<ConsumerRecord<byte[], byte[]>> bufferedRecords;
 
@@ -160,6 +164,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
         private void clear() {
             this.bufferedRecords.clear();
+        }
+
+        private boolean awaitsLimitOffset() {
+            return stateManager.taskType() == Task.TaskType.STANDBY &&
+                stateManager.changelogAsSource(storeMetadata.changelogPartition()) &&
+                !limitOffsetKnown;
         }
 
         private void transitTo(final ChangelogState newState) {
@@ -482,11 +492,16 @@ public class StoreChangelogReader implements ChangelogReader {
     // Report a conservative value (higher than the real value) as fallback.
     // Only "source topic optimized" changelogs have a logical end offset from `ChangelogMetadata` (the committed offset on the source topic).
     // If not known (not set yet, or no "source topic optimization"), fall back to physical end offset.
+    // A standby changelog that is a source topic has no known end offset until its limit offset has been looked up.
     @Override
     public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
         final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
         for (final Map.Entry<TopicPartition, ChangelogMetadata> entry : changelogs.entrySet()) {
             final ChangelogMetadata metadata = entry.getValue();
+            if (metadata.awaitsLimitOffset()) {
+                endOffsets.put(entry.getKey(), null);
+                continue;
+            }
             Long endOffset = metadata.restoreEndOffset;
             if (endOffset == null) {
                 endOffset = metadata.storeMetadata.endOffset();
@@ -673,7 +688,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // when the interval has elapsed we should try to update the limit offset for standbys reading from
             // a source changelog with the new committed offset, unless there are no buffered records since
-            // we only need the limit when processing new records
+            // we only need the limit when processing new records; a limit offset that has never been looked up
+            // successfully is looked up anyway, since the end offset of its changelog is unknown until then
             // for other changelog partitions we do not need to update limit offset at all since we never need to
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
             // standby never need to stop
@@ -686,7 +702,10 @@ public class StoreChangelogReader implements ChangelogReader {
                     tasks.containsKey(entry.getValue().stateManager.taskId()))
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
 
-            if (changelogsWithLimitOffsets.stream().anyMatch(partition -> !changelogs.get(partition).bufferedRecords().isEmpty())) {
+            if (changelogsWithLimitOffsets.stream().anyMatch(partition -> {
+                final ChangelogMetadata metadata = changelogs.get(partition);
+                return !metadata.bufferedRecords().isEmpty() || metadata.awaitsLimitOffset();
+            })) {
                 updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
                 lastUpdateOffsetTime = time.milliseconds();
             }
@@ -967,6 +986,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
 
                 metadata.restoreEndOffset = newLimit;
+                metadata.limitOffsetKnown = true;
 
                 // update the limit index for buffered records
                 while (metadata.bufferedLimitIndex < metadata.bufferedRecords.size() &&

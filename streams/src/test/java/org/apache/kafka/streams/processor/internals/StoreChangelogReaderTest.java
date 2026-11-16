@@ -1262,6 +1262,82 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldReportUnknownEndOffsetOfStandbySourceChangelogUntilLimitOffsetIsLookedUp() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+        when(standbyStateManager.taskId()).thenReturn(taskId);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+
+        final AtomicBoolean failLookups = new AtomicBoolean(true);
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                if (failLookups.get()) {
+                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(groupSpecs.keySet().iterator().next(), new TimeoutException("KABOOM!"));
+                }
+                return super.listConsumerGroupOffsets(groupSpecs, options);
+            }
+        };
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
+
+        final long now = time.milliseconds();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        changelogReader.register(tp, standbyStateManager);
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+
+        // the first lookup of the limit offset fails; the standby is updated nevertheless, but with a limit of 0
+        final Map<TaskId, Task> tasks = Collections.singletonMap(taskId, mock(Task.class));
+        changelogReader.restore(tasks);
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+
+        // the lookup is retried once the interval has elapsed, even though no records are buffered
+        failLookups.set(false);
+        time.setCurrentTimeMs(now + 101L);
+        changelogReader.restore(tasks);
+        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        assertEquals(10L, changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
+    public void shouldReportEndOffsetOfStandbySourceChangelogWithNothingCommitted() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+        when(standbyStateManager.taskId()).thenReturn(taskId);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+
+        // like the admin client, report a requested partition without a committed offset with a null offset
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(
+                    Collections.singletonMap(groupSpecs.keySet().iterator().next(), Collections.singletonMap(tp, null)));
+            }
+        };
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        changelogReader.register(tp, standbyStateManager);
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(0L, changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
     public void shouldNotLookUpLimitOffsetsForChangelogsOfPausedStandbyTasks() {
         setupStandbyStateManager();
         setupStoreMetadata();
