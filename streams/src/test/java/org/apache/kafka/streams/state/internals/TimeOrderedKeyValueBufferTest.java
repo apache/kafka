@@ -1628,6 +1628,32 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldAllowPutFromEvictionCallback(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        putRecord(buffer, context, 0L, 0L, "a", "1");
+        putRecord(buffer, context, 1L, 1L, "b", "2");
+
+        final List<String> evictedKeys = new ArrayList<>();
+        // modifying the buffer from within the callback used to throw a ConcurrentModificationException
+        buffer.evictWhile(() -> buffer.numRecords() > 0 && buffer.minTimestamp() < 2L, kv -> {
+            evictedKeys.add(kv.key());
+            if (evictedKeys.size() == 1) {
+                putRecord(buffer, context, 5L, 2L, "c", "3");
+            }
+        });
+
+        assertEquals(List.of("a", "b"), evictedKeys);
+        assertEquals(1, buffer.numRecords());
+        assertEquals(5L, buffer.minTimestamp());
+        cleanup(context, buffer);
+    }
+
     private static void putRecord(final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer,
                                   final MockInternalProcessorContext<?, ?> context,
                                   final long streamTime,

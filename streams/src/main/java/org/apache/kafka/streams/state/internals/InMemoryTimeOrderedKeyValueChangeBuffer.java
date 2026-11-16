@@ -445,54 +445,46 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                            final Consumer<Eviction<K, Change<V>>> callback) {
         final Iterator<Map.Entry<BufferKey, BufferValue>> iterator = sortedMap.entrySet().iterator();
         // The callback may re-enter this buffer, so it must not run while we iterate over sortedMap. We therefore
-        // only remove the entries (through the iterator) inside the loop, remember their still-serialized form
-        // (which is cheaper than holding deserialized records), and invoke the callback after the loop.
-        final List<PendingEviction> pendingEvictions = new ArrayList<>();
+        // only deserialize and remove the entries (through the iterator) inside the loop, and invoke the callback
+        // afterwards. Deserializing before removing means an entry that fails to deserialize stays buffered.
+        final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
 
-        while (iterator.hasNext()) {
-            if (!predicate.get()) {
-                break;
+        try {
+            while (iterator.hasNext()) {
+                if (!predicate.get()) {
+                    break;
+                }
+
+                final Map.Entry<BufferKey, BufferValue> next = iterator.next();
+                if (evictions.isEmpty() && next.getKey().time() != minTimestamp) {
+                    throw new IllegalStateException(
+                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
+                            next.getKey().time() + "]"
+                    );
+                }
+                final Bytes serializedKey = next.getKey().key();
+                final BufferValue bufferValue = next.getValue();
+                evictions.add(toEviction(serializedKey, bufferValue));
+
+                if (loggingEnabled) {
+                    dirtyKeys.add(serializedKey);
+                }
+
+                memBufferSize -= computeRecordSize(serializedKey, bufferValue);
+
+                iterator.remove();
+                index.remove(serializedKey);
+                // the predicate (e.g. minTimestamp() or bufferSize()) is re-evaluated on the next iteration
+                minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
             }
-
-            final Map.Entry<BufferKey, BufferValue> next = iterator.next();
-            if (pendingEvictions.isEmpty() && next.getKey().time() != minTimestamp) {
-                throw new IllegalStateException(
-                    "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-                        next.getKey().time() + "]"
-                );
+        } finally {
+            // also hand over what was already removed if a later entry failed, so no evicted record is lost
+            if (!evictions.isEmpty()) {
+                updateBufferMetrics();
             }
-            final Bytes serializedKey = next.getKey().key();
-            final BufferValue bufferValue = next.getValue();
-            pendingEvictions.add(new PendingEviction(serializedKey, bufferValue));
-
-            if (loggingEnabled) {
-                dirtyKeys.add(serializedKey);
+            for (final Eviction<K, Change<V>> eviction : evictions) {
+                callback.accept(eviction);
             }
-
-            memBufferSize -= computeRecordSize(serializedKey, bufferValue);
-
-            iterator.remove();
-            index.remove(serializedKey);
-            // the predicate (e.g. minTimestamp() or bufferSize()) is re-evaluated on the next iteration
-            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
-        }
-
-        if (!pendingEvictions.isEmpty()) {
-            updateBufferMetrics();
-        }
-
-        for (final PendingEviction pending : pendingEvictions) {
-            callback.accept(toEviction(pending.serializedKey, pending.bufferValue));
-        }
-    }
-
-    private static final class PendingEviction {
-        private final Bytes serializedKey;
-        private final BufferValue bufferValue;
-
-        private PendingEviction(final Bytes serializedKey, final BufferValue bufferValue) {
-            this.serializedKey = serializedKey;
-            this.bufferValue = bufferValue;
         }
     }
 
