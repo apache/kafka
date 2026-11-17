@@ -4760,9 +4760,9 @@ public class GroupMetadataManager {
         if (cached != null) {
             return cached;
         }
-        // A cached intermediate assignment is missing for an epoch minted before the coordinator loaded the group. Members
-        // may already have reconciled to that epoch under the lost intermediate assignment, and are told nothing new
-        // within the epoch, so a member that holds an active task would never release it to another member.
+        // If the epoch was minted before the coordinator loaded the group, its intermediate assignment is lost, and
+        // members may already have reconciled to the epoch under it. They are told nothing new within the epoch, so a
+        // member that holds an active task would never release it to another member.
         final Map<String, TasksTuple> refinedAssignment = refineAssignment(
             group, targetAssignment, configuredTopology, group.wasMintedBeforeLoad(assignmentEpoch));
         maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
