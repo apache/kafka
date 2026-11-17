@@ -129,9 +129,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         // they always run, as in the full strategy, so they cannot fail an append that has no time to block.
         long deadlineMs = appendDeadlineMs(nowMs, maxTimeToBlock);
 
-        // The first pass is always allowed; the deadline is enforced only on a retry after a denied acquire.
-        boolean firstPass = true;
-
+        // The first pass is always allowed; the deadline is enforced only on a retry after a denied allocation.
         // Whether the non-blocking extension was denied memory on the pass that just ended (only
         // memory exhaustion case a pass can survive because it's non-blocking, all others throw).
         // Cleared once the next pass has read it, so it can only ever describe the pass immediately before.
@@ -140,8 +138,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             while (true) {
-                throwIfNoMoreRetriesAllowed(firstPass, deadlineMs, nonBlockingMemoryAllocationDenied, topic);
-                firstPass = false;
+                throwIfNoMoreRetriesAllowed(deadlineMs, nonBlockingMemoryAllocationDenied, topic);
                 nonBlockingMemoryAllocationDenied = false;
                 final BuiltInPartitioner.StickyPartitionInfo partitionInfo;
                 final int effectivePartition;

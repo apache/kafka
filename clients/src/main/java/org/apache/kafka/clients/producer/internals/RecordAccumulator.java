@@ -420,16 +420,15 @@ public class RecordAccumulator {
      * </ul>
      * Every blocking acquire is bounded separately by {@link #remainingTimeToBlockMs}.
      *
-     * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
+     * @param deadlineMs   the deadline
      * @param deniedMemory whether the pool refused the pass that just ended. Only the incremental extension
      *                     acquire can be refused and still let its pass finish, and it suppresses the pool's own
      *                     buffer-exhausted metric so the drop is counted here — exactly once either way.
+     * @param topic        the topic name
      * @throws BufferExhaustedException if the pass just ended was denied memory and the deadline has been reached
      */
-    protected void throwIfNoMoreRetriesAllowed(boolean firstPass, long deadlineMs,
-                                               boolean deniedMemory, String topic) {
-        // The common case is a single pass, so it costs no clock read. Nor does a retry that did not wait.
-        if (firstPass || !deniedMemory)
+    protected void throwIfNoMoreRetriesAllowed(long deadlineMs, boolean deniedMemory, String topic) {
+        if (!deniedMemory)
             return;
         if (time.milliseconds() < deadlineMs)
             return;

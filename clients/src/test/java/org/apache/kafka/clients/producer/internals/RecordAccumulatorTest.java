@@ -1600,23 +1600,23 @@ public class RecordAccumulatorTest {
             long open = time.milliseconds() + 1000;      // and one that is not
 
             // The first pass may always run, whether or not there is time left.
-            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, spent, false, topic);
-            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, open, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(spent, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(open, false, topic);
 
             // So may a retry after a pass that was not denied memory, whether or not there is time left:
             // it waited for nothing, so it is not charged against the deadline.
-            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, spent, false, topic);
-            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(spent, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(open, false, topic);
 
             // And a retry after a pass that was denied memory, while there is time left.
-            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, true, topic);
+            accum.throwIfNoMoreRetriesAllowed(open, true, topic);
 
             KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
             assertEquals(0.0, (double) exhausted.metricValue(), "an allowed pass is not a buffer-exhausted drop");
 
             // A retry after a pass the pool refused, with the deadline gone, is the only one that gives up.
             BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
-                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, true, topic));
+                    () -> accum.throwIfNoMoreRetriesAllowed(spent, true, topic));
             assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"),
                     "a pass the pool refused must be reported as an exhausted-pool drop, but was: " + denied.getMessage());
             assertEquals(1.0, (double) exhausted.metricValue(),
