@@ -64,7 +64,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -129,6 +131,84 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     @AfterEach
     public void closeStore() {
         cachingStore.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldHandleOversizedRawPayloadReleasedDuringFlushAndSameKeyUpdates(final boolean hasIndex) {
+        setUp(hasIndex);
+        final List<byte[]> forwarded = new ArrayList<>();
+        cachingStore.setFlushListener(record -> {
+            forwarded.add(record.value().newValue);
+            context.recordContext().freeRawRecord();
+        }, true);
+        final Bytes key = bytesKey("key");
+        for (int i = 1; i <= 2; i++) {
+            context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, i, 0, TOPIC,
+                new RecordHeaders(), new byte[7], new byte[MAX_CACHE_SIZE_BYTES * 4]));
+            cachingStore.put(key, bytesValue("v" + i), DEFAULT_TIMESTAMP);
+            assertArrayEquals(bytesValue("v" + i), cachingStore.fetch(key, DEFAULT_TIMESTAMP));
+            assertTrue(cache.sizeBytes() >= 0 && cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
+        }
+        cachingStore.commit(Map.of());
+        assertArrayEquals(bytesValue("v2"), underlyingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertFalse(forwarded.isEmpty());
+        assertArrayEquals(bytesValue("v2"), forwarded.get(forwarded.size() - 1));
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 3L, 0, TOPIC,
+            new RecordHeaders(), new byte[7], new byte[MAX_CACHE_SIZE_BYTES * 4]));
+        cachingStore.put(key, null, DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        assertNull(cachingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertNull(underlyingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertNull(forwarded.get(forwarded.size() - 1));
+        assertTrue(cache.evicts() > 0);
+        cachingStore.close();
+        assertEquals(0L, cache.sizeBytes());
+        assertEquals(0L, cache.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldPreserveWindowResultsWithRawSourceBytesUnderSmallCacheBudget(final boolean hasIndex) {
+        setUp(hasIndex);
+        for (int i = 0; i < 8; i++) {
+            context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, i, 0, TOPIC,
+                new RecordHeaders(), new byte[7], new byte[128]));
+            cachingStore.put(bytesKey("k" + i), bytesValue("v" + i), DEFAULT_TIMESTAMP);
+            if (i == 0 && hasIndex) {
+                assertTrue(cache.evicts() > 0);
+            }
+        }
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 8L, 0, TOPIC,
+            new RecordHeaders(), new byte[7], new byte[128]));
+        cachingStore.put(bytesKey("k0"), bytesValue("replacement"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("k1"), null, DEFAULT_TIMESTAMP);
+        assertTrue(cache.evicts() > 0);
+        assertTrue(cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
+        assertArrayEquals(bytesValue("replacement"), cachingStore.fetch(bytesKey("k0"), DEFAULT_TIMESTAMP));
+        assertNull(cachingStore.fetch(bytesKey("k1"), DEFAULT_TIMESTAMP));
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(
+            bytesKey("k0"), bytesKey("k7"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            final Map<Bytes, String> actual = new HashMap<>();
+            while (iterator.hasNext()) {
+                final KeyValue<Windowed<Bytes>, byte[]> entry = iterator.next();
+                assertEquals(DEFAULT_TIMESTAMP, entry.key.window().start());
+                assertNull(actual.put(entry.key.key(), new String(entry.value, StandardCharsets.UTF_8)));
+            }
+            final Map<Bytes, String> expected = new HashMap<>();
+            expected.put(bytesKey("k0"), "replacement");
+            for (int i = 2; i < 8; i++) {
+                expected.put(bytesKey("k" + i), "v" + i);
+            }
+            assertEquals(expected, actual);
+        }
+        cachingStore.commit(Map.of());
+        assertArrayEquals(bytesValue("replacement"), underlyingStore.fetch(bytesKey("k0"), DEFAULT_TIMESTAMP));
+        assertNull(underlyingStore.fetch(bytesKey("k1"), DEFAULT_TIMESTAMP));
+        for (int i = 2; i < 8; i++) {
+            assertArrayEquals(bytesValue("v" + i), underlyingStore.fetch(bytesKey("k" + i), DEFAULT_TIMESTAMP));
+        }
+        assertTrue(cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
     }
 
     @ParameterizedTest
