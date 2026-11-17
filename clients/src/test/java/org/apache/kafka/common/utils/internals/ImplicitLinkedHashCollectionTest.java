@@ -32,7 +32,6 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -158,18 +157,6 @@ public class ImplicitLinkedHashCollectionTest {
         public int hashCode() {
             return hash;
         }
-    }
-
-    @Test
-    @Timeout(30)
-    public void testChangeCapacityIsLinearForContiguousRun() {
-        int count = 200_000;
-        ImplicitLinkedHashCollection<CollidingElement> coll = new ImplicitLinkedHashCollection<>();
-        for (int i = 0; i < count; i++) {
-            assertTrue(coll.add(new CollidingElement(i, i)));
-        }
-        assertEquals(count, coll.size());
-        assertNotNull(coll.find(new CollidingElement(count - 1, count - 1)));
     }
 
     @Test

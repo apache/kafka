@@ -306,7 +306,13 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     final int slot(Element[] curElements, Object e) {
-        return (e.hashCode() & 0x7fffffff) % curElements.length;
+        int hash = e.hashCode();
+        hash ^= hash >>> 16;
+        hash *= 0x85ebca6b;
+        hash ^= hash >>> 13;
+        hash *= 0xc2b2ae35;
+        hash ^= hash >>> 16;
+        return (hash & 0x7fffffff) % curElements.length;
     }
 
     /**

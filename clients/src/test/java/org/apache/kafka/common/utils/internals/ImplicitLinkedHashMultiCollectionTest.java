@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils.internals;
 
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollectionTest.CollidingElement;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollectionTest.TestElement;
 
 import org.junit.jupiter.api.Test;
@@ -107,6 +108,17 @@ public class ImplicitLinkedHashMultiCollectionTest {
             assertTrue(multiSet.add(new TestElement(1)));
         }
         assertThrows(RuntimeException.class, () -> multiSet.add(new TestElement(1)));
+    }
+
+    @Test
+    public void testAddsManyKeysWithSimilarHashCodes() {
+        int count = 50_000;
+        ImplicitLinkedHashMultiCollection<CollidingElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
+        for (int i = 0; i < count; i++) {
+            String name = "orders.customer" + (i / 100) + "." + (i % 100);
+            assertTrue(multiSet.add(new CollidingElement(i, name.hashCode())));
+        }
+        assertEquals(count, multiSet.size());
     }
 
     static void expectExactTraversal(Iterator<TestElement> iterator, TestElement... sequence) {
