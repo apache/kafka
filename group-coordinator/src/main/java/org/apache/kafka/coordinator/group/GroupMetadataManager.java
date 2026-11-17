@@ -493,6 +493,11 @@ public class GroupMetadataManager {
     private final Map<String, ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
+     * The names of the supported consumer group partition assignors in the configured order.
+     */
+    private final List<String> consumerGroupAssignorNames;
+
+    /**
      * The default consumer group assignor used.
      */
     private final ConsumerGroupPartitionAssignor defaultConsumerGroupAssignor;
@@ -597,6 +602,11 @@ public class GroupMetadataManager {
             .consumerGroupAssignors()
             .stream()
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        this.consumerGroupAssignorNames = config
+            .consumerGroupAssignors()
+            .stream()
+            .map(ConsumerGroupPartitionAssignor::name)
+            .toList();
         this.defaultConsumerGroupAssignor = config.consumerGroupAssignors().get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -712,6 +722,7 @@ public class GroupMetadataManager {
                 describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
                     committedOffset,
                     defaultConsumerGroupAssignor.name(),
+                    consumerGroupAssignorNames,
                     metadataImage
                 ));
             } catch (GroupIdNotFoundException exception) {
@@ -3752,9 +3763,17 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember
     ) {
+        if (member.serverAssignorName().equals(updatedMember.serverAssignorName())) {
+            return false;
+        }
+
         String defaultAssignorName = defaultConsumerGroupAssignor.name();
-        String currentPreferredAssignor = group.preferredServerAssignor().orElse(defaultAssignorName);
-        String newPreferredAssignor = group.computePreferredServerAssignor(member, updatedMember).orElse(defaultAssignorName);
+        String currentPreferredAssignor = group
+            .preferredServerAssignor(consumerGroupAssignorNames)
+            .orElse(defaultAssignorName);
+        String newPreferredAssignor = group
+            .computePreferredServerAssignor(member, updatedMember, consumerGroupAssignorNames)
+            .orElse(defaultAssignorName);
         return !currentPreferredAssignor.equals(newPreferredAssignor);
     }
 
@@ -4398,7 +4417,8 @@ public class GroupMetadataManager {
 
         String preferredServerAssignor = group.computePreferredServerAssignor(
             member,
-            updatedMember
+            updatedMember,
+            consumerGroupAssignorNames
         ).orElse(defaultConsumerGroupAssignor.name());
         try {
             UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment =

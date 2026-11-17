@@ -2945,28 +2945,31 @@ public class GroupMetadataManagerTest {
         uniformAssignor.prepareGroupAssignment(groupAssignment);
         rangeAssignor.prepareGroupAssignment(groupAssignment);
 
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("uniform")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
+            .build();
+
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
             .build();
 
         // Consumer group with one vote for the uniform assignor and one vote for the range assignor.
+        // The range assignor comes first in the configured assignors.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(uniformAssignor, rangeAssignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(rangeAssignor, uniformAssignor))
             .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                .withMember(new ConsumerGroupMember.Builder(memberId1)
-                    .setState(MemberState.STABLE)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(9)
-                    .setRebalanceTimeoutMs(5000)
-                    .setClientId(DEFAULT_CLIENT_ID)
-                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-                    .setSubscribedTopicNames(List.of("foo"))
-                    .setServerAssignorName("uniform")
-                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
-                    .build())
+                .withMember(member1)
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
@@ -2989,23 +2992,39 @@ public class GroupMetadataManagerTest {
                 ))))
             .build();
 
-        // Both members heartbeat several times with unchanged votes. The tied vote resolves
-        // to the same assignor on every heartbeat so the group stays at epoch 10.
-        Map<String, Integer> memberEpochs = new HashMap<>(Map.of(memberId1, 10, memberId2, 10));
-        for (int round = 0; round < 5; round++) {
-            for (String memberId : List.of(memberId1, memberId2)) {
-                CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
-                    new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId)
-                        .setMemberEpoch(memberEpochs.get(memberId)));
-                memberEpochs.put(memberId, result.response().memberEpoch());
+        // Member 1, member 2 and member 1 again heartbeat with unchanged votes. The group
+        // stays at epoch 10 and no record is written.
+        for (String memberId : List.of(memberId1, memberId2, memberId1)) {
+            CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(10));
 
-                assertEquals(List.of(), result.records());
-                assertEquals(10, result.response().memberEpoch());
-                assertEquals(10, context.groupMetadataManager.consumerGroup(groupId).groupEpoch());
-            }
+            assertEquals(List.of(), result.records());
+            assertEquals(10, result.response().memberEpoch());
         }
+
+        // Member 1 switches its vote from uniform to range. Range comes first in the configured
+        // assignors so it is the preferred assignor of the group before and after the switch. The
+        // group stays at epoch 10 and only the updated member is written.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10)
+                .setServerAssignor("range"));
+
+        assertRecordsEquals(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(
+                groupId,
+                new ConsumerGroupMember.Builder(member1)
+                    .setServerAssignorName("range")
+                    .build()
+            )),
+            result.records()
+        );
+        assertEquals(10, result.response().memberEpoch());
     }
 
     @Test
@@ -11736,7 +11755,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor, new MockPartitionAssignor("assignorName")))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
                 .withMember(memberBuilder.build()))

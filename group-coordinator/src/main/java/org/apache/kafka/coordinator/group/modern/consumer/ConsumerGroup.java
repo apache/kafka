@@ -54,7 +54,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -63,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -106,14 +106,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             return lowerCaseName;
         }
     }
-
-    /**
-     * Orders the server assignors by their number of votes. Assignors with the
-     * same number of votes are ordered by name.
-     */
-    private static final Comparator<Map.Entry<String, Integer>> SERVER_ASSIGNOR_VOTES_COMPARATOR =
-        Map.Entry.<String, Integer>comparingByValue()
-            .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder()));
 
     /**
      * The logger.
@@ -622,38 +614,70 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * on {@link ConsumerGroup#serverAssignors} persisted structure
      * but it does not update it.
      *
-     * @param oldMember The old member.
-     * @param newMember The new member.
+     * @param oldMember     The old member.
+     * @param newMember     The new member.
+     * @param assignorNames The names of the configured assignors in order of preference.
      *
      * @return An Optional containing the preferred assignor.
      */
     public Optional<String> computePreferredServerAssignor(
         ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember
+        ConsumerGroupMember newMember,
+        List<String> assignorNames
     ) {
         // Copy the current count and update it.
         Map<String, Integer> counts = new HashMap<>(this.serverAssignors);
         maybeUpdateServerAssignors(counts, oldMember, newMember);
 
-        return counts.entrySet().stream()
-            .max(SERVER_ASSIGNOR_VOTES_COMPARATOR)
-            .map(Map.Entry::getKey);
+        return selectPreferredServerAssignor(assignorNames, counts::get);
     }
 
     /**
+     * @param assignorNames The names of the configured assignors in order of preference.
+     *
      * @return The preferred assignor for the group.
      */
-    public Optional<String> preferredServerAssignor() {
-        return preferredServerAssignor(Long.MAX_VALUE);
+    public Optional<String> preferredServerAssignor(List<String> assignorNames) {
+        return preferredServerAssignor(Long.MAX_VALUE, assignorNames);
     }
 
     /**
+     * @param committedOffset The committed offset.
+     * @param assignorNames   The names of the configured assignors in order of preference.
+     *
      * @return The preferred assignor for the group with given offset.
      */
-    public Optional<String> preferredServerAssignor(long committedOffset) {
-        return serverAssignors.entrySet(committedOffset).stream()
-            .max(SERVER_ASSIGNOR_VOTES_COMPARATOR)
-            .map(Map.Entry::getKey);
+    public Optional<String> preferredServerAssignor(long committedOffset, List<String> assignorNames) {
+        return selectPreferredServerAssignor(
+            assignorNames,
+            assignorName -> serverAssignors.get(assignorName, committedOffset)
+        );
+    }
+
+    /**
+     * Selects the preferred assignor among the configured assignors. The assignor
+     * with the most votes wins. When several assignors have the same number of
+     * votes, the one that comes first in the configured assignors wins.
+     *
+     * @param assignorNames The names of the configured assignors in order of preference.
+     * @param votes         The number of votes of an assignor, or null if it has none.
+     *
+     * @return An Optional containing the preferred assignor.
+     */
+    private static Optional<String> selectPreferredServerAssignor(
+        List<String> assignorNames,
+        Function<String, Integer> votes
+    ) {
+        String preferredAssignorName = null;
+        int maxVotes = 0;
+        for (String assignorName : assignorNames) {
+            Integer assignorVotes = votes.apply(assignorName);
+            if (assignorVotes != null && assignorVotes > maxVotes) {
+                preferredAssignorName = assignorName;
+                maxVotes = assignorVotes;
+            }
+        }
+        return Optional.ofNullable(preferredAssignorName);
     }
 
     /**
@@ -1233,11 +1257,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
         String defaultAssignor,
+        List<String> assignorNames,
         CoordinatorMetadataImage image
     ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
-            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
+            .setAssignorName(preferredServerAssignor(committedOffset, assignorNames).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
