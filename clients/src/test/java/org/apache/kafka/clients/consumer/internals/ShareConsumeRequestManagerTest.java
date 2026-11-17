@@ -2038,6 +2038,53 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(Set.of(topicName), e.unauthorizedTopics());
     }
 
+    @Test
+    public void testNoFetchForPartitionUntilBufferedErrorIsPolled() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullShareFetchResponse(tip0, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The error is buffered and the application has not polled it, so the partition is not fetched: it is
+        // removed from the share session once, and nothing else is sent, however many times the request manager
+        // is polled.
+        assertPartitionRemovedFromShareSession();
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertThrows(TopicAuthorizationException.class, this::collectFetch);
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+    }
+
+    @Test
+    public void testFetchForPartitionAgainOnceRetriableErrorIsPolled() {
+        buildRequestManager();
+        assignFromSubscribed(Set.of(tp0));
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullShareFetchResponse(tip0, records, emptyAcquiredRecords, Errors.NOT_LEADER_OR_FOLLOWER));
+        networkClientDelegate.poll(time.timer(0));
+        assertPartitionRemovedFromShareSession();
+
+        // Polling the error does not throw, and the partition is fetched again without waiting for the next fetch.
+        assertEmptyFetch("Should not return records on fetch error");
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+    }
+
+    private void assertPartitionRemovedFromShareSession() {
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertTrue(builder.data().topics().isEmpty());
+        assertEquals(1, builder.data().forgottenTopicsData().size());
+        assertEquals(tip0.topicId(), builder.data().forgottenTopicsData().get(0).topicId());
+        networkClientDelegate.addAll(pollResult.unsentRequests);
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+    }
+
     @ParameterizedTest
     @MethodSource("handleShareFetchResponseErrorSupplier")
     public void testHandleShareFetchResponseError(Errors error,
