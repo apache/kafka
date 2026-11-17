@@ -454,9 +454,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     /**
-     * The upper bound on how many active plus standby tasks any member may hold, one value for the whole group: all
-     * tasks over all members, rounded up. When a member reaches it, the member and its tasks are taken out and the
-     * bound is computed again from the rest, which can lower it for the others.
+     * The current upper bound on how many active plus standby tasks a member may take in the rack-aware pass, one
+     * value for the whole group. It starts with all tasks over all members, rounded up. When a member reaches it, the
+     * member and its tasks are taken out and the bound is computed again from the rest, which can lower it for the
+     * others.
      */
     private static final class TaskQuota {
         private int totalMembersWithTaskCapacity;
