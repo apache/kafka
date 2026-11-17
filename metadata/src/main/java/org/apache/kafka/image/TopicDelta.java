@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -41,6 +42,10 @@ public final class TopicDelta {
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
     private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
     private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
+
+    private boolean mirrorRecordReplayed;
+    private String mirrorName;
+    private byte desiredMirrorState;
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -103,6 +108,12 @@ public final class TopicDelta {
         partitionChanges.put(record.partitionId(), prevPartition.merge(record));
     }
 
+    public void replay(MirrorTopicStateChangeRecord record) {
+        mirrorRecordReplayed = true;
+        mirrorName = record.mirrorName();
+        desiredMirrorState = record.desiredState();
+    }
+
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
         if (PartitionRegistration.electionWasUnclean(newLeaderRecoveryState)) {
             partitionToUncleanLeaderElectionCount.put(partitionId, partitionToUncleanLeaderElectionCount.getOrDefault(partitionId, 0) + 1);
@@ -151,7 +162,10 @@ public final class TopicDelta {
                 newPartitions.put(entry.getKey(), entry.getValue());
             }
         }
-        return new TopicImage(image.name(), image.id(), newPartitions);
+
+        byte newMirrorState = mirrorRecordReplayed ? desiredMirrorState : image.desiredMirrorState();
+        String newMirrorName =  mirrorRecordReplayed ? mirrorName : image.mirrorName();
+        return new TopicImage(image.name(), image.id(), newMirrorName, newMirrorState, newPartitions);
     }
 
     /**
@@ -165,6 +179,7 @@ public final class TopicDelta {
      *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
      *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
      *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
+     *   <li>mirrorTopicStates: topics for which the mirror name or desired mirror state changed</li>
      * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
@@ -180,6 +195,11 @@ public final class TopicDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
+        Map<Uuid, LocalReplicaChanges.MirrorTopicState> mirrorTopicChanges = new HashMap<>();
+
+        if (mirrorRecordReplayed) {
+            mirrorTopicChanges.put(image.id(), new LocalReplicaChanges.MirrorTopicState(mirrorName, desiredMirrorState));
+        }
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
@@ -222,13 +242,15 @@ public final class TopicDelta {
             }
         }
 
-        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds, mirrorTopicChanges);
     }
 
     @Override
     public String toString() {
         return "TopicDelta(" +
             "partitionChanges=" + partitionChanges +
+            ", mirrorName=" + mirrorName +
+            ", desiredMirrorState=" + desiredMirrorState +
             ')';
     }
 }

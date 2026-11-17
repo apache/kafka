@@ -20,6 +20,7 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -29,12 +30,14 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.metadata.MetadataRecordType.MIRROR_TOPIC_STATE_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
@@ -81,6 +84,11 @@ public final class TopicsImageFixtures {
             new ApiMessageAndVersion(new TopicRecord().
                     setName("baz").setTopicId(BAZ_UUID),
                     TOPIC_RECORD.highestSupportedVersion()),
+            // add mirror topic state change record for new topic
+            new ApiMessageAndVersion(new MirrorTopicStateChangeRecord().
+                    setTopicName("baz").setMirrorName("test-mirror").
+                    setDesiredState(MirrorPartitionState.LOG_ALIGNMENT.value()),
+                    MIRROR_TOPIC_STATE_CHANGE_RECORD.highestSupportedVersion()),
             // add partition record for new topic
             new ApiMessageAndVersion(new PartitionRecord().
                     setPartitionId(0).
@@ -117,17 +125,23 @@ public final class TopicsImageFixtures {
                             setDirectories(DirectoryId.migratingArray(5)).
                             setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
             newTopicImage("baz", BAZ_UUID,
+                    "test-mirror",
+                    MirrorPartitionState.LOG_ALIGNMENT.value(),
                     new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
                             setDirectories(DirectoryId.migratingArray(4)).
                             setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build())));
 
     public static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
+        return newTopicImage(name, id, null, MirrorPartitionState.UNKNOWN.value(), partitions);
+    }
+
+    public static TopicImage newTopicImage(String name, Uuid id, String mirrorName, byte desiredMirrorState, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
         int i = 0;
         for (PartitionRegistration partition : partitions) {
             partitionMap.put(i++, partition);
         }
-        return new TopicImage(name, id, partitionMap);
+        return new TopicImage(name, id, mirrorName, desiredMirrorState, partitionMap);
     }
 
     public static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
