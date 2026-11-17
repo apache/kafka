@@ -89,9 +89,7 @@ public class ThreadCache {
             while (sizeInBytes.get() > maxCacheSizeBytes) {
                 final NamedCache cache = circularIterator.next();
                 synchronized (cache) {
-                    final long oldSize = cache.sizeInBytes();
                     cache.evict();
-                    sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
                 }
                 numEvicts++;
             }
@@ -144,9 +142,7 @@ public class ThreadCache {
         }
 
         synchronized (cache) {
-            final long oldSize = cache.sizeInBytes();
             cache.flush();
-            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
         }
 
         if (log.isTraceEnabled()) {
@@ -174,9 +170,7 @@ public class ThreadCache {
         final NamedCache cache = getOrCreateCache(namespace);
 
         synchronized (cache) {
-            final long oldSize = cache.sizeInBytes();
             cache.put(key, value);
-            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
             maybeEvict(namespace, cache);
         }
     }
@@ -185,9 +179,7 @@ public class ThreadCache {
         final NamedCache cache = getOrCreateCache(namespace);
         final LRUCacheEntry result;
         synchronized (cache) {
-            final long oldSize = cache.sizeInBytes();
             result = cache.putIfAbsent(key, value);
-            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
             maybeEvict(namespace, cache);
         }
 
@@ -211,9 +203,7 @@ public class ThreadCache {
 
         final LRUCacheEntry entry;
         synchronized (cache) {
-            final long oldSize = cache.sizeInBytes();
             entry = cache.delete(key);
-            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
         }
         return entry;
     }
@@ -276,7 +266,6 @@ public class ThreadCache {
     synchronized void close(final String namespace) {
         final NamedCache removed = caches.remove(namespace);
         if (removed != null) {
-            sizeInBytes.getAndAdd(-removed.sizeInBytes());
             removed.close();
         }
     }
@@ -284,7 +273,6 @@ public class ThreadCache {
     synchronized void clear(final String namespace) {
         final NamedCache cleared = caches.get(namespace);
         if (cleared != null) {
-            sizeInBytes.getAndAdd(-cleared.sizeInBytes());
             cleared.clear();
         }
     }
@@ -299,9 +287,7 @@ public class ThreadCache {
             if (cache.isEmpty()) {
                 return;
             }
-            final long oldSize = cache.sizeInBytes();
             cache.evict();
-            sizeInBytes.getAndAdd(cache.sizeInBytes() - oldSize);
             numEvicts++;
             numEvicted++;
         }
@@ -317,7 +303,9 @@ public class ThreadCache {
     private synchronized NamedCache getOrCreateCache(final String name) {
         NamedCache cache = caches.get(name);
         if (cache == null) {
-            cache = new NamedCache(name, this.metrics);
+            // Flush listeners can re-enter this cache. Account for each mutation immediately,
+            // rather than counting nested mutations again in a before/after flush size delta.
+            cache = new NamedCache(name, this.metrics, sizeInBytes::getAndAdd);
             caches.put(name, cache);
         }
         return cache;

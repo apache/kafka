@@ -783,7 +783,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(bytesKey(kv), bytesValue(kv));
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC);
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC, 0, 0);
         }
         return i;
     }

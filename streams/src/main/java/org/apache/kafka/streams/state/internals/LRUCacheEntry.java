@@ -28,6 +28,7 @@ import java.util.Objects;
 class LRUCacheEntry {
     private final ContextualRecord record;
     private final long sizeBytes;
+    private long rawRecordSize;
     private boolean isDirty;
 
 
@@ -61,10 +62,10 @@ class LRUCacheEntry {
 
         this.isDirty = isDirty;
         this.sizeBytes = 1 + // isDirty
-            record.residentMemorySizeEstimate() +
-            // Raw source arrays are retained by cache entries, but are not serialized with the context.
-            (rawKey == null ? 0 : rawKey.length) +
-            (rawValue == null ? 0 : rawValue.length);
+            record.residentMemorySizeEstimate();
+        // Keep the charge independently of the context: a downstream sink can free its raw references.
+        rawRecordSize = (rawKey == null ? 0L : rawKey.length) +
+            (rawValue == null ? 0L : rawValue.length);
     }
 
     void markClean() {
@@ -76,7 +77,12 @@ class LRUCacheEntry {
     }
 
     long size() {
-        return sizeBytes;
+        return sizeBytes + rawRecordSize;
+    }
+
+    void freeRawRecord() {
+        context().freeRawRecord();
+        rawRecordSize = 0L;
     }
 
     byte[] value() {
@@ -96,13 +102,13 @@ class LRUCacheEntry {
             return false;
         }
         final LRUCacheEntry that = (LRUCacheEntry) o;
-        return sizeBytes == that.sizeBytes &&
+        return size() == that.size() &&
             isDirty() == that.isDirty() &&
             Objects.equals(record, that.record);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(record, sizeBytes, isDirty());
+        return Objects.hash(record, size(), isDirty());
     }
 }

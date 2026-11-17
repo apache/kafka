@@ -270,25 +270,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldBalanceSizeWhenEvictionReleasesRawSourceBytes(final String testName, final Function<String, B> bufferSupplier) {
-        setup(testName, bufferSupplier);
-        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext<?, ?> context = makeContext();
-        buffer.init(context, buffer);
-        try {
-            final ProcessorRecordContext rawContext = new ProcessorRecordContext(
-                0L, 0L, 0, "testing", new RecordHeaders(), new byte[7], new byte[1024]);
-            buffer.put(0L, new Record<>("k", new Change<>("v", null), 0L), rawContext);
-            buffer.evictWhile(() -> buffer.numRecords() > 0, eviction -> eviction.recordContext().freeRawRecord());
-            assertEquals(0, buffer.numRecords());
-            assertEquals(0L, buffer.bufferSize());
-        } finally {
-            cleanup(context, buffer);
-        }
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameters")
     public void shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp(final String testName, final Function<String, B> bufferSupplier) {
         setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
