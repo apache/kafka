@@ -137,7 +137,7 @@ public class ThreadCacheTest {
 
 
     static long memoryCacheEntrySize(final byte[] key, final byte[] value, final String topic) {
-        return key.length +
+        return 2 + // source raw key and value in the test fixtures
             value.length +
             1 + // isDirty
             8 + // timestamp
@@ -604,7 +604,7 @@ public class ThreadCacheTest {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));
         final NamedCache.LRUNode node = new NamedCache.LRUNode(Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[]{0}));
         cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
-        assertEquals(cache.sizeBytes(), node.size());
+        assertEquals(cache.sizeBytes() + rawKey.length + rawValue.length, node.size());
     }
 
     @Test
