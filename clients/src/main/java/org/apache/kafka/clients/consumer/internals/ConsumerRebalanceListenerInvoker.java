@@ -108,7 +108,7 @@ public class ConsumerRebalanceListenerInvoker {
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
-            log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
+            log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPausedPartitions);
 
         if (subscriptions.hasRebalanceListener()) {
             try {
