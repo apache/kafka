@@ -686,14 +686,13 @@ public class GroupMetadataManager {
             boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
             boolean typeCheck = enumTypesFilter.isEmpty() || enumTypesFilter.contains(group.type());
 
-            return stateCheck && typeCheck;
+            return stateCheck && typeCheck && groupIdFilter.test(group.groupId());
         };
 
         Stream<Group> groupStream = groups.values(committedOffset).stream();
 
         return groupStream
             .filter(combinedFilter)
-            .filter(group -> groupIdFilter.test(group.groupId()))
             .map(group -> group.asListedGroup(committedOffset))
             .toList();
     }
