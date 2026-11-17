@@ -17,15 +17,23 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -36,10 +44,13 @@ import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -264,4 +275,39 @@ public class TimestampedWindowStoreBuilderTest {
         assertEquals("storeSupplier's metricsScope can't be null", e.getMessage());
     }
 
+    @Test
+    public void inMemoryMarkerShouldPropagateReadOnlyToWrappedStore() {
+        setUpWithoutInner(STORE_NAME);
+        when(supplier.get()).thenReturn(new InMemoryWindowStore(
+            STORE_NAME, 60_000L, 10_000L, false, METRICS_SCOPE));
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(), Serdes.String(), Serdes.String(),
+            new StreamsConfig(props));
+        final TimestampedWindowStore<String, String> store =
+            builder.withLoggingDisabled().withCachingDisabled().build();
+        store.init(context, store);
+        try {
+            store.put("k", ValueAndTimestamp.make("v", 10L), 1000L);
+
+            final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> committedView =
+                store.readOnly(IsolationLevel.READ_COMMITTED);
+            final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> uncommittedView =
+                store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+
+            assertNotSame(store, committedView);
+            assertNull(committedView.fetch("k", 1000L),
+                "READ_COMMITTED view must not see the staged write through the in-memory marker");
+            assertEquals("v", uncommittedView.fetch("k", 1000L).value(),
+                "READ_UNCOMMITTED view must see the staged write through the in-memory marker");
+
+            store.commit(Collections.emptyMap());
+            assertEquals("v", committedView.fetch("k", 1000L).value(),
+                "READ_COMMITTED view must see the write after commit");
+        } finally {
+            store.close();
+        }
+    }
 }
