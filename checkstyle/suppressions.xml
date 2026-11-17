@@ -90,7 +90,7 @@
               files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer|CommitRequestManager|ConsumerHeartbeatRequestManager)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient|StreamsGroupHeartbeatRequestManager|CommitRequestManager)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient|SslTransportLayer|StreamsGroupHeartbeatRequestManager|CommitRequestManager)Test.java"/>
 
     <!-- KafkaAdminClient test split: shared base + per-domain test classes -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity|JavaNCSS)"
