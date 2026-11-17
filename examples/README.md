@@ -33,9 +33,11 @@ examples/bin/java-rebalance-listener-demo.sh consumer
 
 Stop either consumer with `Ctrl+C` to observe another rebalance.
 
-To observe `onPartitionsLost` on Linux/macOS, ensure both consumers are running, then suspend one with `Ctrl+Z` after it has received partitions.
+A session timeout may cause partitions to be reassigned before the consumer is notified.
+This demo logs lost partitions in `onPartitionsLost` without committing their offsets, since the consumer no longer owns them.
+
+To observe this on Linux/macOS, ensure both consumers are running, then suspend one with `Ctrl+Z` after it has received partitions.
 Wait for its session to time out and the other consumer to take over its partitions, then run `fg` in the original terminal to resume it.
-The callback logs the lost partitions without committing offsets, since the consumer no longer owns them.
 
 To compare callback behavior across protocols, stop both instances and restart them with the other protocol.
 
