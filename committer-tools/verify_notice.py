@@ -30,7 +30,7 @@ from collections import defaultdict
 
 # Kafka-own jars carry the project's NOTICE already covered by the hand-written
 # header of NOTICE-binary, so we exclude them from the third-party scan.
-KAFKA_JAR_PATTERN = re.compile(r"(kafka|connect|trogdor)", re.IGNORECASE)
+KAFKA_JAR_PATTERN = re.compile(r"^(kafka[-_]|connect-|trogdor-)")
 
 # Finds NOTICE-like filenames anywhere in a jar, ignoring case.
 # Optional prefixes are separated from NOTICE by '-', '_', or '.', e.g.
