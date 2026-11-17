@@ -399,7 +399,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
                             sourceIterator.remove();
                             destinationTasks.add(taskToMove);
                             if (rackDiversity != null) {
-                                rackDiversity.moved(taskToMove, source, destination);
+                                rackDiversity.move(taskToMove, source, destination);
                             }
                             keepBalancing = true;
                         }
@@ -485,10 +485,10 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return process.assignedTaskCount() < process.capacity() * totalTasksPerMember;
         }
 
-        private void maybeUpdateTotalTasksPerMember(final int taskNo) {
-            if (taskNo == totalTasksPerMember) {
+        private void maybeUpdateTotalTasksPerMember(final int taskCount) {
+            if (taskCount == totalTasksPerMember) {
                 totalMembersWithTaskCapacity--;
-                totalTasks -= taskNo;
+                totalTasks -= taskCount;
                 totalTasksPerMember = computeTasksPerMember(totalTasks, totalMembersWithTaskCapacity);
             }
         }
@@ -558,7 +558,7 @@ public class BalancedTaskAssignor implements TaskAssignor {
             return true;
         }
 
-        private void moved(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
+        private void move(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
             final List<ProcessTasks> taskHolders = holders.get(task);
             taskHolders.set(taskHolders.indexOf(source), destination);
         }
