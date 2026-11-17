@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -42,8 +43,8 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainT
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -434,4 +435,25 @@ public class PlainToHeadersStoreAdapterTest {
         assertArrayEquals(convertFromPlainToHeaderFormat(committedPlain), view.get(key));
         verify(mockStore).readOnly(IsolationLevel.READ_COMMITTED);
     }
+
+    @Test
+    public void shouldConvertIteratorValuesOnReadOnlyView() {
+        final PlainToHeadersStoreAdapter adapter = createAdapter();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(mockStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+        when(innerView.range(any(), any())).thenReturn(mockIterator);
+        when(innerView.reverseRange(any(), any())).thenReturn(mockIterator);
+        when(innerView.all()).thenReturn(mockIterator);
+        when(innerView.reverseAll()).thenReturn(mockIterator);
+        when(innerView.prefixScan(any(), any())).thenReturn(mockIterator);
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertConvertsPlainToHeaders(view.range(null, null));
+        assertConvertsPlainToHeaders(view.reverseRange(null, null));
+        assertConvertsPlainToHeaders(view.all());
+        assertConvertsPlainToHeaders(view.reverseAll());
+        assertConvertsPlainToHeaders(view.prefixScan("p", new StringSerializer()));
+    }
+
 }

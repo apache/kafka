@@ -17,11 +17,18 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +41,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -185,4 +193,29 @@ public class TimestampedKeyValueStoreBuilderTest {
         assertEquals("storeSupplier's metricsScope can't be null", e.getMessage());
     }
 
+    @Test
+    public void inMemoryMarkerShouldPropagateReadOnlyToWrappedStore() {
+        setUpWithoutInner();
+        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("name"));
+        final TimestampedKeyValueStore<String, String> store =
+            builder.withLoggingDisabled().withCachingDisabled().build();
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(), Serdes.String(), Serdes.String(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        store.init(context, store);
+        try {
+            store.put("k", ValueAndTimestamp.make("v", 10L));
+
+            final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> committedView =
+                store.readOnly(IsolationLevel.READ_COMMITTED);
+            final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> uncommittedView =
+                store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+
+            assertNotSame(store, committedView);
+            assertEquals("v", uncommittedView.get("k").value(),
+                "READ_UNCOMMITTED view must see the staged write through the in-memory marker");
+        } finally {
+            store.close();
+        }
+    }
 }
