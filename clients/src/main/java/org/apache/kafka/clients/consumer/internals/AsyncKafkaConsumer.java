@@ -2260,8 +2260,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
-            if (listener != null)
-                subscriptions.setRebalanceListener(listener, this);
+            subscriptions.setRebalanceListenerFromSubscribe(listener, this);
             log.info("Subscribed to pattern: '{}'", pattern);
             applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(
                 pattern,
@@ -2282,8 +2281,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfGroupIdNotDefined();
             throwIfSubscriptionPatternIsInvalid(pattern);
-            if (listener != null)
-                subscriptions.setRebalanceListener(listener, this);
+            subscriptions.setRebalanceListenerFromSubscribe(listener, this);
             log.info("Subscribing to regular expression {}", pattern);
             applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
                 pattern,
@@ -2320,8 +2318,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
-                if (listener != null)
-                    subscriptions.setRebalanceListener(listener, this);
+                subscriptions.setRebalanceListenerFromSubscribe(listener, this);
 
                 for (TopicPartition tp : subscriptions.assignedPartitions()) {
                     if (topics.contains(tp.topic()))

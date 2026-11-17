@@ -510,8 +510,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 throwIfNoAssignorsConfigured();
 
-                if (listener != null)
-                    subscriptions.setRebalanceListener(listener, this);
+                subscriptions.setRebalanceListenerFromSubscribe(listener, this);
 
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
@@ -591,8 +590,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
-            if (listener != null)
-                subscriptions.setRebalanceListener(listener, this);
+            subscriptions.setRebalanceListenerFromSubscribe(listener, this);
             subscriptions.subscribe(pattern);
             coordinator.updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
