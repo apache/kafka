@@ -358,6 +358,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return StreamsGroupTopologyDescriptionUpdateRequest.parse(readable, apiVersion);
             case UNREGISTER_CONTROLLER:
                 return UnregisterControllerRequest.parse(readable, apiVersion);
+            case STOP_MIRROR_TOPICS:
+                return StopMirrorTopicsRequest.parse(readable, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
