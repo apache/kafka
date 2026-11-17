@@ -55,7 +55,6 @@ public class KafkaRebalanceListenerDemo {
     private static final String TOPIC_NAME = "rebalance-listener-demo";
     private static final String GROUP_NAME = "rebalance-listener-group";
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(1);
-    private static final Duration CALLBACK_OPERATION_TIMEOUT = Duration.ofSeconds(10);
 
     public static void main(String[] args) {
         if (args.length > 1) {
@@ -171,9 +170,9 @@ public class KafkaRebalanceListenerDemo {
             // Each poll batch is processed synchronously, so positions reflect the next offsets to consume.
             Map<TopicPartition, OffsetAndMetadata> revokedOffsets = new HashMap<>();
             for (TopicPartition partition : partitions) {
-                revokedOffsets.put(partition, new OffsetAndMetadata(consumer.position(partition, CALLBACK_OPERATION_TIMEOUT)));
+                revokedOffsets.put(partition, new OffsetAndMetadata(consumer.position(partition)));
             }
-            consumer.commitSync(revokedOffsets, CALLBACK_OPERATION_TIMEOUT);
+            consumer.commitSync(revokedOffsets);
             Utils.printOut("[onPartitionsRevoked] clientId=%s committed %s before revocation", clientId, revokedOffsets);
         }
 
@@ -187,7 +186,7 @@ public class KafkaRebalanceListenerDemo {
 
             Map<TopicPartition, Long> positions = new HashMap<>();
             for (TopicPartition partition : partitions) {
-                positions.put(partition, consumer.position(partition, CALLBACK_OPERATION_TIMEOUT));
+                positions.put(partition, consumer.position(partition));
             }
             Utils.printOut("[onPartitionsAssigned] clientId=%s assigned %s at positions %s",
                 clientId, partitions, positions);

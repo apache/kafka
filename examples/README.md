@@ -21,10 +21,14 @@ Create the two-partition topic used by the demo:
 bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic rebalance-listener-demo --partitions 2
 ```
 
-Run the demo in two terminals, starting the second instance after the first reports its assignment:
+Choose a protocol and run the same command in two terminals, starting the second instance after the first reports its assignment:
 
 ```bash
+# Classic protocol (default)
 examples/bin/java-rebalance-listener-demo.sh
+
+# Consumer protocol
+examples/bin/java-rebalance-listener-demo.sh consumer
 ```
 
 Stop either consumer with `Ctrl+C` to observe another rebalance.
@@ -33,7 +37,7 @@ To observe `onPartitionsLost` on Linux/macOS, ensure both consumers are running,
 Wait for its session to time out and the other consumer to take over its partitions, then run `fg` in the original terminal to resume it.
 The callback logs the lost partitions without committing offsets, since the consumer no longer owns them.
 
-The demo uses `classic` by default. To compare callback behavior with the `consumer` protocol, stop both instances and restart them with the `consumer` argument.
+To compare callback behavior across protocols, stop both instances and restart them with the other protocol.
 
 ## Exactly-once demo
 
