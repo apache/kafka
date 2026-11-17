@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,28 +46,10 @@ public final class AssignorHelpers {
      * @return A deep copy of the assignment.
      */
     public static Map<Uuid, Set<Integer>> deepCopyAssignment(Map<Uuid, Set<Integer>> map) {
-        Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
+        Map<Uuid, Set<Integer>> copy = Utils.newHashMap(map.size());
         for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
             copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
         return copy;
-    }
-
-    /**
-     * Constructs a HashNap with a known capacity. This is equivalent to HashMap.newHashMap which is introduced in Java 19.
-     * @param numMappings The expected number of mappings.
-     * @return The newly created map.
-     */
-    static <K, V> HashMap<K, V> newHashMap(int numMappings) {
-        return new HashMap<>((int) (((numMappings + 1) / 0.75f) + 1));
-    }
-
-    /**
-     * Constructs a HashSet with a known capacity. This is equivalent to HashSet.newHashSet which is introduced in Java 19.
-     * @param numElements The expected number of elements.
-     * @return The newly created set.
-     */
-    static <K> HashSet<K> newHashSet(int numElements) {
-        return new HashSet<>((int) (((numElements + 1) / 0.75f) + 1));
     }
 }

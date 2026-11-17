@@ -158,12 +158,7 @@ public class SelectorTest {
         String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
-        try {
-            selector.send(createSend(node, "test2"));
-            fail("IllegalStateException not thrown when sending a request with one in flight");
-        } catch (IllegalStateException e) {
-            // Expected exception
-        }
+        assertThrows(IllegalStateException.class, () -> selector.send(createSend(node, "test2")), "IllegalStateException not thrown when sending a request with one in flight");
         selector.poll(0);
         assertTrue(selector.disconnected().containsKey(node), "Channel not closed");
         assertEquals(ChannelState.FAILED_SEND, selector.disconnected().get(node));
@@ -456,6 +451,9 @@ public class SelectorTest {
         String id = "0";
         selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelConnected(selector, id);
+        NetworkTestUtils.waitForChannelReady(selector, id);
+        // Complete an application round trip so TLS 1.3 post-handshake messages are processed before the idle window.
+        assertEquals("", blockingRequest(id, ""));
         time.sleep(CONNECTION_MAX_IDLE_MS + 1_000);
         selector.poll(0);
 

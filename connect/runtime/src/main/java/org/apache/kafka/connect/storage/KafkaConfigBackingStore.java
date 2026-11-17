@@ -112,7 +112,7 @@ import static org.apache.kafka.connect.util.ConnectUtils.className;
  *   <li> {@link RestartRequest Restart requests}: records representing requests to restart a connector and / or its
  *   tasks. See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308623">KIP-745</a> for more
  *   details.
- *   <li> Task count records: an integer value that that tracks the number of task producers (for source connectors) that
+ *   <li> Task count records: an integer value that tracks the number of task producers (for source connectors) that
  *   will have to be fenced out if a connector is reconfigured before bringing up any tasks with the new set of task
  *   configurations. This is required for exactly-once support for source connectors, see
  *   <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>
@@ -430,6 +430,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         ConnectUtils.addMetricsContextProperties(producerProps, workerConfig, kafkaClusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
         return producerProps;
     }
 
@@ -777,6 +778,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
                     consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
@@ -788,6 +790,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).configStorageTopicSettings()

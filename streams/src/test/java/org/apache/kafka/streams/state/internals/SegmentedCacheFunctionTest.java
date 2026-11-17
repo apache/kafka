@@ -27,8 +27,8 @@ import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SegmentedCacheFunctionTest {
 
@@ -96,10 +96,7 @@ class SegmentedCacheFunctionTest {
     @ParameterizedTest
     @MethodSource("provideKeysAndSchemas")
     void testKey(final Bytes cacheKey, final Bytes key, final SegmentedBytesStore.KeySchema keySchema) {
-        assertThat(
-                createCacheFunction(keySchema).key(cacheKey),
-                equalTo(key)
-        );
+        assertEquals(key, createCacheFunction(keySchema).key(cacheKey));
     }
 
     @ParameterizedTest
@@ -109,11 +106,11 @@ class SegmentedCacheFunctionTest {
         final Bytes actualCacheKey = createCacheFunction(keySchema).cacheKey(key);
         final ByteBuffer buffer = ByteBuffer.wrap(actualCacheKey.get());
 
-        assertThat(buffer.getLong(), equalTo(segmentId));
+        assertEquals(segmentId, buffer.getLong());
 
         final byte[] actualKey = new byte[buffer.remaining()];
         buffer.get(actualKey);
-        assertThat(Bytes.wrap(actualKey), equalTo(key));
+        assertEquals(key, Bytes.wrap(actualKey));
     }
 
     @ParameterizedTest
@@ -121,59 +118,34 @@ class SegmentedCacheFunctionTest {
     void testRoundTripping(final Bytes cacheKey, final Bytes key, final SegmentedBytesStore.KeySchema keySchema) {
         final SegmentedCacheFunction cacheFunction = createCacheFunction(keySchema);
 
-        assertThat(
-            cacheFunction.key(cacheFunction.cacheKey(key)),
-            equalTo(key)
-        );
+        assertEquals(key, cacheFunction.key(cacheFunction.cacheKey(key)));
 
-        assertThat(
-            cacheFunction.cacheKey(cacheFunction.key(cacheKey)),
-            equalTo(cacheKey)
-        );
+        assertEquals(cacheKey, cacheFunction.cacheKey(cacheFunction.key(cacheKey)));
     }
 
     @ParameterizedTest
     @MethodSource("provideKeysForBoundaryChecks")
     void compareSegmentedKeys(final Bytes key, final SegmentedBytesStore.KeySchema keySchema, final Bytes sameKeyInPriorSegment, final Bytes lowerKeyInSameSegment) {
         final SegmentedCacheFunction cacheFunction = createCacheFunction(keySchema);
-        assertThat(
-            "same key in same segment should be ranked the same",
-            cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(key),
-                key
-            ) == 0
-        );
+        assertEquals(
+            0,
+            cacheFunction.compareSegmentedKeys(cacheFunction.cacheKey(key), key),
+            "same key in same segment should be ranked the same");
 
-        assertThat(
-            "same keys in different segments should be ordered according to segment",
-            cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(sameKeyInPriorSegment),
-                key
-            ) < 0
-        );
+        assertTrue(
+            cacheFunction.compareSegmentedKeys(cacheFunction.cacheKey(sameKeyInPriorSegment), key) < 0,
+            "same keys in different segments should be ordered according to segment");
 
-        assertThat(
-            "same keys in different segments should be ordered according to segment",
-            cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(key),
-                sameKeyInPriorSegment
-            ) > 0
-        );
+        assertTrue(
+            cacheFunction.compareSegmentedKeys(cacheFunction.cacheKey(key), sameKeyInPriorSegment) > 0,
+            "same keys in different segments should be ordered according to segment");
 
-        assertThat(
-            "different keys in same segments should be ordered according to key",
-            cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(key),
-                lowerKeyInSameSegment
-            ) > 0
-        );
+        assertTrue(
+            cacheFunction.compareSegmentedKeys(cacheFunction.cacheKey(key), lowerKeyInSameSegment) > 0,
+            "different keys in same segments should be ordered according to key");
 
-        assertThat(
-            "different keys in same segments should be ordered according to key",
-            cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(lowerKeyInSameSegment),
-                key
-            ) < 0
-        );
+        assertTrue(
+            cacheFunction.compareSegmentedKeys(cacheFunction.cacheKey(lowerKeyInSameSegment), key) < 0,
+            "different keys in same segments should be ordered according to key");
     }
 }

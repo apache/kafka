@@ -56,7 +56,6 @@ import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -72,7 +71,6 @@ import org.rocksdb.WriteBatch;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -89,12 +87,9 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -458,15 +453,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                Arrays.asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -492,15 +483,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                Arrays.asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -681,9 +668,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions(""));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("").get(0));
     }
 
     @ParameterizedTest
@@ -721,11 +708,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("A"));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("A").get(0));
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("B"));
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("B").get(0));
     }
 
     @ParameterizedTest
@@ -768,8 +755,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
             assertEquals(expected, results);
         }
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("A").get(0));
     }
 
     @ParameterizedTest
@@ -792,7 +779,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
         bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
-        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), bytesStore.getPosition());
     }
 
     @ParameterizedTest

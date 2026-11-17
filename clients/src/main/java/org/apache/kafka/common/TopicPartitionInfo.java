@@ -117,6 +117,7 @@ public class TopicPartitionInfo {
         return lastKnownElr;
     }
 
+    @Override
     public String toString() {
         String elrString = elr != null ? elr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";
         String lastKnownElrString = lastKnownElr != null ? lastKnownElr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";

@@ -176,8 +176,7 @@ class StreamsBrokerBounceTest(Test):
             server_prop_overrides.append(
                 ["group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS])
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics,
-                                  server_prop_overrides=server_prop_overrides,
-                                  use_streams_groups=use_streams_groups)
+                                  server_prop_overrides=server_prop_overrides)
         self.kafka.start()
 
         # allow some time for topics to be created

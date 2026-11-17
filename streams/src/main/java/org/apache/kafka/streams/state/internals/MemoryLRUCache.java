@@ -96,17 +96,25 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
-                synchronized (position) {
+                // put() takes the store monitor and then the position lock (KAFKA-19629); let it
+                // do the locking per record so readers can interleave between records, and update
+                // the position under its own lock afterwards (position may briefly trail the data,
+                // which IQ bound checks treat conservatively).
+                // finally: keep the flag exception-safe, else a mid-batch failure suppresses eviction forever.
+                try {
                     for (final ConsumerRecord<byte[], byte[]> record : records) {
                         put(Bytes.wrap(record.key()), record.value());
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                        synchronized (position) {
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
+                } finally {
+                    restoring = false;
                 }
-                restoring = false;
             }
         );
         this.context = stateStoreContext;

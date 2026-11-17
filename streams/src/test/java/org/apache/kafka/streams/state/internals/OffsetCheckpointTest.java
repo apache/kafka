@@ -33,10 +33,6 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeEntry;
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeIntLine;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -96,13 +92,13 @@ public class OffsetCheckpointTest {
 
         checkpoint.write(offsets);
 
-        assertThat(file.exists(), is(true));
-        assertThat(offsets, is(checkpoint.read()));
+        assertTrue(file.exists());
+        assertEquals(offsets, checkpoint.read());
 
         checkpoint.write(Collections.emptyMap());
 
-        assertThat(file.exists(), is(false));
-        assertThat(Collections.emptyMap(), is(checkpoint.read()));
+        assertFalse(file.exists());
+        assertEquals(Map.of(), checkpoint.read());
     }
 
     @Test
@@ -133,7 +129,7 @@ public class OffsetCheckpointTest {
             checkpoint.write(offsetsToWrite);
 
             final Map<TopicPartition, Long> readOffsets = checkpoint.read();
-            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(sentinelOffset));
+            assertEquals(sentinelOffset, readOffsets.get(new TopicPartition(topic, 1)));
         } finally {
             checkpoint.delete();
         }
@@ -164,7 +160,7 @@ public class OffsetCheckpointTest {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(notExistedFile);
         
         final IOException e = assertThrows(IOException.class, () -> checkpoint.write(offsetsToWrite));
-        assertThat(e.getMessage(), containsString("No such file or directory"));
+        assertTrue(e.getMessage().contains("No such file or directory"));
     }
 
     /**

@@ -38,7 +38,6 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -46,9 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -184,11 +183,11 @@ public abstract class AbstractJoinIntegrationTest {
                     }
 
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
-                    assertThat(output, equalTo(updatedExpected));
+                    assertEquals(updatedExpected, output);
                     expectedFinalResult = updatedExpected.get(expected.size() - 1);
                 } else {
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
-                    assertThat(output, equalTo(Collections.emptyList()));
+                    assertTrue(output.isEmpty());
                 }
             }
 
@@ -228,7 +227,7 @@ public abstract class AbstractJoinIntegrationTest {
 
             final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
 
-            assertThat(output.get(output.size() - 1), equalTo(updatedExpectedFinalResult));
+            assertEquals(updatedExpectedFinalResult, output.get(output.size() - 1));
 
             if (storeName != null) {
                 checkQueryableStore(storeName, updatedExpectedFinalResult, driver);
@@ -258,7 +257,7 @@ public abstract class AbstractJoinIntegrationTest {
                     }
 
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
-                    assertThat(output, equalTo(updatedExpected));
+                    assertEquals(updatedExpected, output);
                 }
             }
         }
@@ -270,10 +269,10 @@ public abstract class AbstractJoinIntegrationTest {
         try (final KeyValueIterator<Long, ValueAndTimestamp<String>> all = store.all()) {
             final KeyValue<Long, ValueAndTimestamp<String>> onlyEntry = all.next();
 
-            assertThat(onlyEntry.key, is(expectedFinalResult.key()));
-            assertThat(onlyEntry.value.value(), is(expectedFinalResult.value()));
-            assertThat(onlyEntry.value.timestamp(), is(expectedFinalResult.timestamp()));
-            assertThat(all.hasNext(), is(false));
+            assertEquals(expectedFinalResult.key(), onlyEntry.key);
+            assertEquals(expectedFinalResult.value(), onlyEntry.value.value());
+            assertEquals(expectedFinalResult.timestamp(), onlyEntry.value.timestamp());
+            assertFalse(all.hasNext());
         }
     }
 

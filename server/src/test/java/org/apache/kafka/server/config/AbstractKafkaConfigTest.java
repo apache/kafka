@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -49,7 +48,7 @@ public class AbstractKafkaConfigTest {
 
     @Test
     public void testPopulateSynonymsOnEmptyMap() {
-        assertEquals(Collections.emptyMap(), AbstractKafkaConfig.populateSynonyms(Collections.emptyMap()));
+        assertEquals(Map.of(), AbstractKafkaConfig.populateSynonyms(Map.of()));
     }
 
     @SuppressWarnings("removal") // this test sets broker.id, which is deprecated (KIP-1232) but still works until 5.0

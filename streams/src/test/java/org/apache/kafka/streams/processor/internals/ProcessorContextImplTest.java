@@ -70,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -930,11 +929,6 @@ public class ProcessorContextImplTest {
     }
 
     private void checkThrowsUnsupportedOperation(final Runnable check, final String name) {
-        try {
-            check.run();
-            fail(name + " should throw exception");
-        } catch (final UnsupportedOperationException e) {
-            //ignore.
-        }
+        assertThrows(UnsupportedOperationException.class, check::run, name + " should throw exception");
     }
 }

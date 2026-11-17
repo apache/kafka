@@ -133,6 +133,55 @@ public class RequestContextTest {
     }
 
     @Test
+    public void testInvalidRequestForImplicitHashCollectionWithMaxPreAllocation() throws UnknownHostException {
+        short version = (short) 7; // non-flexible, name-based and no topicId
+        int actualTopicCount = 1010; // (greater than the 1000 pre-alloc cap)
+        ProduceRequestData data = new ProduceRequestData().setAcks((short) -1).setTimeoutMs(1);
+        for (int i = 0; i < actualTopicCount; i++) {
+            data.topicData().add(new ProduceRequestData.TopicProduceData()
+                    .setName("t" + i)
+                    .setPartitionData(Collections.emptyList()));
+        }
+        ByteBuffer buffer = serialize(version, data);
+
+        // Inflate the declared topic_data array length.
+        buffer.putInt(8, 5000);
+
+        RequestHeader header = new RequestHeader(ApiKeys.PRODUCE, version, "console-producer", 3);
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
+                KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+                ClientInformation.EMPTY, true);
+
+        assertThrows(InvalidRequestException.class, () -> context.parseRequest(buffer));
+    }
+
+    @Test
+    public void testProduceRequestV3WithHugeDeclaredTopicCountIsRejected() throws UnknownHostException {
+        short version = 3; // ProduceRequestData.LOWEST_SUPPORTED_VERSION
+        int declaredTopicCount = 89_999_978;
+
+        // Real ~90MB buffer, backed by declaredTopicCount padding bytes, so the pre-existing
+        // count-vs-remaining-bytes guard alone would let this through and the
+        // new hard cap is what has to catch it.
+        ByteBuffer buffer = ByteBuffer.allocate(12 + declaredTopicCount);
+        buffer.putShort((short) -1); // null transactionalId
+        buffer.putShort((short) -1); // acks
+        buffer.putInt(1); // timeoutMs
+        buffer.putInt(declaredTopicCount); // topic_data declared length
+        buffer.position(12 + declaredTopicCount);
+        buffer.flip();
+
+        RequestHeader header = new RequestHeader(ApiKeys.PRODUCE, version, "console-producer", 3);
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
+                KafkaPrincipal.ANONYMOUS, new ListenerName("plaintext"), SecurityProtocol.PLAINTEXT,
+                ClientInformation.EMPTY, false);
+
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.parseRequest(buffer));
+        assertTrue(e.getCause().getMessage().contains("exceeds the maximum allowed size"),
+                "Expected a hard-cap rejection, but got: " + e.getCause().getMessage());
+    }
+
+    @Test
     public void testInvalidRequestForArrayList() throws UnknownHostException {
         short version = (short) 7; // choose a version with fixed length encoding, for simplicity
         ByteBuffer corruptBuffer = produceRequest(version);
@@ -150,6 +199,25 @@ public class RequestContextTest {
                 "Tried to allocate a collection of size 2147483647, but there are only 8 bytes remaining.", msg);
     }
 
+    @Test
+    public void testKeyedCollectionAboveInitialCapacityStillParses() {
+        short version = (short) 7; // non-flexible, name-based and no topicId
+        int count = 1010;
+        ProduceRequestData data = new ProduceRequestData()
+                .setAcks((short) -1)
+                .setTimeoutMs(1);
+        for (int i = 0; i < count; i++) {
+            data.topicData().add(new ProduceRequestData.TopicProduceData()
+                    .setName("t" + i)
+                    .setPartitionData(Collections.emptyList()));
+        }
+
+        ByteBuffer buffer = serialize(version, data);
+        ProduceRequestData parsed = new ProduceRequestData(new ByteBufferAccessor(buffer), version);
+
+        assertEquals(count, parsed.topicData().size());
+    }
+
     private ByteBuffer produceRequest(short version) {
         ProduceRequestData data = new ProduceRequestData()
                 .setAcks((short) -1)
@@ -165,8 +233,8 @@ public class RequestContextTest {
 
     private ByteBuffer serialize(short version, ApiMessage data) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        data.size(cache, version);
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int size = data.size(cache, version);
+        ByteBuffer buffer = ByteBuffer.allocate(size);
         data.write(new ByteBufferAccessor(buffer), cache, version);
         buffer.flip();
         return buffer;

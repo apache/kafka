@@ -203,12 +203,14 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         producerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
                     consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
@@ -220,6 +222,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
         NewTopic topicDescription = newTopicDescription(topic, config);
 
         this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, Time.SYSTEM);

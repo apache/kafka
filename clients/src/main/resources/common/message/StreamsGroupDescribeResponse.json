@@ -21,6 +21,9 @@
   // and AssignorName (KIP-1357).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
   // - NOT_COORDINATOR (version 0+)

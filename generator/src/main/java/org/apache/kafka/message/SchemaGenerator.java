@@ -215,15 +215,13 @@ final class SchemaGenerator {
         return fieldTypeToSchemaType(field.type(),
             field.nullableVersions().contains(version),
             version,
-            fieldFlexibleVersions,
-            field.zeroCopy());
+            fieldFlexibleVersions);
     }
 
     private String fieldTypeToSchemaType(FieldType type,
                                          boolean nullable,
                                          short version,
-                                         Versions fieldFlexibleVersions,
-                                         boolean zeroCopy) {
+                                         Versions fieldFlexibleVersions) {
         if (type instanceof FieldType.BoolFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -305,14 +303,14 @@ final class SchemaGenerator {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions));
 
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions));
             }
         } else if (type.isStruct()) {
             if (nullable) {

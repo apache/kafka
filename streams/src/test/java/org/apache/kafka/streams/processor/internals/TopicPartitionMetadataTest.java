@@ -21,8 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TopicPartitionMetadataTest {
 
@@ -35,8 +34,8 @@ public class TopicPartitionMetadataTest {
 
         final TopicPartitionMetadata topicMeta = new TopicPartitionMetadata(100L, metadata);
 
-        assertThat(topicMeta.partitionTime(), is(100L));
-        assertThat(topicMeta.processorMetadata(), is(metadata));
+        assertEquals(100L, topicMeta.partitionTime());
+        assertEquals(metadata, topicMeta.processorMetadata());
     }
 
     @Test
@@ -49,8 +48,8 @@ public class TopicPartitionMetadataTest {
 
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
 
-        assertThat(topicMeta.partitionTime(), is(100L));
-        assertThat(topicMeta.processorMetadata(), is(new ProcessorMetadata()));
+        assertEquals(100L, topicMeta.partitionTime());
+        assertEquals(new ProcessorMetadata(), topicMeta.processorMetadata());
     }
 
     @Test
@@ -64,7 +63,7 @@ public class TopicPartitionMetadataTest {
         final String serializedString = expected.encode();
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
 
-        assertThat(topicMeta, is(expected));
+        assertEquals(expected, topicMeta);
     }
 
     @Test
@@ -73,7 +72,7 @@ public class TopicPartitionMetadataTest {
         final String serializedString = expected.encode();
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode(serializedString);
 
-        assertThat(topicMeta, is(expected));
+        assertEquals(expected, topicMeta);
     }
 
     @Test
@@ -81,7 +80,7 @@ public class TopicPartitionMetadataTest {
         final TopicPartitionMetadata expected = new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata());
         final TopicPartitionMetadata topicMeta = TopicPartitionMetadata.decode("");
 
-        assertThat(topicMeta, is(expected));
+        assertEquals(expected, topicMeta);
     }
 
     @Test
@@ -91,8 +90,8 @@ public class TopicPartitionMetadataTest {
 
         final TopicPartitionMetadata decoded = TopicPartitionMetadata.decode(encodedString);
 
-        assertThat(decoded.partitionTime(), is(RecordQueue.UNKNOWN));
-        assertThat(decoded.processorMetadata(), is(new ProcessorMetadata()));
+        assertEquals(RecordQueue.UNKNOWN, decoded.partitionTime());
+        assertEquals(new ProcessorMetadata(), decoded.processorMetadata());
     }
 
     @Test
@@ -101,7 +100,7 @@ public class TopicPartitionMetadataTest {
 
         final TopicPartitionMetadata decoded = TopicPartitionMetadata.decode(invalidBase64String);
 
-        assertThat(decoded.partitionTime(), is(RecordQueue.UNKNOWN));
-        assertThat(decoded.processorMetadata(), is(new ProcessorMetadata()));
+        assertEquals(RecordQueue.UNKNOWN, decoded.partitionTime());
+        assertEquals(new ProcessorMetadata(), decoded.processorMetadata());
     }
 }

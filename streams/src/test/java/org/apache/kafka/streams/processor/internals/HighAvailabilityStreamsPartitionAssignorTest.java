@@ -68,11 +68,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -203,17 +200,13 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         // The tasks were returned to their prior owner
         final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
         Collections.sort(sortedExpectedTasks);
-        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
-        assertThat(newConsumerActiveTasks, empty());
+        assertEquals(sortedExpectedTasks, firstConsumerActiveTasks);
+        assertTrue(newConsumerActiveTasks.isEmpty());
 
         // There is a rebalance scheduled
-        assertThat(
-            time.milliseconds() + rebalanceInterval,
-            anyOf(
-                is(firstConsumerUserData.nextRebalanceMs()),
-                is(newConsumerUserData.nextRebalanceMs())
-            )
-        );
+        final long nextScheduledRebalance = time.milliseconds() + rebalanceInterval;
+        assertTrue(nextScheduledRebalance == firstConsumerUserData.nextRebalanceMs()
+            || nextScheduledRebalance == newConsumerUserData.nextRebalanceMs());
     }
 
     @Test
@@ -257,18 +250,18 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
         final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
         Collections.sort(sortedExpectedTasks);
-        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
-        assertThat(newConsumerActiveTasks, empty());
+        assertEquals(sortedExpectedTasks, firstConsumerActiveTasks);
+        assertTrue(newConsumerActiveTasks.isEmpty());
 
-        assertThat(referenceContainer.assignmentErrorCode.get(), equalTo(AssignorError.NONE.code()));
+        assertEquals(AssignorError.NONE.code(), referenceContainer.assignmentErrorCode.get());
 
         final long nextScheduledRebalanceOnThisClient =
             AssignmentInfo.decode(assignments.get(firstConsumer).userData()).nextRebalanceMs();
         final long nextScheduledRebalanceOnOtherClient =
             AssignmentInfo.decode(assignments.get(newConsumer).userData()).nextRebalanceMs();
 
-        assertThat(nextScheduledRebalanceOnThisClient, equalTo(time.milliseconds() + rebalanceInterval));
-        assertThat(nextScheduledRebalanceOnOtherClient, equalTo(Long.MAX_VALUE));
+        assertEquals(time.milliseconds() + rebalanceInterval, nextScheduledRebalanceOnThisClient);
+        assertEquals(Long.MAX_VALUE, nextScheduledRebalanceOnOtherClient);
     }
 
 

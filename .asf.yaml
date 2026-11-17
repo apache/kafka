@@ -38,15 +38,15 @@ github:
   # Read more here: https://github.com/apache/infrastructure-asfyaml
   collaborators:
     - aliehsaeedii
+    - chickenchickenlove
     - DL1231
+    - gabriellefu
     - lucliu1108
     - majialoong
     - mingyen066
+    - muralibasani
     - nicktelford
-    - Nikita-Shupletsov
     - see-quick
-    - sjhajharia
-    - smjn
   enabled_merge_buttons:
     squash: true
     squash_commit_message: PR_TITLE_AND_DESC

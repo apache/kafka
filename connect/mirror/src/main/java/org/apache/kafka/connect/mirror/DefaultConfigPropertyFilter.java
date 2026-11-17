@@ -42,6 +42,8 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
                                                                    + "log.message.timestamp.after.max.ms, "
                                                                    + "message.timestamp.type, "
                                                                    + "unclean.leader.election.enable, "
+                                                                   + "mirror.unclean.leader.election.enable, "
+                                                                   + "mirror.replication.throttled.replicas, "
                                                                    + "min.insync.replicas";
     private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
     private String useDefaultsFrom = USE_DEFAULTS_FROM_DEFAULT;
