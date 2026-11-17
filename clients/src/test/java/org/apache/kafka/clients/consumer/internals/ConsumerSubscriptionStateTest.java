@@ -57,7 +57,10 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class ConsumerSubscriptionStateTest {
 
@@ -597,6 +600,41 @@ public class ConsumerSubscriptionStateTest {
         state.subscribe(Set.of(topic));
         state.unsubscribe();
         assertTrue(state.hasRebalanceListener());
+    }
+
+    @Test
+    public void testSubscribeWithoutListenerRemovesListenerFromSubscribe() {
+        state.setRebalanceListenerFromSubscribe(mock(RebalanceListener.class), consumer);
+        state.setRebalanceListenerFromSubscribe(null, consumer);
+        assertFalse(state.hasRebalanceListener());
+    }
+
+    @Test
+    public void testSubscribeWithoutListenerKeepsListenerFromSetter() {
+        state.setRebalanceListener(mock(RebalanceListener.class), consumer);
+        state.setRebalanceListenerFromSubscribe(null, consumer);
+        assertTrue(state.hasRebalanceListener());
+    }
+
+    @Test
+    public void testSubscribeWithoutListenerKeepsSetterListenerThatOverrodeSubscribe() {
+        RebalanceListener subscribeListener = mock(RebalanceListener.class);
+        RebalanceListener setterListener = mock(RebalanceListener.class);
+        state.setRebalanceListenerFromSubscribe(subscribeListener, consumer);
+        state.setRebalanceListener(setterListener, consumer);
+        state.setRebalanceListenerFromSubscribe(null, consumer);
+
+        state.onPartitionsAssigned(partitions);
+        verify(setterListener).onPartitionsAssigned(any(), any());
+        verify(subscribeListener, never()).onPartitionsAssigned(any(), any());
+    }
+
+    @Test
+    public void testSubscribeWithoutListenerRemovesSubscribeListenerThatOverrodeSetter() {
+        state.setRebalanceListener(mock(RebalanceListener.class), consumer);
+        state.setRebalanceListenerFromSubscribe(mock(RebalanceListener.class), consumer);
+        state.setRebalanceListenerFromSubscribe(null, consumer);
+        assertFalse(state.hasRebalanceListener());
     }
 
     @Test
