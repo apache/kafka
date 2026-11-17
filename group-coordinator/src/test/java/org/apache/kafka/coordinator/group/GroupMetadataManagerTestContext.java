@@ -1403,10 +1403,15 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        return groupMetadataManager.classicGroupHeartbeat(
+        CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.classicGroupHeartbeat(
             context,
             request
         );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
+        return result;
     }
 
     public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
