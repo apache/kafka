@@ -296,10 +296,12 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * growable stream growing mid-write. The estimate read here can differ from the one the batch reads in
      * its constructor moments later, which {@link ChunkedProducerBatch#tryAppend} accepts for the same reason.
      * <p>
-     * The compressed size is capped at the pool's total memory. {@code KafkaProducer.ensureValidRecordSize}
-     * bounds only the uncompressed upper bound by {@code buffer.memory}, so an estimate near or above 1.0
-     * could otherwise size a record that passed that check past the whole pool, which
-     * {@link BufferPool#allocateChunks} rejects. The stream is growable, so the cap is safe.
+     * The compressed size is capped at the pool's total memory in whole chunks.
+     * {@code KafkaProducer.ensureValidRecordSize} bounds only the uncompressed upper bound by
+     * {@code buffer.memory}, so an estimate near or above 1.0 could otherwise size a record that passed that
+     * check past the whole pool, which {@link BufferPool#allocateChunks} rejects. That method rounds the
+     * request up to whole chunks and {@code buffer.memory} need not be a multiple of the chunk size, so the
+     * cap is rounded down to whole chunks. The stream is growable, so the cap is safe.
      *
      * @param firstRecordUpperBound the record's uncompressed upper bound, batch header included
      */
@@ -309,7 +311,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         int batchHeaderSize = AbstractRecords.recordBatchHeaderSizeInBytes(RecordBatch.CURRENT_MAGIC_VALUE, compression.type());
         int estimate = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(batchHeaderSize,
                 firstRecordUpperBound - batchHeaderSize, CompressionRatioEstimator.estimation(topic, compression.type()));
-        return (int) Math.min(estimate, chunkedFree.totalMemory());
+        long chunkSize = chunkedFree.poolableSize();
+        return (int) Math.min(estimate, chunkedFree.totalMemory() / chunkSize * chunkSize);
     }
 
     /**

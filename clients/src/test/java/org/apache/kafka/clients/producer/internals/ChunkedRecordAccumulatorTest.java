@@ -399,6 +399,60 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
+     * {@link BufferPool#allocateChunks} rounds a request up to whole chunks, and buffer.memory need not be a
+     * multiple of the chunk size. So a compressed first record whose estimate fits the pool's total memory
+     * can still need more whole chunks than the pool holds. Its allocation must be capped at the pool's whole
+     * chunks rather than be rejected, and the incompressible data past them must grow onto the heap.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testCompressedFirstRecordSizeIsCappedAtPoolWholeChunks(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 16384;
+        long totalMemory = 64L * chunkSize + 200;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.95f);
+        try {
+            // Preconditions: the record passes ensureValidRecordSize and its estimate fits the pool, but the
+            // estimate rounded up to whole chunks exceeds the pool.
+            byte[] value = new byte[16496];
+            new Random(42).nextBytes(value);
+            int upperBound = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                    compression.type(), key, value, Record.EMPTY_HEADERS);
+            assertTrue(upperBound <= totalMemory, "the upper bound of " + upperBound + " bytes must fit the pool");
+            int estimated = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                    upperBound - DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 0.95f);
+            assertTrue(estimated <= totalMemory, "the estimate of " + estimated + " bytes must fit the pool");
+            long estimatedInChunks = (estimated + chunkSize - 1L) / chunkSize * chunkSize;
+            assertTrue(estimatedInChunks > totalMemory,
+                    "the estimate of " + estimatedInChunks + " bytes in whole chunks must exceed the pool");
+
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // All of the pool's whole chunks back the batch, leaving only the remainder.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(1, batch.recordCount);
+            assertEquals(totalMemory - 64L * chunkSize, pool.availableMemory());
+
+            batch.close();
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            assertTrue(stream.fallbackAllocations() > 0, "the output past the pool's chunks should grow onto the heap");
+            assertArrayEquals(value, readBytes(batch.records().records().iterator().next().value()));
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
      * The opposite of an estimate above 1.0: a topic whose compression ratio estimate is far below 1.0
      * but whose data doesn't compress. The batch's fullness checks trust the estimate, so they would admit
      * many times batch.size of uncompressed data, while the compressor writes roughly all of it. With ample
