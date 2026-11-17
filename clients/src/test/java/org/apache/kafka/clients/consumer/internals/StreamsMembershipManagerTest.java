@@ -2255,8 +2255,8 @@ public class StreamsMembershipManagerTest {
 
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
-                .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Source topics are missing.")
         );
 
         final StreamsGroupHeartbeatResponse responseWithoutTasks = makeHeartbeatResponse(
@@ -2277,6 +2277,160 @@ public class StreamsMembershipManagerTest {
             false
         );
         future2.complete(null);
+    }
+
+    @Test
+    public void testAssignmentDelayedKeepsReadyGroupReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+
+        final StreamsGroupHeartbeatResponse delayedResponse = makeHeartbeatResponse(
+            null,
+            null,
+            null,
+            MEMBER_EPOCH,
+            List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval.")
+            )
+        );
+        membershipManager.onHeartbeatSuccess(delayedResponse);
+        membershipManager.poll(time.milliseconds());
+
+        verify(backgroundEventHandler, times(onTasksAssignedCallbackNeededAddCount)).add(any(StreamsOnTasksAssignedCallbackNeededEvent.class));
+        verifyInStateAcknowledging(membershipManager);
+    }
+
+    @Test
+    public void testAssignmentDelayedWithMissingTopicsMakesReadyGroupNotReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+
+        final StreamsGroupHeartbeatResponse delayedResponse = makeHeartbeatResponse(
+            null,
+            null,
+            null,
+            MEMBER_EPOCH,
+            List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval."),
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                    .setStatusDetail("One or more internal topics are missing.")
+            )
+        );
+        membershipManager.onHeartbeatSuccess(delayedResponse);
+        membershipManager.poll(time.milliseconds());
+
+        verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), false);
+    }
+
+    @Test
+    public void testAssignmentDelayedWhileReconcilingKeepsTargetReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        // The target assignment is ready, while the current assignment is not ready until the callback completes.
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final CompletableFuture<Void> onTasksAssignedFuture =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true);
+
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(null, null, null, MEMBER_EPOCH, List.of(assignmentDelayedStatus())));
+        membershipManager.poll(time.milliseconds());
+        acknowledging(onTasksAssignedFuture);
+        membershipManager.onHeartbeatRequestGenerated();
+        membershipManager.poll(time.milliseconds());
+
+        verify(backgroundEventHandler, times(onTasksAssignedCallbackNeededAddCount)).add(any(StreamsOnTasksAssignedCallbackNeededEvent.class));
+        verifyInStateStable(membershipManager);
+    }
+
+    @Test
+    public void testAssignmentDelayedWhileReconcilingKeepsTargetNotReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+        // The target assignment is not ready, while the current assignment stays ready until the callback completes.
+        reconcile(makeHeartbeatResponse(
+            List.of(taskIds(SUBTOPOLOGY_ID_0, List.of(PARTITION_0))),
+            List.of(),
+            List.of(),
+            MEMBER_EPOCH,
+            List.of(missingInternalTopicsStatus())
+        ));
+        final CompletableFuture<Void> onTasksAssignedFuture =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), false);
+
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(null, null, null, MEMBER_EPOCH, List.of(assignmentDelayedStatus())));
+        membershipManager.poll(time.milliseconds());
+        acknowledging(onTasksAssignedFuture);
+        membershipManager.onHeartbeatRequestGenerated();
+        membershipManager.poll(time.milliseconds());
+
+        verify(backgroundEventHandler, times(onTasksAssignedCallbackNeededAddCount)).add(any(StreamsOnTasksAssignedCallbackNeededEvent.class));
+        verifyInStateStable(membershipManager);
+    }
+
+    @Test
+    public void testAssignmentDelayedWithUnchangedAssignmentKeepsStableMemberReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+        membershipManager.onHeartbeatRequestGenerated();
+        verifyInStateStable(membershipManager);
+
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(
+            List.of(taskIds(SUBTOPOLOGY_ID_0, List.of(PARTITION_0))),
+            List.of(),
+            List.of(),
+            MEMBER_EPOCH,
+            List.of(assignmentDelayedStatus())
+        ));
+        membershipManager.poll(time.milliseconds());
+
+        verify(backgroundEventHandler, times(onTasksAssignedCallbackNeededAddCount)).add(any(StreamsOnTasksAssignedCallbackNeededEvent.class));
+        verifyInStateStable(membershipManager);
+    }
+
+    private static StreamsGroupHeartbeatResponseData.Status assignmentDelayedStatus() {
+        return new StreamsGroupHeartbeatResponseData.Status()
+            .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+            .setStatusDetail("Assignment delayed due to the configured assignment interval.");
+    }
+
+    private static StreamsGroupHeartbeatResponseData.Status missingInternalTopicsStatus() {
+        return new StreamsGroupHeartbeatResponseData.Status()
+            .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+            .setStatusDetail("One or more internal topics are missing.");
     }
 
     private void verifyThatNoTasksHaveBeenRevoked() {
