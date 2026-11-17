@@ -149,25 +149,4 @@ public class ProcessorRecordContextTest {
 
         assertEquals(context, roundTripped);
     }
-
-    @Test
-    public void shouldEstimateSourceRawRecordLengths() {
-        for (final byte[] rawKey : new byte[][] {null, new byte[0], new byte[7]}) {
-            for (final byte[] rawValue : new byte[][] {null, new byte[0], new byte[1024]}) {
-                final ProcessorRecordContext context = new ProcessorRecordContext(
-                    42L, 73L, 0, null, new RecordHeaders(), rawKey, rawValue);
-                assertEquals(MIN_SIZE + (rawKey == null ? 0 : rawKey.length)
-                    + (rawValue == null ? 0 : rawValue.length), context.residentMemorySizeEstimate());
-            }
-        }
-    }
-
-    @Test
-    public void shouldExcludeFreedSourceRawRecord() {
-        final ProcessorRecordContext context = new ProcessorRecordContext(
-            42L, 73L, 0, null, new RecordHeaders(), new byte[7], new byte[1024]);
-        assertEquals(MIN_SIZE + 7L + 1024L, context.residentMemorySizeEstimate());
-        context.freeRawRecord();
-        assertEquals(MIN_SIZE, context.residentMemorySizeEstimate());
-    }
 }

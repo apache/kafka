@@ -61,7 +61,10 @@ class LRUCacheEntry {
 
         this.isDirty = isDirty;
         this.sizeBytes = 1 + // isDirty
-            record.residentMemorySizeEstimate();
+            record.residentMemorySizeEstimate() +
+            // Raw source arrays are retained by cache entries, but are not serialized with the context.
+            (rawKey == null ? 0 : rawKey.length) +
+            (rawValue == null ? 0 : rawValue.length);
     }
 
     void markClean() {

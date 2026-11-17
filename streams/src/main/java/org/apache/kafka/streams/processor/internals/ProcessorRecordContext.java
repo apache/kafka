@@ -122,12 +122,6 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
                 size += value.length;
             }
         }
-        if (sourceRawKey != null) {
-            size += sourceRawKey.length;
-        }
-        if (sourceRawValue != null) {
-            size += sourceRawValue.length;
-        }
         return size;
     }
 

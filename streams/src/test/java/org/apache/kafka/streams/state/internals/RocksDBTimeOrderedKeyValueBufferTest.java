@@ -113,6 +113,21 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     @Test
+    public void shouldBalanceSizeAfterEvictingRecordWithRawSourceBytes() {
+        createBuffer(Duration.ZERO, Serdes.String());
+        try {
+            final ProcessorRecordContext rawContext = new ProcessorRecordContext(
+                0L, 0L, 0, "testing", new RecordHeaders(), new byte[7], new byte[1024]);
+            assertTrue(buffer.put(0L, new Record<>("k", "v", 0L), rawContext));
+            buffer.evictWhile(() -> buffer.numRecords() > 0, eviction -> { });
+            assertEquals(0, buffer.numRecords());
+            assertEquals(0L, buffer.bufferSize());
+        } finally {
+            buffer.close();
+        }
+    }
+
+    @Test
     public void shouldAddAndEvictRecord() {
         createBuffer(Duration.ZERO, Serdes.String());
         final AtomicInteger count = new AtomicInteger(0);

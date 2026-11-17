@@ -32,6 +32,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ThreadCacheRawRecordTest {
     @Test
+    void shouldCountNullableAndEmptyRawArrays() {
+        final byte[] value = {1};
+        final long baseSize = new LRUCacheEntry(value, new RecordHeaders(), true,
+            0L, 0L, 0, "", null, null).size();
+        for (final byte[] rawKey : new byte[][] {null, new byte[0], new byte[7]}) {
+            for (final byte[] rawValue : new byte[][] {null, new byte[0], new byte[1024]}) {
+                final LRUCacheEntry entry = new LRUCacheEntry(value, new RecordHeaders(), true,
+                    0L, 0L, 0, "", rawKey, rawValue);
+                assertEquals(baseSize + (rawKey == null ? 0 : rawKey.length)
+                    + (rawValue == null ? 0 : rawValue.length), entry.size());
+            }
+        }
+    }
+
+    @Test
     void shouldEvictWhenRawRecordsExceedBudget() {
         final String namespace = "0.0-raw-record";
         final long budget = 4096L;
@@ -86,7 +101,7 @@ class ThreadCacheRawRecordTest {
     }
 
     @Test
-    void shouldKeepCleanRawReferencesAfterFlushUntilDeletion() {
+    void shouldKeepCleanRawReferencesWhenFlushListenerDoesNotReleaseThem() {
         final byte[] raw = new byte[1024];
         final Bytes key = Bytes.wrap(new byte[] {1});
         final String namespace = "0_0-flush";
