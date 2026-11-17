@@ -2019,6 +2019,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldReportLargestStoreUncommittedBytes
 - shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered
 - shouldReportZeroMaxStoreUncommittedBytesBeforeStoresAreRegistered
+- shouldRestoreFromBeginningWhenStoreReportsUnknownCommittedOffset
 - shouldRestoreRecordsFromCheckpointToHighWatermark
 - shouldRestoreRecordsUpToHighwatermark
 - shouldRetryAtLeastOnceWhenEndOffsetsThrowsTimeoutException
@@ -5283,6 +5284,7 @@ org.apache.kafka.streams.state.internals.KeyValueSegmentsTest:
 - shouldNotCreateSegmentThatIsAlreadyExpired
 - shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldOpenExistingSegments
+- shouldReportUnknownCommittedOffsetWithoutSegments
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 - shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat
@@ -5826,8 +5828,13 @@ org.apache.kafka.streams.state.internals.NamedCacheTest:
 - shouldPutGet
 - shouldPutIfAbsent
 - shouldRemoveDeletedValuesOnFlush
+- shouldReplaceDirtyKeysBelowQuarterOfPeakAndKeepFlushOrder
+- shouldReplaceDirtyKeysOnClearAfterPeak
+- shouldReplaceDirtyKeysOnIdleFlushAfterPeak
+- shouldRetainDirtyKeysAtQuarterOfPeak
 - shouldReturnNullIfKeyIsNull
 - shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry
+- shouldTrackDirtyKeysPeakAcrossDeletes
 org.apache.kafka.streams.state.internals.OffsetCheckpointTest:
 - shouldDeleteExistingCheckpointWhenNoOffsets
 - shouldNotWriteCheckpointWhenNoOffsets
@@ -7244,6 +7251,9 @@ org.apache.kafka.streams.state.internals.SegmentedCacheFunctionTest:
 - compareSegmentedKeys
 - testKey
 - testRoundTripping
+org.apache.kafka.streams.state.internals.SegmentedStoreWithoutSegmentsTest:
+- shouldInitializeTaskWhoseStoreHasNoSegments
+- shouldTreatTaskAsCorruptedWhenSegmentHasNoOffset
 org.apache.kafka.streams.state.internals.SessionKeySchemaTest:
 - shouldConvertToBinaryAndBack
 - shouldDeSerializeEmptyByteArrayToNull
