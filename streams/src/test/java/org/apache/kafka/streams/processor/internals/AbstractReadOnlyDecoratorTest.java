@@ -35,13 +35,9 @@ import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import java.util.stream.Stream;
 
@@ -52,8 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractReadOnlyDecoratorTest {
 
     // Dispatch tests pin getReadOnlyStore to the exact decorator per store type. Because the
