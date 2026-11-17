@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
@@ -102,6 +104,11 @@ public class SessionStoreWithHeadersBuilder<K, V>
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
             }
+        }
+
+        @Override
+        public ReadOnlySessionStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+            return wrapped().readOnly(isolationLevel);
         }
 
         @Override
