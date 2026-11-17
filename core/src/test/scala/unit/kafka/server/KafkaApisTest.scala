@@ -95,7 +95,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.FetchContext.FullFetchContext
 import org.apache.kafka.server.{AutoTopicCreationManager, ClientMetricsManager, FetchManager, FetchSessionCacheShard, ForwardingManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, MirrorVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
@@ -377,6 +377,26 @@ class KafkaApisTest extends Logging {
   def testElectLeadersForwarding(): Unit = {
     val requestBuilder = new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 30000)
     testKraftForwarding(ApiKeys.ELECT_LEADERS, requestBuilder)
+  }
+
+  @Test
+  def testStopMirrorTopicsDisabled(): Unit = {
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    val request = buildRequest(new StopMirrorTopicsRequest.Builder(
+      new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true).build())
+    kafkaApis = createKafkaApis(featureVersions = Seq(MirrorVersion.MV_0))
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[StopMirrorTopicsResponse](request)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode())
+    verifyNoInteractions(forwardingManager)
+  }
+
+  @Test
+  def testStopMirrorTopicsForwarding(): Unit = {
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    kafkaApis = createKafkaApis(featureVersions = Seq(MirrorVersion.MV_1))
+    testForwardableApi(kafkaApis, ApiKeys.STOP_MIRROR_TOPICS,
+      new StopMirrorTopicsRequest.Builder(new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true))
   }
 
   @Test

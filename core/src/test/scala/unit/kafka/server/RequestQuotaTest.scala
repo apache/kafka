@@ -774,6 +774,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS =>
           new DeleteShareGroupOffsetsRequest.Builder(new DeleteShareGroupOffsetsRequestData())
 
+        case ApiKeys.STOP_MIRROR_TOPICS =>
+          new StopMirrorTopicsRequest.Builder(new StopMirrorTopicsRequestData().setMirrorName("test-mirror"), true)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

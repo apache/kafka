@@ -232,6 +232,8 @@ import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StopMirrorTopicsRequestData;
+import org.apache.kafka.common.message.StopMirrorTopicsResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -1160,6 +1162,7 @@ public class RequestResponseTest {
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
             case UNREGISTER_CONTROLLER: return createUnregisterControllerRequest(version);
+            case STOP_MIRROR_TOPICS: return createStopMirrorTopicsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1257,6 +1260,7 @@ public class RequestResponseTest {
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
             case UNREGISTER_CONTROLLER: return createUnregisterControllerResponse();
+            case STOP_MIRROR_TOPICS: return new StopMirrorTopicsResponse(new StopMirrorTopicsResponseData());
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3710,6 +3714,15 @@ public class RequestResponseTest {
 
     private UnregisterBrokerResponse createUnregisterBrokerResponse() {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
+    }
+
+    private StopMirrorTopicsRequest createStopMirrorTopicsRequest(short version) {
+        StopMirrorTopicsRequestData data = new StopMirrorTopicsRequestData()
+            .setMirrorName("mirror-a")
+            .setStateOffset(42) // Metadata log offset used to validate partition state.
+            .setTimeoutMs(30_000);
+        data.topics().add(new StopMirrorTopicsRequestData.TopicMetadata().setTopicName("topic-a"));
+        return new StopMirrorTopicsRequest.Builder(data, true).build(version);
     }
 
     private UnregisterControllerRequest createUnregisterControllerRequest(short version) {
