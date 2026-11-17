@@ -337,14 +337,17 @@ public class DefaultSslEngineFactoryTest {
 
     @Test
     public void testUnavailableKeyFactoryAlgorithmDoesNotThrow() {
-        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Set.of("BOGUS_FACTORY"));
-        assertTrue(factories.isEmpty());
+        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Set.of("RSA", "EC", "BOGUS_FACTORY"));
+        assertFalse(factories.isEmpty());
+        assertFalse(factories.stream().anyMatch(f -> f.getAlgorithm().equals("BOGUS_FACTORY")));
     }
 
     @Test
     public void testAllJvmKeyFactoryAlgorithmsLoaded() {
         List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Security.getAlgorithms("KeyFactory"));
         assertFalse(factories.isEmpty());
+        assertTrue(factories.stream().anyMatch(f -> f.getAlgorithm().equals("RSA")));
+        assertTrue(factories.stream().anyMatch(f -> f.getAlgorithm().equals("EC")));
     }
 
     @Test
