@@ -367,4 +367,24 @@ public class MockConsumerTest {
         assertEquals(2, capturedOnAssign.size());
         assertThrows(IllegalStateException.class, () -> capturedOnRevoke.get(0).assignment());
     }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe() {
+        List<TopicPartition> assigned = new ArrayList<>();
+        consumer.subscribe(Collections.singleton("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+        });
+        consumer.subscribe(Collections.singleton("test"));
+
+        consumer.rebalance(List.of(new TopicPartition("test", 0)));
+        assertTrue(assigned.isEmpty());
+    }
 }

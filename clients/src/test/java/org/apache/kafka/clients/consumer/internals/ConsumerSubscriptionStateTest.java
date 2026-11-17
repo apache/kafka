@@ -603,7 +603,7 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
-    public void testSubscribeWithoutListenerRemovesListenerFromSubscribe() {
+    public void testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe() {
         state.setRebalanceListenerFromSubscribe(mock(RebalanceListener.class), consumer);
         state.setRebalanceListenerFromSubscribe(null, consumer);
         assertFalse(state.hasRebalanceListener());
@@ -617,7 +617,7 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
-    public void testSubscribeWithoutListenerKeepsSetterListenerThatOverrodeSubscribe() {
+    public void testSubscribeWithoutListenerKeepsSetterListenerThatOverrodeDeprecatedSubscribe() {
         RebalanceListener subscribeListener = mock(RebalanceListener.class);
         RebalanceListener setterListener = mock(RebalanceListener.class);
         state.setRebalanceListenerFromSubscribe(subscribeListener, consumer);
@@ -630,7 +630,7 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
-    public void testSubscribeWithoutListenerRemovesSubscribeListenerThatOverrodeSetter() {
+    public void testSubscribeWithoutListenerRemovesDeprecatedSubscribeListenerThatOverrodeSetter() {
         state.setRebalanceListener(mock(RebalanceListener.class), consumer);
         state.setRebalanceListenerFromSubscribe(mock(RebalanceListener.class), consumer);
         state.setRebalanceListenerFromSubscribe(null, consumer);
