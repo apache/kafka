@@ -84,8 +84,11 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * comes through {@code ChunkedRecordAccumulator.tryAppend}, which has already evaluated
      * {@link #extensionBytesNeeded}.
      * <p>
-     * If the growth fell back to the heap, the record is still appended but the batch is then closed for
-     * record appends, so it is sent early rather than growing further on the heap past buffer.memory.
+     * If a compressed batch's growth fell back to the heap, or the bytes written to its stream have reached the
+     * batch's write limit (batch.size), the record is still appended but the batch is then closed for record
+     * appends, so it is sent early rather than growing further on the heap past buffer.memory or from the pool
+     * past batch.size. Only bytes the compressor has already flushed are visible here, so a codec that buffers
+     * its input until close can still overshoot batch.size, as it can with a single-buffer batch.
      *
      * @return the record's future, or null if the batch is at its batch-size limit
      * @throws IllegalStateException if the uncompressed stream was not pre-sized to hold the batch's first record
@@ -97,20 +100,26 @@ public class ChunkedProducerBatch extends ProducerBatch {
                     "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
                             "the stream should have been pre-sized for the batch's first record");
         FutureRecordMetadata future = super.tryAppend(timestamp, key, value, headers, callback, now);
-        if (future != null && stream().fallbackAllocations() > 0) {
-            // The stream grew on the heap mid-record: the pool is exhausted, and the builder's fullness checks
-            // trust a compression ratio estimate that has proven too low. Close for appends so later records
-            // go to a new batch (which blocks for pool memory) instead of growing this one further on the heap.
+        if (future != null && isCompressed()
+                && (stream().fallbackAllocations() > 0 || stream().position() >= recordsBuilder.writeLimit())) {
+            // The builder's fullness checks trust a compression ratio estimate that has proven too low: either
+            // the stream grew on the heap mid-record because the pool is exhausted, or the bytes the compressor
+            // has written already reach the write limit even though the estimate says the batch has room.
+            // Close for appends so later records go to a new batch (which blocks for pool memory) instead of
+            // growing this one further, on the heap past buffer.memory or from the pool past batch.size.
             // The caller's append result reads isFull(), now true, so the sender is woken to send it early, and
             // the drain's ProducerBatch.close() then feeds the observed ratio back to the estimator sooner. The
-            // compressor flush in closeForRecordAppends may fall back to the heap once more, which is bounded since
+            // compressor flush in closeForRecordAppends may grow the stream once more, which is bounded since
             // nothing is appended after it. Closing is idempotent, and matches how the extension path closes a
             // batch on pool exhaustion.
             if (log.isDebugEnabled()) {
-                log.debug("Closing batch for {} to record appends so it is sent early: the buffer pool was "
-                        + "exhausted and the batch's stream fell back to {} heap-allocated chunk(s) beyond buffer.memory. "
-                        + "recordCount={}, attachedCapacity={}, estimatedSizeInBytes={}, compressionRatioEstimate={}",
-                        topicPartition, stream().fallbackAllocations(), recordCount, stream().attachedCapacity(),
+                log.debug("Closing batch for {} to record appends so it is sent early: {}. recordCount={}, "
+                        + "position={}, writeLimit={}, attachedCapacity={}, estimatedSizeInBytes={}, compressionRatioEstimate={}",
+                        topicPartition, stream().fallbackAllocations() > 0
+                                ? "the buffer pool was exhausted and the batch's stream fell back to "
+                                        + stream().fallbackAllocations() + " heap-allocated chunk(s) beyond buffer.memory"
+                                : "the bytes written to the batch's stream reached its write limit",
+                        recordCount, stream().position(), recordsBuilder.writeLimit(), stream().attachedCapacity(),
                         recordsBuilder.estimatedSizeInBytes(),
                         CompressionRatioEstimator.estimation(topicPartition.topic(), recordsBuilder.compression().type()));
             }

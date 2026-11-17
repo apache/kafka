@@ -928,6 +928,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return this.writeLimit - this.batchHeaderSizeInBytes;
     }
 
+    public int writeLimit() {
+        return this.writeLimit;
+    }
+
     public boolean isClosed() {
         return builtRecords != null;
     }

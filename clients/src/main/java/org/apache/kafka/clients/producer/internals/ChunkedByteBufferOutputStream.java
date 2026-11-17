@@ -36,11 +36,12 @@ import java.util.Set;
  * run past the attached chunks, the stream attaches all the chunks the write still needs, as many as the pool
  * can hand out without blocking ({@link BufferPool#tryAllocateChunksUpTo}) and the rest from the heap, since the
  * pool may be exhausted, or closed, in the middle of a write (a partially written record can neither be rolled
- * back nor blocked on). Heap growth is not left unbounded,
- * though: once a record's append falls back to the heap, the owning batch is closed for appends after that record
+ * back nor blocked on). Growth is not left unbounded, though: once a record's append falls back to the heap, or
+ * the bytes written reach the batch's write limit, the owning batch is closed for appends after that record
  * (see {@link ChunkedProducerBatch#tryAppend}), so only the current record and the compressor's final flush can
- * grow on the heap. The closed case arises when a compressed batch is closed or aborted after the producer closed
- * the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
+ * grow it further. Only bytes the compressor has flushed count toward the write limit, so a codec that buffers its
+ * input until close can still overshoot it. The closed case arises when a compressed batch is closed or aborted after
+ * the producer closed the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
  * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
  * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
  * <p>
@@ -370,7 +371,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * on the normal path; a non-zero value means the producer transiently exceeded buffer.memory to
      * guarantee forward progress.
      * {@link ChunkedProducerBatch#tryAppend} reads it to close the batch for appends (sending it early) once
-     * growth has fallen back to the heap; also used by tests.
+     * growth has fallen back to the heap, as it also does once the bytes written reach the batch's write limit;
+     * also used by tests.
      */
     int fallbackAllocations() {
         return fallbackAllocations;

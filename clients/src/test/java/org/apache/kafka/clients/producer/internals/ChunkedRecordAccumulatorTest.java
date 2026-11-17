@@ -400,21 +400,23 @@ public class ChunkedRecordAccumulatorTest {
 
     /**
      * The opposite of an estimate above 1.0: a topic whose compression ratio estimate is far below 1.0
-     * but whose data doesn't compress. The batch's fullness checks trust the estimate, so the batch admits
-     * many times batch.size of uncompressed data, and the compressor then writes roughly all of it. With
-     * ample pool memory that overshoot is absorbed by mid-write growth from the pool (mostly as the
-     * compressor flushes on close), so the batch stays open for every record and never touches the heap.
-     * The batch must decode back to every record appended, every chunk must go back to the pool, and the
-     * stream is asserted to have grown past its pre-size. Closing the batch must also feed its observed ratio
-     * (about 1.0) back to the estimator, which is far more than one COMPRESSION_RATIO_DETERIORATE_STEP above
-     * 0.05, so the estimate jumps straight to it.
+     * but whose data doesn't compress. The batch's fullness checks trust the estimate, so they would admit
+     * many times batch.size of uncompressed data, while the compressor writes roughly all of it. With ample
+     * pool memory that overshoot is absorbed by mid-write growth from the pool, never the heap, so the batch
+     * must instead be closed for appends once the bytes the compressor has written reach batch.size, even
+     * though the estimate still says it has room. The next record must go to a new batch, every record must
+     * decode across both batches, and every chunk must go back to the pool. Closing the batch must also feed
+     * its observed ratio (about 1.0) back to the estimator, which is far more than one
+     * COMPRESSION_RATIO_DETERIORATE_STEP above 0.05, so the estimate jumps straight to it.
      * {@link #testMidRecordHeapFallbackClosesBatchForAppends} covers the same growth past an exhausted pool.
      */
     @ParameterizedTest
     @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
-    public void testIncompressibleDataWithLowCompressionRatioEstimateGrowsPastBatchSize(String codec) throws Exception {
+    public void testIncompressibleDataWithLowCompressionRatioEstimateClosesBatchAtBatchSize(String codec) throws Exception {
         int chunkSize = 256;
-        int batchSize = 8192;
+        // As in testMidRecordHeapFallbackClosesBatchForAppends: large enough that the estimate admits zstd's
+        // buffered input before its first output, so every codec flushes before the estimate fills the batch.
+        int batchSize = 16384;
         long totalMemory = 1024L * chunkSize;
         Compression compression = Compression.of(CompressionType.forName(codec)).build();
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
@@ -423,54 +425,71 @@ public class ChunkedRecordAccumulatorTest {
         // Read by the batch on construction, so it must be set before the first append.
         CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
         try {
-            // Random bytes don't compress, totalling several times batch.size.
-            int recordCount = 100;
+            // Random bytes don't compress. Append until the batch reports full, bounded generously.
+            int maxRecords = 2000;
             Random random = new Random(42);
             List<byte[]> values = new ArrayList<>();
-            int presized = 0;
-            for (int i = 0; i < recordCount; i++) {
+            ProducerBatch batch = null;
+            RecordAccumulator.RecordAppendResult result = null;
+            while (values.size() < maxRecords) {
                 byte[] value = new byte[500];
                 random.nextBytes(value);
                 values.add(value);
-                accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
-                        maxBlockTimeMs, time.milliseconds(), cluster);
-                if (i == 0)
-                    presized = ((ChunkedByteBufferOutputStream) batchesFor(accum, tp1).peekFirst().recordsBuilder
-                            .bufferStream()).attachedCapacity();
+                result = accum.append(topic, partition1, values.size() - 1, key, value, Record.EMPTY_HEADERS,
+                        null, maxBlockTimeMs, time.milliseconds(), cluster);
+                Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+                assertEquals(1, dq.size(), "every record up to the close belongs in the first batch");
+                batch = dq.peekFirst();
+                if (result.batchIsFull)
+                    break;
             }
-
-            // The estimate let every record into the one batch.
-            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
-            assertEquals(1, dq.size());
-            ProducerBatch batch = dq.peekFirst();
             assertNotNull(batch);
-            assertEquals(recordCount, batch.recordCount);
+            assertTrue(result.batchIsFull, "the batch was not closed within " + maxRecords + " records");
+            assertEquals(values.size(), batch.recordCount);
 
-            // Compressors buffer internally, so much of the growth happens as they flush on close.
-            batch.close();
-            MemoryRecords records = batch.records();
-            assertTrue(records.sizeInBytes() > 4 * batchSize,
-                    "the compressed batch should be several times batch.size, but was " + records.sizeInBytes());
+            // The written bytes reached batch.size, all from the pool, while the estimate alone still had room.
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            assertEquals(0, stream.fallbackAllocations());
+            assertTrue(stream.position() >= batchSize,
+                    "the stream should have reached batch.size, but holds " + stream.position() + " bytes");
+            assertTrue(batch.recordsBuilder.estimatedSizeInBytes() < batchSize,
+                    "the estimate alone should not have filled the batch");
+            assertTrue(batch.isFull());
+            assertNull(batch.tryAppend(time.milliseconds(), key, new byte[1], Record.EMPTY_HEADERS, null,
+                    time.milliseconds()), "the batch should be closed for appends");
 
+            // Drain it as the woken sender would, which closes it and feeds the observed ratio back.
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+            assertEquals(List.of(batch), drained.get(node1.id()));
             // The observed ratio (about 1.0) is far above 0.05 + COMPRESSION_RATIO_DETERIORATE_STEP (0.1),
             // so the estimate becomes exactly the observed ratio.
             float observed = (float) batch.compressionRatio();
             assertTrue(observed > 0.9f, "random data should not compress, but the observed ratio was " + observed);
             assertEquals(observed, CompressionRatioEstimator.estimation(topic, compression.type()));
-            int i = 0;
-            for (Record r : records.records()) {
-                assertArrayEquals(values.get(i), readBytes(r.value()));
-                i++;
-            }
-            assertEquals(recordCount, i, "all appended records must be present");
-
-            // The compressor overshot the pre-size, and the pool had room for all the growth, so none of it
-            // fell back to the heap.
-            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
-            assertTrue(stream.attachedCapacity() > presized);
-            assertEquals(0, stream.fallbackAllocations());
-
+            List<byte[]> decoded = new ArrayList<>();
+            batch.records().records().forEach(r -> decoded.add(readBytes(r.value())));
             accum.deallocate(batch);
+
+            // The next record starts a new batch.
+            byte[] next = new byte[500];
+            random.nextBytes(next);
+            values.add(next);
+            accum.append(topic, partition1, values.size() - 1, key, next, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch second = dq.peekFirst();
+            assertNotSame(batch, second);
+            assertEquals(1, second.recordCount);
+            second.close();
+            second.records().records().forEach(r -> decoded.add(readBytes(r.value())));
+
+            assertEquals(values.size(), decoded.size(), "all appended records must be present");
+            for (int i = 0; i < values.size(); i++)
+                assertArrayEquals(values.get(i), decoded.get(i));
+
+            accum.deallocate(second);
             assertEquals(totalMemory, pool.availableMemory());
         } finally {
             accum.close();
@@ -480,7 +499,7 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * KIP-1332's compressed mid-record growth path: when the compressor grows the stream mid-record and
      * the pool is exhausted, the stream falls back to the heap and the batch is closed for early send.
-     * Setup as in {@link #testIncompressibleDataWithLowCompressionRatioEstimateGrowsPastBatchSize}, but the
+     * Setup as in {@link #testIncompressibleDataWithLowCompressionRatioEstimateClosesBatchAtBatchSize}, but the
      * pool covers the chunks the appends reserve from the (far too low) estimate and not the compressor's
      * actual output, so its first large flush during an append exhausts the pool. That append must still
      * succeed, but must close the batch and report it full so the sender is woken, rather than leaving it
@@ -790,13 +809,15 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * Appends a single batch of incompressible data that a compression ratio estimate far below 1.0
      * lets grow past its attached chunks, so the compressor still has to grow the stream when it
-     * flushes on close. Returns the append result of the last record.
+     * flushes on close. About 15KB of input stays below every codec's internal buffer (gzip's 16KB is the
+     * smallest), so nothing is flushed before close and the batch is not closed for reaching batch.size.
+     * Returns the append result of the last record.
      */
     private RecordAccumulator.RecordAppendResult appendIncompressibleBatch(ChunkedRecordAccumulator accum,
                                                                            List<byte[]> values) throws Exception {
         Random random = new Random(42);
         RecordAccumulator.RecordAppendResult result = null;
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 30; i++) {
             byte[] value = new byte[500];
             random.nextBytes(value);
             values.add(value);
