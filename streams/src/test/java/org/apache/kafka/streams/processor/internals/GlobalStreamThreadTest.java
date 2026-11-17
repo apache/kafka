@@ -339,28 +339,58 @@ public class GlobalStreamThreadTest {
 
         try {
             globalStreamThread.run();
-
-            assertFalse(interruptedInHandler.get());
         } finally {
-            assertTrue(Thread.interrupted());
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
         }
+
+        assertFalse(interruptedInHandler.get());
     }
 
     @Test
-    public void shouldClearInterruptStatusDuringShutdownAndRestoreItAfterwards() {
-        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
-        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
-        interruptOnNextPoll(consumer);
-        globalStreamThread = globalStreamThread(consumer);
+    public void shouldClearInterruptStatusBeforeInvokingUncaughtExceptionHandlerOnInvalidOffsetException() {
+        final AtomicBoolean interruptedInHandler = new AtomicBoolean(true);
+        initializeConsumer();
+        mockConsumer.schedulePollTask(() -> {
+            Thread.currentThread().interrupt();
+            throw new InvalidOffsetException("Try Again!") {
+                @Override
+                public Set<TopicPartition> partitions() {
+                    return Collections.singleton(topicPartition);
+                }
+            };
+        });
+        globalStreamThread.setUncaughtExceptionHandler(
+            e -> interruptedInHandler.set(Thread.currentThread().isInterrupted())
+        );
 
         try {
             globalStreamThread.run();
-
-            assertFalse(interruptedOnClose.get());
-            assertEquals(DEAD, globalStreamThread.state());
         } finally {
-            assertTrue(Thread.interrupted());
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
         }
+
+        assertFalse(interruptedInHandler.get());
+        assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
+    }
+
+    @Test
+    public void shouldClearInterruptStatusBeforeClosingGlobalConsumer() {
+        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
+        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
+        interruptOnNextPoll(consumer);
+        globalStreamThread = newGlobalStreamThread(consumer);
+
+        try {
+            globalStreamThread.run();
+        } finally {
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+
+        assertFalse(interruptedOnClose.get());
+        assertEquals(DEAD, globalStreamThread.state());
     }
 
     @Test
@@ -369,33 +399,59 @@ public class GlobalStreamThreadTest {
         final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
         // fail without an interrupt, so that the only interrupt is the one set by the handler
         consumer.setPollException(new KafkaException("KABOOM!"));
-        globalStreamThread = globalStreamThread(consumer);
+        globalStreamThread = newGlobalStreamThread(consumer);
         globalStreamThread.setUncaughtExceptionHandler(e -> Thread.currentThread().interrupt());
 
         try {
             globalStreamThread.run();
-
-            assertFalse(interruptedOnClose.get());
         } finally {
-            assertTrue(Thread.interrupted());
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
         }
+
+        assertFalse(interruptedOnClose.get());
     }
 
     @Test
-    public void shouldRestoreInterruptStatusWhenShutdownThrows() {
-        initializeConsumer();
-        interruptOnNextPoll(mockConsumer);
-        globalStreamThread.setStateListener((thread, newState, oldState) -> {
-            if (newState == DEAD) {
-                throw new RuntimeException("KABOOM!");
-            }
+    public void shouldClearInterruptStatusBeforeClosingGlobalConsumerWhenUncaughtExceptionHandlerThrows() {
+        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
+        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
+        consumer.setPollException(new KafkaException("KABOOM!"));
+        globalStreamThread = newGlobalStreamThread(consumer);
+        globalStreamThread.setUncaughtExceptionHandler(e -> {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("handler failed");
         });
 
         try {
             assertThrows(RuntimeException.class, globalStreamThread::run);
         } finally {
-            assertTrue(Thread.interrupted());
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
         }
+
+        assertFalse(interruptedOnClose.get());
+        assertEquals(DEAD, globalStreamThread.state());
+    }
+
+    @Test
+    public void shouldClearInterruptStatusBeforeClosingGlobalConsumerWhenInitializationFails() {
+        final AtomicBoolean interruptedOnClose = new AtomicBoolean(true);
+        final MockConsumer<byte[], byte[]> consumer = consumerRecordingInterruptStatusOnClose(interruptedOnClose);
+        // the end offset must be ahead of the start offset, otherwise the restoration does not poll
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1L));
+        interruptOnNextPoll(consumer);
+        globalStreamThread = newGlobalStreamThread(consumer);
+
+        try {
+            globalStreamThread.run();
+        } finally {
+            // clear the interrupt status since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+
+        assertFalse(interruptedOnClose.get());
+        assertEquals(DEAD, globalStreamThread.state());
     }
 
     @Test
@@ -575,7 +631,7 @@ public class GlobalStreamThreadTest {
         return consumer;
     }
 
-    private GlobalStreamThread globalStreamThread(final MockConsumer<byte[], byte[]> consumer) {
+    private GlobalStreamThread newGlobalStreamThread(final MockConsumer<byte[], byte[]> consumer) {
         return new GlobalStreamThread(
             builder.buildGlobalStateTopology(),
             config,

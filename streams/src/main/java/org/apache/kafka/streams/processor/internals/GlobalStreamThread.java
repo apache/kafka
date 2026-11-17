@@ -311,10 +311,6 @@ public class GlobalStreamThread extends Thread {
         }
 
         boolean wipeStateStore = false;
-        // An interrupt that stops the run loop must not leak into the exception handler or the shutdown:
-        // the handler may have to create a stream thread on this thread, and closing the global consumer
-        // would be cut short. The flag is cleared before either runs and restored once the shutdown completes.
-        boolean interrupted = false;
         try {
             while (stillRunning()) {
                 final long size = cacheSize.getAndSet(-1L);
@@ -358,7 +354,9 @@ public class GlobalStreamThread extends Thread {
                 }
             }
         } catch (final InvalidOffsetException recoverableException) {
-            interrupted = Thread.interrupted();
+            // Clear the interrupt status before invoking the handler, which may call
+            // addStreamThread() on this thread for SHUTDOWN_APPLICATION.
+            Thread.interrupted();
             wipeStateStore = true;
             log.error(
                 "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
@@ -370,36 +368,34 @@ public class GlobalStreamThread extends Thread {
             );
             this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
-            interrupted = Thread.interrupted();
+            Thread.interrupted();
             log.error("Error happened while maintaining global state store. The streams application or client will now close to ERROR.", e);
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
-            interrupted |= Thread.interrupted();
+            // Clear the interrupt status before closing the consumer, since an interrupt
+            // can leave fetch sessions open on the brokers. This also covers exits that
+            // bypass the catch blocks and interrupts set by the exception handler.
+            Thread.interrupted();
+
+            // set the state to pending shutdown first as it may be called due to error;
+            // its state may already be PENDING_SHUTDOWN so it will return false but we
+            // intentionally do not check the returned flag
+            setState(State.PENDING_SHUTDOWN);
+
+            log.info("Shutting down");
+
             try {
-                // set the state to pending shutdown first as it may be called due to error;
-                // its state may already be PENDING_SHUTDOWN so it will return false but we
-                // intentionally do not check the returned flag
-                setState(State.PENDING_SHUTDOWN);
-
-                log.info("Shutting down");
-
-                try {
-                    stateConsumer.close(wipeStateStore);
-                } catch (final IOException e) {
-                    log.error("Failed to close state maintainer due to the following error:", e);
-                }
-
-                streamsMetrics.removeAllThreadLevelSensors(getName());
-                streamsMetrics.removeAllThreadLevelMetrics(getName());
-
-                setState(DEAD);
-
-                log.info("Shutdown complete");
-            } finally {
-                if (interrupted) {
-                    Thread.currentThread().interrupt();
-                }
+                stateConsumer.close(wipeStateStore);
+            } catch (final IOException e) {
+                log.error("Failed to close state maintainer due to the following error:", e);
             }
+
+            streamsMetrics.removeAllThreadLevelSensors(getName());
+            streamsMetrics.removeAllThreadLevelMetrics(getName());
+
+            setState(DEAD);
+
+            log.info("Shutdown complete");
         }
     }
 
@@ -487,6 +483,9 @@ public class GlobalStreamThread extends Thread {
     }
 
     private void closeStateConsumer(final StateConsumer stateConsumer, final boolean wipeStateStore) {
+        // Clear the interrupt status before closing the consumer, since an interrupt
+        // can leave fetch sessions open on the brokers.
+        Thread.interrupted();
         if (stateConsumer != null) {
             try {
                 stateConsumer.close(wipeStateStore);
