@@ -105,7 +105,7 @@ public class StandardAuthorizerData {
     /**
      * Contains all of the current ACLs
      */
-    private AclCache aclCache;
+    private volatile AclCache aclCache;
 
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
