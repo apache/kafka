@@ -723,6 +723,48 @@ public class PlaintextConsumerCallbackTest {
         }
     }
 
+    @ClusterTest
+    public void testClassicConsumerSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe() throws InterruptedException {
+        testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe() throws InterruptedException {
+        testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe(CONSUMER);
+    }
+
+    /**
+     * subscribe(topics) removes the listener registered via the deprecated subscribe(topics, listener), so a
+     * following unsubscribe() must not invoke it.
+     */
+    @SuppressWarnings("removal")
+    private void testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe(GroupProtocol groupProtocol) throws InterruptedException {
+        var topicName = "subscribe-without-listener";
+        cluster.createTopic(topicName, 1, (short) 1);
+        var partition = new TopicPartition(topicName, 0);
+
+        var revokedCount = new AtomicInteger();
+        var listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revokedCount.incrementAndGet();
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            }
+        };
+
+        try (Consumer<byte[], byte[]> consumer = createConsumer(groupProtocol)) {
+            consumer.subscribe(List.of(topicName), listener);
+            ClientsTestUtils.awaitAssignment(consumer, Set.of(partition));
+
+            consumer.subscribe(List.of(topicName));
+            consumer.unsubscribe();
+            assertEquals(0, revokedCount.get(), "unsubscribe() should not invoke the listener removed by subscribe(topics)");
+        }
+    }
+
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol) {
         return cluster.consumer(Map.of(
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
