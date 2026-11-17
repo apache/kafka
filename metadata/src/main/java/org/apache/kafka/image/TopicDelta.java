@@ -20,16 +20,19 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +44,10 @@ public final class TopicDelta {
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
     private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
     private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
+
+    private boolean mirrorRecordReplayed;
+    private String mirrorName;
+    private byte desiredMirrorState;
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -103,6 +110,46 @@ public final class TopicDelta {
         partitionChanges.put(record.partitionId(), prevPartition.merge(record));
     }
 
+    public void replay(MirrorTopicStateChangeRecord record) {
+        if (record.mirrorName() == null && record.desiredState() != MirrorPartitionState.UNKNOWN.value()) {
+            throw new IllegalArgumentException("desiredState must be UNKNOWN when mirrorName is null, got " + MirrorPartitionState.nameOf(record.desiredState()));
+        }
+        mirrorRecordReplayed = true;
+        mirrorName = record.mirrorName();
+        desiredMirrorState = record.desiredState();
+    }
+
+    /**
+     * Returns the mirror name after this delta is applied.
+     */
+    public String mirrorName() {
+        return mirrorRecordReplayed ? mirrorName : image.mirrorName();
+    }
+
+    /**
+     * Returns the desired mirror state after this delta is applied.
+     */
+    public byte desiredMirrorState() {
+        return mirrorRecordReplayed ? desiredMirrorState : image.desiredMirrorState();
+    }
+
+    /**
+     * Returns the mirror topic state after this delta is applied if a mirror topic state change record was replayed,
+     * or if the state differs from the state in the given image. Returns null otherwise. A null image is treated as a
+     * topic that is not associated with a mirror.
+     * <p>
+     * A replayed record is reported even if it doesn't change the state, because the controller re-writes the current
+     * state to make brokers re-process the mirror partitions (e.g. when recovering failed partitions).
+     */
+    LocalReplicaChanges.MirrorTopicState mirrorTopicStateChange(TopicImage prevImage) {
+        String prevMirrorName = prevImage == null ? null : prevImage.mirrorName();
+        byte prevDesiredMirrorState = prevImage == null ? MirrorPartitionState.UNKNOWN.value() : prevImage.desiredMirrorState();
+        if (!mirrorRecordReplayed && Objects.equals(prevMirrorName, mirrorName()) && prevDesiredMirrorState == desiredMirrorState()) {
+            return null;
+        }
+        return new LocalReplicaChanges.MirrorTopicState(mirrorName(), desiredMirrorState());
+    }
+
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
         if (PartitionRegistration.electionWasUnclean(newLeaderRecoveryState)) {
             partitionToUncleanLeaderElectionCount.put(partitionId, partitionToUncleanLeaderElectionCount.getOrDefault(partitionId, 0) + 1);
@@ -151,7 +198,8 @@ public final class TopicDelta {
                 newPartitions.put(entry.getKey(), entry.getValue());
             }
         }
-        return new TopicImage(image.name(), image.id(), newPartitions);
+
+        return new TopicImage(image.name(), image.id(), mirrorName(), desiredMirrorState(), newPartitions);
     }
 
     /**
@@ -165,6 +213,7 @@ public final class TopicDelta {
      *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
      *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
      *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
+     *   <li>mirrorTopicStates: topics for which a mirror topic state change record was replayed, or the mirror name or desired mirror state changed</li>
      * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
@@ -180,6 +229,12 @@ public final class TopicDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
+        Map<Uuid, LocalReplicaChanges.MirrorTopicState> mirrorTopicChanges = new HashMap<>();
+
+        LocalReplicaChanges.MirrorTopicState mirrorTopicState = mirrorTopicStateChange(image);
+        if (mirrorTopicState != null) {
+            mirrorTopicChanges.put(id(), mirrorTopicState);
+        }
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
@@ -222,13 +277,14 @@ public final class TopicDelta {
             }
         }
 
-        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds, mirrorTopicChanges);
     }
 
     @Override
     public String toString() {
         return "TopicDelta(" +
-            "partitionChanges=" + partitionChanges +
-            ')';
+                "partitionChanges=" + partitionChanges +
+                (mirrorRecordReplayed ? ", mirrorName=" + mirrorName + ", desiredMirrorState=" + desiredMirrorState : "") +
+                ')';
     }
 }

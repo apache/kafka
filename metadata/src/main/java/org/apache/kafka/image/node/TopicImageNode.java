@@ -19,9 +19,11 @@ package org.apache.kafka.image.node;
 
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Optional;
 
 
 public final class TopicImageNode implements MetadataNode {
@@ -42,6 +44,10 @@ public final class TopicImageNode implements MetadataNode {
         for (Integer partitionId : image.partitions().keySet()) {
             childNames.add(partitionId.toString());
         }
+        if (image.mirrorName() != null) {
+            childNames.add("mirrorName");
+            childNames.add("mirrorDesiredState");
+        }
         return childNames;
     }
 
@@ -51,6 +57,12 @@ public final class TopicImageNode implements MetadataNode {
             return new MetadataLeafNode(image.name());
         } else if (name.equals("id")) {
             return new MetadataLeafNode(image.id().toString());
+        } else if (name.equals("mirrorName")) {
+            return Optional.ofNullable(image.mirrorName()).map(MetadataLeafNode::new).orElse(null);
+        } else if (name.equals("mirrorDesiredState")) {
+            return Optional.ofNullable(image.mirrorName())
+                    .map(_unused -> new MetadataLeafNode(MirrorPartitionState.nameOf(image.desiredMirrorState())))
+                    .orElse(null);
         } else {
             int partitionId;
             try {

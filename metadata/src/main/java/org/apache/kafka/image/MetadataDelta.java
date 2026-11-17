@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -271,6 +272,9 @@ public final class MetadataDelta {
             case UNREGISTER_CONTROLLER_RECORD:
                 replay((UnregisterControllerRecord) record);
                 break;
+            case MIRROR_TOPIC_STATE_CHANGE_RECORD:
+                replay((MirrorTopicStateChangeRecord) record);
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }
@@ -289,6 +293,10 @@ public final class MetadataDelta {
     }
 
     public void replay(PartitionRecord record) {
+        getOrCreateTopicsDelta().replay(record);
+    }
+
+    public void replay(MirrorTopicStateChangeRecord record) {
         getOrCreateTopicsDelta().replay(record);
     }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ClearElrRecord;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -93,6 +94,26 @@ public final class TopicsDelta {
     public void replay(PartitionChangeRecord record) {
         TopicDelta topicDelta = getOrCreateTopicDelta(record.topicId());
         topicDelta.replay(record);
+    }
+
+    public void replay(MirrorTopicStateChangeRecord record) {
+        // CreatedTopics contains the latest topic IDs. It should be checked first in case the topic is deleted and
+        // created in the same batch.
+        Uuid topicId = createdTopics.get(record.topicName());
+        if (topicId == null) {
+            TopicImage topicImage = image.getTopic(record.topicName());
+            // Ignore the image's topic if it was deleted in this delta, otherwise we would resurrect it.
+            if (topicImage != null && !deletedTopicIds.contains(topicImage.id())) {
+                topicId = topicImage.id();
+            }
+        }
+        if (topicId != null) {
+            TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
+            topicDelta.replay(record);
+        } else {
+            throw new RuntimeException("Unable to process mirror topic state change for mirror " + record.mirrorName()
+                    + " with topic name " + record.topicName() + ": no such topic found.");
+        }
     }
 
     private void maybeReplayClearElrRecord(Uuid topicId) {
@@ -225,6 +246,7 @@ public final class TopicsDelta {
      *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
      *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
      *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
+     *   <li>mirrorTopicStates: topics for which a mirror topic state change record was replayed, or the mirror name or desired mirror state changed</li>
      * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
@@ -239,6 +261,7 @@ public final class TopicsDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
+        Map<Uuid, LocalReplicaChanges.MirrorTopicState> mirrorTopicChanges = new HashMap<>();
 
         for (TopicDelta delta : changedTopics.values()) {
             LocalReplicaChanges changes = delta.localChanges(brokerId);
@@ -249,6 +272,16 @@ public final class TopicsDelta {
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
             directoryIds.putAll(changes.directoryIds());
+
+            // Compare against the existing topics image rather than the topic delta's image. When a broker loads a snapshot
+            // after being offline, its local metadata log may contain a stale mirror association that was removed while it
+            // was offline. Comparing against the existing image ensures that this removal is detected.
+            // Incremental update example: local log (mirror-A, MIRRORING) --> fetched snapshot (null, UNKNOWN).
+            // Snapshot update example: local log (mirror-A, MIRRORING) --> fetched snapshot (null, UNKNOWN).
+            LocalReplicaChanges.MirrorTopicState mirrorTopicState = delta.mirrorTopicStateChange(image.getTopic(delta.id()));
+            if (mirrorTopicState != null) {
+                mirrorTopicChanges.put(delta.id(), mirrorTopicState);
+            }
         }
 
         // Add all of the removed topic partitions to the set of locally removed partitions
@@ -261,7 +294,7 @@ public final class TopicsDelta {
             });
         });
 
-        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds, mirrorTopicChanges);
     }
 
     @Override

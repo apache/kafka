@@ -29,6 +29,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -122,12 +123,16 @@ public final class TopicsImageFixtures {
                             setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build())));
 
     public static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
+        return newTopicImage(name, id, null, MirrorPartitionState.UNKNOWN.value(), partitions);
+    }
+
+    public static TopicImage newTopicImage(String name, Uuid id, String mirrorName, byte desiredMirrorState, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
         int i = 0;
         for (PartitionRegistration partition : partitions) {
             partitionMap.put(i++, partition);
         }
-        return new TopicImage(name, id, partitionMap);
+        return new TopicImage(name, id, mirrorName, desiredMirrorState, partitionMap);
     }
 
     public static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
