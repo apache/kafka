@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -86,6 +87,26 @@ public class ImplicitLinkedHashMultiCollectionTest {
         expectExactTraversal(multiSet.iterator(), e1, e3);
         assertTrue(multiSet.remove(e1));
         expectExactTraversal(multiSet.iterator(), e3);
+    }
+
+    @Test
+    public void testAllowsDuplicateKeysBelowProbeLimit() {
+        int count = ImplicitLinkedHashMultiCollection.MAX_PROBE_LENGTH - 1;
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
+        for (int i = 0; i < count; i++) {
+            assertTrue(multiSet.add(new TestElement(1)));
+        }
+        assertEquals(count, multiSet.size());
+        assertEquals(count, multiSet.findAll(new TestElement(1)).size());
+    }
+
+    @Test
+    public void testResistsIdenticalKeyFlood() {
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
+        for (int i = 0; i < ImplicitLinkedHashMultiCollection.MAX_PROBE_LENGTH; i++) {
+            assertTrue(multiSet.add(new TestElement(1)));
+        }
+        assertThrows(RuntimeException.class, () -> multiSet.add(new TestElement(1)));
     }
 
     static void expectExactTraversal(Iterator<TestElement> iterator, TestElement... sequence) {

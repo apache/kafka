@@ -43,6 +43,8 @@ import java.util.List;
  */
 public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashCollection.Element>
         extends ImplicitLinkedHashCollection<E> {
+    static final int MAX_PROBE_LENGTH = 1000;
+
     public ImplicitLinkedHashMultiCollection() {
         super(0);
     }
@@ -67,7 +69,8 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
     @Override
     int addInternal(Element newElement, Element[] addElements) {
         int slot = slot(addElements, newElement);
-        for (int seen = 0; seen < addElements.length; seen++) {
+        int maxProbe = Math.min(addElements.length, MAX_PROBE_LENGTH);
+        for (int seen = 0; seen < maxProbe; seen++) {
             Element element = addElements[slot];
             if (element == null) {
                 addElements[slot] = newElement;
@@ -78,7 +81,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
             }
             slot = (slot + 1) % addElements.length;
         }
-        throw new RuntimeException("Not enough hash table slots to add a new element.");
+        throw new RuntimeException("Unable to add a new element: the probe sequence exceeded " + maxProbe + " slots.");
     }
 
     /**

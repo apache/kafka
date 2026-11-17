@@ -32,6 +32,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,6 +106,70 @@ public class ImplicitLinkedHashCollectionTest {
             long hashCode = 2654435761L * key;
             return (int) (hashCode >> 32);
         }
+    }
+
+    static final class CollidingElement implements ImplicitLinkedHashCollection.Element {
+        private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private final int key;
+        private final int hash;
+
+        CollidingElement(int key, int hash) {
+            this.key = key;
+            this.hash = hash;
+        }
+
+        @Override
+        public int prev() {
+            return prev;
+        }
+
+        @Override
+        public void setPrev(int prev) {
+            this.prev = prev;
+        }
+
+        @Override
+        public int next() {
+            return next;
+        }
+
+        @Override
+        public void setNext(int next) {
+            this.next = next;
+        }
+
+        @Override
+        public boolean elementKeysAreEqual(Object o) {
+            if (this == o) return true;
+            if ((o == null) || (o.getClass() != CollidingElement.class)) return false;
+            return key == ((CollidingElement) o).key;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if ((o == null) || (o.getClass() != CollidingElement.class)) return false;
+            CollidingElement that = (CollidingElement) o;
+            return key == that.key && hash == that.hash;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+    }
+
+    @Test
+    @Timeout(30)
+    public void testChangeCapacityIsLinearForContiguousRun() {
+        int count = 200_000;
+        ImplicitLinkedHashCollection<CollidingElement> coll = new ImplicitLinkedHashCollection<>();
+        for (int i = 0; i < count; i++) {
+            assertTrue(coll.add(new CollidingElement(i, i)));
+        }
+        assertEquals(count, coll.size());
+        assertNotNull(coll.find(new CollidingElement(count - 1, count - 1)));
     }
 
     @Test
