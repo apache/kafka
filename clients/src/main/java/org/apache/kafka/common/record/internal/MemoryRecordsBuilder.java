@@ -895,17 +895,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (numRecords == 0)
             return true;
 
-        final int recordSize;
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
-        } else {
-            int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
-            long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
-        }
-
         // Be conservative and not take compression of the new record into consideration.
-        return this.writeLimit >= estimatedBytesWritten() + recordSize;
+        return this.writeLimit >= estimatedBytesWritten() + nextRecordSizeInBytes(timestamp, key, value, headers);
     }
 
     /**
