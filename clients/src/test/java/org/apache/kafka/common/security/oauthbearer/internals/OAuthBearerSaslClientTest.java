@@ -38,7 +38,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerSaslClientTest {
 
@@ -140,14 +140,10 @@ public class OAuthBearerSaslClientTest {
     @Test
     public void testWrapsExtensionsCallbackHandlingErrorInSaslExceptionInFirstClientMessage() {
         OAuthBearerSaslClient client = new OAuthBearerSaslClient(new ExtensionsCallbackHandler(true));
-        try {
-            client.evaluateChallenge("".getBytes());
-            fail("Should have failed with " + SaslException.class.getName());
-        } catch (SaslException e) {
-            // assert it has caught our expected exception
-            assertEquals(ConfigException.class, e.getCause().getClass());
-            assertEquals(errorMessage, e.getCause().getMessage());
-        }
+        SaslException e = assertThrows(SaslException.class, () -> client.evaluateChallenge("".getBytes()),
+            "Should have failed with " + SaslException.class.getName());
+        assertEquals(ConfigException.class, e.getCause().getClass());
+        assertEquals(errorMessage, e.getCause().getMessage());
 
     }
 }

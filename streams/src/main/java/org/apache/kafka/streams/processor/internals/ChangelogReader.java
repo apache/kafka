@@ -55,6 +55,10 @@ public interface ChangelogReader extends ChangelogRegister {
     Set<TopicPartition> completedChangelogs();
 
     /**
+     * The last known <em>logical</em> end offset of each registered changelog partition:
+     * the end offset of the partition for a regular changelog, and the committed offset of the source topic for a
+     * source-topic changelog; {@code null} if unknown.
+     *
      * @return the logical changelog partitions end-offsets
      */
     Map<TopicPartition, Long> logicalChangelogEndOffsets();

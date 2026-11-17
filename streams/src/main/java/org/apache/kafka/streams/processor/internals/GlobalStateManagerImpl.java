@@ -70,6 +70,7 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLE
 import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
@@ -214,7 +215,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             if (store.persistent()) {
                 for (final TopicPartition partition : metadata.changelogPartitions) {
                     final Long offset = store.committedOffset(partition);
-                    if (offset != null) {
+                    if (offset != null && offset != OFFSET_UNKNOWN) {
                         currentOffsets.put(partition, offset);
                     }
                 }

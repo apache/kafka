@@ -104,16 +104,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Covers the warm-up task lifecycle under the streams group protocol (KIP-1071) end to end, with real Kafka Streams
  * clients against the broker-side {@link AssignmentRefinerImpl}: the warm-up budget, a warm-up task given up because
  * the target assignment no longer wants it, the offset reporting that drives promotion, the promotion gate on
- * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task surviving a coordinator failover, a
- * lagging warm-up task taking over when the active owner leaves, and members with several stream threads. The
- * scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
+ * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task with nothing to restore, a warm-up task
+ * surviving a coordinator failover, a lagging warm-up task taking over when the active owner leaves, and members with
+ * several stream threads. The scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
  *
  * <p>All stores are in memory, so a task that is closed rather than recycled has to restore its changelog from
  * scratch, which the restore listeners record. Where a test has to hold a warm-up task behind, a {@link RestoreGate}
  * withholds the records of the instance's restore consumer. A gate that is closed from the start would leave the
- * warm-up task's end offset unknown, since a standby task learns it only from its first restored batch, and an unknown
- * lag is never within {@code acceptable.recovery.lag}, whatever the threshold. So a gate first lets a small budget of
- * records through, which gives the warm-up task a known lag.
+ * warm-up task's end offset unknown: a standby task learns it from a restored batch, or once its restore consumer has
+ * reached the end of the changelog, and a closed gate prevents both. An unknown lag is never within
+ * {@code acceptable.recovery.lag}, whatever the threshold. So a gate first lets a small budget of records through, which
+ * gives the warm-up task a known lag.
  */
 @Timeout(600)
 @Tag("integration")
@@ -349,6 +350,31 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         awaitRestoreEnd(b, movedTask, 1);
         assertEquals(changelogSizes().get(movedTask), b.totalRestoredByTask.get(movedTask),
             "b should have taken over " + movedTask + " cold, restoring all of it from the changelog");
+    }
+
+    @Test
+    public void shouldPromoteAWarmupTaskThatHasNothingToRestore(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2);
+        final Instance a = startInstance("a");
+        waitForGroup("a to own all tasks", group -> isStable(group, 1) && activeTasks(group, a).size() == numPartitions);
+        awaitNoActiveTaskReportedAsRestoring();
+
+        // Nothing is produced, so the changelog is empty, and the warm-up task restores no batch to learn its end
+        // offset from. It is caught up once its restore consumer has reached the end of the empty changelog.
+        final Instance b = startInstance("b");
+        waitForGroup("b to take over a task", group -> isStable(group, 2)
+            && activeTasks(group, a).size() == 1
+            && activeTasks(group, b).size() == 1
+            && totalWarmupTasks(group) == 0);
+        final int movedTask = single(activeTasks(describeGroup(), b));
+        assertEquals(1, b.standbyUpdateStarts(movedTask), "b should have warmed up " + movedTask + " before taking it over");
+        TestUtils.waitForCondition(
+            () -> b.standbySuspensionsByTask.containsKey(movedTask),
+            WAIT_MS,
+            () -> "b's warm-up task " + movedTask + " was never suspended"
+        );
+        assertEquals(StandbyUpdateListener.SuspendReason.PROMOTED, b.standbySuspensionsByTask.get(movedTask),
+            "b should have turned its warm-up task " + movedTask + " into the active task in place");
     }
 
     @Test
