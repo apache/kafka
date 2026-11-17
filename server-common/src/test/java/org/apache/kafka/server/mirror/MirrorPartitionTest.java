@@ -17,6 +17,7 @@
 package org.apache.kafka.server.mirror;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidMirrorException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,12 +47,6 @@ class MirrorPartitionTest {
     }
 
     @Test
-    void testOfFactory() {
-        MirrorPartition mp = MirrorPartition.of(MIRROR_NAME, TOPIC_ID, PARTITION);
-        assertEquals(new MirrorPartition(MIRROR_NAME, TOPIC_ID, PARTITION), mp);
-    }
-
-    @Test
     void testNullMirrorName() {
         assertThrows(NullPointerException.class,
             () -> new MirrorPartition(null, TOPIC_ID, PARTITION));
@@ -68,7 +63,7 @@ class MirrorPartitionTest {
     @ParameterizedTest
     @MethodSource("invalidMirrorNames")
     void testMirrorNameRejected(String name) {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(InvalidMirrorException.class,
             () -> new MirrorPartition(name, TOPIC_ID, PARTITION));
     }
 
@@ -132,31 +127,37 @@ class MirrorPartitionTest {
         assertNotEquals(a, b);
     }
 
-    // -- toString and fromString --
+    // -- asCoordinatorKey, toString and fromString --
+
+    @Test
+    void testAsCoordinatorKey() {
+        MirrorPartition mp = new MirrorPartition(MIRROR_NAME, TOPIC_ID, PARTITION);
+        assertEquals(MIRROR_NAME + ":" + TOPIC_ID + ":" + PARTITION, mp.asCoordinatorKey());
+    }
 
     @Test
     void testToString() {
         MirrorPartition mp = new MirrorPartition(MIRROR_NAME, TOPIC_ID, PARTITION);
-        assertEquals(MIRROR_NAME + ":" + TOPIC_ID + ":" + PARTITION, mp.toString());
+        assertEquals(MIRROR_NAME + "-" + TOPIC_ID + "-" + PARTITION, mp.toString());
     }
 
     @Test
-    void testFromStringRoundTrip() {
+    void testParseRoundTrip() {
         MirrorPartition original = new MirrorPartition(MIRROR_NAME, TOPIC_ID, PARTITION);
-        assertEquals(original, MirrorPartition.fromString(original.toString()));
+        assertEquals(original, MirrorPartition.parse(original.asCoordinatorKey()));
     }
 
     @Test
-    void testFromStringNullKey() {
+    void testParseNullKey() {
         assertThrows(NullPointerException.class,
-            () -> MirrorPartition.fromString(null));
+            () -> MirrorPartition.parse(null));
     }
 
     @ParameterizedTest
     @MethodSource("invalidFromStringKeys")
-    void testFromStringRejected(String key) {
+    void testParseRejected(String key) {
         assertThrows(IllegalArgumentException.class,
-            () -> MirrorPartition.fromString(key));
+            () -> MirrorPartition.parse(key));
     }
 
     private static Stream<String> invalidFromStringKeys() {
@@ -164,9 +165,21 @@ class MirrorPartitionTest {
             "",
             "single",
             "only:two",
-            ":" + TOPIC_ID + ":0",
             "mirror:not-a-uuid:0",
-            "mirror:" + TOPIC_ID + ":abc",
+            "mirror:" + TOPIC_ID + ":abc"
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidMirrorNameFromStringKeys")
+    void testParseInvalidMirrorName(String key) {
+        assertThrows(InvalidMirrorException.class,
+            () -> MirrorPartition.parse(key));
+    }
+
+    private static Stream<String> invalidMirrorNameFromStringKeys() {
+        return Stream.of(
+            ":" + TOPIC_ID + ":0",
             "bad name:" + TOPIC_ID + ":0"
         );
     }
@@ -178,9 +191,9 @@ class MirrorPartitionTest {
     }
 
     @Test
-    void testFromStringNegativePartition() {
+    void testParseNegativePartition() {
         assertThrows(IllegalArgumentException.class,
-            () -> MirrorPartition.fromString("mirror:" + TOPIC_ID + ":-1"));
+            () -> MirrorPartition.parse("mirror:" + TOPIC_ID + ":-1"));
     }
 
     // -- coordinatingPartition --
@@ -199,5 +212,12 @@ class MirrorPartitionTest {
     void testCoordinatingPartitionDeterministic() {
         MirrorPartition mp = new MirrorPartition(MIRROR_NAME, TOPIC_ID, PARTITION);
         assertEquals(mp.coordinatingPartition(50), mp.coordinatingPartition(50));
+    }
+
+    @Test
+    void testCoordinatingPartitionStableMapping() {
+        Uuid fixedId = Uuid.fromString("AAAAAAAAAAAAAAAAAAAAAA");
+        MirrorPartition mp = new MirrorPartition("test-mirror", fixedId, 3);
+        assertEquals(43, mp.coordinatingPartition(50));
     }
 }

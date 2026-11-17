@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidMirrorException;
 import org.apache.kafka.common.errors.InvalidMirrorStateException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
@@ -440,7 +441,8 @@ public enum Errors {
     TOPIC_NOT_IN_CLUSTER_MIRROR(141, "The topic does not belong to the specified cluster mirror.", TopicNotInClusterMirrorException::new),
     CLUSTER_MIRROR_AUTHORIZATION_FAILED(142, "Cluster mirror authorization failed.", ClusterMirrorAuthorizationException::new),
     INVALID_CLUSTER_MIRROR_STATE(143, "Invalid cluster mirror state.", InvalidMirrorStateException::new),
-    MIRROR_CONFIG_NOT_AVAILABLE(144, "Mirror config is not available.", MirrorConfigNotAvailableException::new);
+    MIRROR_CONFIG_NOT_AVAILABLE(144, "Mirror config is not available.", MirrorConfigNotAvailableException::new),
+    INVALID_MIRROR(145, "The request attempted to perform an operation on an invalid mirror.", InvalidMirrorException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
