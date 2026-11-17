@@ -1322,6 +1322,7 @@ public class StoreChangelogReaderTest {
 
         assertEquals(lookupsBeforePause + 1, lookups.get());
         assertEquals(9L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(2, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
     }
 
     @Test
