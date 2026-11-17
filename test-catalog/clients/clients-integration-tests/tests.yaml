@@ -26,6 +26,7 @@ org.apache.kafka.clients.MetricsDuringTopicCreationDeletionTest:
 org.apache.kafka.clients.admin.AddPartitionsTest:
 - testCreatePartitions
 - testCreatePartitionsAcrossMetadataVersions
+- testIncreasePartitionsUsesReplicationFactorOfPartitionZero
 - testIncrementPartitions
 - testManualAssignmentOfReplicas
 - testMissingPartitionsInCreatePartitions

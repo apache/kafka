@@ -276,10 +276,10 @@ org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandlerTest:
 - testCleanShutdownFileBasic
 - testCleanShutdownFileCanParseWithUnknownFields
 - testCleanShutdownFileNonExist
-org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFileWithFailureHandlerTest:
+org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFileTest:
 - shouldPersistAndOverwriteAndReloadFile
 - shouldRetainValuesEvenIfCheckpointIsRecreated
-org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFileWithFailureHandlerTest:
+org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFileTest:
 - shouldHandleMultipleLines
 - shouldPersistAndOverwriteAndReloadFile
 - shouldReturnEmptyMapForEmptyFile
@@ -295,6 +295,7 @@ org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFileTest:
 - testSetRecordWithSameTopicId
 org.apache.kafka.storage.internals.epoch.LeaderEpochFileCacheTest:
 - shouldAddEpochAndMessageOffsetToCache
+- shouldAddEpochEntriesToCacheAndPersistThem
 - shouldClearAllEntries
 - shouldClearEarliestOnEmptyCache
 - shouldClearLatestOnEmptyCache
@@ -306,6 +307,7 @@ org.apache.kafka.storage.internals.epoch.LeaderEpochFileCacheTest:
 - shouldFetchEndOffsetOfEmptyCache
 - shouldFetchEpochForGivenOffset
 - shouldFetchLatestEpochOfEmptyCache
+- shouldFlushTruncatedEntriesAsynchronously
 - shouldGetFirstOffsetOfSubsequentEpochWhenOffsetRequestedForPreviousEpoch
 - shouldIncreaseAndTrackEpochsAsFollowerReceivesManyMessages
 - shouldIncreaseAndTrackEpochsAsLeadersChangeManyTimes

@@ -305,6 +305,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown
 - testCreatePartitionsFailsWithManualAssignmentWithAllFenced
 - testCreatePartitionsISRInvariants
+- testCreatePartitionsUsesReplicationFactorOfPartitionZero
 - testCreatePartitionsWithMutationQuotaExceeded
 - testCreatePartitionsWithOverSizedBatch
 - testCreateTopicFailsIfLogDirNameIsTooLong
