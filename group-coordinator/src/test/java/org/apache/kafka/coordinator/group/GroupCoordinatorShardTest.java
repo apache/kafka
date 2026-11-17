@@ -122,6 +122,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
@@ -2843,18 +2844,23 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetricsShard.class)
         );
 
-        ListGroupsResponseData.ListedGroup withOffsets = new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets");
-        ListGroupsResponseData.ListedGroup withoutOffsets = new ListGroupsResponseData.ListedGroup().setGroupId("without-offsets");
-        when(groupMetadataManager.listGroups(Set.of(), Set.of(), 100L)).thenReturn(List.of(withOffsets, withoutOffsets));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Predicate<String>> groupIdFilterCaptor = ArgumentCaptor.forClass(Predicate.class);
+        List<ListGroupsResponseData.ListedGroup> groups = List.of(new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets"));
+        when(groupMetadataManager.listGroups(eq(Set.of()), eq(Set.of()), groupIdFilterCaptor.capture(), eq(100L))).thenReturn(groups);
 
-        // Without the filter, the offsets are not read.
-        assertEquals(List.of(withOffsets, withoutOffsets), coordinator.listGroups(List.of(), List.of(), false, 100L));
+        // Without the filter, every group matches and the offsets are not read.
+        assertEquals(groups, coordinator.listGroups(List.of(), List.of(), false, 100L));
+        assertTrue(groupIdFilterCaptor.getValue().test("with-offsets"));
+        assertTrue(groupIdFilterCaptor.getValue().test("without-offsets"));
         verifyNoInteractions(offsetMetadataManager);
 
-        // With the filter, the groups and the offsets are read at the same committed offset.
+        // With the filter, the offsets are read at the same committed offset as the groups.
         when(offsetMetadataManager.hasCommittedOffsets("with-offsets", 100L)).thenReturn(true);
         when(offsetMetadataManager.hasCommittedOffsets("without-offsets", 100L)).thenReturn(false);
-        assertEquals(List.of(withOffsets), coordinator.listGroups(List.of(), List.of(), true, 100L));
+        assertEquals(groups, coordinator.listGroups(List.of(), List.of(), true, 100L));
+        assertTrue(groupIdFilterCaptor.getValue().test("with-offsets"));
+        assertFalse(groupIdFilterCaptor.getValue().test("without-offsets"));
     }
 
     @Test

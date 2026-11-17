@@ -143,6 +143,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -902,16 +903,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Set<String> statesFilterSet = new HashSet<>(statesFilter);
         Set<String> typesFilterSet = new HashSet<>(typesFilter);
 
-        List<ListGroupsResponseData.ListedGroup> groups =
-            groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
+        Predicate<String> groupIdFilter = requireCommittedOffsets
+            ? groupId -> offsetMetadataManager.hasCommittedOffsets(groupId, committedOffset)
+            : groupId -> true;
 
-        if (!requireCommittedOffsets) {
-            return groups;
-        }
-
-        return groups.stream()
-            .filter(group -> offsetMetadataManager.hasCommittedOffsets(group.groupId(), committedOffset))
-            .toList();
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, groupIdFilter, committedOffset);
     }
 
     /**

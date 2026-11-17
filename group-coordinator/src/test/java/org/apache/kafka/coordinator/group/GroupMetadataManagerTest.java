@@ -11640,6 +11640,40 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testListGroupsAppliesGroupIdFilterAfterStatesAndTypesFilters() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder("consumer-group-id", 10))
+            .build();
+        for (String groupId : List.of("classic-group-1", "classic-group-2")) {
+            context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord(
+                groupId,
+                new GroupMetadataValue()
+                    .setMembers(List.of())
+                    .setGeneration(2)
+                    .setLeader(null)
+                    .setProtocolType("classic")
+                    .setProtocol("range")
+                    .setCurrentStateTimestamp(context.time.milliseconds())));
+        }
+        context.commit();
+
+        Set<String> testedGroupIds = new HashSet<>();
+        List<ListGroupsResponseData.ListedGroup> groups = context.groupMetadataManager.listGroups(
+            Set.of(),
+            Set.of(Group.GroupType.CLASSIC.toString()),
+            groupId -> {
+                testedGroupIds.add(groupId);
+                return groupId.equals("classic-group-1");
+            },
+            context.lastCommittedOffset
+        );
+
+        assertEquals(List.of("classic-group-1"), groups.stream().map(ListGroupsResponseData.ListedGroup::groupId).toList());
+        // The consumer group does not match the types filter, so the group id filter is not applied to it.
+        assertEquals(Set.of("classic-group-1", "classic-group-2"), testedGroupIds);
+    }
+
+    @Test
     public void testConsumerGroupDescribeNoErrors() {
         List<String> consumerGroupIds = List.of("group-id-1", "group-id-2");
         int epoch = 10;

@@ -659,6 +659,8 @@ public class GroupMetadataManager {
      * @param typesFilter       The types of the groups we want to list.
      *                          If empty, all groups are returned with their type.
      *                          If invalid, no groups are returned.
+     * @param groupIdFilter     Applied to the ids of the groups that match the states and types filters.
+     *                          Only the groups whose id matches are returned.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
@@ -666,6 +668,7 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         Set<String> statesFilter,
         Set<String> typesFilter,
+        Predicate<String> groupIdFilter,
         long committedOffset
     ) {
         // Converts each state filter string to lower case for a case-insensitive comparison.
@@ -690,6 +693,7 @@ public class GroupMetadataManager {
 
         return groupStream
             .filter(combinedFilter)
+            .filter(group -> groupIdFilter.test(group.groupId()))
             .map(group -> group.asListedGroup(committedOffset))
             .toList();
     }
