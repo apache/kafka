@@ -511,6 +511,37 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testWriteStateInvalidStateBatchRequestData() {
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(10)
+                        .setLastOffset(5)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.INVALID_STATE_BATCH.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertNull(shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertNull(shard.getLeaderMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
     public void testWriteNullMetadataImage() {
         initSharePartition(shard, SHARE_PARTITION_KEY);
 

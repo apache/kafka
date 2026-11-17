@@ -102,7 +102,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public class IntegrationTestUtils {
 
-    public static final long DEFAULT_TIMEOUT = 60 * 1000L;
+    public static final long DEFAULT_TIMEOUT_MS = 60 * 1000L;
     private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
 
     /**
@@ -120,7 +120,7 @@ public class IntegrationTestUtils {
         final Set<Integer> partitions) {
 
         final long start = System.currentTimeMillis();
-        final long deadline = start + DEFAULT_TIMEOUT;
+        final long deadline = start + DEFAULT_TIMEOUT_MS;
 
         do {
             if (Thread.currentThread().isInterrupted()) {
@@ -150,7 +150,7 @@ public class IntegrationTestUtils {
         final StateQueryRequest<R> request) {
 
         final long start = System.currentTimeMillis();
-        final long deadline = start + DEFAULT_TIMEOUT;
+        final long deadline = start + DEFAULT_TIMEOUT_MS;
 
         StateQueryResult<R> result;
         do {
@@ -627,7 +627,7 @@ public class IntegrationTestUtils {
     public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(final Properties consumerConfig,
                                                                                 final String topic,
                                                                                 final int expectedNumRecords) throws Exception {
-        return waitUntilMinRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+        return waitUntilMinRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT_MS);
     }
 
     /**
@@ -677,7 +677,7 @@ public class IntegrationTestUtils {
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
                                                                                   final String topic,
                                                                                   final int expectedNumRecords) throws Exception {
-        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT_MS);
     }
 
     /**
@@ -762,7 +762,7 @@ public class IntegrationTestUtils {
     public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
                                                                                     final String topic,
                                                                                     final List<KeyValue<K, V>> expectedRecords) throws Exception {
-        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT);
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT_MS);
     }
 
     /**
@@ -779,7 +779,7 @@ public class IntegrationTestUtils {
     public static <K, V> List<KeyValueTimestamp<K, V>> waitUntilFinalKeyValueTimestampRecordsReceived(final Properties consumerConfig,
                                                                                                       final String topic,
                                                                                                       final List<KeyValueTimestamp<K, V>> expectedRecords) throws Exception {
-        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT, true);
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, DEFAULT_TIMEOUT_MS, true);
     }
 
     /**
@@ -891,7 +891,7 @@ public class IntegrationTestUtils {
     }
 
     public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList) throws Exception {
-        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(DEFAULT_TIMEOUT));
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofMillis(DEFAULT_TIMEOUT_MS));
     }
 
     /**
@@ -1270,7 +1270,7 @@ public class IntegrationTestUtils {
         });
         driver.start();
         try {
-            latch.await(DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            latch.await(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (final InterruptedException e) {
             throw new RuntimeException("Streams didn't start in time.", e);
         }
@@ -1280,14 +1280,14 @@ public class IntegrationTestUtils {
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
                                  final QueryableStoreType<S> storeType) throws Exception {
-        return getStore(DEFAULT_TIMEOUT, storeName, streams, storeType);
+        return getStore(DEFAULT_TIMEOUT_MS, storeName, streams, storeType);
     }
 
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
                                  final boolean enableStaleQuery,
                                  final QueryableStoreType<S> storeType) throws Exception {
-        return getStore(DEFAULT_TIMEOUT, storeName, streams, enableStaleQuery, storeType);
+        return getStore(DEFAULT_TIMEOUT_MS, storeName, streams, enableStaleQuery, storeType);
     }
 
     public static <S> S getStore(final long waitTime,
@@ -1310,7 +1310,7 @@ public class IntegrationTestUtils {
 
     public static <S> S getStore(final KafkaStreams streams,
                                  final StoreQueryParameters<S> param) throws Exception {
-        return getStore(DEFAULT_TIMEOUT, streams, param);
+        return getStore(DEFAULT_TIMEOUT_MS, streams, param);
     }
 
     public static <S> S getStore(final long waitTime,

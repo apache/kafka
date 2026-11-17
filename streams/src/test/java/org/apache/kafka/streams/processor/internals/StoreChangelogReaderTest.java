@@ -388,7 +388,10 @@ public class StoreChangelogReaderTest {
         setupStore();
         @SuppressWarnings("unchecked")
         final Map<TaskId, Task> mockTasks = mock(Map.class);
-        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        // the reader starts out restoring actives, so it never restores the standby changelog
+        if (type == ACTIVE) {
+            when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        }
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
 
@@ -420,6 +423,11 @@ public class StoreChangelogReaderTest {
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        } else {
+            // initializing the changelog starts the update, which the reader does not run while restoring actives
+            assertEquals(storeName, standbyListener.capturedStore(UPDATE_START));
+            assertNull(standbyListener.capturedStore(UPDATE_BATCH));
+            assertNull(standbyListener.capturedStore(UPDATE_SUSPENDED));
         }
     }
 
@@ -871,6 +879,36 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldSkipPausedActiveChangelogAfterPositionTimeout() {
+        setupActiveStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+        final Task mockTask = mock(Task.class);
+        when(storeMetadata.offset()).thenReturn(10L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public long position(final TopicPartition partition) {
+                throw new TimeoutException("KABOOM!");
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.register(tp, activeStateManager);
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+
+        changelogReader.transitToUpdateStandby();
+        changelogReader.restore(Collections.emptyMap());
+
+        assertEquals(Set.of(tp), consumer.paused());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+    }
+
+    @Test
     public void shouldThrowIfPositionFail() {
         setupActiveStateManager();
         setupStoreMetadata();
@@ -1207,17 +1245,17 @@ public class StoreChangelogReaderTest {
     public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
         // Verifies the 3-step fallback chain in changelogEndOffsets():
         //   1) ChangelogMetadata.restoreEndOffset (preferred)
-        //   2) StateStoreMetadata.endOffset (physical Fetch high-water-mark)
+        //   2) StateStoreMetadata.endOffset + 1 (the store's end offset is the last offset, not the next one)
         //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
         // This test wires a standby with restoreEndOffset == null but
-        // storeMetadata.endOffset == 42L → fallback returns 42L.
+        // storeMetadata.endOffset == 42L → fallback returns 43L.
         setupStandbyStateManager();
         when(storeMetadata.endOffset()).thenReturn(42L);
 
         changelogReader.register(tp, standbyStateManager);
 
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(Long.valueOf(42L), changelogReader.logicalChangelogEndOffsets().get(tp));
+        assertEquals(Long.valueOf(43L), changelogReader.logicalChangelogEndOffsets().get(tp));
     }
 
     @Test
@@ -1480,6 +1518,46 @@ public class StoreChangelogReaderTest {
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
         assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
         assertEquals(Set.of(tp1, tp2), consumer.paused());
+    }
+
+    @Test
+    public void shouldPauseRestoringActiveChangelogsWhenUpdatingStandbyTasks() {
+        setupActiveStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId activeTaskId = new TaskId(0, 0);
+        final TaskId standbyTaskId = new TaskId(0, 1);
+        when(activeStateManager.taskId()).thenReturn(activeTaskId);
+        when(standbyStateManager.taskId()).thenReturn(standbyTaskId);
+        when(standbyStateManager.taskType()).thenReturn(STANDBY);
+        when(standbyStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(storeMetadataOne.store()).thenReturn(store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(storeMetadataOne.offset()).thenReturn(5L);
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+        final Task activeTask = mock(Task.class);
+        final Task standbyTask = mock(Task.class);
+        final Map<TaskId, Task> tasks = Map.of(activeTaskId, activeTask, standbyTaskId, standbyTask);
+
+        changelogReader.register(tp, activeStateManager);
+        changelogReader.register(tp1, standbyStateManager);
+        changelogReader.restore(tasks);
+        changelogReader.transitToUpdateStandby();
+
+        changelogReader.restore(Collections.singletonMap(standbyTaskId, standbyTask));
+
+        assertEquals(Set.of(tp), consumer.paused());
+        assertEquals(STANDBY_UPDATING, changelogReader.state());
+
+        changelogReader.enforceRestoreActive();
+        changelogReader.restore(tasks);
+
+        assertEquals(Set.of(tp1), consumer.paused());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
+
+        changelogReader.transitToUpdateStandby();
+        assertThrows(IllegalStateException.class, () -> changelogReader.restore(tasks));
     }
 
     @Test

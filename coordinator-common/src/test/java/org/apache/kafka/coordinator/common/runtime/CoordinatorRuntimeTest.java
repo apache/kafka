@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ControlRecordType;
@@ -230,6 +231,65 @@ public class CoordinatorRuntimeTest {
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
+    }
+
+    @Test
+    public void testScheduleLoadingWhenOnLoadedFails() {
+        MockTimer timer = new MockTimer();
+        MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
+        MockCoordinatorShardBuilderSupplier supplier =
+            mock(MockCoordinatorShardBuilderSupplier.class);
+        MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+
+        try (
+            Metrics metrics = new Metrics();
+            CoordinatorRuntimeMetricsImpl runtimeMetrics =
+                new CoordinatorRuntimeMetricsImpl(metrics, "test-group", false)
+        ) {
+            CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+                new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                    .withTime(timer.time())
+                    .withTimer(timer)
+                    .withLoader(loader)
+                    .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                    .withEventProcessor(new DirectEventProcessor())
+                    .withPartitionWriter(new MockPartitionWriter())
+                    .withCoordinatorShardBuilderSupplier(supplier)
+                    .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                    .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                    .withSerializer(new StringSerializer())
+                    .withExecutorService(mock(ExecutorService.class))
+                    .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                    .build();
+
+            when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+            when(builder.withLogContext(any())).thenReturn(builder);
+            when(builder.withTime(any())).thenReturn(builder);
+            when(builder.withTimer(any())).thenReturn(builder);
+            when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+            when(builder.withTopicPartition(any())).thenReturn(builder);
+            when(builder.withExecutor(any())).thenReturn(builder);
+            when(builder.build()).thenReturn(coordinator);
+            when(supplier.get()).thenReturn(builder);
+            doThrow(new IllegalStateException("onLoaded failed")).when(coordinator).onLoaded(any());
+            CompletableFuture<CoordinatorLoader.LoadSummary> future = new CompletableFuture<>();
+            when(loader.load(eq(TP), any())).thenReturn(future);
+
+            runtime.scheduleLoadOperation(TP, 0);
+            future.complete(null);
+
+            assertEquals(FAILED, runtime.contextOrThrow(TP).state);
+            assertEquals(
+                Map.of("loading", 0L, "active", 0L, "failed", 1L),
+                Stream.of("loading", "active", "failed").collect(Collectors.toMap(
+                    state -> state,
+                    state -> metrics.metric(
+                        metrics.metricName("num-partitions", "test-group", "", "state", state)
+                    ).metricValue()
+                ))
+            );
+        }
     }
 
     @Test
