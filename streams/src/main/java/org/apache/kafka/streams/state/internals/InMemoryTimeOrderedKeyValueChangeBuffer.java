@@ -447,16 +447,14 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         // The callback may re-enter this buffer, so it must not run while we iterate over sortedMap. We therefore
         // only deserialize and remove the entries (through the iterator) inside the loop, and invoke the callback
         // afterwards. Deserializing before removing means an entry that fails to deserialize stays buffered.
+        // Once an entry is removed it stays removed, even if a callback throws; the exception then propagates and
+        // the remaining callbacks are not invoked (the task fails and the buffer is restored from the changelog).
         final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
 
         try {
-            while (iterator.hasNext()) {
-                if (!predicate.get()) {
-                    break;
-                }
-
-                final Map.Entry<BufferKey, BufferValue> next = iterator.next();
-                if (evictions.isEmpty() && next.getKey().time() != minTimestamp) {
+            Map.Entry<BufferKey, BufferValue> next = iterator.hasNext() ? iterator.next() : null;
+            while (next != null && predicate.get()) {
+                if (next.getKey().time() != minTimestamp) {
                     throw new IllegalStateException(
                         "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
                             next.getKey().time() + "]"
@@ -474,8 +472,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
                 iterator.remove();
                 index.remove(serializedKey);
-                // the predicate (e.g. minTimestamp() or bufferSize()) is re-evaluated on the next iteration
-                minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
+
+                // peek at the next entry so the predicate (e.g. minTimestamp() or bufferSize()) sees the updated state
+                next = iterator.hasNext() ? iterator.next() : null;
+                minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time();
             }
         } finally {
             // also hand over what was already removed if a later entry failed, so no evicted record is lost
