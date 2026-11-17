@@ -660,7 +660,7 @@ public class StreamsGroup implements Group {
      * @return Whether the intermediate assignment of the given assignment epoch was derived by a previous coordinator,
      *         which is the case for any epoch up to the one at which the coordinator loaded the group.
      */
-    public boolean wasMintedBeforeLoad(int assignmentEpoch) {
+    public boolean isAssignmentEpochFromBeforeLoad(int assignmentEpoch) {
         return assignmentEpoch <= assignmentEpochAtLoad;
     }
 

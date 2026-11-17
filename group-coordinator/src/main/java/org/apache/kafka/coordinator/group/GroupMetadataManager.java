@@ -4806,11 +4806,11 @@ public class GroupMetadataManager {
         if (cached != null) {
             return cached;
         }
-        // If the epoch was minted before the coordinator loaded the group, its intermediate assignment is lost, and
+        // If the group had reached this epoch when the coordinator loaded it, its intermediate assignment is lost, and
         // members may already have reconciled to the epoch under it. They are told nothing new within the epoch, so a
         // member that holds an active task would never release it to another member.
         final Map<String, TasksTuple> refinedAssignment = refineAssignment(
-            group, targetAssignment, configuredTopology, group.wasMintedBeforeLoad(assignmentEpoch));
+            group, targetAssignment, configuredTopology, group.isAssignmentEpochFromBeforeLoad(assignmentEpoch));
         maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
         return refinedAssignment;
     }
