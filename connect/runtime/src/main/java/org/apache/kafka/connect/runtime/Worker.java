@@ -161,6 +161,8 @@ public final class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
+    private final Set<String> connectorsFailedToStart = ConcurrentHashMap.newKeySet();
+    private final Set<ConnectorTaskId> tasksFailedToStart = ConcurrentHashMap.newKeySet();
     private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter = Optional.empty();
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
@@ -355,6 +357,7 @@ public final class Worker {
                 }
             } catch (Throwable t) {
                 log.error("Failed to start connector {}", connName, t);
+                connectorsFailedToStart.add(connName);
                 connectorStatusListener.onFailure(connName, t);
                 onConnectorStateChange.onCompletion(t, null);
                 return;
@@ -471,7 +474,10 @@ public final class Worker {
             log.info("Stopping connector {}", connName);
 
             if (workerConnector == null) {
-                log.warn("Ignoring stop request for unowned connector {}", connName);
+                if (connectorsFailedToStart.contains(connName))
+                    log.info("Ignoring stop request for connector {} that failed to start", connName);
+                else
+                    log.warn("Ignoring stop request for unowned connector {}", connName);
                 return;
             }
 
@@ -491,8 +497,12 @@ public final class Worker {
     private void awaitStopConnector(String connName, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             WorkerConnector connector = connectors.remove(connName);
+            boolean failedToStart = connectorsFailedToStart.remove(connName);
             if (connector == null) {
-                log.warn("Ignoring await stop request for non-present connector {}", connName);
+                if (failedToStart)
+                    log.debug("Ignoring await stop request for connector {} that failed to start", connName);
+                else
+                    log.warn("Ignoring await stop request for non-present connector {}", connName);
                 return;
             }
 
@@ -726,6 +736,7 @@ public final class Worker {
                 Utils.closeQuietly(valueConverterPlugin, "value converter");
                 Utils.closeQuietly(headerConverterPlugin, "header converter");
                 log.error("Failed to start task {}", id, t);
+                tasksFailedToStart.add(id);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
                 taskStatusListener.onFailure(id, t);
                 return false;
@@ -1114,7 +1125,10 @@ public final class Worker {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask<?, ?> task = tasks.get(taskId);
             if (task == null) {
-                log.warn("Ignoring stop request for unowned task {}", taskId);
+                if (tasksFailedToStart.contains(taskId))
+                    log.info("Ignoring stop request for task {} that failed to start", taskId);
+                else
+                    log.warn("Ignoring stop request for unowned task {}", taskId);
                 return;
             }
 
@@ -1139,8 +1153,12 @@ public final class Worker {
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask<?, ?> task = tasks.remove(taskId);
+            boolean failedToStart = tasksFailedToStart.remove(taskId);
             if (task == null) {
-                log.warn("Ignoring await stop request for non-present task {}", taskId);
+                if (failedToStart)
+                    log.debug("Ignoring await stop request for task {} that failed to start", taskId);
+                else
+                    log.warn("Ignoring await stop request for non-present task {}", taskId);
                 return;
             }
 
