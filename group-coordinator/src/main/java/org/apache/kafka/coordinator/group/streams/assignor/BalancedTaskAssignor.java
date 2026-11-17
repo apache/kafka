@@ -319,14 +319,24 @@ public class BalancedTaskAssignor implements TaskAssignor {
             ProcessTasks::assignedTaskLoad,
             quota::hasRoom
         );
-        final Map<TaskId, Integer> rackAwareStandbys = Utils.newHashMap(statefulTasks.size());
+        final Map<TaskId, List<ProcessTasks>> holders = Utils.newHashMap(statefulTasks.size());
         for (final TaskId task : statefulTasks) {
-            picker.startTask(List.of(activeTaskToProcess.get(task)));
-            int placed = 0;
-            while (placed < numStandbyReplicas) {
+            final List<ProcessTasks> taskHolders = new ArrayList<>(1 + numStandbyReplicas);
+            taskHolders.add(activeTaskToProcess.get(task));
+            holders.put(task, taskHolders);
+        }
+        // Every task gets its first standby before any task gets its second one, and so on.
+        for (int replica = 0; replica < numStandbyReplicas; replica++) {
+            for (final TaskId task : statefulTasks) {
+                final List<ProcessTasks> taskHolders = holders.get(task);
+                // A task that got no standby in an earlier round gets none in a later one either.
+                if (taskHolders.size() <= replica) {
+                    continue;
+                }
+                picker.startTask(taskHolders);
                 final RackAwareStandbyPicker.Pick<ProcessTasks> pick = picker.pick();
                 if (pick == null) {
-                    break;
+                    continue;
                 }
                 final ProcessTasks process = pick.leastLoaded();
                 process.standbyTasks.add(task);
@@ -339,10 +349,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 } else {
                     picker.updated(process);
                 }
-                placed++;
+                taskHolders.add(process);
             }
-            rackAwareStandbys.put(task, placed);
         }
+        final Map<TaskId, Integer> rackAwareStandbys = Utils.newHashMap(statefulTasks.size());
+        holders.forEach((task, taskHolders) -> rackAwareStandbys.put(task, taskHolders.size() - 1));
         return rackAwareStandbys;
     }
 
@@ -561,7 +572,8 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         private void move(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
             final List<ProcessTasks> taskHolders = holders.get(task);
-            taskHolders.set(taskHolders.indexOf(source), destination);
+            taskHolders.remove(source);
+            taskHolders.add(destination);
         }
     }
 
