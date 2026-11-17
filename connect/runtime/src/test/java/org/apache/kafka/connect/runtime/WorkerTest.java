@@ -964,6 +964,77 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testStopConnectorThatFailedToStart(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
+        final String nonConnectorClass = "java.util.HashMap";
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, nonConnectorClass);
+
+        Exception exception = new ConnectException("Failed to find Connector");
+        mockKafkaClusterId();
+        mockGenericIsolation();
+
+        when(plugins.newConnector(nonConnectorClass, null)).thenThrow(exception);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        FutureCallback<TargetState> onStart = new FutureCallback<>();
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onStart);
+        assertThrows(ExecutionException.class, () -> onStart.get(0, TimeUnit.MILLISECONDS));
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            worker.stopAndAwaitConnector(CONNECTOR_ID);
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.WARN));
+
+            worker.stopAndAwaitConnector(CONNECTOR_ID);
+            assertEquals(List.of(
+                    "Ignoring stop request for unowned connector " + CONNECTOR_ID,
+                    "Ignoring await stop request for non-present connector " + CONNECTOR_ID
+            ), logCaptureAppender.getMessages(Level.WARN));
+        }
+
+        verify(connectorStatusListener).onFailure(eq(CONNECTOR_ID), any(ConnectException.class));
+        verifyKafkaClusterId();
+        verifyGenericIsolation();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStopTaskThatFailedToStart(boolean enableTopicCreation) {
+        setup(enableTopicCreation);
+        mockInternalConverters();
+        mockFileConfigProvider();
+
+        Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
+
+        mockKafkaClusterId();
+        mockGenericIsolation();
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        assertFalse(worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Worker.class)) {
+            worker.stopAndAwaitTask(TASK_ID);
+            assertEquals(List.of(), logCaptureAppender.getMessages(Level.WARN));
+
+            worker.stopAndAwaitTask(TASK_ID);
+            assertEquals(List.of(
+                    "Ignoring stop request for unowned task " + TASK_ID,
+                    "Ignoring await stop request for non-present task " + TASK_ID
+            ), logCaptureAppender.getMessages(Level.WARN));
+        }
+
+        verify(taskStatusListener).onFailure(eq(TASK_ID), any(ConfigException.class));
+        verifyKafkaClusterId();
+        verifyGenericIsolation();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testStartTaskFailureAfterConverterWrappingClosesConverterPlugins(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
