@@ -228,14 +228,14 @@ public class ShareSessionCache {
     }
 
     /**
-     * Get the key of the share session that the client connection was last used for.
+     * Get the key of the active share session for the client connection.
      *
      * @param connectionId The client connection id.
-     * @return The share session key, or null if the connection has not been used for a share session.
+     * @return The share session key, or null if the connection has no active share session.
      */
     public synchronized ShareSessionKey connectionShareSessionKey(String connectionId) {
         SessionKeyAndState sessionKeyAndState = connectionIdToSessionMap.get(connectionId);
-        return sessionKeyAndState == null ? null : sessionKeyAndState.shareSessionKey();
+        return sessionKeyAndState == null || sessionKeyAndState.stale() ? null : sessionKeyAndState.shareSessionKey();
     }
 
     /**

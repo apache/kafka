@@ -409,16 +409,51 @@ public class SharePartitionManager implements AutoCloseable {
         String groupId,
         String memberId
     ) {
+        return releaseSession(groupId, memberId, Optional.empty());
+    }
+
+    /**
+     * The release session method is used to release the session for the memberId of respective group,
+     * if the session was created by the given client connection.
+     *
+     * @param groupId The group id, this is used to identify the share group.
+     * @param memberId The member id is used to identify the client.
+     * @param clientConnectionId The client connection id.
+     *
+     * @return A future that will be completed with the release response.
+     */
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
+        String groupId,
+        String memberId,
+        String clientConnectionId
+    ) {
+        return releaseSession(groupId, memberId, Optional.of(clientConnectionId));
+    }
+
+    private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
+        String groupId,
+        String memberId,
+        Optional<String> clientConnectionId
+    ) {
         log.trace("Release session request for groupId: {}, memberId: {}", groupId, memberId);
-        List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
-            groupId, memberId);
-        // Remove the share session from the cache.
         ShareSessionKey key = shareSessionKey(groupId, memberId);
-        if (cache.remove(key) == null) {
-            log.error("Share session error for {}: no such share session found", key);
-            return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
-        } else {
-            log.debug("Removed share session with key {}", key);
+        List<TopicIdPartition> topicIdPartitions;
+        synchronized (cache) {
+            if (clientConnectionId.isPresent()) {
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null || !shareSession.connectionId().equals(clientConnectionId.get())) {
+                    log.error("Share session error for {}: no such share session found", key);
+                    return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+                }
+            }
+            topicIdPartitions = cachedTopicIdPartitionsInShareSession(groupId, memberId);
+            // Remove the share session from the cache.
+            if (cache.remove(key) == null) {
+                log.error("Share session error for {}: no such share session found", key);
+                return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+            } else {
+                log.debug("Removed share session with key {}", key);
+            }
         }
 
         // Additionally release the acquired records for the respective member.

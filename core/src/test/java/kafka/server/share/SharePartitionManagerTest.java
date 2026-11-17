@@ -661,6 +661,45 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testShareSessionRequestWithAnotherMemberIdAfterSessionReleased() {
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(new ShareSessionCache(10))
+            .build();
+
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        String groupId = "grp";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        sharePartitionManager.newContext(groupId, List.of(tp0), EMPTY_PART_LIST, memberId1, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID);
+        sharePartitionManager.releaseSession(groupId, memberId1, CONNECTION_ID).join();
+
+        assertDoesNotThrow(() -> sharePartitionManager.newContext(groupId, List.of(tp0), EMPTY_PART_LIST,
+            memberId2, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID));
+        assertDoesNotThrow(() -> sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId2, 1, CONNECTION_ID));
+    }
+
+    @Test
+    public void testReleaseSessionFromAnotherConnection() {
+        ShareSessionCache cache = new ShareSessionCache(10);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        sharePartitionManager.newContext(groupId, List.of(tp0), EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID);
+        sharePartitionManager.newContext(groupId, List.of(tp0), EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false, "id-2");
+
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+            sharePartitionManager.releaseSession(groupId, memberId, CONNECTION_ID);
+        assertTrue(resultFuture.isCompletedExceptionally());
+        Throwable exception = assertThrows(ExecutionException.class, resultFuture::get);
+        assertInstanceOf(ShareSessionNotFoundException.class, exception.getCause());
+        assertEquals("id-2", cache.get(new ShareSessionKey(groupId, memberId)).connectionId());
+    }
+
+    @Test
     public void testSubsequentShareSession() {
         sharePartitionManager = SharePartitionManagerBuilder.builder().build();
         Map<Uuid, String> topicNames = new HashMap<>();

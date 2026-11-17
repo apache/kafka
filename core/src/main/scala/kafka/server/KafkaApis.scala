@@ -3500,7 +3500,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManager.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId, request.context.connectionId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
@@ -3731,7 +3731,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManager.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId, request.context.connectionId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +

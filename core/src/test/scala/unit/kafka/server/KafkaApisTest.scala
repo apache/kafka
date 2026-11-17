@@ -5034,7 +5034,7 @@ class KafkaApisTest extends Logging {
       ))
     ).thenThrow(Errors.INVALID_REQUEST.exception)
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -5929,7 +5929,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId4, 0, topicName4), false
     ))
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -7363,7 +7363,7 @@ class KafkaApisTest extends Logging {
       new FinalContext()
     )
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -7857,7 +7857,7 @@ class KafkaApisTest extends Logging {
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -7926,7 +7926,7 @@ class KafkaApisTest extends Logging {
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
