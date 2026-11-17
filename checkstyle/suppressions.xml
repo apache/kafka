@@ -320,6 +320,7 @@
     <suppress checks="ImportControl" files="TransactionsExpirationTest.java"/>
     <suppress checks="ImportControl" files="TransactionsTest.java"/>
     <suppress checks="ImportControl" files="TransactionsWithMaxInFlightOneTest.java"/>
+    <suppress checks="ImportControl" files="TransactionsWith2PCTest.java"/>
     <suppress checks="(NPathComplexity|ClassDataAbstractionCoupling|ClassFanOutComplexity|JavaNCSS|MethodLength)" files="(LogCleanerTest|LogLoaderTest).java"/>
     <suppress checks="ParameterNumber" files="LogTestUtils.java"/>
 
