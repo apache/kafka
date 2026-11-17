@@ -20800,14 +20800,13 @@ public class GroupMetadataManagerTest {
             context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10));
         assertEquals(10, group.groupEpoch());
         assertEquals(List.of(), result.response().data().warmupTasks());
-        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
-        assertEquals(10, group.groupEpoch());
 
         // Once every member has been heard from, memberB is handed a warm-up task rather than the active one: 0_2
-        // keeps running on memberA until the warm-up has caught up, which is a refinement step of its own and so bumps
-        // the epoch.
-        result = context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10));
+        // keeps running on memberA until the warm-up has caught up. The warm-up task is a refinement step of its own,
+        // so memberA's heartbeat bumps the epoch.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
         assertEquals(11, group.groupEpoch());
+        result = context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10));
         assertEquals(mkResponseTasks("subtopology1", 2), result.response().data().warmupTasks());
         assertEquals(List.of(), result.response().data().activeTasks());
         assertEquals(
