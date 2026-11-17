@@ -828,7 +828,11 @@ public class StreamsMembershipManager implements RequestManager {
                 }
             }
         }
-        return !assignmentDelayed || targetAssignment.isGroupReady;
+        if (assignmentDelayed) {
+            return targetAssignment.isGroupReady;
+        } else {
+            return true;
+        }
     }
 
     /**
