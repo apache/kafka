@@ -38,10 +38,12 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.Collections;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -197,11 +199,14 @@ public class TimestampedKeyValueStoreBuilderTest {
     public void inMemoryMarkerShouldPropagateReadOnlyToWrappedStore() {
         setUpWithoutInner();
         when(supplier.get()).thenReturn(new InMemoryKeyValueStore("name"));
-        final TimestampedKeyValueStore<String, String> store =
-            builder.withLoggingDisabled().withCachingDisabled().build();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(), Serdes.String(), Serdes.String(),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+            new StreamsConfig(props));
+        final TimestampedKeyValueStore<String, String> store =
+            builder.withLoggingDisabled().withCachingDisabled().build();
         store.init(context, store);
         try {
             store.put("k", ValueAndTimestamp.make("v", 10L));
@@ -212,8 +217,14 @@ public class TimestampedKeyValueStoreBuilderTest {
                 store.readOnly(IsolationLevel.READ_UNCOMMITTED);
 
             assertNotSame(store, committedView);
+            assertNull(committedView.get("k"),
+                "READ_COMMITTED view must not see the staged write through the in-memory marker");
             assertEquals("v", uncommittedView.get("k").value(),
                 "READ_UNCOMMITTED view must see the staged write through the in-memory marker");
+
+            store.commit(Collections.emptyMap());
+            assertEquals("v", committedView.get("k").value(),
+                "READ_COMMITTED view must see the write after commit");
         } finally {
             store.close();
         }
