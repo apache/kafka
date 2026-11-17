@@ -105,7 +105,8 @@ public record MirrorPartition(String mirrorName, Uuid topicId, int partition) {
      *
      * @param key the string to parse
      * @return the parsed {@link MirrorPartition}
-     * @throws IllegalArgumentException if the key is empty or has invalid format
+     * @throws IllegalArgumentException if the key is empty, has invalid format, topic ID or partition
+     * @throws InvalidMirrorException if the mirror name is invalid
      */
     public static MirrorPartition parse(String key) {
         Objects.requireNonNull(key, "Key cannot be null");
