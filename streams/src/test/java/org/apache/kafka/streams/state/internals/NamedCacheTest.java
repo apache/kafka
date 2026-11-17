@@ -275,7 +275,7 @@ public class NamedCacheTest {
     @Test
     public void shouldBeReentrantAndNotBreakLRU() {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), true, 0, 0, 0, "", rawKey, rawValue);
-        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
+        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3}, new RecordHeaders(), false, 0, 0, 0, "", rawKey, rawValue);
         cache.put(Bytes.wrap(new byte[]{0}), dirty);
         cache.put(Bytes.wrap(new byte[]{1}), clean);
         cache.put(Bytes.wrap(new byte[]{2}), clean);

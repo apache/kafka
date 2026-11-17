@@ -65,6 +65,7 @@ public class CachingKeyValueStore
     private boolean sendOldValues;
     private String cacheName;
     private InternalProcessorContext<?, ?> internalContext;
+    private boolean retainSourceRawRecord;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Position position;
@@ -99,6 +100,7 @@ public class CachingKeyValueStore
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         internalContext = asInternalProcessorContext(stateStoreContext);
+        retainSourceRawRecord = SourceRawRecordRetention.shouldRetain(stateStoreContext.appConfigs());
         cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(internalContext.taskId().toString(), name());
         internalContext.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
@@ -276,8 +278,8 @@ public class CachingKeyValueStore
                     internalContext.recordContext().timestamp(),
                     internalContext.recordContext().partition(),
                     internalContext.recordContext().topic(),
-                    internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
+                    retainSourceRawRecord ? internalContext.recordContext().sourceRawKey() : null,
+                    retainSourceRawRecord ? internalContext.recordContext().sourceRawValue() : null
                 )
             );
 

@@ -24,8 +24,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -37,6 +39,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +55,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -74,6 +78,8 @@ import static org.mockito.Mockito.when;
 public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private static final String TOPIC = "topic";
+    private static final byte[] SOURCE_RAW_KEY = new byte[] {1, 2};
+    private static final byte[] SOURCE_RAW_VALUE = new byte[] {3, 4, 5};
     private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
     private InternalMockProcessorContext<?, ?> context;
@@ -93,6 +99,43 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init(context, null);
+    }
+
+    @Test
+    public void shouldNotKeepSourceRawRecordInCacheEntryWithoutDeadLetterQueue() {
+        final LRUCacheEntry entry = putWithSourceRawRecord(StreamsTestUtils.getStreamsConfig());
+
+        assertNull(entry.context().sourceRawKey());
+        assertNull(entry.context().sourceRawValue());
+    }
+
+    @Test
+    public void shouldKeepSourceRawRecordInCacheEntryWithDeadLetterQueue() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq");
+
+        final LRUCacheEntry entry = putWithSourceRawRecord(props);
+
+        assertArrayEquals(SOURCE_RAW_KEY, entry.context().sourceRawKey());
+        assertArrayEquals(SOURCE_RAW_VALUE, entry.context().sourceRawValue());
+    }
+
+    private LRUCacheEntry putWithSourceRawRecord(final Properties props) {
+        final ThreadCache rawRecordCache =
+            new ThreadCache(new LogContext("testCache "), 10_000, new MockStreamsMetrics(new Metrics()));
+        final InternalMockProcessorContext<?, ?> rawRecordContext = new InternalMockProcessorContext<>(
+            null, null, null, new MockStreamsMetrics(new Metrics()), new StreamsConfig(props), null, rawRecordCache, Time.SYSTEM);
+        final CachingKeyValueStore rawRecordStore = new CachingKeyValueStore(new InMemoryKeyValueStore("store"));
+        rawRecordStore.init(rawRecordContext, null);
+
+        rawRecordContext.setRecordContext(
+            new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders(), SOURCE_RAW_KEY, SOURCE_RAW_VALUE));
+        rawRecordStore.put(bytesKey("key"), bytesValue("value"));
+
+        final LRUCacheEntry entry =
+            rawRecordCache.get(ThreadCache.nameSpaceFromTaskIdAndStore("0_0", "store"), bytesKey("key"));
+        assertNotNull(entry);
+        return entry;
     }
 
     @SuppressWarnings("unchecked")
