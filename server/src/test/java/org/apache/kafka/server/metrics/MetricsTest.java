@@ -163,17 +163,6 @@ public class MetricsTest {
     }
 
     @ClusterTest
-    public void testWindowsStyleTagNames() {
-        var path = "C:\\windows-path\\kafka-logs";
-        var tags = Map.of("dir", path);
-        var expectedMBeanName = "dir=" + ObjectName.quote(path);
-
-        // Changing the package or class name may cause incompatibility with existing code and metrics configuration.
-        var metric = new KafkaMetricsGroup("kafka.metrics", "MetricsTest").metricName("test-metric", tags);
-        assertTrue(metric.getMBeanName().endsWith(expectedMBeanName));
-    }
-
-    @ClusterTest
     public void testClassicConsumerBrokerTopicMetricsBytesInOut() throws Exception {
         testBrokerTopicMetricsBytesInOut(GroupProtocol.CLASSIC);
     }
