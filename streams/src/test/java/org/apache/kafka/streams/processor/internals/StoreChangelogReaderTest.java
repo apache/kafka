@@ -388,7 +388,10 @@ public class StoreChangelogReaderTest {
         setupStore();
         @SuppressWarnings("unchecked")
         final Map<TaskId, Task> mockTasks = mock(Map.class);
-        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        // the reader starts out restoring actives, so it never restores the standby changelog
+        if (type == ACTIVE) {
+            when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        }
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
 
@@ -420,6 +423,11 @@ public class StoreChangelogReaderTest {
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_START));
             assertEquals(storeName, callback.storeNameCalledStates.get(RESTORE_END));
             assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+        } else {
+            // initializing the changelog starts the update, which the reader does not run while restoring actives
+            assertEquals(storeName, standbyListener.capturedStore(UPDATE_START));
+            assertNull(standbyListener.capturedStore(UPDATE_BATCH));
+            assertNull(standbyListener.capturedStore(UPDATE_SUSPENDED));
         }
     }
 
@@ -1237,17 +1245,17 @@ public class StoreChangelogReaderTest {
     public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
         // Verifies the 3-step fallback chain in changelogEndOffsets():
         //   1) ChangelogMetadata.restoreEndOffset (preferred)
-        //   2) StateStoreMetadata.endOffset (physical Fetch high-water-mark)
+        //   2) StateStoreMetadata.endOffset + 1 (the store's end offset is the last offset, not the next one)
         //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
         // This test wires a standby with restoreEndOffset == null but
-        // storeMetadata.endOffset == 42L → fallback returns 42L.
+        // storeMetadata.endOffset == 42L → fallback returns 43L.
         setupStandbyStateManager();
         when(storeMetadata.endOffset()).thenReturn(42L);
 
         changelogReader.register(tp, standbyStateManager);
 
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(Long.valueOf(42L), changelogReader.logicalChangelogEndOffsets().get(tp));
+        assertEquals(Long.valueOf(43L), changelogReader.logicalChangelogEndOffsets().get(tp));
     }
 
     @Test
