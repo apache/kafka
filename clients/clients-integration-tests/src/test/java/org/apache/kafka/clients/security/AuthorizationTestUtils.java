@@ -70,7 +70,6 @@ import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public final class AuthorizationTestUtils {
@@ -295,7 +294,7 @@ public final class AuthorizationTestUtils {
             }
         }
 
-    public static void testProduceConsumeTopicAutoCreateTopicCreateAcl(
+        public static void testProduceConsumeTopicAutoCreateTopicCreateAcl(
             TestContext context,
             GroupProtocol groupProtocol
         ) throws Exception {
@@ -414,18 +413,14 @@ public final class AuthorizationTestUtils {
                 if (groupProtocol == GroupProtocol.CLASSIC) {
                     consumeRecordsIgnoreOneAuthorizationException(consumer, 0, TP);
                 } else {
-                    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TestUtils.DEFAULT_MAX_WAIT_MS);
-                    boolean consumed = false;
-                    while (System.nanoTime() < deadline) {
+                    TestUtils.waitForCondition(() -> {
                         try {
                             consumeRecords(consumer);
-                            consumed = true;
-                            break;
+                            return true;
                         } catch (TopicAuthorizationException e) {
-                            Thread.sleep(100);
+                            return false;
                         }
-                    }
-                    assertTrue(consumed, "Consumer did not recover after granting authorization");
+                    }, "Consumer did not recover after granting authorization");
                 }
             }
         }
