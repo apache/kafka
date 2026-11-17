@@ -2938,9 +2938,41 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldNotGrantATaskAwayFromItsOwnerWhileAMemberHasNotBeenHeardFrom() {
-        // memberB reports a caught-up standby task, which would make the task ready to move. memberC has not been
-        // heard from since the coordinator loaded the group, so memberA keeps the task until it has.
+    public void shouldKeepATaskWithItsOwnerWhenActiveTasksHaveToStay() {
+        // memberB reports a caught-up standby task, which would make the task ready to move. The coordinator derives
+        // the intermediate assignment again for an epoch that memberA may already have reconciled to, so memberA keeps
+        // the task.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(10_000L, 10_000L));
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of());
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, taskOffsets, heartbeatVersions, true);
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals("memberA", decisions.stagedMigrations().get(0).currentOwner());
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            assemble(members, targetAssignment, taskOffsets, heartbeatVersions, true, 1).get("memberA")
+        );
+        // In a new epoch, the task is granted.
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")),
+            analyze(members, targetAssignment, taskOffsets).grantedTasks()
+        );
+    }
+
+    @Test
+    public void shouldGrantATaskAwayFromItsOwnerWhileAMemberHasNotBeenHeardFrom() {
+        // memberC has not heartbeated since the coordinator loaded the group, but in a new epoch every member
+        // reconciles, so the caught-up copy on memberB is granted the task as usual.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
@@ -2955,39 +2987,27 @@ public class AssignmentRefinerTest {
         final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of());
         heartbeatVersions.remove("memberC");
 
-        final AssignmentRefinerImpl.TaskDecisions decisions =
-            analyze(members, targetAssignment, taskOffsets, heartbeatVersions);
-
-        assertEquals(List.of(), decisions.grantedTasks());
-        assertEquals("memberA", decisions.stagedMigrations().get(0).currentOwner());
-        assertEquals(
-            mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
-            assemble(members, targetAssignment, taskOffsets, heartbeatVersions, 1).get("memberA")
-        );
-        // Once every member has been heard from, the task is granted.
         assertEquals(
             List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")),
-            analyze(members, targetAssignment, taskOffsets).grantedTasks()
+            analyze(members, targetAssignment, taskOffsets, heartbeatVersions).grantedTasks()
         );
     }
 
     @Test
-    public void shouldNotGrantAnyMoveAwayFromAnOwnerWhileAMemberHasNotBeenHeardFrom() {
+    public void shouldNotGrantAnyMoveAwayFromAnOwnerWhenActiveTasksHaveToStay() {
         // A move inside a process, a grant to a version 0 target owner, and a grant away from an owner that is still
-        // restoring the task all wait until memberD has been heard from.
+        // restoring the task all wait for the next epoch.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA1", member("memberA1", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberA2", member("memberA2", "processA", TasksTuple.EMPTY),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1, 2))),
-            "memberC", member("memberC", "processC", TasksTuple.EMPTY),
-            "memberD", member("memberD", "processD", TasksTuple.EMPTY)
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
         );
         final Map<String, TasksTuple> targetAssignment = Map.of(
             "memberA1", TasksTuple.EMPTY,
             "memberA2", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
             "memberB", TasksTuple.EMPTY,
-            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1, 2)),
-            "memberD", TasksTuple.EMPTY
+            "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1, 2))
         );
         // memberB is still restoring STATEFUL_2, and memberC heartbeats with version 0.
         final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(2, 500L, 10_000L));
@@ -2995,9 +3015,8 @@ public class AssignmentRefinerTest {
 
         assertEquals(3, analyze(members, targetAssignment, taskOffsets, heartbeatVersions).grantedTasks().size());
 
-        heartbeatVersions.remove("memberD");
         final AssignmentRefinerImpl.TaskDecisions decisions =
-            analyze(members, targetAssignment, taskOffsets, heartbeatVersions);
+            analyze(members, targetAssignment, taskOffsets, heartbeatVersions, true);
 
         assertEquals(List.of(), decisions.grantedTasks());
         assertEquals(
@@ -3014,7 +3033,7 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldStillGrantATaskNoMemberHoldsWhileAMemberHasNotBeenHeardFrom() {
+    public void shouldStillGrantATaskNoMemberHoldsWhenActiveTasksHaveToStay() {
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", TasksTuple.EMPTY),
             "memberB", member("memberB", "processB", TasksTuple.EMPTY)
@@ -3024,7 +3043,8 @@ public class AssignmentRefinerTest {
             "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
         );
 
-        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(members, targetAssignment, Map.of(), Map.of());
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), Map.of(), true);
 
         assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
     }
@@ -3124,12 +3144,22 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final Map<String, Integer> heartbeatVersions
     ) {
+        return analyze(members, targetAssignment, taskOffsets, heartbeatVersions, false);
+    }
+
+    private static AssignmentRefinerImpl.TaskDecisions analyze(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions,
+        final boolean keepActiveTasks
+    ) {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
             targetAssignment,
             members,
             heartbeatVersions,
-            heartbeatVersions.keySet().containsAll(members.keySet()),
+            keepActiveTasks,
             subtopologies(),
             load(members)
         );
@@ -3236,11 +3266,23 @@ public class AssignmentRefinerTest {
         final Map<String, Integer> heartbeatVersions,
         final int numWarmupReplicas
     ) {
+        return assemble(members, targetAssignment, taskOffsets, heartbeatVersions, false, numWarmupReplicas);
+    }
+
+    private static Map<String, TasksTuple> assemble(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions,
+        final boolean keepActiveTasks,
+        final int numWarmupReplicas
+    ) {
         return new AssignmentRefinerImpl().refine(
             members,
             targetAssignment,
             taskOffsets,
             heartbeatVersions,
+            keepActiveTasks,
             subtopologies(),
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

@@ -20921,7 +20921,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsGroupKeepsStagingACaughtUpWarmupTaskUntilEveryMemberHasHeartbeated() {
+    public void testStreamsGroupMovesACaughtUpWarmupTaskInANewEpochBeforeEveryMemberHasHeartbeated() {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();
         String memberB = Uuid.randomUuid().toString();
@@ -20929,20 +20929,11 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
             groupId, 11, memberA, memberB, 11,
             mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)));
+        context.groupMetadataManager.onLoaded();
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
 
-        // memberA has not heartbeated since the coordinator loaded the group, so it may already be reconciled to the
-        // epoch and would never be told to release 0_2. The migration stays staged although the warm-up task is
-        // caught up.
-        context.streamsGroupHeartbeat(warmupProgressHeartbeat(groupId, memberB, subtopology1, 1000L, 1050L));
-        assertEquals(11, group.groupEpoch());
-        assertEquals(
-            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberA)
-        );
-
-        // Once memberA has heartbeated too, the next refinement step moves 0_2 to memberB.
-        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 11));
+        // memberA has not heartbeated since the coordinator loaded the settled group. The move of 0_2 to memberB is a
+        // refinement step of its own, which memberA reconciles to as well, so it does not have to wait for memberA.
         context.streamsGroupHeartbeat(warmupProgressHeartbeat(groupId, memberB, subtopology1, 1000L, 1050L));
         assertEquals(12, group.groupEpoch());
         assertEquals(
@@ -20962,6 +20953,7 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
             groupId, 12, memberA, memberB, 11,
             mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)));
+        context.groupMetadataManager.onLoaded();
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
 
         // memberB is the first to heartbeat after the load, and reports its warm-up task caught up. Within epoch 12

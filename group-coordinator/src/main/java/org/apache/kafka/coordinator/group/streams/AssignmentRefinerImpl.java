@@ -54,6 +54,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
         Map<String, Integer> heartbeatVersions,
+        boolean keepActiveTasks,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -65,12 +66,23 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment =
             indexCurrentAssignment(members, taskOffsets, subtopologies, acceptableRecoveryLag);
         final Map<String, ProcessLoad> processLoad = indexProcessLoad(members, subtopologies);
-        final boolean everyMemberHeardFrom = heartbeatVersions.keySet().containsAll(members.keySet());
         final TaskDecisions decisions = analyzeTasks(
-            currentAssignment, targetAssignment, members, heartbeatVersions, everyMemberHeardFrom, subtopologies,
-            processLoad);
+            currentAssignment,
+            targetAssignment,
+            members,
+            heartbeatVersions,
+            keepActiveTasks,
+            subtopologies,
+            processLoad
+        );
         final WarmupPlan warmupPlan = planWarmups(
-            decisions, currentAssignment, members, everyMemberHeardFrom, processLoad, numWarmupReplicas);
+            decisions,
+            currentAssignment,
+            members,
+            heartbeatVersions.keySet().containsAll(members.keySet()),
+            processLoad,
+            numWarmupReplicas
+        );
         final SortedMap<String, SortedSet<TaskId>> withheldStandbys =
             filterStandbys(targetAssignment, currentAssignment, decisions, warmupPlan, members, subtopologies);
 
@@ -245,8 +257,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
      *
-     * <p>After a coordinator failover, an active task stays with the member that holds it until every member has
-     * heartbeated again. Only tasks that no member holds as an active task are placed in the meantime.
+     * <p>If {@code keepActiveTasks} is set, every active task stays with the member that holds it, and only tasks that
+     * no member holds as an active task are placed.
      *
      * @param currentAssignment
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
@@ -256,9 +268,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        All members of the group, used to resolve which process a member runs in.
      * @param heartbeatVersions
      *        The version of the latest heartbeat of each member, which tells whether a member can be warmed up.
-     * @param everyMemberHeardFrom
-     *        Whether every member has heartbeated since the coordinator loaded the group. If not, no active task is
-     *        moved to another member.
+     * @param keepActiveTasks
+     *        Whether every active task has to stay with the member that holds it, see {@link AssignmentRefiner#refine}.
      * @param subtopologies
      *        The resolved subtopologies, which tell whether a subtopology is stateful.
      * @param processLoad
@@ -272,7 +283,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, TasksTuple> targetAssignment,
         final Map<String, StreamsGroupMember> members,
         final Map<String, Integer> heartbeatVersions,
-        final boolean everyMemberHeardFrom,
+        final boolean keepActiveTasks,
         final SortedMap<String, ConfiguredSubtopology> subtopologies,
         final Map<String, ProcessLoad> processLoad
     ) {
@@ -315,12 +326,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             final String targetProcessId = targetMember.processId();
 
-            // Don't move an active task to another member until every member has heartbeated. Moving a task needs its
-            // current owner to give it up. Right after a coordinator failover, the current owner may already have
-            // reconciled to the current epoch, and is then sent nothing new within that epoch. It would never give
-            // the task up, and the target owner would wait for it forever. The move happens in the first epoch after
-            // every member has heartbeated.
-            if (holder != null && !everyMemberHeardFrom) {
+            // A task that a member holds as an active task stays with it. Its move waits for the next epoch, which every
+            // member reconciles to. Tasks that no member holds as an active task are placed below as usual.
+            if (holder != null && keepActiveTasks) {
                 // A process can't hold a warm-up task next to the active task, so a move within it can't be warmed up.
                 final boolean sameProcess = members.get(holder.memberId()).processId().equals(targetProcessId);
                 stagedMigrations.add(stagedMigration(
@@ -559,11 +567,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             return WarmupPlan.EMPTY;
         }
 
-        // Fund no new warm-up task until every member has heartbeated after a coordinator failover. Before that, the
-        // members' restore progress is unknown, so we can't tell which target owner is best to warm up. We wait for all
-        // members, not only for the target owner, because a warm-up task stays once placed: otherwise the members that
-        // heartbeat first would get the warm-up tasks. Warm-up tasks that members already hold are kept.
-
         final SortedMap<TaskId, String> warmupTasks = new TreeMap<>();
         final SortedSet<TaskId> borrowedMigrations = new TreeSet<>();
         final SortedSet<TaskId> parkedMigrations = new TreeSet<>();
@@ -573,6 +576,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             loadAfterGrants(processLoad, currentAssignment, decisions, members);
         final List<FundingCandidate> candidates = new ArrayList<>();
 
+        // Fund no new warm-up task until every member has heartbeated after a coordinator failover. Before that, the
+        // members' restore progress is unknown, so we can't tell which target owner is best to warm up. We wait for all
+        // members, not only for the target owner, because a warm-up task stays once placed: otherwise the members that
+        // heartbeat first would get the warm-up tasks. Warm-up tasks that members already hold are kept. A sibling's
+        // standby task that would move onto the target owner is borrowed where it sits instead, which costs no slot.
         for (final StagedMigration migration : decisions.stagedMigrations()) {
             final Warming warming = warmingOf(migration);
             switch (warming) {

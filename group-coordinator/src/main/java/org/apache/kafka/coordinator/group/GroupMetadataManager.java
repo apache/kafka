@@ -2315,7 +2315,7 @@ public class GroupMetadataManager {
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
-            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology);
+            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology, false);
             if (differsFromAssignedTasks(refinedGroupAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
             }
@@ -4711,13 +4711,16 @@ public class GroupMetadataManager {
      * @param group              The streams group.
      * @param targetAssignment   All members' target assignments.
      * @param configuredTopology The configured topology.
+     * @param keepActiveTasks    Whether every active task has to stay with the member that holds it, see
+     *                           {@link AssignmentRefiner#refine}.
      *
      * @return The intermediate assignment keyed by member ID.
      */
     private Map<String, TasksTuple> refineAssignment(
         final StreamsGroup group,
         final Map<String, TasksTuple> targetAssignment,
-        final ConfiguredTopology configuredTopology
+        final ConfiguredTopology configuredTopology,
+        final boolean keepActiveTasks
     ) {
         final int numWarmupReplicas = streamsGroupNumWarmupReplicas(group.groupId());
         if (numWarmupReplicas == 0) {
@@ -4739,6 +4742,7 @@ public class GroupMetadataManager {
             targetAssignment,
             group.taskOffsets(),
             group.heartbeatVersions(),
+            keepActiveTasks,
             Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
@@ -4802,7 +4806,11 @@ public class GroupMetadataManager {
         if (cached != null) {
             return cached;
         }
-        final Map<String, TasksTuple> refinedAssignment = refineAssignment(group, targetAssignment, configuredTopology);
+        // A cached intermediate assignment is missing for an epoch minted before the coordinator loaded the group. Members
+        // may already have reconciled to that epoch under the lost intermediate assignment, and are told nothing new
+        // within the epoch, so a member that holds an active task would never release it to another member.
+        final Map<String, TasksTuple> refinedAssignment = refineAssignment(
+            group, targetAssignment, configuredTopology, group.wasMintedBeforeLoad(assignmentEpoch));
         maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
         return refinedAssignment;
     }
@@ -7021,6 +7029,7 @@ public class GroupMetadataManager {
                 case STREAMS:
                     StreamsGroup streamsGroup = (StreamsGroup) group;
                     log.info("[GroupId {}] Loaded the streams group with {} members.", groupId, streamsGroup.members().size());
+                    streamsGroup.recordAssignmentEpochAtLoad();
                     streamsGroup.members().forEach((memberId, member) -> {
                         log.debug("[GroupId {}] Loaded member {} in the streams group.", groupId, memberId);
                         scheduleStreamsGroupSessionTimeout(groupId, memberId);

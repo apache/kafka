@@ -239,18 +239,19 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
-     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
-     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
-     * since the coordinator loaded the group. It is written in the heartbeat path, dropped when the member is removed
-     * and lost on coordinator failover. It is not persisted, so that it can never outlive the client that sent it.
-     * <p>
-     * Unlike {@link #taskOffsets} it is kept in a timeline container, so that a failed write that rolls back the
-     * removal of a member also brings back its version, and one that rolls back a join drops it. A member of the group
-     * without a version holds back every move of an active task in the refiner until it heartbeats. A rollback also
-     * drops the versions recorded since the last committed write, even of members that did heartbeat, so moves can
-     * wait for those members' next heartbeat.
+     * The version of the latest streams group heartbeat of each member, keyed by member ID. A member that is missing
+     * has not heartbeated since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written
+     * in the heartbeat path, dropped when the member is removed and lost on coordinator failover. It is not persisted,
+     * so that it can never outlive the client that sent it.
      */
-    private final TimelineHashMap<String, Integer> heartbeatVersions;
+    private final Map<String, Integer> heartbeatVersions = new HashMap<>();
+
+    /**
+     * The assignment epoch of the group when the coordinator loaded it, or -1 if the group was created after the load.
+     * The intermediate assignment of this epoch and of earlier ones was derived by a previous coordinator and is lost,
+     * while members may already have reconciled to it.
+     */
+    private int assignmentEpochAtLoad = -1;
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
@@ -358,7 +359,6 @@ public class StreamsGroup implements Group {
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
-        this.heartbeatVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
@@ -646,11 +646,22 @@ public class StreamsGroup implements Group {
      * Records the version of the latest streams group heartbeat of a member.
      */
     public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
-        // Written only when it changes, since every write to a timeline container is kept until the next commit.
-        final Integer previous = heartbeatVersions.get(memberId);
-        if (previous == null || previous != heartbeatVersion) {
-            heartbeatVersions.put(memberId, heartbeatVersion);
-        }
+        heartbeatVersions.put(memberId, heartbeatVersion);
+    }
+
+    /**
+     * Records the current assignment epoch as the one at which the coordinator loaded the group.
+     */
+    public void recordAssignmentEpochAtLoad() {
+        assignmentEpochAtLoad = assignmentEpoch();
+    }
+
+    /**
+     * @return Whether the intermediate assignment of the given assignment epoch was derived by a previous coordinator,
+     *         which is the case for any epoch up to the one at which the coordinator loaded the group.
+     */
+    public boolean wasMintedBeforeLoad(int assignmentEpoch) {
+        return assignmentEpoch <= assignmentEpochAtLoad;
     }
 
     /**

@@ -178,34 +178,17 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testRolledBackRemovalOfAMemberBringsBackItsHeartbeatVersion() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
-        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
-        streamsGroup.updateHeartbeatVersion("member-id", 1);
-        snapshotRegistry.idempotentCreateSnapshot(1);
+    public void testAssignmentEpochsMintedBeforeLoad() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.setTargetAssignmentMetadata(5, 0L);
 
-        // A write that removes the member fails, and the group is reverted to before it.
-        streamsGroup.removeMember("member-id");
-        snapshotRegistry.revertToSnapshot(1);
+        // A group the coordinator has not loaded has no epoch from a previous coordinator.
+        assertFalse(streamsGroup.wasMintedBeforeLoad(5));
 
-        assertEquals(Set.of("member-id"), streamsGroup.members().keySet());
-        assertEquals(Map.of("member-id", 1), streamsGroup.heartbeatVersions());
-    }
-
-    @Test
-    public void testRolledBackJoinOfAMemberDropsItsHeartbeatVersion() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
-        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
-        snapshotRegistry.idempotentCreateSnapshot(1);
-
-        // A write that adds the member fails, and the group is reverted to before it.
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
-        streamsGroup.updateHeartbeatVersion("member-id", 1);
-        snapshotRegistry.revertToSnapshot(1);
-
-        assertEquals(Set.of(), streamsGroup.members().keySet());
-        assertEquals(Map.of(), streamsGroup.heartbeatVersions());
+        streamsGroup.recordAssignmentEpochAtLoad();
+        assertTrue(streamsGroup.wasMintedBeforeLoad(4));
+        assertTrue(streamsGroup.wasMintedBeforeLoad(5));
+        assertFalse(streamsGroup.wasMintedBeforeLoad(6));
     }
 
     @Test
