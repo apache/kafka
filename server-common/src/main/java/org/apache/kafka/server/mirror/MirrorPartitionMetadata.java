@@ -16,34 +16,91 @@
  */
 package org.apache.kafka.server.mirror;
 
+import org.apache.kafka.server.common.OffsetAndEpoch;
+
 import java.util.Objects;
 
 /**
  * An immutable snapshot of the mirror metadata of a partition.
  *
- * @param state             The mirror partition state.
- * @param leaderEpoch       The highest leader epoch seen for the partition, or -1 if not available.
- * @param stateEpoch        The current state epoch for the partition.
- * @param lastMirrorEpoch   The last mirror epoch, or -1 if not available.
- * @param lastMirrorOffset  The last mirror offset, or -1 if not available.
- * @param errorMessage      The error message when in {@link MirrorPartitionState#FAILED} state, or null otherwise.
- * @param retryAttempt      The retry attempt count in {@link MirrorPartitionState#FAILED} state, 0 if not failed,
- *                          or -1 if non-retryable.
- * @param previousState     The mirror partition state before entering {@link MirrorPartitionState#FAILED},
- *                          or {@link MirrorPartitionState#UNKNOWN} if not recorded.
+ * @param state          The mirror partition state.
+ * @param stateEpoch     The current state epoch for the partition, which tells when the cached metadata can be safely
+ *                       updated.
+ * @param lastMirror     The last mirror epoch and offset, or {@link #EMPTY_LAST_MIRROR} if not available.
+ * @param errorMessage   The error message when in {@link MirrorPartitionState#FAILED} state, or null otherwise.
+ * @param retryAttempt   The retry attempt count in {@link MirrorPartitionState#FAILED} state, 0 if not failed,
+ *                       or -1 if non-retryable.
+ * @param previousState  The mirror partition state before entering {@link MirrorPartitionState#FAILED},
+ *                       or {@link MirrorPartitionState#UNKNOWN} if not recorded.
  */
 public record MirrorPartitionMetadata(
     MirrorPartitionState state,
-    int leaderEpoch,
     int stateEpoch,
-    int lastMirrorEpoch,
-    long lastMirrorOffset,
+    OffsetAndEpoch lastMirror,
     String errorMessage,
     short retryAttempt,
     MirrorPartitionState previousState
 ) {
+    /**
+     * The last mirror epoch and offset when they are not available.
+     */
+    public static final OffsetAndEpoch EMPTY_LAST_MIRROR = new OffsetAndEpoch(-1L, -1);
+
+    /**
+     * The metadata of a partition with no recorded state, with the default value of every field.
+     */
+    public static final MirrorPartitionMetadata EMPTY = builder().build();
+
     public MirrorPartitionMetadata {
         Objects.requireNonNull(state);
+        Objects.requireNonNull(lastMirror);
         Objects.requireNonNull(previousState);
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private MirrorPartitionState state = MirrorPartitionState.UNKNOWN;
+        private int stateEpoch = 0;
+        private OffsetAndEpoch lastMirror = EMPTY_LAST_MIRROR;
+        private String errorMessage = null;
+        private short retryAttempt = 0;
+        private MirrorPartitionState previousState = MirrorPartitionState.UNKNOWN;
+
+        public Builder setState(MirrorPartitionState state) {
+            this.state = state;
+            return this;
+        }
+
+        public Builder setStateEpoch(int stateEpoch) {
+            this.stateEpoch = stateEpoch;
+            return this;
+        }
+
+        public Builder setLastMirror(OffsetAndEpoch lastMirror) {
+            this.lastMirror = lastMirror;
+            return this;
+        }
+
+        public Builder setErrorMessage(String errorMessage) {
+            this.errorMessage = errorMessage;
+            return this;
+        }
+
+        public Builder setRetryAttempt(short retryAttempt) {
+            this.retryAttempt = retryAttempt;
+            return this;
+        }
+
+        public Builder setPreviousState(MirrorPartitionState previousState) {
+            this.previousState = previousState;
+            return this;
+        }
+
+        public MirrorPartitionMetadata build() {
+            return new MirrorPartitionMetadata(state, stateEpoch, lastMirror, errorMessage, retryAttempt, previousState);
+        }
     }
 }
