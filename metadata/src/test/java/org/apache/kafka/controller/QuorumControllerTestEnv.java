@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -31,9 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -99,7 +102,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         int numControllers = clientEnv.raftClients().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
-            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().toList();
+            Set<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toSet());
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
                 QuorumController.Builder builder = new QuorumController.Builder(nodeId, clientEnv.clusterId());
                 builder.setRaftClient(clientEnv.raftClients().get(nodeId));
@@ -111,7 +114,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 }
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultSupportedFeatureMap(true), nodeIds));
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultSupportedFeatureMap(true), () -> nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout ->
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS))
                 );
@@ -121,6 +124,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
                 builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
+                builder.setControllerMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();

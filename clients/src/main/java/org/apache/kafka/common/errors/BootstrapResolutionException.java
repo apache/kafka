@@ -18,18 +18,24 @@ package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates that the {@link org.apache.kafka.clients.NetworkClient} was unable to resolve a DNS address within
- * the time specified by {@link org.apache.kafka.clients.CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}.
+ * the time specified by {@link org.apache.kafka.clients.producer.ProducerConfig#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}
+ * and the equivalents for consumer and admin clients.
  * <p>
  * This is an unrecoverable error: the failure is permanently attached to the client and is re-thrown on every
  * subsequent API call. Callers must close the client and construct a new one after resolving the underlying
  * DNS or {@code bootstrap.servers} configuration issue.
+ * <p>
+ * This exception is only thrown when {@code bootstrap.resolve.timeout.ms} is set to a positive value.
+ * This feature is evolving and may undergo compatibility-breaking changes in a minor release.
  *
- * @see org.apache.kafka.clients.CommonClientConfigs
+ * @see org.apache.kafka.clients.producer.ProducerConfig
  */
 @InterfaceAudience.Public
+@InterfaceStability.Evolving
 public class BootstrapResolutionException extends KafkaException {
     public BootstrapResolutionException(String message) {
         super(message);

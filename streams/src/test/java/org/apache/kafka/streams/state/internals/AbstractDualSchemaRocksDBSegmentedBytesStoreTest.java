@@ -57,7 +57,6 @@ import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,13 +80,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -967,7 +962,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             bytesStore.putIndex(serializedKey1, new byte[0]);
 
             byte[] value = bytesStore.getIndex(serializedKey1);
-            assertThat(Bytes.wrap(value), is(Bytes.wrap(new byte[0])));
+            assertEquals(Bytes.wrap(new byte[0]), Bytes.wrap(value));
 
             final Bytes serializedKey0 = serializeKey(new Windowed<>(keyA, windows[0]));
             bytesStore.put(serializedKey0, serializeValue(10L));
@@ -1002,7 +997,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
             // Dangling index should be deleted.
             value = bytesStore.getIndex(serializedKey1);
-            assertThat(value, is(nullValue()));
+            assertNull(value);
         }
     }
 
@@ -1052,7 +1047,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             // Index should also be removed.
             final Bytes indexKey = serializeKeyForIndex(new Windowed<>("a", windows[0]));
             final byte[] value = bytesStore.getIndex(indexKey);
-            assertThat(value, is(nullValue()));
+            assertNull(value);
         }
     }
 
@@ -1213,15 +1208,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -1245,15 +1236,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
-        assertThat(
-            results,
-            equalTo(
-                asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
-                    KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
-                )
-            )
-        );
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)),
+            results);
 
         segments.close();
     }
@@ -1369,9 +1356,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         // after restoration, only non expired segments should be returned which is one as actual from is 59001
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions(""));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("").get(0));
     }
 
     @Test
@@ -1406,11 +1393,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("A"));
+        assertEquals(3L, bytesStore.getPosition().getPartitionPositions("A").get(0));
+        assertNotNull(bytesStore.getPosition().getPartitionPositions("B"));
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("B").get(0));
     }
 
     @Test
@@ -1450,8 +1437,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(bytesStore.all());
         assertEquals(expected, results);
-        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
+        assertNotNull(bytesStore.getPosition());
+        assertEquals(2L, bytesStore.getPosition().getPartitionPositions("A").get(0));
     }
 
     @Test
@@ -1472,7 +1459,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
         bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
-        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), bytesStore.getPosition());
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {

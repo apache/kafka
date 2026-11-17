@@ -50,7 +50,6 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.DynamicConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
@@ -67,7 +66,6 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -117,19 +115,17 @@ public class ConfigCommand {
 
     private static final String BROKER_DEFAULT_ENTITY_NAME = "";
     private static final int DEFAULT_SCRAM_ITERATIONS = 4096;
-    private static final String TOPIC_TYPE = ConfigType.TOPIC.value();
-    private static final String CLIENT_METRICS_TYPE = ConfigType.CLIENT_METRICS.value();
-    private static final String BROKER_TYPE = ConfigType.BROKER.value();
-    private static final String GROUP_TYPE = ConfigType.GROUP.value();
-    private static final String USER_TYPE = ConfigType.USER.value();
-    private static final String CLIENT_TYPE = ConfigType.CLIENT.value();
-    private static final String IP_TYPE = ConfigType.IP.value();
+    private static final String TOPIC_TYPE = "topics";
+    private static final String CLIENT_METRICS_TYPE = "client-metrics";
+    private static final String BROKER_TYPE = "brokers";
+    private static final String GROUP_TYPE = "groups";
+    private static final String USER_TYPE = "users";
+    private static final String CLIENT_TYPE = "clients";
+    private static final String IP_TYPE = "ips";
 
     static final String BROKER_LOGGER_CONFIG_TYPE = "broker-loggers";
-    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES = Stream.concat(
-            Stream.of(BROKER_LOGGER_CONFIG_TYPE),
-            Stream.of(ConfigType.values()).map(ConfigType::value)
-    ).toList();
+    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES = List.of(
+            BROKER_LOGGER_CONFIG_TYPE, TOPIC_TYPE, CLIENT_TYPE, USER_TYPE, BROKER_TYPE, IP_TYPE, CLIENT_METRICS_TYPE, GROUP_TYPE);
 
     public static void main(String[] args) {
         try {
@@ -310,7 +306,7 @@ public class ConfigCommand {
                     combined.addAll(scramConfigsToDelete);
                     throw new IllegalArgumentException("Only quota configs can be deleted for '" + CLIENT_TYPE + "' using --bootstrap-server. Unexpected config names: " + String.join(",", combined));
                 }
-            } else { // ConfigType.User
+            } else { // USER_TYPE
                 if (!unknownConfigsToAdd.isEmpty())
                     throw new IllegalArgumentException("Only quota and SCRAM credential configs can be added for '" + USER_TYPE + "' using --bootstrap-server. Unexpected config names: " + String.join(",", unknownConfigsToAdd));
                 if (!unknownConfigsToDelete.isEmpty())
@@ -465,7 +461,7 @@ public class ConfigCommand {
 
         Collection<ClientQuotaAlteration.Op> alterOps = Stream.concat(addOps.stream(), deleteOps.stream()).toList();
 
-        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+        adminClient.alterClientQuotas(Set.of(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
                 .all().get(60, TimeUnit.SECONDS);
     }
 
@@ -672,7 +668,7 @@ public class ConfigCommand {
                 ? Optional.empty()
                 : Optional.of(context.dynamicConfigSource());
         DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
-        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(context.configResource()), describeOptions)
+        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Set.of(context.configResource()), describeOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
         return filterAndSortEntries(configs.get(context.configResource()), configSourceFilter);

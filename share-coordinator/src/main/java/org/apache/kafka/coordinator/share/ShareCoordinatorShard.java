@@ -91,6 +91,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
     public static final Exception NEGATIVE_LEADER_EPOCH = new Exception("The leader epoch cannot be a negative number.");
     public static final Exception NEGATIVE_STATE_EPOCH = new Exception("The state epoch cannot be a negative number.");
+    public static final Exception INVALID_STATE_BATCH = new Exception("The state batch must have 0 <= firstOffset <= lastOffset, a non-negative delivery count and a known delivery state.");
     public static final Exception WRITE_UNINITIALIZED_SHARE_PARTITION = new Exception("Write operation on uninitialized share partition not allowed.");
     public static final Exception READ_UNINITIALIZED_SHARE_PARTITION = new Exception("Read operation on uninitialized share partition not allowed.");
 
@@ -539,29 +540,29 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * This method writes a share snapshot records corresponding to the requested topic partitions.
+     * This method writes a share snapshot records corresponding to the requested share partition.
      * <p>
      * This method as called by the ShareCoordinatorService will be provided with
-     * the request data which covers only key i.e. group1:topic1:partition1. The implementation
-     * below was done keeping this in mind.
+     * the request data for a single share partition (group, topicId and partition data).
      *
-     * @param request - InitializeShareGroupStateRequestData for a single key
+     * @param groupId - String representing the group id.
+     * @param topicId - Uuid representing the topic id.
+     * @param partitionData - InitializeShareGroupStateRequestData.PartitionData representing partition request data.
      * @return CoordinatorResult(records, response)
      */
 
     public CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> initializeState(
-        InitializeShareGroupStateRequestData request
+        String groupId,
+        Uuid topicId,
+        InitializeShareGroupStateRequestData.PartitionData partitionData
     ) {
-        // Records to write (with both key and value of snapshot type), response to caller
-        // only one key will be there in the request by design.
-        Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetInitializeStateError(request);
+        // Records to write (with both key and value of snapshot type), response to caller.
+        Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetInitializeStateError(groupId, topicId, partitionData);
         if (error.isPresent()) {
             return error.get();
         }
 
-        InitializeShareGroupStateRequestData.InitializeStateData topicData = request.topics().get(0);
-        InitializeShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
-        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
+        SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicId, partitionData.partition());
 
         Integer currentStateEpoch = stateEpochMap.get(key);
         ShareGroupOffset currentState = shareStateMap.get(key);
@@ -575,7 +576,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         if (currentStateEpoch != null && currentStateEpoch == partitionData.stateEpoch() &&
                 currentState != null && currentState.startOffset() == partitionData.startOffset()) {
-            log.debug("Duplicate initialize request {}. Treating as no-op.", request);
+            log.debug("Duplicate initialize request {} {} {}. Treating as no-op.", groupId, topicId, partitionData);
             return new CoordinatorResult<>(List.of(), responseData);
         }
 
@@ -779,6 +780,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
         }
 
+        if (!partitionData.stateBatches().stream().allMatch(ShareCoordinatorShard::isValidStateBatch)) {
+            return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, INVALID_STATE_BATCH, topicId, partitionId));
+        }
+
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
 
         if (!shareStateMap.containsKey(mapKey)) {
@@ -806,6 +811,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         return Optional.empty();
+    }
+
+    private static boolean isValidStateBatch(WriteShareGroupStateRequestData.StateBatch batch) {
+        // The delivery state is a RecordState id, from AVAILABLE (0) to ARCHIVED (4).
+        return batch.firstOffset() >= 0 &&
+            batch.firstOffset() <= batch.lastOffset() &&
+            batch.deliveryCount() >= 0 &&
+            batch.deliveryState() >= 0 &&
+            batch.deliveryState() <= 4;
     }
 
     private Optional<ReadShareGroupStateResponseData> maybeGetReadStateError(ReadShareGroupStateRequestData request) {
@@ -933,12 +947,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     private Optional<CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord>> maybeGetInitializeStateError(
-        InitializeShareGroupStateRequestData request
+        String groupId,
+        Uuid topicId,
+        InitializeShareGroupStateRequestData.PartitionData partitionData
     ) {
-        InitializeShareGroupStateRequestData.InitializeStateData topicData = request.topics().get(0);
-        InitializeShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
-
-        Uuid topicId = topicData.topicId();
         int partitionId = partitionData.partition();
         int stateEpoch = partitionData.stateEpoch();
 
@@ -954,7 +966,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
         }
 
-        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
+        SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
             log.info("Initialize request state epoch is smaller than last recorded current: {}, requested: {}.", stateEpochMap.get(key), partitionData.stateEpoch());
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception(), topicId, partitionId));

@@ -235,7 +235,7 @@ public class ProducerStateManagerTest {
         long offset = 992342L;
         ProducerAppendInfo appendInfo = new ProducerAppendInfo(partition, producerId,
                 ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT,
-                stateManager.maybeCreateVerificationStateEntry(producerId, defaultSequence, epoch, true));
+                stateManager.maybeCreateVerificationStateEntry(producerId, defaultSequence, epoch, true), false);
 
         LogOffsetMetadata firstOffsetMetadata = new LogOffsetMetadata(offset, 990000L, 234224);
         appendInfo.appendDataBatch(epoch, defaultSequence, defaultSequence, 
@@ -552,11 +552,16 @@ public class ProducerStateManagerTest {
         stateManager.takeSnapshot();
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
                 maxTransactionTimeoutMs, producerStateManagerConfig, time);
-        recoveredMapping.truncateAndReload(0L, 1L, 70000);
+        long timeAfterExpiration = producerStateManagerConfig.producerIdExpirationMs() + 1;
+        recoveredMapping.truncateAndReload(0L, 2L, timeAfterExpiration);
+
+        // the snapshot is reloaded, but the pid is expired and is not added to the mapping
+        assertEquals(0, recoveredMapping.activeProducers().size());
+        assertEquals(2L, recoveredMapping.mapEndOffset());
 
         // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence,
         // we should accept the append and add the pid back in
-        appendClientEntry(recoveredMapping, producerId, epoch, 2, 2L, 70001, false);
+        appendClientEntry(recoveredMapping, producerId, epoch, 2, 2L, timeAfterExpiration + 1, false);
 
         assertEquals(1, recoveredMapping.activeProducers().size());
         assertEquals(2, recoveredMapping.activeProducers().values().iterator().next().lastSeq());
@@ -652,15 +657,15 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testReloadSnapshots() throws IOException {
-        appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
-        appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
+        appendClientEntry(stateManager, producerId, epoch, 0, 1L, false);
+        appendClientEntry(stateManager, producerId, epoch, 1, 2L, false);
         stateManager.takeSnapshot();
         Map<Path, byte[]> pathAndDataList = Arrays.stream(Objects.requireNonNull(logDir.listFiles()))
                 .map(File::toPath)
                 .collect(Collectors.toMap(path -> path, path -> assertDoesNotThrow(() -> Files.readAllBytes(path))));
 
-        appendClientEntry(stateManager, producerId, epoch, 3, 3L, false);
-        appendClientEntry(stateManager, producerId, epoch, 4, 4L, false);
+        appendClientEntry(stateManager, producerId, epoch, 2, 3L, false);
+        appendClientEntry(stateManager, producerId, epoch, 3, 4L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
         assertEquals(Set.of(3L, 5L), currentSnapshotOffsets());
@@ -1132,9 +1137,10 @@ public class ProducerStateManagerTest {
             producerId,
             ProducerStateEntry.empty(producerId),
             AppendOrigin.CLIENT,
-            verificationEntry
+            verificationEntry,
+            false
         );
-        
+
         // Attempting to append with non-zero sequence number should fail for transactions v2
         OutOfOrderSequenceException exception = assertThrows(
             OutOfOrderSequenceException.class,
@@ -1185,9 +1191,10 @@ public class ProducerStateManagerTest {
             producerId + 1,
             ProducerStateEntry.empty(producerId + 1),
             AppendOrigin.CLIENT,
-            verificationEntry
+            verificationEntry,
+            false
         );
-        
+
         // Attempting to append with non-zero sequence number should succeed for transactions v1
         // (our validation should not trigger)
         assertDoesNotThrow(() -> appendInfo.appendDataBatch(
@@ -1196,6 +1203,98 @@ public class ProducerStateManagerTest {
             5,
             time.milliseconds(),
             new LogOffsetMetadata(0L), 0L, false)
+        );
+    }
+
+    @Test
+    public void testRejectNonZeroFirstSequenceWithEmptyStateOnEmptyLog() {
+        // KAFKA-15591: A producer with no state must start at sequence 0 on a partition which has never
+        // contained any records, since no state can have been lost. A non-zero first sequence means the
+        // request arrived out of order, and accepting it would permanently prevent the earlier request
+        // from being appended
+        ProducerAppendInfo currentProducerAppendInfo = new ProducerAppendInfo(
+            partition,
+            producerId,
+            ProducerStateEntry.empty(producerId),
+            AppendOrigin.CLIENT,
+            null,
+            true
+        );
+
+        OutOfOrderSequenceException exception = assertThrows(OutOfOrderSequenceException.class,
+            () -> currentProducerAppendInfo.appendDataBatch(
+                epoch,
+                17,
+                21,
+                time.milliseconds(),
+                new LogOffsetMetadata(0L), 4L, false)
+        );
+        assertTrue(exception.getMessage().contains("Expected sequence 0 for a producer with no state on a partition with no records"));
+
+        // The retried earlier request starting at sequence 0 is accepted
+        assertDoesNotThrow(() -> currentProducerAppendInfo.appendDataBatch(
+            epoch,
+            0,
+            16,
+            time.milliseconds(),
+            new LogOffsetMetadata(0L), 16L, false)
+        );
+        stateManager.update(currentProducerAppendInfo);
+        stateManager.updateMapEndOffset(17L);
+
+        // The retry of the later request is then accepted
+        ProducerAppendInfo updatedProducerAppendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        assertDoesNotThrow(() -> updatedProducerAppendInfo.appendDataBatch(
+            epoch,
+            17,
+            21,
+            time.milliseconds(),
+            new LogOffsetMetadata(17L), 21L, false)
+        );
+    }
+
+    @Test
+    public void testAllowNonZeroFirstSequenceWithEmptyStateOnNonEmptyLog() {
+        // If records have ever been added to the log, producer state may have been lost due to producer
+        // expiration or retention, so a producer may legitimately continue with a non-zero sequence
+        ProducerAppendInfo appendInfo = new ProducerAppendInfo(
+            partition,
+            producerId,
+            ProducerStateEntry.empty(producerId),
+            AppendOrigin.CLIENT,
+            null,
+            false
+        );
+
+        assertDoesNotThrow(() -> appendInfo.appendDataBatch(
+            epoch,
+            17,
+            21,
+            time.milliseconds(),
+            new LogOffsetMetadata(42L), 46L, false)
+        );
+    }
+
+    @Test
+    public void testPrepareUpdateRequiresZeroSequenceOnlyBeforeFirstAppend() {
+        ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        assertThrows(OutOfOrderSequenceException.class,
+            () -> appendInfo.appendDataBatch(
+                epoch,
+                5,
+                5,
+                time.milliseconds(),
+                new LogOffsetMetadata(0L), 0L, false)
+        );
+
+        stateManager.updateMapEndOffset(1L);
+        ProducerAppendInfo appendInfoAfterAppend = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
+        assertDoesNotThrow(() -> appendInfoAfterAppend.appendDataBatch(
+            epoch,
+            5,
+            5,
+            time.milliseconds(),
+            new LogOffsetMetadata(1L), 1L, false)
         );
     }
 
@@ -1524,7 +1623,8 @@ public class ProducerStateManagerTest {
                 producerId,
                 ProducerStateEntry.empty(producerId),
                 AppendOrigin.CLIENT,
-                stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true)
+                stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true),
+                false
         );
         LogOffsetMetadata firstOffsetMetadata = new LogOffsetMetadata(startOffset, segmentBaseOffset, 50 * relativeOffset);
         appendInfo.appendDataBatch(epoch, 0, 0, time.milliseconds(),

@@ -258,6 +258,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
     public void testTerminalErrorsClearFlag() {
         for (final Errors error : new Errors[]{
             Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED,
+            Errors.STREAMS_INVALID_TOPOLOGY_EPOCH,
             Errors.INVALID_REQUEST,
             Errors.UNSUPPORTED_VERSION,
             Errors.GROUP_ID_NOT_FOUND,

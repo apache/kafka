@@ -139,8 +139,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotMigrateActiveTaskToOtherProcess() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
@@ -158,8 +158,8 @@ public class StickyTaskAssignorTest {
             testMember1.activeTasks().get("test-subtopology").size() + testMember2.activeTasks().get("test-subtopology").size());
 
         // flip the previous active tasks assignment around.
-        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(), Map.of());
         members = mkMap(mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         result = assignor.assign(
@@ -179,8 +179,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 2))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 2))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
@@ -234,7 +234,7 @@ public class StickyTaskAssignorTest {
         final Map<String, Set<Integer>> activeTasks = mkMap(
             mkEntry("test-subtopology1", Sets.newSet(0, 1, 2, 3, 4, 5)),
             mkEntry("test-subtopology2", Sets.newSet(0)));
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", activeTasks, Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", activeTasks, Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
@@ -261,9 +261,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks() {
-        MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(), Map.of());
+        MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
         MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4");
         MemberMetadataAndStateImpl memberMetadata5 = createMemberMetadata("process5");
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
@@ -296,10 +296,10 @@ public class StickyTaskAssignorTest {
 
         // change up the assignment and make sure it is still sticky
         memberMetadata1 = createMemberMetadata("process1");
-        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
         memberMetadata3 = createMemberMetadata("process3");
-        memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        memberMetadata5 = createMemberMetadata("process5", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(), Map.of());
+        memberMetadata5 = createMemberMetadata("process5", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
         members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
             mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5));
@@ -331,9 +331,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
@@ -357,9 +357,123 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldAssignTasksToClientWithPreviousWarmupTasks() {
+        // Task 8 is not owned as an active task by anybody, and member3 holds it as a warm-up task, i.e. it has
+        // already been restoring the task's state. member3 must get the task even though member4 carries fewer tasks
+        // and would win a purely load-based assignment.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0, 1, 2))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(3, 4, 5))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3",
+            mkMap(mkEntry("test-subtopology", Set.of(6, 7))), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(8))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4",
+            mkMap(mkEntry("test-subtopology", Set.of(9))), Map.of(), Map.of());
+        Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(12, true, List.of("test-subtopology"))
+        );
+
+        final MemberAssignment testMember3 = result.members().get("member3");
+        assertNotNull(testMember3);
+        assertEquals(Set.of(6, 7, 8), testMember3.activeTasks().get("test-subtopology"));
+        final MemberAssignment testMember4 = result.members().get("member4");
+        assertNotNull(testMember4);
+        assertEquals(Set.of(9, 10, 11), testMember4.activeTasks().get("test-subtopology"));
+    }
+
+    @Test
+    public void shouldAssignStandbyTaskToClientWithPreviousWarmupTaskOverLessLoadedClient() {
+        // member3 held task 1 as a warm-up (restoring its state) while member2 kept it active. Once assignStandby
+        // runs, member3 must get the standby slot for task 1 even though member4 is idle and would otherwise win
+        // the standby purely on load.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3",
+            mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(1))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4");
+        Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        final MemberAssignment testMember3 = result.members().get("member3");
+        assertNotNull(testMember3);
+        assertEquals(Set.of(2), testMember3.activeTasks().get("test-subtopology"));
+        assertEquals(Set.of(1), testMember3.standbyTasks().get("test-subtopology"));
+        final MemberAssignment testMember4 = result.members().get("member4");
+        assertNotNull(testMember4);
+        assertFalse(testMember4.standbyTasks().getOrDefault("test-subtopology", Set.of()).contains(1));
+    }
+
+    @Test
+    public void shouldPreferMoreCaughtUpCandidateRegardlessOfPrevStandbyOrPrevWarmupRole() {
+        // task 0 (active on member1): member3 held it as a real standby and is more caught up than member4, which
+        // only held it as a warm-up -- the standby wins.
+        // task 1 (active on member2): member6 held it as a warm-up but is more caught up than member5, which held
+        // it as a real standby -- the warm-up wins. Together this shows the tie-break is the reported offset, not
+        // the prev-standby/prev-warmup role.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = new MemberMetadataAndStateImpl(
+            Optional.empty(), Optional.empty(), "process3", Map.of(), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(),
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata4 = new MemberMetadataAndStateImpl(
+            Optional.empty(), Optional.empty(), "process4", Map.of(), Map.of(), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(0))),
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 10L)))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata5 = new MemberMetadataAndStateImpl(
+            Optional.empty(), Optional.empty(), "process5", Map.of(), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(),
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(1, 10L)))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata6 = new MemberMetadataAndStateImpl(
+            Optional.empty(), Optional.empty(), "process6", Map.of(), Map.of(), Map.of(),
+            mkMap(mkEntry("test-subtopology", Set.of(1))),
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(1, 100L)))), Map.of());
+        Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4),
+            mkEntry("member5", memberMetadata5), mkEntry("member6", memberMetadata6));
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        final MemberAssignment testMember3 = result.members().get("member3");
+        assertNotNull(testMember3);
+        assertEquals(Set.of(0), testMember3.standbyTasks().get("test-subtopology"));
+        final MemberAssignment testMember4 = result.members().get("member4");
+        assertNotNull(testMember4);
+        assertFalse(testMember4.standbyTasks().getOrDefault("test-subtopology", Set.of()).contains(0));
+
+        final MemberAssignment testMember6 = result.members().get("member6");
+        assertNotNull(testMember6);
+        assertEquals(Set.of(1), testMember6.standbyTasks().get("test-subtopology"));
+        final MemberAssignment testMember5 = result.members().get("member5");
+        assertNotNull(testMember5);
+        assertFalse(testMember5.standbyTasks().getOrDefault("test-subtopology", Set.of()).contains(1));
+    }
+
+    @Test
     public void shouldNotAssignStandbyTasksToClientWithPreviousStandbyTasksAndCurrentActiveTasks() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
@@ -386,12 +500,12 @@ public class StickyTaskAssignorTest {
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology", Set.of(0))),
-            mkMap(mkEntry("test-subtopology", Set.of(1))));
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata21 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Set.of(2))),
-            mkMap(mkEntry("test-subtopology", Set.of(1))));
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata22 = createMemberMetadata("process2",
-            Map.of(), Map.of());
+            Map.of(), Map.of(), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1),
             mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
@@ -418,10 +532,10 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo() {
         final Map<String, Set<Integer>> tasks = mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3)));
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(3))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(3))), Map.of(), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
             mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
@@ -455,9 +569,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of(), Map.of());
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
             mkEntry("member3", memberMetadata3));
@@ -591,7 +705,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1");
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2");
         final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadata("process4");
@@ -611,7 +725,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() {
-        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1");
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
@@ -629,7 +743,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldRebalanceTasksToClientsBasedOnCapacity() {
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3, 2))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3, 2))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata31 = createMemberMetadata("process3");
         final MemberMetadataAndStateImpl memberMetadata32 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndStateImpl> members = mkMap(
@@ -648,8 +762,8 @@ public class StickyTaskAssignorTest {
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() {
         final Set<Integer> p1PrevTasks = Sets.newSet(0, 2);
         final Set<Integer> p2PrevTasks = Sets.newSet(1, 3);
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", p1PrevTasks)), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", p2PrevTasks)), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", p1PrevTasks)), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", p2PrevTasks)), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
@@ -670,8 +784,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotMoveAnyTasksWhenNewTasksAdded() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))), Map.of(), Map.of());
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
@@ -690,8 +804,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 1))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 1))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
@@ -716,16 +830,16 @@ public class StickyTaskAssignorTest {
     public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1)), mkEntry("test-subtopology1", Sets.newSet(2, 3))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(2))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3",
             mkMap(mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(2)), mkEntry("test-subtopology1", Sets.newSet(2))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(2)), mkEntry("test-subtopology1", Sets.newSet(2))), Map.of());
         final MemberMetadataAndStateImpl newMemberSpec = createMemberMetadata("process4",
             Map.of(),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 2, 3))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 2, 3))), Map.of());
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3), mkEntry("newMember", newMemberSpec));
 
@@ -748,16 +862,16 @@ public class StickyTaskAssignorTest {
     public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1)), mkEntry("test-subtopology1", Sets.newSet(2, 3))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(2))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))), Map.of());
         final MemberMetadataAndStateImpl bounce1 = createMemberMetadata("bounce1",
             Map.of(),
-            mkMap(mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
+            mkMap(mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))), Map.of());
         final MemberMetadataAndStateImpl bounce2 = createMemberMetadata("bounce2",
             Map.of(),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3)), mkEntry("test-subtopology1", Sets.newSet(0))));
+            mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3)), mkEntry("test-subtopology1", Sets.newSet(0))), Map.of());
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("bounce_member1", bounce1), mkEntry("bounce_member2", bounce2));
 
@@ -778,7 +892,7 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClient() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
@@ -793,8 +907,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl newMemberSpec = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
@@ -819,8 +933,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 6))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))));
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 6))), Map.of(), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of());
         final MemberMetadataAndStateImpl newMemberSpec = createMemberMetadata("newProcess");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
@@ -1107,11 +1221,11 @@ public class StickyTaskAssignorTest {
         // Node 2 has active tasks 2,3 and standby tasks 0,1
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))),
-            mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))));
+            mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))), Map.of());
 
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
-            mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))));
+            mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))), Map.of());
 
         // Node 3 joins as new client
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3");
@@ -1154,7 +1268,7 @@ public class StickyTaskAssignorTest {
         // Two clients, the second one is new
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             Map.of("test-subtopology1", Set.of(0, 1), "test-subtopology2", Set.of(0, 1)),
-            Map.of());
+            Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2");
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
@@ -1263,10 +1377,10 @@ public class StickyTaskAssignorTest {
         // Process3: no previous tasks
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", 
             mkMap(mkEntry("test-subtopology", Sets.newSet(0))), 
-            mkMap(mkEntry("test-subtopology", Sets.newSet(1))));
+            mkMap(mkEntry("test-subtopology", Sets.newSet(1))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Sets.newSet(1))), 
-            Map.of());
+            Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadata("process3");
 
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
@@ -1330,11 +1444,11 @@ public class StickyTaskAssignorTest {
         //   member4/process4: [] [1]
         final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
         members.put("member1", createMemberMetadata("process1",
-            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of()));
         members.put("member2", createMemberMetadata("process2",
-            mkMap(mkEntry("test-subtopology", Set.of(0))), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+            mkMap(mkEntry("test-subtopology", Set.of(0))), mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of()));
         members.put("member3", createMemberMetadata("process3",
-            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of()));
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of(), Map.of()));
         members.put("member4", createMemberMetadata("process4"));
 
         final GroupAssignment result = assignor.assign(
@@ -1438,9 +1552,9 @@ public class StickyTaskAssignorTest {
         // to active for task 1. Among the two members only known through their offsets, task 2 goes to the more
         // caught-up one, leaving task 3 for the other.
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
-            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
-            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0, 1))));
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0, 1))), Map.of());
         final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadataWithOffsets("process3",
             mkMap(mkEntry("test-subtopology",
                 mkMap(mkEntry(0, 1_000_000L), mkEntry(1, 1_000_000L), mkEntry(2, 100L)))));
@@ -1486,6 +1600,246 @@ public class StickyTaskAssignorTest {
         assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "member2"));
     }
 
+    @Test
+    public void shouldBalanceStatefulAndStatelessActiveTasksIndependently() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1")),
+            mkEntry("member2", createMemberMetadata("process2")),
+            mkEntry("member3", createMemberMetadata("process3")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 4), mkEntry("stateless", 4)), Set.of("stateful"))
+        );
+
+        // Each flavor spreads 2/1/1 on its own, so no member ends up with two stateful and no stateless tasks.
+        assertEquals(List.of(1, 1, 2), sortedActiveTaskCounts(result, "stateful", "member1", "member2", "member3"));
+        assertEquals(List.of(1, 1, 2), sortedActiveTaskCounts(result, "stateless", "member1", "member2", "member3"));
+        assertEquals(mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3)), mkEntry("stateless", Sets.newSet(0, 1, 2, 3))),
+            mergeAllActiveTasks(result, "member1", "member2", "member3"));
+    }
+
+    @Test
+    public void shouldKeepEachFlavorStickyOnlyWithinItsOwnQuotaWhenScalingUp() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1", mkMap(mkEntry("stateless", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
+            mkEntry("member2", createMemberMetadata("process2", mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2, 3))), Map.of(), Map.of())),
+            mkEntry("member3", createMemberMetadata("process3")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 4), mkEntry("stateless", 4)), Set.of("stateful"))
+        );
+
+        // member2 keeps stateful tasks up to the stateful quota of 2; the other two go to the two other members
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member2").get("stateful"));
+        assertEquals(1, activeTaskCount(result, "member1", "stateful"));
+        assertEquals(1, activeTaskCount(result, "member3", "stateful"));
+        // member1 keeps stateless tasks up to the active quota of 3, which its new stateful task counts towards;
+        // the remaining two fill up the members with the fewest active, then the fewest stateless, tasks
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member1").get("stateless"));
+        assertEquals(Sets.newSet(3), getAllActiveTasks(result, "member2").get("stateless"));
+        assertEquals(Sets.newSet(2), getAllActiveTasks(result, "member3").get("stateless"));
+    }
+
+    @Test
+    public void shouldNotLetStatefulAndStatelessQuotasAddUpBeyondTheActiveQuota() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", createMemberMetadata("process1",
+                mkMap(mkEntry("stateful", Sets.newSet(0, 1, 2)), mkEntry("stateless", Sets.newSet(0, 1, 2))), Map.of(), Map.of())),
+            mkEntry("member2", createMemberMetadata("process2")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 3), mkEntry("stateless", 3)), Set.of("stateful"))
+        );
+
+        // The stateful quota is 2 and the active quota 3: member1 keeps two stateful tasks but only one stateless
+        // task, instead of two of each, so the active tasks still split 3/3.
+        assertEquals(Sets.newSet(0, 1), getAllActiveTasks(result, "member1").get("stateful"));
+        assertEquals(Sets.newSet(0), getAllActiveTasks(result, "member1").get("stateless"));
+        assertEquals(Sets.newSet(2), getAllActiveTasks(result, "member2").get("stateful"));
+        assertEquals(Sets.newSet(1, 2), getAllActiveTasks(result, "member2").get("stateless"));
+    }
+
+    @Test
+    public void shouldBalanceBothFlavorsAcrossMembersOfProcessesWithDifferentCapacity() {
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1_1", createMemberMetadata("process1")),
+            mkEntry("member1_2", createMemberMetadata("process1")),
+            mkEntry("member2", createMemberMetadata("process2")));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 3), mkEntry("stateless", 3)), Set.of("stateful"))
+        );
+
+        for (final String memberId : members.keySet()) {
+            assertEquals(1, activeTaskCount(result, memberId, "stateful"));
+            assertEquals(1, activeTaskCount(result, memberId, "stateless"));
+        }
+    }
+
+    @Test
+    public void shouldReturnItsOwnOutputWhenReassigningWithUnchangedMembers() {
+        final TopologyDescriber topology =
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 7), mkEntry("stateless", 5)), Set.of("stateful"));
+        for (final int numStandbyReplicas : List.of(0, 1)) {
+            final AssignmentConfigsImpl configs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(numStandbyReplicas);
+            final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+                mkEntry("member1", createMemberMetadata("process1")),
+                mkEntry("member2", createMemberMetadata("process2")),
+                mkEntry("member3", createMemberMetadata("process3")));
+
+            final GroupAssignment first = assignor.assign(new GroupSpecImpl(members, configs), topology);
+            final GroupAssignment second = assignor.assign(
+                new GroupSpecImpl(membersFromAssignment(members, first), configs),
+                topology
+            );
+
+            assertEquals(first, second);
+        }
+    }
+
+    @Test
+    public void shouldPlaceStandbysThroughEveryStepWithRackAwareTags() {
+        // Stateful task 1 is followed through all four standby steps; stateful task 0 only moves task 1's active off
+        // P, and the stateless tasks only give processes different loads. P held both stateful tasks as active, so the
+        // quota keeps task 0 on it and task 1 goes to A, the most caught-up previous standby. Task 1 previously had
+        // three standbys, on A, B and C, and now needs five.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("p1", createTaggedMemberMetadata("P", Map.of("cluster", "c1", "zone", "z5"), Map.of("stateful", Set.of(0, 1)), Map.of())),
+            mkEntry("a1", createTaggedMemberMetadataWithOffsets("A", Map.of("cluster", "c1", "zone", "z1"), Map.of(), Map.of("stateful", Set.of(1)), Map.of("stateful", Map.of(1, 9000L)))),
+            mkEntry("b1", createTaggedMemberMetadata("B", Map.of("cluster", "c1", "zone", "z1"), Map.of(), Map.of("stateful", Set.of(1)))),
+            mkEntry("c1", createTaggedMemberMetadata("C", Map.of("cluster", "c2", "zone", "z2"), Map.of("stateless", Set.of(0)), Map.of())),
+            mkEntry("c2", createTaggedMemberMetadata("C", Map.of("cluster", "c2", "zone", "z2"), Map.of(), Map.of("stateful", Set.of(1)))),
+            mkEntry("e1", createTaggedMemberMetadata("E", Map.of("cluster", "c1", "zone", "z4"), Map.of("stateless", Set.of(1)), Map.of())),
+            mkEntry("e2", createMemberMetadata("E", Map.of("cluster", "c1", "zone", "z4"))),
+            mkEntry("f1", createTaggedMemberMetadata("F", Map.of("cluster", "c1", "zone", "z4"), Map.of("stateless", Set.of(2)), Map.of())),
+            mkEntry("f2", createTaggedMemberMetadata("F", Map.of("cluster", "c1", "zone", "z4"), Map.of("stateless", Set.of(3)), Map.of())),
+            mkEntry("f3", createMemberMetadata("F", Map.of("cluster", "c1", "zone", "z4"))),
+            mkEntry("g1", createMemberMetadata("G", Map.of())),
+            mkEntry("h1", createTaggedMemberMetadata("H", Map.of("cluster", "c2", "zone", "z2"), Map.of("stateless", Set.of(4)), Map.of())),
+            mkEntry("h2", createMemberMetadata("H", Map.of("cluster", "c2", "zone", "z2"))),
+            mkEntry("h3", createMemberMetadata("H", Map.of("cluster", "c2", "zone", "z2"))),
+            mkEntry("q1", createTaggedMemberMetadata("Q", Map.of("cluster", "c1", "zone", "z5"), Map.of("stateless", Set.of(5)), Map.of())),
+            mkEntry("q2", createMemberMetadata("Q", Map.of("cluster", "c1", "zone", "z5")))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(5).withRackAwareAssignmentTags(List.of("cluster", "zone"))),
+            new MixedTopologyDescriberImpl(mkMap(mkEntry("stateful", 2), mkEntry("stateless", 6)), Set.of("stateful"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "stateful", "p1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "stateful", "a1"));
+        for (final Map.Entry<String, Integer> statelessOwner : Map.of("c1", 0, "e1", 1, "f1", 2, "f2", 3, "h1", 4, "q1", 5).entrySet()) {
+            assertEquals(Set.of(statelessOwner.getValue()), getActiveTasks(result, "stateless", statelessOwner.getKey()));
+        }
+
+        // Step 1, cluster first: C and H are the processes in a new cluster and C held the standby, so C wins although
+        // H is lighter. No other cluster is left, so the zone decides next: P, E, F and Q are in new zones and P held
+        // the active, so P wins although Q is lighter. E and F held nothing, so the task waits for step 2.
+        // Step 2: E and F are still the only processes in a new zone and E is the lighter one; e1 is full, so e2 takes it.
+        // Step 3: B shares cluster and zone with A but held the standby, so it gets it back without rack awareness.
+        // Step 4: the last standby goes to the least loaded process that is left, G, which has no tags at all.
+        // H and Q, both lighter than E, get nothing: they only add diversity where C and P already do.
+        assertEquals(Set.of("c2", "p1", "e2", "b1", "g1"), standbyHolders(result, "stateful", 1));
+    }
+
+    @Test
+    public void shouldNotLetLeastLoadedRackAwarePickTakeRoomOfLaterStickyPick() {
+        // Standbys are placed for task 1 before task 0. P is the only process in a new zone and, with four members
+        // and four tasks, has room for one task. Task 1 held no standby, so its only rack-aware pick would be the
+        // least-loaded one; task 0 held its standby on P. The sticky picks run for both tasks first, so task 0 keeps
+        // P and task 1 falls to the tag-blind pass, which lands on C.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("a1", createTaggedMemberMetadata("A", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(1)), Map.of())),
+            mkEntry("b1", createTaggedMemberMetadata("B", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(0)), Map.of())),
+            mkEntry("p1", createTaggedMemberMetadata("P", Map.of("zone", "z2"), Map.of(), Map.of("test-subtopology", Set.of(0)))),
+            mkEntry("c1", createMemberMetadata("C", Map.of("zone", "z1")))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "a1"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "b1"));
+        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "p1"));
+        assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "c1"));
+    }
+
+    @Test
+    public void shouldPlaceRackAwareStandbyOnAnotherProcessWithTheSameTagValuesWhenTheLeastLoadedOneHasNoRoom() {
+        // A and B are in zone z1, C and D in z2. Task 3's standby goes back to memberB0, and the standbys of tasks 2
+        // and 1 fill C and D, which drops the quota from two to one. A, with one task, has no room any more but is
+        // as loaded as B, whose memberB1 has no task yet, so task 0's standby goes to memberB1 and not over the quota
+        // to A.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("memberA0", createTaggedMemberMetadata("processA", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(1)), Map.of())),
+            mkEntry("memberB0", createTaggedMemberMetadata("processB", Map.of("zone", "z1"), Map.of("test-subtopology", Set.of(2, 3)), Map.of())),
+            mkEntry("memberB1", createMemberMetadata("processB", Map.of("zone", "z1"))),
+            mkEntry("memberC0", createMemberMetadata("processC", Map.of("zone", "z2"))),
+            mkEntry("memberD0", createTaggedMemberMetadata("processD", Map.of("zone", "z2"), Map.of("test-subtopology", Set.of(0)), Map.of()))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("zone"))),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "memberA0"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "memberB0"));
+        assertEquals(Set.of(3), getActiveTasks(result, "test-subtopology", "memberC0"));
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "memberD0"));
+        assertEquals(Set.of(3), getStandbyTasks(result, "test-subtopology", "memberB0"));
+        assertEquals(Set.of("memberB1"), standbyHolders(result, "test-subtopology", 0));
+    }
+
+    @Test
+    public void shouldPlaceRackAwareStandbyOnPreviousStandbyMemberWithRoomWhenAnotherOneIsFull() {
+        // Each process is in a rack of its own and every member has room for two tasks. Task 4's standby goes back to
+        // m1, which fills it, while m1b on the same process still has room. Task 0's previous standby members are m1,
+        // the most caught-up, and m2, so the full m1 is skipped and the standby goes back to m2, not to m1b, which has
+        // no state of task 0.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("a0", createTaggedMemberMetadata("P0", Map.of("rack", "A"), Map.of("s", Set.of(0)), Map.of())),
+            mkEntry("m1", createTaggedMemberMetadataWithOffsets("P1", Map.of("rack", "B"), Map.of("s", Set.of(1)), Map.of("s", Set.of(4, 0)), Map.of("s", Map.of(0, 9000L)))),
+            mkEntry("m1b", createTaggedMemberMetadata("P1", Map.of("rack", "B"), Map.of("s", Set.of(2)), Map.of())),
+            mkEntry("m2", createTaggedMemberMetadataWithOffsets("P2", Map.of("rack", "C"), Map.of("s", Set.of(3)), Map.of("s", Set.of(0)), Map.of("s", Map.of(0, 100L)))),
+            mkEntry("m2b", createTaggedMemberMetadata("P2", Map.of("rack", "C"), Map.of("s", Set.of(4)), Map.of("s", Set.of(1))))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("rack"))),
+            new TopologyDescriberImpl(5, true, List.of("s"))
+        );
+
+        assertEquals(Set.of(4), getStandbyTasks(result, "s", "m1"));
+        assertEquals(Set.of("m2"), standbyHolders(result, "s", 0));
+    }
+
+    private int activeTaskCount(GroupAssignment result, String memberId, String subtopologyId) {
+        return getAllActiveTasks(result, memberId).getOrDefault(subtopologyId, Set.of()).size();
+    }
+
+    private List<Integer> sortedActiveTaskCounts(GroupAssignment result, String subtopologyId, String... memberIds) {
+        return Arrays.stream(memberIds).map(memberId -> activeTaskCount(result, memberId, subtopologyId)).sorted().toList();
+    }
+
+    private Map<String, MemberMetadataAndStateImpl> membersFromAssignment(
+        Map<String, MemberMetadataAndStateImpl> members,
+        GroupAssignment result
+    ) {
+        final Map<String, MemberMetadataAndStateImpl> next = new LinkedHashMap<>();
+        for (Map.Entry<String, MemberMetadataAndStateImpl> entry : members.entrySet()) {
+            final MemberAssignment assignment = result.members().get(entry.getKey());
+            next.put(entry.getKey(), createMemberMetadata(entry.getValue().processId(), assignment.activeTasks(), assignment.standbyTasks(), Map.of()));
+        }
+        return next;
+    }
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
@@ -1526,6 +1880,13 @@ public class StickyTaskAssignorTest {
             }
         }
         return res;
+    }
+
+    private Set<String> standbyHolders(GroupAssignment result, String subtopologyId, int partition) {
+        return result.members().entrySet().stream()
+            .filter(member -> member.getValue().standbyTasks().getOrDefault(subtopologyId, Set.of()).contains(partition))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
     }
 
     private List<Integer> getAllActiveTaskIds(GroupAssignment result, String... memberIds) {
@@ -1640,6 +2001,50 @@ public class StickyTaskAssignorTest {
             Map.of());
     }
 
+    private MemberMetadataAndStateImpl createMemberMetadata(
+        final String processId,
+        final Map<String, String> clientTags
+    ) {
+        return createTaggedMemberMetadata(processId, clientTags, Map.of(), Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createTaggedMemberMetadata(
+        final String processId,
+        final Map<String, String> clientTags,
+        final Map<String, Set<Integer>> prevActiveTasks,
+        final Map<String, Set<Integer>> prevStandbyTasks
+    ) {
+        return new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            processId,
+            clientTags,
+            prevActiveTasks,
+            prevStandbyTasks,
+            Map.of(),
+            Map.of(),
+            Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createTaggedMemberMetadataWithOffsets(
+        final String processId,
+        final Map<String, String> clientTags,
+        final Map<String, Set<Integer>> prevActiveTasks,
+        final Map<String, Set<Integer>> prevStandbyTasks,
+        final Map<String, Map<Integer, Long>> taskOffsets
+    ) {
+        return new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            processId,
+            clientTags,
+            prevActiveTasks,
+            prevStandbyTasks,
+            Map.of(),
+            taskOffsets,
+            Map.of());
+    }
+
     private MemberMetadataAndStateImpl createMemberMetadataWithOffsets(
         final String processId,
         final Map<String, Map<Integer, Long>> taskOffsets
@@ -1659,7 +2064,8 @@ public class StickyTaskAssignorTest {
     private MemberMetadataAndStateImpl createMemberMetadata(
         final String processId,
         final Map<String, Set<Integer>> prevActiveTasks,
-        final Map<String, Set<Integer>> prevStandbyTasks
+        final Map<String, Set<Integer>> prevStandbyTasks,
+        final Map<String, Set<Integer>> prevWarmupTasks
     ) {
         return new MemberMetadataAndStateImpl(
             Optional.empty(),
@@ -1668,7 +2074,7 @@ public class StickyTaskAssignorTest {
             Map.of(),
             prevActiveTasks,
             prevStandbyTasks,
-            Map.of(),
+            prevWarmupTasks,
             Map.of(),
             Map.of());
     }
@@ -1683,6 +2089,24 @@ public class StickyTaskAssignorTest {
         @Override
         public boolean isStateful(String subtopologyId) {
             return isStateful;
+        }
+    }
+
+    record MixedTopologyDescriberImpl(Map<String, Integer> numTasksBySubtopology, Set<String> statefulSubtopologies) implements TopologyDescriber {
+
+        @Override
+        public List<String> subtopologies() {
+            return new ArrayList<>(numTasksBySubtopology.keySet());
+        }
+
+        @Override
+        public int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException {
+            return numTasksBySubtopology.get(subtopologyId);
+        }
+
+        @Override
+        public boolean isStateful(String subtopologyId) {
+            return statefulSubtopologies.contains(subtopologyId);
         }
     }
 

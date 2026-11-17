@@ -236,7 +236,7 @@ public class GroupCoordinatorRecordHelpers {
      * Creates a ConsumerGroupTargetAssignmentMetadata record.
      *
      * @param groupId             The consumer group id.
-     * @param assignmentEpoch     The consumer group epoch.
+     * @param assignmentEpoch     The target assignment epoch.
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
@@ -526,8 +526,8 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupMemberMetadata record.
      *
-     * @param groupId   The consumer group id.
-     * @param member    The consumer group member.
+     * @param groupId   The share group id.
+     * @param member    The share group member.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupMemberSubscriptionRecord(
@@ -572,9 +572,9 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupMetadata record.
      *
-     * @param groupId       The group id.
-     * @param newGroupEpoch The group epoch.
-     * @param metadataHash  The group metadata hash.
+     * @param groupId       The share group id.
+     * @param newGroupEpoch The share group epoch.
+     * @param metadataHash  The share group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochRecord(
@@ -597,7 +597,7 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupMetadata tombstone.
      *
-     * @param groupId   The group id.
+     * @param groupId   The share group id.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochTombstoneRecord(
@@ -612,8 +612,8 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMember record.
      *
-     * @param groupId       The group id.
-     * @param memberId      The group member id.
+     * @param groupId       The share group id.
+     * @param memberId      The share group member id.
      * @param partitions    The target partitions of the member.
      * @return The record.
      */
@@ -648,8 +648,8 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMember tombstone.
      *
-     * @param groupId       The group id.
-     * @param memberId      The group member id.
+     * @param groupId       The share group id.
+     * @param memberId      The share group member id.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupTargetAssignmentTombstoneRecord(
@@ -666,8 +666,8 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMetadata record.
      *
-     * @param groupId             The group id.
-     * @param assignmentEpoch     The group epoch.
+     * @param groupId             The share group id.
+     * @param assignmentEpoch     The target assignment epoch.
      * @param assignmentTimestamp The time at which the target assignment calculation finished.
      * @return The record.
      */
@@ -691,7 +691,7 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupTargetAssignmentMetadata tombstone.
      *
-     * @param groupId   The group id.
+     * @param groupId   The share group id.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupTargetAssignmentMetadataTombstoneRecord(
@@ -706,8 +706,8 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupCurrentMemberAssignment record.
      *
-     * @param groupId   The group id.
-     * @param member    The group member.
+     * @param groupId   The share group id.
+     * @param member    The share group member.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupCurrentAssignmentRecord(
@@ -730,10 +730,10 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupCurrentMemberAssignment tombstone.
+     * Creates a ShareGroupCurrentMemberAssignment tombstone.
      *
-     * @param groupId   The consumer group id.
-     * @param memberId  The consumer group member id.
+     * @param groupId   The share group id.
+     * @param memberId  The share group member id.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupCurrentAssignmentTombstoneRecord(
@@ -765,9 +765,10 @@ public class GroupCoordinatorRecordHelpers {
     /**
      * Creates a ShareGroupStatePartitionMetadata record.
      *
-     * @param groupId   The share group id.
+     * @param groupId            The share group id.
+     * @param initializingTopics Topics which are being initialized.
      * @param initializedTopics  Topics which have been initialized.
-     * @param deletingTopics  Topics which are being deleted.
+     * @param deletingTopics     Topics which are being deleted.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(

@@ -17,9 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -38,7 +35,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,15 +58,15 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         // Create topics.
         String leaderTopic = "leader";
         // Set broker id 0 as the first entry which is taken as the leader.
-        createTopic(leaderTopic, Map.of(0, List.of(0, 1, 2)));
+        clusterInstance.createTopicWithAssignment(leaderTopic, Map.of(0, List.of(0, 1, 2)));
 
         String followerTopic = "follower";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(followerTopic, Map.of(0, List.of(1, 2, 0)));
+        clusterInstance.createTopicWithAssignment(followerTopic, Map.of(0, List.of(1, 2, 0)));
 
         String topicWithNoMessages = "no-messages-topic";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(topicWithNoMessages, Map.of(0, List.of(1, 2, 0)));
+        clusterInstance.createTopicWithAssignment(topicWithNoMessages, Map.of(0, List.of(1, 2, 0)));
 
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
@@ -167,13 +163,6 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             // In this state, all the metadata should be available in RLMM for both leader and follower partitions.
             assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext(), "No segments found");
             assertTrue(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition).hasNext(), "No segments found");
-        }
-    }
-
-    private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            admin.createTopics(List.of(new NewTopic(topic, replicasAssignments)));
-            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, replicasAssignments.size()));
         }
     }
 }

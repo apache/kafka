@@ -42,8 +42,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class HandlingSourceTopicDeletionIntegrationTest {
@@ -128,8 +127,8 @@ public class HandlingSourceTopicDeletionIntegrationTest {
                 () -> "Kafka Streams clients did not reach state ERROR"
             );
 
-            assertThat(calledUncaughtExceptionHandler1.get(), is(true));
-            assertThat(calledUncaughtExceptionHandler2.get(), is(true));
+            assertTrue(calledUncaughtExceptionHandler1.get());
+            assertTrue(calledUncaughtExceptionHandler2.get());
         }
     }
 }

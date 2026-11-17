@@ -106,7 +106,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
@@ -115,10 +115,8 @@ import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
@@ -240,8 +238,8 @@ public class EosIntegrationTest {
             final long consumerPosition = consumer.position(topicPartition);
             final long endOffset = consumer.endOffsets(topicPartitions).get(topicPartition);
 
-            assertThat(committedOffset, equalTo(consumerPosition));
-            assertThat(committedOffset, equalTo(endOffset));
+            assertEquals(consumerPosition, committedOffset);
+            assertEquals(endOffset, committedOffset);
         }
     }
 
@@ -341,7 +339,7 @@ public class EosIntegrationTest {
         addAllKeys(allKeys, expectedResult);
 
         for (final Long key : allKeys) {
-            assertThat(reason, getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            assertEquals(getAllRecordPerKey(key, expectedResult), getAllRecordPerKey(key, result), reason);
         }
     }
 
@@ -398,7 +396,7 @@ public class EosIntegrationTest {
             );
 
             final List<KeyValue<Long, Long>> firstCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, firstBurstOfData.size(), CONSUMER_GROUP_ID);
-            assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
+            assertEquals(firstBurstOfData, firstCommittedRecords);
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 SINGLE_PARTITION_INPUT_TOPIC,
@@ -408,7 +406,7 @@ public class EosIntegrationTest {
             );
 
             final List<KeyValue<Long, Long>> secondCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, secondBurstOfData.size(), CONSUMER_GROUP_ID);
-            assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
+            assertEquals(secondBurstOfData, secondCommittedRecords);
         }
     }
 
@@ -510,7 +508,7 @@ public class EosIntegrationTest {
                 expectedCommittedRecordsAfterRecovery,
                 "The committed records after recovery do not match what expected");
 
-            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
+            assertFalse(hasUnexpectedError, "Should only get one uncaught exception from Streams.");
         }
     }
 
@@ -630,7 +628,7 @@ public class EosIntegrationTest {
                 getMaxPerKey(expectedResult),
                 "The state store content after recovery do not match what expected");
 
-            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
+            assertFalse(hasUnexpectedError, "Should only get one uncaught exception from Streams.");
         }
     }
 
@@ -1373,7 +1371,7 @@ public class EosIntegrationTest {
     private List<KeyValue<Long, Long>> readResult(final String topic,
                                                   final int numberOfRecords,
                                                   final String groupId) throws Exception {
-        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT);
+        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT_MS);
     }
 
     private List<KeyValue<Long, Long>> readResult(final String topic,
@@ -1417,7 +1415,7 @@ public class EosIntegrationTest {
     private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
                                                                final int partition,
                                                                final int numberOfRecords) throws Exception {
-        final long timeoutMs = 2 * DEFAULT_TIMEOUT;
+        final long timeoutMs = 2 * DEFAULT_TIMEOUT_MS;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
         int tries = 0;

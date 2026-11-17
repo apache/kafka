@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.RequestHeaderData;
@@ -36,12 +37,21 @@ public class RequestHeader implements AbstractRequestResponse {
     private int size = SIZE_NOT_INITIALIZED;
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(new RequestHeaderData().
+        this(requestApiKey, requestVersion, clientId, null, correlationId);
+    }
+
+    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, Uuid clientInstanceId,
+                         int correlationId) {
+        this.headerVersion = requestApiKey.requestHeaderVersion(requestVersion);
+        this.data = new RequestHeaderData().
                 setRequestApiKey(requestApiKey.id).
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
-                setCorrelationId(correlationId),
-            requestApiKey.requestHeaderVersion(requestVersion));
+                setCorrelationId(correlationId);
+        // The client instance ID is a tagged field from header version 3, so writing it at an older version fails.
+        // We only set it from header version 3. Otherwise, the header leaves the ID unset as its default, `Uuid.ZERO_UUID`.
+        if (clientInstanceId != null && headerVersion >= 3)
+            this.data.setClientInstanceId(clientInstanceId);
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
@@ -67,6 +77,13 @@ public class RequestHeader implements AbstractRequestResponse {
 
     public int correlationId() {
         return data.correlationId();
+    }
+
+    /**
+     * Returns {@link Uuid#ZERO_UUID} if the header predates v3 or the client sent no ID.
+     */
+    public Uuid clientInstanceId() {
+        return data.clientInstanceId();
     }
 
     public RequestHeaderData data() {
@@ -165,6 +182,7 @@ public class RequestHeader implements AbstractRequestResponse {
         return "RequestHeader(apiKey=" + apiKey() +
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
+                ", clientInstanceId=" + clientInstanceId() +
                 ", correlationId=" + correlationId() +
                 ", headerVersion=" + headerVersion +
                 ")";

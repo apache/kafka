@@ -29,6 +29,8 @@
       "about": "Producer id used by the last committed transaction."},
     { "name": "NextProducerId", "type": "int64", "taggedVersions": "1+", "tag": 1, "default": -1,
       "about": "Latest producer ID sent to the producer for the given transactional id."},
+    { "name": "LastProducerEpoch", "type": "int16", "default": -1, "taggedVersions": "1+", "tag": 4,
+      "about": "Previous producer epoch for the transactional id."},
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Epoch associated with the producer id."},
     { "name": "NextProducerEpoch", "type": "int16", "default": -1, "taggedVersions": "1+", "tag": 3,

@@ -23,6 +23,9 @@
   // Version 2 changes the response to not return feature level results.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "How long to wait in milliseconds before timing out the request." },

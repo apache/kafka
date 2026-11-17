@@ -509,7 +509,7 @@ kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
 <tr>  
 <td>
 
-\# of under minIsr partitions (|ISR| < min.insync.replicas)
+\# of under minIsr partitions (|ISR| < min(min.insync.replicas, replica count))
 </td>  
 <td>
 
@@ -522,7 +522,7 @@ kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount
 <tr>  
 <td>
 
-\# of at minIsr partitions (|ISR| = min.insync.replicas)
+\# of at minIsr partitions (|ISR| = min(min.insync.replicas, replica count))
 </td>  
 <td>
 
@@ -532,6 +532,22 @@ kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount
 
 0
 </td> </tr>  
+
+<tr>
+<td>
+
+Count of leader partitions with late transactions
+</td>
+<td>
+
+kafka.server:type=ReplicaManager,name=PartitionsWithLateTransactionsCount
+</td>
+<td>
+
+0
+</td> </tr>
+
+
 <tr>  
 <td>
 
@@ -675,6 +691,45 @@ kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=
 
 size depends on fetch.wait.max.ms in the consumer
 </td> </tr>  
+<tr>
+<td>
+
+Delayed Produce Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedProduceMetrics,name=ExpiresPerSec,topic=([-.\w]+),partition=([0-9]+)
+</td>
+<td>
+
+Produce timeouts per second, counted once per partition still waiting for replica acknowledgments. Omit `topic` and `partition` for the broker-wide rate.
+</td> </tr>
+<tr>
+<td>
+
+Delayed Fetch Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedFetchMetrics,name=ExpiresPerSec,fetcherType={consumer|follower}
+</td>
+<td>
+
+Expired Fetch requests per second, by fetcher type (consumer or follower).
+</td> </tr>
+<tr>
+<td>
+
+Delayed Delete Records Expires Per Sec
+</td>
+<td>
+
+kafka.server:type=DelayedDeleteRecordsMetrics,name=ExpiresPerSec
+</td>
+<td>
+
+DeleteRecords timeouts per second, counted once per partition whose low watermark is below the requested delete offset.
+</td> </tr>
 <tr>  
 <td>
 
@@ -1188,6 +1243,45 @@ kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p5
 <td>
 
 The time that an event waited in the purgatory before being completed
+</td> </tr>  
+<tr>  
+<td>
+
+Average Background Thread Idle Ratio
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-thread-idle-ratio-avg
+</td>  
+<td>
+
+The average idle ratio of the coordinator background threads
+</td> </tr>  
+<tr>  
+<td>
+
+Background Queue Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-queue-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task spent waiting in the queue to be processed
+</td> </tr>  
+<tr>  
+<td>
+
+Background Processing Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-processing-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task took to be processed
 </td> </tr>  
 <tr>  
 <td>
@@ -1970,11 +2064,11 @@ Delayed Remote Fetch Expires Per Sec
 </td>  
 <td>
 
-The number of expired remote fetches per second. Omitting 'topic=(...)' will yield the all-topic rate
+The number of expired remote fetches per second across all topics on the broker.
 </td>  
 <td>
 
-kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec,topic=([-.\w]+)
+kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec
 </td> </tr>  
 <tr>  
 <td>

@@ -33,7 +33,7 @@ Interactive queries allow you to leverage the state of your application from out
 
 The full state of your application is typically [split across many distributed instances of your application](../../architecture#streams_architecture_state), and across many state stores that are managed locally by these application instances.
 
-![](/43/images/streams-interactive-queries-03.png)
+![](/{version}/images/streams-interactive-queries-03.png)
 
 There are local and remote components to interactively querying the state of your application.
 
@@ -129,7 +129,7 @@ A Kafka Streams application typically runs on multiple instances. The state that
 
 The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](/{version}/streams/developer-guide/processor-api/#versioned-key-value-state-stores) at this time.
 
-![](/43/images/streams-interactive-queries-api-01.png)
+![](/{version}/images/streams-interactive-queries-api-01.png)
 
 Every application instance can directly query any of its local state stores.
 
@@ -177,7 +177,7 @@ Note: These examples use `QueryableStoreTypes.keyValueStore()` and `ReadOnlyKeyV
     KafkaStreams streams = new KafkaStreams(builder, props);
     streams.start();
 
-After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java) API:
+After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java) API:
     
     
     // Get the key-value store CountsKeyValueStore
@@ -238,7 +238,7 @@ Note: These examples use `QueryableStoreTypes.windowStore()` and `ReadOnlyWindow
     groupedByWord.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(60)))
       .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>as("CountsWindowStore"));
 
-After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java) API:
+After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java) API:
     
     
     // Get the window store named "CountsWindowStore"
@@ -311,7 +311,7 @@ Session stores return `AggregationWithHeaders<V>`, which exposes the aggregated 
 
 ### Reading headers with the IQv2 `query()` API
 
-Interactive Queries v2 (IQv2) is the query-based interactive-queries API: instead of accessing a store object directly, you build a `Query`, wrap it in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html), and run it with `KafkaStreams#query(...)`. The call returns a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that holds a per-partition [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html): use `getOnlyPartitionResult()` for a single-key lookup, or `getPartitionResults()` for the full `Map<Integer, QueryResult<R>>`. Each `QueryResult` exposes the query result via `getResult()` and its data-freshness `Position` via `getPosition()`. To require a minimum freshness on the request side, bound it with `StateQueryRequest#withPositionBound(...)`; a not-up-to-bound failure (described in the behavior notes below) means the store had not yet reached that bound.
+Interactive Queries v2 (IQv2) is the query-based interactive-queries API: instead of accessing a store object directly, you build a `Query`, wrap it in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html), and run it with `KafkaStreams#query(...)`. The call returns a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that holds a per-partition [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html): use `getOnlyPartitionResult()` for a single-key lookup, or `getPartitionResults()` for the full `Map<Integer, QueryResult<R>>`. Each `QueryResult` exposes the query result via `getResult()` and its data-freshness `Position` via `getPosition()`. To require a minimum freshness on the request side, bound it with `StateQueryRequest#withPositionBound(...)`; a not-up-to-bound failure (described in the behavior notes below) means the store had not yet reached that bound. For the full IQv2 API — the four-step query flow, all built-in query types, per-partition result handling, and the consistency and availability controls — see the [Interactive Queries v2 (IQv2)](#interactive-queries-v2) section; here we cover only how record headers surface through it.
 
 Before [KIP-1356](../../upgrade-guide/#kip-1356-iqv2-header-queries), no IQv2 query type exposed record headers. [KIP-1356](../../upgrade-guide/#kip-1356-iqv2-header-queries) adds four `@Evolving` query types whose results carry headers. Each returns a [ReadOnlyRecord](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — a read-only view exposing `key()`, `value()`, `timestamp()`, and `headers()` — or, for the range and window queries, a closeable [ReadOnlyRecordIterator](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html) of such records. `headers()` is never null (an empty `Headers` when the record had none) and must be treated as read-only: records served as IQv2 results have their headers frozen, so adding or removing a header (for example `add(...)`) throws `IllegalStateException`. The freeze is shallow, though — the byte array behind an individual header value can still be mutated in place, so treat header values as read-only too.
 
@@ -526,7 +526,7 @@ The class/interface hierarchy for your custom store might look something like:
 
 To make this store queryable you must:
 
-  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
+  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
   * Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
 
 
@@ -549,7 +549,7 @@ Here is how to implement `QueryableStoreType`:
 
 A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
 
-When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
+When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
 
 Here is an example implementation of the wrapper:
     
@@ -834,7 +834,7 @@ For example, you have a Kafka Streams application that processes user events in 
 
 
 
-![](/43/images/streams-interactive-queries-api-02.png)
+![](/{version}/images/streams-interactive-queries-api-02.png)
 
 Discover any running instances of the same application as well as the respective RPC endpoints they expose for interactive queries
 

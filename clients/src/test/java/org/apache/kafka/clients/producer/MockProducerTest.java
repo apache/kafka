@@ -48,7 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("removal")
 public class MockProducerTest {
@@ -115,12 +114,10 @@ public class MockProducerTest {
         assertFalse(md2.isDone(), "Second request still incomplete");
         IllegalArgumentException e = new IllegalArgumentException("blah");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
-        try {
-            md2.get();
-            fail("Expected error to be thrown");
-        } catch (ExecutionException err) {
-            assertEquals(e, err.getCause());
-        }
+
+        ExecutionException err = assertThrows(ExecutionException.class, md2::get);
+        assertEquals(e, err.getCause());
+
         assertFalse(producer.completeNext(), "No more requests to complete");
 
         Future<RecordMetadata> md3 = producer.send(record1);
@@ -732,12 +729,9 @@ public class MockProducerTest {
         });
         IllegalArgumentException e = new IllegalArgumentException("dummy exception");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
-        try {
-            metadata.get();
-            fail("Something went wrong, expected an error");
-        } catch (ExecutionException err) {
-            assertEquals(e, err.getCause());
-        }
+
+        ExecutionException err = assertThrows(ExecutionException.class, metadata::get);
+        assertEquals(e, err.getCause());
     }
 
     private boolean isError(Future<?> future) {

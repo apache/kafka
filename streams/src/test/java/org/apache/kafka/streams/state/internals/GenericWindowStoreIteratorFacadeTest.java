@@ -31,8 +31,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,8 +59,8 @@ public class GenericWindowStoreIteratorFacadeTest {
             .thenReturn(KeyValue.pair(100L, ValueAndTimestamp.make("value1", 42L)))
             .thenReturn(KeyValue.pair(200L, ValueAndTimestamp.make("value2", 84L)));
 
-        assertThat(facade.next(), is(KeyValue.pair(100L, "value1")));
-        assertThat(facade.next(), is(KeyValue.pair(200L, "value2")));
+        assertEquals(KeyValue.pair(100L, "value1"), facade.next());
+        assertEquals(KeyValue.pair(200L, "value2"), facade.next());
     }
 
     @Test
@@ -70,8 +69,8 @@ public class GenericWindowStoreIteratorFacadeTest {
             .thenReturn(KeyValue.pair(100L, null))
             .thenReturn(KeyValue.pair(200L, ValueAndTimestamp.make("value2", 42L)));
 
-        assertThat(facade.next(), is(KeyValue.pair(100L, null)));
-        assertThat(facade.next(), is(KeyValue.pair(200L, "value2")));
+        assertEquals(KeyValue.pair(100L, null), facade.next());
+        assertEquals(KeyValue.pair(200L, "value2"), facade.next());
     }
 
     @Test
@@ -86,7 +85,7 @@ public class GenericWindowStoreIteratorFacadeTest {
     public void shouldDelegatePeekNextKey() {
         when(mockedInnerIterator.peekNextKey()).thenReturn(100L, (Long) null);
 
-        assertThat(facade.peekNextKey(), is(100L));
+        assertEquals(100L, facade.peekNextKey());
         assertNull(facade.peekNextKey());
     }
 

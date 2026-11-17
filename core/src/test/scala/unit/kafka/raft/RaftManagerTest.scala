@@ -22,13 +22,15 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
-import kafka.server.KafkaConfig
+import kafka.server.{DynamicBrokerConfig, KafkaConfig}
 import kafka.tools.TestRaftServer.ByteArraySerde
 import kafka.utils.TestUtils
+import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.SslChannelBuilder
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
@@ -178,6 +180,33 @@ class RaftManagerTest {
 
       assertFalse(fileLocked(lockPath))
     } finally {
+      logDir.foreach(p => Utils.delete(p.toFile))
+      metadataDir.foreach(p => Utils.delete(p.toFile))
+    }
+  }
+
+  @Test
+  def testRaftManagerRegistersSslChannelBuilderForReconfiguration(): Unit = {
+    val logDir = Seq(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+    val config = createConfig(
+      Set(ProcessRole.ControllerRole),
+      nodeId = 1,
+      logDir,
+      metadataDir
+    )
+    val raftManager = createRaftManager(new TopicPartition("__raft_id_test", 0), config)
+    try {
+      val dynamicConfigMethod = classOf[KafkaConfig].getDeclaredMethod("dynamicConfig")
+      dynamicConfigMethod.setAccessible(true)
+      val dynamicConfig = dynamicConfigMethod.invoke(config)
+      val reconfigurablesMethod = classOf[DynamicBrokerConfig].getDeclaredMethod("reconfigurables")
+      reconfigurablesMethod.setAccessible(true)
+      val reconfigurables = reconfigurablesMethod.invoke(dynamicConfig).asInstanceOf[java.util.Collection[Reconfigurable]]
+      assertTrue(reconfigurables.asScala.exists(_.isInstanceOf[SslChannelBuilder]),
+        "RaftManager should register its SSL channel builder as a Reconfigurable on the config")
+    } finally {
+      raftManager.shutdown()
       logDir.foreach(p => Utils.delete(p.toFile))
       metadataDir.foreach(p => Utils.delete(p.toFile))
     }

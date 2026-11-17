@@ -18,7 +18,6 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -45,13 +44,6 @@ public class Tls13SelectorTest extends SslSelectorTest {
             trustStoreFile, "client");
         configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         return configs;
-    }
-
-    @Flaky(value = "KAFKA-14249", comment = "Copied from base class. Remove this override once the flakiness has been resolved.")
-    @Test
-    @Override
-    public void testCloseOldestConnection() throws Exception {
-        super.testCloseOldestConnection();
     }
 
     /**

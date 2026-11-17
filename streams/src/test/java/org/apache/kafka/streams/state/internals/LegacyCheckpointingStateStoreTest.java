@@ -50,13 +50,9 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -110,7 +106,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             persistentStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, instanceOf(LegacyCheckpointingStateStore.class));
+        assertInstanceOf(LegacyCheckpointingStateStore.class, result);
     }
 
     @Test
@@ -120,7 +116,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             nonPersistentStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, not(instanceOf(LegacyCheckpointingStateStore.class)));
+        assertFalse(result instanceof LegacyCheckpointingStateStore);
     }
 
     @Test
@@ -136,7 +132,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             offsetManagingStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, not(instanceOf(LegacyCheckpointingStateStore.class)));
+        assertFalse(result instanceof LegacyCheckpointingStateStore);
     }
 
     // =====================================================================
@@ -494,8 +490,7 @@ public class LegacyCheckpointingStateStoreTest {
                  LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
             store.checkpoint(); // should log a warning, not throw
 
-            assertThat(appender.getMessages(),
-                hasItem(containsString("Failed to write offset checkpoint file")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Failed to write offset checkpoint file")));
         }
     }
 
@@ -630,8 +625,7 @@ public class LegacyCheckpointingStateStoreTest {
             LegacyCheckpointingStateStore.migrateLegacyOffsets(
                 LOG_PREFIX, stateDirectory, taskId, Collections.singletonMap(partition, persistentStore));
 
-            assertThat(appender.getMessages(),
-                hasItem(containsString("does not manage its own offsets")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("does not manage its own offsets")));
         }
     }
 

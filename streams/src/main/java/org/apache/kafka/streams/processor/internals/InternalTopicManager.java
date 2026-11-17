@@ -159,12 +159,12 @@ public class InternalTopicManager {
         final Set<String> topicDescriptionsStillToValidate = new HashSet<>(topicConfigs.keySet());
         final Set<String> topicConfigsStillToValidate = new HashSet<>(topicConfigs.keySet());
         while (!topicDescriptionsStillToValidate.isEmpty() || !topicConfigsStillToValidate.isEmpty()) {
-            Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Collections.emptyMap();
+            Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Map.of();
             if (!topicDescriptionsStillToValidate.isEmpty()) {
                 final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicDescriptionsStillToValidate);
                 descriptionsForTopic = describeTopicsResult.topicNameValues();
             }
-            Map<String, KafkaFuture<Config>> configsForTopic = Collections.emptyMap();
+            Map<String, KafkaFuture<Config>> configsForTopic = Map.of();
             if (!topicConfigsStillToValidate.isEmpty()) {
                 final DescribeConfigsResult describeConfigsResult = adminClient.describeConfigs(
                     topicConfigsStillToValidate.stream()
@@ -492,7 +492,7 @@ public class InternalTopicManager {
                 break;
             }
             if (!topicsToCreate.isEmpty()) {
-                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady, deadlineMs);
+                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady);
                 topicsNotReady.removeAll(createdTopics);
                 newlyCreatedTopics.addAll(createdTopics);
             }
@@ -504,7 +504,7 @@ public class InternalTopicManager {
                     String.format("Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
                     null
                 ));
-
+                maybeSleep(List.of(topicsNotReady), deadlineMs, "made ready");
             }
         }
         log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
@@ -543,8 +543,7 @@ public class InternalTopicManager {
     }
 
     private Set<String> createTopics(final Set<NewTopic> topicsToCreate,
-                                     final Set<String> topicsNotReady,
-                                     final long deadlineMs) {
+                                     final Set<String> topicsNotReady) {
         final CreateTopicsResult createTopicsResult = adminClient.createTopics(topicsToCreate);
         final Set<String> createdTopics = new HashSet<>();
 
@@ -554,7 +553,6 @@ public class InternalTopicManager {
                 createTopicResult.getValue().get();
                 topicsNotReady.remove(topicName);
                 createdTopics.add(topicName);
-                
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -594,27 +592,10 @@ public class InternalTopicManager {
                 }
             }
 
-            if (!topicsNotReady.isEmpty()) {
-                maybeThrowTimeout(new TimeoutContext(
-                        topicsNotReady,
-                        deadlineMs,
-                        "createTopics timeout",
-                        String.format(
-                                "Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.",
-                                retryTimeoutMs),
-                        null));
-                log.info(
-                    "Topics {} could not be made ready. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
-                    topicsNotReady,
-                    retryBackOffMs,
-                    deadlineMs - time.milliseconds()
-                );
-                Utils.sleep(retryBackOffMs);
-            }
-        } 
+        }
+
         return createdTopics;
-    } 
-        
+    }
 
     /**
      * Try to get the partition information for the given topics; return the partition info for topics that already exists.
@@ -751,7 +732,7 @@ public class InternalTopicManager {
 
             processCreateTopicResults(createTopicsResult, topicStillToCreate, createdTopics, deadline);
 
-            maybeSleep(Collections.singletonList(topicStillToCreate), deadline, "created");
+            maybeSleep(List.of(topicStillToCreate), deadline, "created");
         }
 
         log.info("Completed setup of internal topics {}.", topicConfigs.keySet());
@@ -885,7 +866,7 @@ public class InternalTopicManager {
             }
 
             maybeSleep(
-                Collections.singletonList(topicsStillToCleanup),
+                List.of(topicsStillToCleanup),
                 deadline,
                 "validated"
             );
@@ -939,7 +920,7 @@ public class InternalTopicManager {
                 retryBackOffMs,
                 deadline - now
             );
-            Utils.sleep(retryBackOffMs);
+            time.sleep(retryBackOffMs);
         }
     }
 }

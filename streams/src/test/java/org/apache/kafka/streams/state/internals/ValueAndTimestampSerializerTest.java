@@ -25,11 +25,10 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -50,9 +49,9 @@ public class ValueAndTimestampSerializerTest {
 
         final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(value, TIMESTAMP);
         final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, valueAndTimestamp);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
         final ValueAndTimestamp<String> deserialized = STRING_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
-        assertThat(deserialized, is(valueAndTimestamp));
+        assertEquals(valueAndTimestamp, deserialized);
     }
 
     @Test
@@ -81,7 +80,7 @@ public class ValueAndTimestampSerializerTest {
     public void shouldSerializeNullDataAsNull() {
         final byte[] serialized = STRING_SERDE.serializer().serialize(TOPIC, HEADERS, ValueAndTimestamp.make(null, TIMESTAMP));
 
-        assertThat(serialized, is(nullValue()));
+        assertNull(serialized);
     }
 
     @Test
@@ -91,7 +90,7 @@ public class ValueAndTimestampSerializerTest {
         final Serializer<String> alwaysNullSerializer = (topic, data) -> null;
         final ValueAndTimestampSerializer<String> serializer = new ValueAndTimestampSerializer<>(alwaysNullSerializer);
         final byte[] serialized = serializer.serialize(TOPIC, HEADERS, "non-null-data", TIMESTAMP);
-        assertThat(serialized, is(nullValue()));
+        assertNull(serialized);
     }
 
     @Test

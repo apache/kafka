@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Feature
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.lang.{Byte => JByte}
 
@@ -261,10 +261,10 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
         )
 
         assertEquals(2, actual.size)
-        assertEquals(actual.map(_.groupId).toSet, Set("grp-1", "grp-2"))
+        assertEquals(Set("grp-1", "grp-2"), actual.map(_.groupId).toSet)
         for (describedGroup <- actual) {
           assertEquals("Stable", describedGroup.groupState)
-          assertTrue("Group epoch is not equal to the assignment epoch", describedGroup.groupEpoch == describedGroup.assignmentEpoch)
+          assertTrue(describedGroup.groupEpoch == describedGroup.assignmentEpoch, "Group epoch is not equal to the assignment epoch")
           // Verify topology
           assertEquals(1, describedGroup.topology.epoch)
           assertEquals(1, describedGroup.topology.subtopologies.size)
@@ -284,7 +284,7 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
           assertEquals(authorizedOperationsInt, describedGroup.authorizedOperations)
 
           describedGroup.members.asScala.foreach { member =>
-            assertTrue("Group epoch is not equal to the member epoch", member.memberEpoch == describedGroup.assignmentEpoch)
+            assertTrue(member.memberEpoch == describedGroup.assignmentEpoch, "Group epoch is not equal to the member epoch")
             assertEquals(1, member.topologyEpoch)
             assertEquals(member.targetAssignment, member.assignment)
             assertEquals(clientId, member.clientId())

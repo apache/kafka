@@ -964,16 +964,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
             for (InitializeShareGroupStateRequestData.PartitionData partitionData : topicData.partitions()) {
                 SharePartitionKey coordinatorKey = SharePartitionKey.getInstance(request.groupId(), topicId, partitionData.partition());
 
-                InitializeShareGroupStateRequestData requestForCurrentPartition = new InitializeShareGroupStateRequestData()
-                    .setGroupId(groupId)
-                    .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
-                        .setTopicId(topicId)
-                        .setPartitions(List.of(partitionData))));
-
                 CompletableFuture<InitializeShareGroupStateResponseData> initializeFuture = runtime.scheduleWriteOperation(
                     "initialize-share-group-state",
                     topicPartitionFor(coordinatorKey),
-                    coordinator -> coordinator.initializeState(requestForCurrentPartition)
+                    coordinator -> coordinator.initializeState(groupId, topicId, partitionData)
                 ).exceptionally(initializeException ->
                     handleOperationException(
                         "initialize-share-group-state",

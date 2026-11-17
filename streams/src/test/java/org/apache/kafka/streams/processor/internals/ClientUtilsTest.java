@@ -50,8 +50,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerR
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -198,7 +197,7 @@ public class ClientUtilsTest {
             Optional.empty()
         );
 
-        assertThat(consumerRecordSizeInBytes(record), equalTo(SIZE_IN_BYTES));
+        assertEquals(SIZE_IN_BYTES, consumerRecordSizeInBytes(record));
     }
 
     @Test
@@ -211,7 +210,7 @@ public class ClientUtilsTest {
             VALUE,
             HEADERS
         );
-        assertThat(producerRecordSizeInBytes(record), equalTo(SIZE_IN_BYTES));
+        assertEquals(SIZE_IN_BYTES, producerRecordSizeInBytes(record));
     }
 
     @Test
@@ -229,7 +228,7 @@ public class ClientUtilsTest {
             HEADERS,
             Optional.empty()
         );
-        assertThat(consumerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
+        assertEquals(NULL_KEY_SIZE_IN_BYTES, consumerRecordSizeInBytes(record));
     }
 
     @Test
@@ -242,7 +241,7 @@ public class ClientUtilsTest {
             VALUE,
             HEADERS
         );
-        assertThat(producerRecordSizeInBytes(record), equalTo(NULL_KEY_SIZE_IN_BYTES));
+        assertEquals(NULL_KEY_SIZE_IN_BYTES, producerRecordSizeInBytes(record));
     }
 
     @Test
@@ -260,7 +259,7 @@ public class ClientUtilsTest {
             HEADERS,
             Optional.empty()
         );
-        assertThat(consumerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
+        assertEquals(TOMBSTONE_SIZE_IN_BYTES, consumerRecordSizeInBytes(record));
     }
 
     @Test
@@ -273,6 +272,6 @@ public class ClientUtilsTest {
             null,
             HEADERS
         );
-        assertThat(producerRecordSizeInBytes(record), equalTo(TOMBSTONE_SIZE_IN_BYTES));
+        assertEquals(TOMBSTONE_SIZE_IN_BYTES, producerRecordSizeInBytes(record));
     }
 }

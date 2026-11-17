@@ -51,6 +51,9 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.mirror.MirrorCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.mirror.generated.CoordinatorRecordJsonConverters;
+import org.apache.kafka.coordinator.mirror.generated.MirrorPartitionStateValue;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionState;
@@ -59,6 +62,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
@@ -311,15 +315,7 @@ public class DumpLogSegments {
                 prevTimestamp = entry.timestamp();
             }
         } finally {
-            if (fileRecords != null) {
-                fileRecords.closeHandlers();
-            }
-            if (index != null) {
-                index.closeHandler();
-            }
-            if (timeIndex != null) {
-                timeIndex.closeHandler();
-            }
+            Utils.closeAll(fileRecords, index, timeIndex);
         }
     }
 
@@ -376,9 +372,7 @@ public class DumpLogSegments {
             }
         }
 
-        FileRecords fileRecords = null;
-        try {
-            fileRecords = FileRecords.open(file, false).slice(0, maxBytes);
+        try (FileRecords fileRecords = FileRecords.open(file, false).slice(0, maxBytes)) {
             long validBytes = 0L;
             AtomicLong lastOffset = new AtomicLong(-1L);
 
@@ -392,10 +386,6 @@ public class DumpLogSegments {
             }
 
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
-        } finally {
-            if (fileRecords != null) {
-                fileRecords.closeHandlers();
-            }
         }
     }
 
@@ -803,6 +793,28 @@ public class DumpLogSegments {
         }
     }
 
+    // Package private for testing
+    static class MirrorStateMessageParser extends CoordinatorRecordMessageParser {
+        public MirrorStateMessageParser() {
+            super(new MirrorCoordinatorRecordSerde());
+        }
+
+        @Override
+        protected JsonNode keyAsJson(ApiMessage message) {
+            return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+        }
+
+        @Override
+        protected JsonNode valueAsJson(ApiMessage message, short version) {
+            JsonNode json = CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+            if (message instanceof MirrorPartitionStateValue state) {
+                ((ObjectNode) json).put("state", MirrorPartitionState.nameOf(state.state()));
+                ((ObjectNode) json).put("previousState", MirrorPartitionState.nameOf(state.previousState()));
+            }
+            return json;
+        }
+    }
+
     private static class DumpLogSegmentsOptions extends CommandDefaultOptions {
         private final OptionSpec<Void> printOpt;
         private final OptionSpec<Void> verifyOpt;
@@ -818,6 +830,7 @@ public class DumpLogSegments {
         private final OptionSpec<Void> clusterMetadataOpt;
         private final OptionSpec<Void> remoteMetadataOpt;
         private final OptionSpec<Void> shareStateOpt;
+        private final OptionSpec<Void> mirrorStateOpt;
         private final OptionSpec<Void> skipRecordMetadataOpt;
 
         DumpLogSegmentsOptions(String[] args) {
@@ -869,6 +882,8 @@ public class DumpLogSegments {
                 "Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.");
             shareStateOpt = parser.accepts("share-group-state-decoder",
                 "If set, log data will be parsed as share group state data from the __share_group_state topic.");
+            mirrorStateOpt = parser.accepts("mirror-state-decoder",
+                "If set, log data will be parsed as mirror state data from the __mirror_state topic.");
             skipRecordMetadataOpt = parser.accepts("skip-record-metadata",
                 "Skip metadata when printing records. This flag also skips control records.");
 
@@ -886,6 +901,8 @@ public class DumpLogSegments {
                 return new RemoteMetadataLogMessageParser();
             } else if (options.has(shareStateOpt)) {
                 return new ShareGroupStateMessageParser();
+            } else if (options.has(mirrorStateOpt)) {
+                return new MirrorStateMessageParser();
             } else {
                 try {
                     Decoder<?> valueDecoder = Utils.newInstance(options.valueOf(valueDecoderOpt), Decoder.class);
@@ -906,7 +923,8 @@ public class DumpLogSegments {
                 remoteMetadataOpt,
                 valueDecoderOpt,
                 keyDecoderOpt,
-                shareStateOpt
+                shareStateOpt,
+                mirrorStateOpt
             );
         }
 
