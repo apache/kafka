@@ -95,33 +95,7 @@ listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL
 
 It is a requirement that the host and port defined in `controller.quorum.bootstrap.servers` is routed to the exposed controller listeners. For example, here the `CONTROLLER` listener is bound to localhost:9093. The connection string defined by `controller.quorum.bootstrap.servers` must then also use localhost:9093, as it does here.
 
-When a controller listener uses SASL, `sasl.mechanism.controller.protocol` selects the mechanism used for connections to the controllers. The mechanism must be enabled, and each SASL listener must have a JAAS configuration for that mechanism. For example, the following listener-related settings configure a combined broker and controller to use SASL/PLAIN for both broker and controller traffic:
-
-```java-properties
-process.roles=broker,controller
-node.id=1
-listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
-inter.broker.listener.name=BROKER
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER
-listener.security.protocol.map=BROKER:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
-
-sasl.enabled.mechanisms=PLAIN
-sasl.mechanism.inter.broker.protocol=PLAIN
-sasl.mechanism.controller.protocol=PLAIN
-
-listener.name.broker.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-    username="admin" \
-    password="admin-secret" \
-    user_admin="admin-secret" \
-    user_alice="alice-secret";
-listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-    username="admin" \
-    password="admin-secret" \
-    user_admin="admin-secret";
-```
-
-`SASL_PLAINTEXT` authenticates connections but does not encrypt them. Use `SASL_SSL` and configure the listener's SSL properties when encryption is required. See [Authentication using SASL](../authentication-using-sasl) for mechanism-specific configuration and production recommendations.
+When a controller listener uses SASL, `sasl.mechanism.controller.protocol` selects the mechanism used for connections to the controllers. The mechanism must be enabled, and each SASL listener must have a JAAS configuration for that mechanism. See [Authentication using SASL](../authentication-using-sasl) for mechanism-specific configuration and production recommendations.
 
 The controller will accept requests on all listeners defined by `controller.listener.names`. Typically there would be just one controller listener, but it is possible to have more. For example, this provides a way to change the active listener from one port or security protocol to another through a roll of the cluster (one roll to expose the new listener, and one roll to remove the old listener). When multiple controller listeners are defined, the first one in the list will be used for outbound requests.
 
