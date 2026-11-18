@@ -278,6 +278,9 @@ public class GlobalStreamThread extends Thread {
         }
 
         public void close(final boolean wipeStateStore) throws IOException {
+            // Clear the interrupt status before closing the consumer. With the status set,
+            // the close gives up after one network poll and throws an InterruptException.
+            Thread.interrupted();
             try {
                 globalConsumer.close();
             } catch (final RuntimeException e) {
@@ -368,15 +371,11 @@ public class GlobalStreamThread extends Thread {
             );
             this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
+            // Clear the interrupt status before invoking the handler, as above.
             Thread.interrupted();
             log.error("Error happened while maintaining global state store. The streams application or client will now close to ERROR.", e);
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
-            // Clear the interrupt status before closing the consumer, since an interrupt
-            // can leave fetch sessions open on the brokers. This also covers exits that
-            // bypass the catch blocks and interrupts set by the exception handler.
-            Thread.interrupted();
-
             // set the state to pending shutdown first as it may be called due to error;
             // its state may already be PENDING_SHUTDOWN so it will return false but we
             // intentionally do not check the returned flag
@@ -483,9 +482,6 @@ public class GlobalStreamThread extends Thread {
     }
 
     private void closeStateConsumer(final StateConsumer stateConsumer, final boolean wipeStateStore) {
-        // Clear the interrupt status before closing the consumer, since an interrupt
-        // can leave fetch sessions open on the brokers.
-        Thread.interrupted();
         if (stateConsumer != null) {
             try {
                 stateConsumer.close(wipeStateStore);

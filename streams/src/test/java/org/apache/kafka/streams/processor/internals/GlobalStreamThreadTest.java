@@ -47,6 +47,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -139,6 +140,12 @@ public class GlobalStreamThreadTest {
             stateRestoreListener,
             e -> { }
         );
+    }
+
+    @AfterEach
+    public void clearInterruptStatus() {
+        // some tests call run() on the test thread, which JUnit may reuse
+        Thread.interrupted();
     }
 
     @Test
@@ -271,12 +278,7 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetExceptionDuringStartup() throws Exception {
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         initializeConsumer();
-        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
-            @Override
-            public Set<TopicPartition> partitions() {
-                return Collections.singleton(topicPartition);
-            }
-        });
+        mockConsumer.setPollException(invalidOffsetException());
 
         startAndSwallowError();
 
@@ -310,12 +312,7 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "Input record never consumed");
 
-        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
-            @Override
-            public Set<TopicPartition> partitions() {
-                return Collections.singleton(topicPartition);
-            }
-        });
+        mockConsumer.setPollException(invalidOffsetException());
 
         TestUtils.waitForCondition(
             () -> globalStreamThread.state() == DEAD,
@@ -337,12 +334,7 @@ public class GlobalStreamThreadTest {
             e -> interruptedInHandler.set(Thread.currentThread().isInterrupted())
         );
 
-        try {
-            globalStreamThread.run();
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        globalStreamThread.run();
 
         assertFalse(interruptedInHandler.get());
     }
@@ -353,23 +345,13 @@ public class GlobalStreamThreadTest {
         initializeConsumer();
         mockConsumer.schedulePollTask(() -> {
             Thread.currentThread().interrupt();
-            throw new InvalidOffsetException("Try Again!") {
-                @Override
-                public Set<TopicPartition> partitions() {
-                    return Collections.singleton(topicPartition);
-                }
-            };
+            throw invalidOffsetException();
         });
         globalStreamThread.setUncaughtExceptionHandler(
             e -> interruptedInHandler.set(Thread.currentThread().isInterrupted())
         );
 
-        try {
-            globalStreamThread.run();
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        globalStreamThread.run();
 
         assertFalse(interruptedInHandler.get());
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
@@ -382,12 +364,7 @@ public class GlobalStreamThreadTest {
         interruptOnNextPoll(consumer);
         globalStreamThread = newGlobalStreamThread(consumer);
 
-        try {
-            globalStreamThread.run();
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        globalStreamThread.run();
 
         assertFalse(interruptedOnClose.get());
         assertEquals(DEAD, globalStreamThread.state());
@@ -402,12 +379,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread = newGlobalStreamThread(consumer);
         globalStreamThread.setUncaughtExceptionHandler(e -> Thread.currentThread().interrupt());
 
-        try {
-            globalStreamThread.run();
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        globalStreamThread.run();
 
         assertFalse(interruptedOnClose.get());
     }
@@ -423,12 +395,7 @@ public class GlobalStreamThreadTest {
             throw new RuntimeException("handler failed");
         });
 
-        try {
-            assertThrows(RuntimeException.class, globalStreamThread::run);
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        assertThrows(RuntimeException.class, globalStreamThread::run);
 
         assertFalse(interruptedOnClose.get());
         assertEquals(DEAD, globalStreamThread.state());
@@ -443,12 +410,7 @@ public class GlobalStreamThreadTest {
         interruptOnNextPoll(consumer);
         globalStreamThread = newGlobalStreamThread(consumer);
 
-        try {
-            globalStreamThread.run();
-        } finally {
-            // clear the interrupt status since this thread may be reused by JUnit
-            Thread.interrupted();
-        }
+        globalStreamThread.run();
 
         assertFalse(interruptedOnClose.get());
         assertEquals(DEAD, globalStreamThread.state());
@@ -610,6 +572,15 @@ public class GlobalStreamThreadTest {
         consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
         consumer.assign(Collections.singleton(topicPartition));
+    }
+
+    private InvalidOffsetException invalidOffsetException() {
+        return new InvalidOffsetException("Try Again!") {
+            @Override
+            public Set<TopicPartition> partitions() {
+                return Collections.singleton(topicPartition);
+            }
+        };
     }
 
     private static void interruptOnNextPoll(final MockConsumer<byte[], byte[]> consumer) {
