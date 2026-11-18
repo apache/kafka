@@ -5033,8 +5033,9 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(groupId, true);
 
-        // Use the same metadata image throughout.
-        CoordinatorMetadataImage metadataImage = this.metadataImage;
+        // Capture the current metadata image, since metadata updates may replace it while an
+        // offloaded assignor run is in flight.
+        CoordinatorMetadataImage assignmentMetadataImage = this.metadataImage;
 
         long groupSpecStartTimeMs = time.milliseconds();
         org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
@@ -5050,7 +5051,7 @@ public class GroupMetadataManager {
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(groupEpoch, assignor)
                     .withTime(time)
                     .withTopology(configuredTopology)
-                    .withMetadataImage(metadataImage)
+                    .withMetadataImage(assignmentMetadataImage)
                     .withGroupSpec(groupSpec)
                     .build();
             long assignorTimeMs = time.milliseconds() - assignorStartTimeMs;
