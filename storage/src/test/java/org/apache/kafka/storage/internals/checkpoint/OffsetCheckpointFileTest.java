@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class OffsetCheckpointFileWithFailureHandlerTest {
+public class OffsetCheckpointFileTest {
 
     @Test
     public void shouldPersistAndOverwriteAndReloadFile() throws IOException {
@@ -111,7 +111,7 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
     public void shouldThrowIfVersionIsNotRecognised() throws IOException {
         File file = TestUtils.tempFile();
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
-        CheckpointFileWithFailureHandler<OffsetCheckpointFile.TopicPartitionOffset> checkpointFile = new CheckpointFileWithFailureHandler<>(file, OffsetCheckpointFile.CURRENT_VERSION + 1,
+        CheckpointFile<OffsetCheckpointFile.TopicPartitionOffset> checkpointFile = new CheckpointFile<>(file, OffsetCheckpointFile.CURRENT_VERSION + 1,
                 new OffsetCheckpointFile.Formatter(), logDirFailureChannel, file.getParent());
         checkpointFile.write(List.of(new OffsetCheckpointFile.TopicPartitionOffset(new TopicPartition("foo", 5), 10L)));
         assertThrows(KafkaStorageException.class, () -> new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read());
@@ -156,7 +156,7 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
         File dir = TestUtils.tempDirectory();
         File file = dir.toPath().resolve("test-checkpoint").toFile();
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
-        CheckpointFileWithFailureHandler<EpochEntry> checkpointFile = new CheckpointFileWithFailureHandler<>(file, 0,
+        CheckpointFile<EpochEntry> checkpointFile = new CheckpointFile<>(file, 0,
                 LeaderEpochCheckpointFile.FORMATTER, logDirFailureChannel, file.getParent());
 
         assertTrue(dir.renameTo(new File(dir.getAbsolutePath() + "-renamed")));
