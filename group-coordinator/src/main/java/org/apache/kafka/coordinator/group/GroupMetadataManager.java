@@ -910,9 +910,13 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
+            // Cancel any in-flight offloaded assignor run, since it would belong to a previous group with the same id.
+            cancelTargetAssignmentUpdate(groupId);
             return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
+            // Cancel any in-flight offloaded assignor run, since it would belong to a previous group with the same id.
+            cancelTargetAssignmentUpdate(groupId);
             return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else {
             if (group.type() == CONSUMER) {
@@ -4609,6 +4613,16 @@ public class GroupMetadataManager {
                 // log and was reverted. Discard the assignment.
                 log.info("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current group epoch is {}).",
                     groupId, targetAssignmentEpoch, consumerGroup.groupEpoch());
+                return new CoordinatorResult<>(List.of());
+            }
+
+            if (consumerGroup.assignmentEpoch() >= targetAssignmentEpoch) {
+                // The group already has a target assignment for this epoch or a later one. This
+                // should never happen since we cancel in-flight assignor runs when a group is
+                // created. Discard the assignment rather than install a stale one if a cancellation
+                // is ever missed.
+                log.error("[GroupId {}] Discarding unexpected offloaded target assignment for epoch {} (current assignment epoch is {}).",
+                    groupId, targetAssignmentEpoch, consumerGroup.assignmentEpoch());
                 return new CoordinatorResult<>(List.of());
             }
 
