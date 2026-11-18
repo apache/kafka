@@ -1232,6 +1232,8 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
+            // Cancel any in-flight offloaded assignor run, since it would belong to a previous group with the same id.
+            cancelTargetAssignmentUpdate(groupId);
             return new ShareGroup(snapshotRegistry, groupId);
         } else {
             if (group.type() == SHARE) {
@@ -4875,6 +4877,16 @@ public class GroupMetadataManager {
                 // log and was reverted. Discard the assignment.
                 log.info("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current group epoch is {}).",
                     groupId, targetAssignmentEpoch, shareGroup.groupEpoch());
+                return new CoordinatorResult<>(List.of());
+            }
+
+            if (shareGroup.assignmentEpoch() >= targetAssignmentEpoch) {
+                // The group already has a target assignment for this epoch or a later one. This
+                // should never happen since we cancel in-flight assignor runs when a group is
+                // created. Discard the assignment rather than install a stale one if a cancellation
+                // is ever missed.
+                log.error("[GroupId {}] Discarding unexpected offloaded target assignment for epoch {} (current assignment epoch is {}).",
+                    groupId, targetAssignmentEpoch, shareGroup.assignmentEpoch());
                 return new CoordinatorResult<>(List.of());
             }
 
