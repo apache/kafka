@@ -465,72 +465,41 @@ public class StreamsGroupCommand {
             for (StreamsGroupMemberDescription memberDescription : members) {
                 allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
             }
+            // A member that stopped without leaving the group keeps its assignment until its session times out, so the
+            // assignment can reference a topic or partition that has since been deleted. listOffsets would fail or retry
+            // until the timeout for those, so only query partitions with a leader and report the rest as unknown.
+            List<TopicPartition> partitionsWithoutLeader = groupOffsetsResetter.filterNoneLeaderPartitions(allTp);
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
             Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
 
             for (TopicPartition tp : allTp) {
-                earliest.put(tp, OffsetSpec.earliest());
-                latest.put(tp, OffsetSpec.latest());
+                if (!partitionsWithoutLeader.contains(tp)) {
+                    earliest.put(tp, OffsetSpec.earliest());
+                    latest.put(tp, OffsetSpec.latest());
+                }
             }
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = offsetsOfExistingTopics(adminClient.listOffsets(
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(
                 earliest,
                 withTimeoutMs(new ListOffsetsOptions())
-            ), allTp);
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = offsetsOfExistingTopics(adminClient.listOffsets(
+            ).all().get();
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(
                 latest,
                 withTimeoutMs(new ListOffsetsOptions())
-            ), allTp);
+            ).all().get();
             Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
             Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
-            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                if (!latestResult.containsKey(tp.getKey())) {
-                    continue;
-                }
-                final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
-                final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
-                final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
-                output.put(tp.getKey(),
-                    new OffsetsInfo(
-                        currentOffset,
-                        leaderEpoch,
-                        Optional.of(latestResult.get(tp.getKey()).offset()),
-                        Optional.of(lag)));
-            }
-            // Partitions of a deleted topic have no log-end offset or lag, but still show their committed offset.
             for (TopicPartition tp : allTp) {
-                if (!output.containsKey(tp)) {
-                    final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp));
-                    output.put(tp, new OffsetsInfo(committed.map(OffsetAndMetadata::offset), committed.flatMap(OffsetAndMetadata::leaderEpoch), Optional.empty(), Optional.empty()));
-                }
+                final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp));
+                final Optional<Long> currentOffset = committed.map(OffsetAndMetadata::offset);
+                final Optional<Integer> leaderEpoch = committed.flatMap(OffsetAndMetadata::leaderEpoch);
+                // empty for partitions without a leader, which were not queried
+                final Optional<Long> logEndOffset = Optional.ofNullable(latestResult.get(tp)).map(ListOffsetsResult.ListOffsetsResultInfo::offset);
+                final Optional<Long> lag = logEndOffset.map(end -> end - currentOffset.orElseGet(() -> earliestResult.get(tp).offset()));
+                output.put(tp, new OffsetsInfo(currentOffset, leaderEpoch, logEndOffset, lag));
             }
             return output;
-        }
-
-        /**
-         * Like {@code result.all().get()}, but leaves out partitions whose topic no longer exists instead of failing.
-         *
-         * <p>A member that stopped without leaving the group (e.g. it crashed) keeps its assignment until its
-         * session times out, so the assignment can still reference a topic that has since been deleted. The admin
-         * client fails only that topic's partitions with {@link UnknownTopicOrPartitionException}, so one deleted
-         * topic must not fail the describe of the whole group (and of the remaining groups with {@code --all-groups}).
-         */
-        private static Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsetsOfExistingTopics(
-            ListOffsetsResult result,
-            Set<TopicPartition> partitions
-        ) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = new HashMap<>();
-            for (TopicPartition tp : partitions) {
-                try {
-                    offsets.put(tp, result.partitionResult(tp).get());
-                } catch (ExecutionException e) {
-                    if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
-                        throw e;
-                    }
-                }
-            }
-            return offsets;
         }
 
         Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {

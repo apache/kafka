@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -33,6 +34,7 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
@@ -47,6 +49,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.test.TestUtils;
@@ -289,6 +292,8 @@ public class StreamsGroupCommandTest {
         ListOffsetsResult endOffset = new ListOffsetsResult(Map.of(topic1, offsetFuture(30)));
 
         when(ADMIN_CLIENT.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(startOffset, endOffset);
+        when(ADMIN_CLIENT.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
+            .thenReturn(AdminClientTestUtils.describeTopicsResult("topic1", topicWithPartitions("topic1", 1)));
 
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
@@ -337,36 +342,123 @@ public class StreamsGroupCommandTest {
     }
 
     @Test
-    public void testDescribeStreamsGroupsGetOffsetsWithDeletedTopic() throws Exception {
-        String groupId = "group1";
+    public void testDescribeStreamsGroupsGetOffsetsWithDeletedTopicAndPartition() throws Exception {
         Admin adminClient = mock(KafkaAdminClient.class);
-        TopicPartition alive = new TopicPartition("alive", 0);
-        TopicPartition deleted = new TopicPartition("deleted", 0);
+        StreamsGroupDescription groupDescription = mockGroupWithStaleAssignment(adminClient);
+        ArgumentCaptor<Map<TopicPartition, OffsetSpec>> listOffsetsCaptor = stubListOffsetsForLivePartitions(adminClient);
 
-        // "deleted" is still referenced by the (stale) assignment of a member that has not timed out yet. The admin
-        // client fails only that topic's partitions, the way it does when the topic's metadata cannot be found.
-        ListOffsetsResult startOffset = new ListOffsetsResult(Map.of(alive, offsetFuture(10), deleted, unknownTopicFuture(deleted)));
-        ListOffsetsResult endOffset = new ListOffsetsResult(Map.of(alive, offsetFuture(30), deleted, unknownTopicFuture(deleted)));
-        when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(startOffset, endOffset);
+        try (StreamsGroupCommand.StreamsGroupService service = describeService(adminClient)) {
+            Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> offsets = service.getOffsets(groupDescription);
+
+            assertEquals(Map.of(
+                new TopicPartition("alive", 0), new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), Optional.of(30L), Optional.of(18L)),
+                new TopicPartition("alive", 1), new StreamsGroupCommand.OffsetsInfo(Optional.empty(), Optional.empty(), Optional.of(30L), Optional.of(20L)),
+                new TopicPartition("recreated", 0), new StreamsGroupCommand.OffsetsInfo(Optional.empty(), Optional.empty(), Optional.of(30L), Optional.of(20L)),
+                // deleted topic and missing partition: committed offset is kept, log-end offset and lag are unknown
+                new TopicPartition("deleted", 0), new StreamsGroupCommand.OffsetsInfo(Optional.of(5L), Optional.of(1), Optional.empty(), Optional.empty()),
+                new TopicPartition("deleted", 1), new StreamsGroupCommand.OffsetsInfo(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
+                new TopicPartition("recreated", 1), new StreamsGroupCommand.OffsetsInfo(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
+            ), offsets);
+            // Querying a deleted topic or partition would fail or retry until the timeout, so they must be left out.
+            assertEquals(2, listOffsetsCaptor.getAllValues().size());
+            listOffsetsCaptor.getAllValues().forEach(spec -> assertEquals(LIVE_PARTITIONS, spec.keySet()));
+        }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupsPrintsMissingValuesForDeletedTopicAndPartition() throws Exception {
+        Admin adminClient = mock(KafkaAdminClient.class);
+        mockGroupWithStaleAssignment(adminClient);
+        stubListOffsetsForLivePartitions(adminClient);
+
+        assertEquals(Set.of(
+            List.of(STALE_GROUP, "alive", "0", "18"),
+            List.of(STALE_GROUP, "alive", "1", "20"),
+            List.of(STALE_GROUP, "recreated", "0", "20"),
+            List.of(STALE_GROUP, "deleted", "0", "-"),
+            List.of(STALE_GROUP, "deleted", "1", "-"),
+            List.of(STALE_GROUP, "recreated", "1", "-")
+        ), describeOutputRows(adminClient));
+
+        // re-stub so the second describe again gets earliest then latest
+        stubListOffsetsForLivePartitions(adminClient);
+        assertEquals(Set.of(
+            List.of(STALE_GROUP, "alive", "0", "12", "0", "30", "18"),
+            List.of(STALE_GROUP, "alive", "1", "-", "-", "30", "20"),
+            List.of(STALE_GROUP, "recreated", "0", "-", "-", "30", "20"),
+            List.of(STALE_GROUP, "deleted", "0", "5", "1", "-", "-"),
+            List.of(STALE_GROUP, "deleted", "1", "-", "-", "-", "-"),
+            List.of(STALE_GROUP, "recreated", "1", "-", "-", "-", "-")
+        ), describeOutputRows(adminClient, "--verbose"));
+    }
+
+    @Test
+    public void testDescribeStreamsGroupsGetOffsetsFailsOnOtherDescribeTopicsErrors() {
+        Admin adminClient = mock(KafkaAdminClient.class);
+        StreamsGroupDescription groupDescription = mockGroupWithStaleAssignment(adminClient);
+        // Only UnknownTopicOrPartitionException means "deleted"; any other error must still fail the describe.
+        mockDescribeTopics(adminClient, Map.of(
+            "alive", completedFuture(topicWithPartitions("alive", 2)),
+            "deleted", failedFuture(new TopicAuthorizationException(Set.of("deleted"))),
+            "recreated", completedFuture(topicWithPartitions("recreated", 1))));
+
+        try (StreamsGroupCommand.StreamsGroupService service = describeService(adminClient)) {
+            Throwable e = assertThrows(RuntimeException.class, () -> service.getOffsets(groupDescription));
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause().getCause());
+            verify(adminClient, times(0)).listOffsets(anyMap(), any(ListOffsetsOptions.class));
+        }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupsGetOffsetsFailsOnListOffsetsErrors() {
+        Admin adminClient = mock(KafkaAdminClient.class);
+        StreamsGroupDescription groupDescription = mockGroupWithStaleAssignment(adminClient);
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> failing = new HashMap<>();
+        LIVE_PARTITIONS.forEach(tp -> failing.put(tp, offsetFuture(10)));
+        failing.put(new TopicPartition("alive", 1), failedFuture(new TopicAuthorizationException(Set.of("alive"))));
+        when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(new ListOffsetsResult(failing));
+
+        try (StreamsGroupCommand.StreamsGroupService service = describeService(adminClient)) {
+            ExecutionException e = assertThrows(ExecutionException.class, () -> service.getOffsets(groupDescription));
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
+        }
+    }
+
+    private static final String STALE_GROUP = "stale-group";
+    private static final Set<TopicPartition> LIVE_PARTITIONS = Set.of(
+        new TopicPartition("alive", 0), new TopicPartition("alive", 1), new TopicPartition("recreated", 0));
+
+    /**
+     * Mocks a streams group whose only member was killed without leaving the group, so it still holds tasks 0 and 1
+     * for three source topics while its session has not timed out: "alive" still exists with both partitions,
+     * "deleted" was deleted, and "recreated" was recreated with only partition 0. Shared by the tests above because
+     * the deleted topic, the missing partition and the live partitions must all be handled within one describe.
+     * {@code listOffsets} is not stubbed; see {@link #stubListOffsetsForLivePartitions}.
+     */
+    private static StreamsGroupDescription mockGroupWithStaleAssignment(Admin adminClient) {
+        mockDescribeTopics(adminClient, Map.of(
+            "alive", completedFuture(topicWithPartitions("alive", 2)),
+            "deleted", failedFuture(new UnknownTopicOrPartitionException("This server does not host this topic-partition.")),
+            "recreated", completedFuture(topicWithPartitions("recreated", 1))));
 
         ListStreamsGroupOffsetsResult committedResult = mock(ListStreamsGroupOffsetsResult.class);
         when(adminClient.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(committedResult);
-        when(committedResult.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(new HashMap<>(Map.of(
-            alive, new OffsetAndMetadata(12, Optional.of(0), ""),
-            deleted, new OffsetAndMetadata(5, Optional.of(1), "")))));
+        when(committedResult.partitionsToOffsetAndMetadata(anyString())).thenAnswer(invocation -> completedFuture(new HashMap<>(Map.of(
+            new TopicPartition("alive", 0), new OffsetAndMetadata(12, Optional.of(0), ""),
+            new TopicPartition("deleted", 0), new OffsetAndMetadata(5, Optional.of(1), "")))));
 
         StreamsGroupMemberDescription member = new StreamsGroupMemberDescription("foo", 0, Optional.empty(),
             Optional.empty(), "bar", "baz", 0, "qux",
             Optional.empty(), Map.of(), List.of(), List.of(),
-            new StreamsGroupMemberAssignment(List.of(new StreamsGroupMemberAssignment.TaskIds("id", List.of(0))), List.of(), List.of()),
+            new StreamsGroupMemberAssignment(List.of(new StreamsGroupMemberAssignment.TaskIds("id", List.of(0, 1))), List.of(), List.of()),
             new StreamsGroupMemberAssignment(List.of(), List.of(), List.of()),
             false);
         StreamsGroupDescription groupDescription = new StreamsGroupDescription(
-            groupId,
+            STALE_GROUP,
             0,
             0,
             0,
-            List.of(new StreamsGroupSubtopologyDescription("id", List.of("alive", "deleted"), List.of(), Map.of(), Map.of())),
+            List.of(new StreamsGroupSubtopologyDescription("id", List.of("alive", "deleted", "recreated"), List.of(), Map.of(), Map.of())),
             List.of(member),
             GroupState.STABLE,
             new Node(0, "host", 0),
@@ -375,28 +467,72 @@ public class StreamsGroupCommandTest {
             StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
             Optional.empty());
         DescribeStreamsGroupsResult describeResult = mock(DescribeStreamsGroupsResult.class);
-        when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class))).thenReturn(describeResult);
-        when(describeResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, groupDescription)));
+        when(adminClient.describeStreamsGroups(eq(List.of(STALE_GROUP)), any(DescribeStreamsGroupsOptions.class))).thenReturn(describeResult);
+        when(describeResult.all()).thenReturn(completedFuture(Map.of(STALE_GROUP, groupDescription)));
+        return groupDescription;
+    }
 
-        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(
-            new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", groupId, "--describe"});
-        try (StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(opts, adminClient)) {
-            Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> offsets = service.getOffsets(groupDescription);
+    /**
+     * Stubs {@code listOffsets} to answer only for {@link #LIVE_PARTITIONS} (earliest 10, then latest 30), capturing
+     * the requested partitions so a test can check that deleted topics and partitions were not queried.
+     */
+    private static ArgumentCaptor<Map<TopicPartition, OffsetSpec>> stubListOffsetsForLivePartitions(Admin adminClient) {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<TopicPartition, OffsetSpec>> captor = ArgumentCaptor.forClass(Map.class);
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> earliest = new HashMap<>();
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> latest = new HashMap<>();
+        LIVE_PARTITIONS.forEach(tp -> {
+            earliest.put(tp, offsetFuture(10));
+            latest.put(tp, offsetFuture(30));
+        });
+        when(adminClient.listOffsets(captor.capture(), any(ListOffsetsOptions.class)))
+            .thenReturn(new ListOffsetsResult(earliest), new ListOffsetsResult(latest));
+        return captor;
+    }
 
-            assertEquals(2, offsets.size());
-            assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), Optional.of(30L), Optional.of(18L)), offsets.get(alive));
-            assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(5L), Optional.of(1), Optional.empty(), Optional.empty()), offsets.get(deleted));
+    private static void mockDescribeTopics(Admin adminClient, Map<String, KafkaFuture<TopicDescription>> topicFutures) {
+        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
+        when(describeTopicsResult.topicNameValues()).thenReturn(topicFutures);
+        when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicsResult);
+    }
+
+    private static TopicDescription topicWithPartitions(String topic, int numPartitions) {
+        Node leader = new Node(0, "localhost", 9092);
+        List<TopicPartitionInfo> partitions = new ArrayList<>();
+        for (int p = 0; p < numPartitions; p++) {
+            partitions.add(new TopicPartitionInfo(p, leader, List.of(leader), List.of(leader)));
         }
+        return new TopicDescription(topic, false, partitions);
+    }
+
+    private static StreamsGroupCommand.StreamsGroupService describeService(Admin adminClient, String... extraArgs) {
+        List<String> args = new ArrayList<>(List.of("--bootstrap-server", BOOTSTRAP_SERVERS, "--group", STALE_GROUP, "--describe"));
+        args.addAll(List.of(extraArgs));
+        return new StreamsGroupCommand.StreamsGroupService(new StreamsGroupCommandOptions(args.toArray(new String[0])), adminClient);
+    }
+
+    /** Runs {@code --describe} and returns its rows (header excluded) split into columns; row order is not defined. */
+    private static Set<List<String>> describeOutputRows(Admin adminClient, String... extraArgs) {
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            try (StreamsGroupCommand.StreamsGroupService service = describeService(adminClient, extraArgs)) {
+                assertEquals(0, service.describeGroups());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        return Arrays.stream(output.trim().split("\n"))
+            .skip(1)
+            .map(line -> List.of(line.trim().split("\\s+")))
+            .collect(Collectors.toSet());
     }
 
     private static KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo> offsetFuture(long offset) {
         return completedFuture(new ListOffsetsResult.ListOffsetsResultInfo(offset, -1, Optional.empty()));
     }
 
-    private static KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo> unknownTopicFuture(TopicPartition tp) {
-        KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new UnknownTopicOrPartitionException("Failed to fetch metadata for partition " + tp
-            + " because metadata for topic `" + tp.topic() + "` could not be found"));
+    private static <T> KafkaFuture<T> failedFuture(Throwable error) {
+        KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(error);
         return future;
     }
 
@@ -456,7 +592,6 @@ public class StreamsGroupCommandTest {
         List<String> args = List.of("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic1", "--to-latest");
         List<String> topics = List.of(topic);
 
-        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
         Map<String, TopicDescription> descriptions = Map.of(
@@ -464,8 +599,7 @@ public class StreamsGroupCommandTest {
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
-            .thenReturn(describeTopicsResult);
-        when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+            .thenReturn(AdminClientTestUtils.describeTopicsResult(descriptions));
         when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class)))
             .thenReturn(listOffsetsResult());
         ListGroupsResult listGroupsResult = listGroupResult(groupId);
@@ -605,15 +739,13 @@ public class StreamsGroupCommandTest {
         
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
-        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
 
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
-            .thenReturn(describeTopicsResult);
-        when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+            .thenReturn(AdminClientTestUtils.describeTopicsResult(descriptions));
         when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class)))
             .thenReturn(listOffsetsResult());
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
