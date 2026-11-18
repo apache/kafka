@@ -17,10 +17,10 @@
 package kafka.api
 
 import kafka.api.GroupEndToEndAuthorizationTest._
-import kafka.security.JaasTestUtils
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SaslAuthenticationContext}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.security.JaasTestUtils
 
 object GroupEndToEndAuthorizationTest {
   val GroupPrincipalType = "Group"

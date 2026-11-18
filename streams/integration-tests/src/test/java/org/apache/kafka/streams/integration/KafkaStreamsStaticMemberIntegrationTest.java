@@ -384,7 +384,7 @@ public class KafkaStreamsStaticMemberIntegrationTest {
         final String firstInstanceId = "instance-1";
         final String secondInstanceId = "instance-2";
 
-        CLUSTER.setGroupHeartbeatTimeout(applicationId, heartbeatIntervalMs);
+        CLUSTER.setGroupHeartbeatInterval(applicationId, heartbeatIntervalMs);
         CLUSTER.setGroupSessionTimeout(applicationId, sessionTimeoutMs);
 
         try {

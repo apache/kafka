@@ -167,7 +167,7 @@ public class SmokeTestDriverIntegrationTest {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
             // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
             cluster.setGroupSessionTimeout(appId, 10000);
-            cluster.setGroupHeartbeatTimeout(appId, 1000);
+            cluster.setGroupHeartbeatInterval(appId, 1000);
         } else {
             // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
             props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);

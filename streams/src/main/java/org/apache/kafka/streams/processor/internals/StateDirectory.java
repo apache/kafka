@@ -257,6 +257,7 @@ public class StateDirectory implements AutoCloseable {
                         eosEnabled,
                         logContext,
                         this,
+                        time,
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
@@ -324,7 +325,7 @@ public class StateDirectory implements AutoCloseable {
         taskOffsetSums.remove(taskId);
     }
 
-    private long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
+    static long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
@@ -475,7 +476,7 @@ public class StateDirectory implements AutoCloseable {
     /**
      * Get or create the directory for the global stores.
      * @return directory for the global stores
-     * @throws ProcessorStateException if the global store directory does not exists and could not be created
+     * @throws ProcessorStateException if the global store directory does not exist and could not be created
      */
     public File globalStateDir() {
         final File dir = new File(stateDir, "global");
@@ -850,12 +851,15 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> taskDirectories = new ArrayList<>();
         if (hasPersistentStores && stateDir.exists()) {
             if (hasNamedTopologies) {
-                for (final File namedTopologyDir : listNamedTopologyDirs()) {
-                    final String namedTopology = parseNamedTopologyFromDirectory(namedTopologyDir.getName());
-                    final File[] taskDirs = namedTopologyDir.listFiles(filter);
-                    if (taskDirs != null) {
-                        taskDirectories.addAll(Arrays.stream(taskDirs)
-                            .map(f -> new TaskDirectory(f, namedTopology)).collect(Collectors.toList()));
+                final File[] namedTopologyDirs = stateDir.listFiles(f -> f.getName().startsWith("__") && f.getName().endsWith("__"));
+                if (namedTopologyDirs != null) {
+                    for (final File namedTopologyDir : namedTopologyDirs) {
+                        final String namedTopology = parseNamedTopologyFromDirectory(namedTopologyDir.getName());
+                        final File[] taskDirs = namedTopologyDir.listFiles(filter);
+                        if (taskDirs != null) {
+                            taskDirectories.addAll(Arrays.stream(taskDirs)
+                                .map(f -> new TaskDirectory(f, namedTopology)).collect(Collectors.toList()));
+                        }
                     }
                 }
             } else {
@@ -869,11 +873,6 @@ public class StateDirectory implements AutoCloseable {
         }
 
         return taskDirectories;
-    }
-
-    private List<File> listNamedTopologyDirs() {
-        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") &&  f.getName().endsWith("__"));
-        return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : Collections.emptyList();
     }
 
     private String parseNamedTopologyFromDirectory(final String dirName) {

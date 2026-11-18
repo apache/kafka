@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.internals.FatalExitError;
@@ -166,7 +167,7 @@ public class InterBrokerSendThreadTest {
         final TestInterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         final ClientRequest clientRequest =
-            new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler);
+            new ClientRequest("dest", request, 0, "1", Uuid.randomUuid(), 0, true, requestTimeoutMs, handler.handler);
 
         when(networkClient.newClientRequest(
             ArgumentMatchers.eq("1"),
@@ -209,7 +210,7 @@ public class InterBrokerSendThreadTest {
         final TestInterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         final ClientRequest clientRequest =
-            new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler);
+            new ClientRequest("dest", request, 0, "1", Uuid.randomUuid(), 0, true, requestTimeoutMs, handler.handler);
 
         when(networkClient.newClientRequest(
             ArgumentMatchers.eq("1"),
@@ -261,7 +262,7 @@ public class InterBrokerSendThreadTest {
 
         final ClientRequest clientRequest =
             new ClientRequest(
-                "dest", request, 0, "1", time.milliseconds(), true, requestTimeoutMs, handler.handler);
+                "dest", request, 0, "1", Uuid.randomUuid(), time.milliseconds(), true, requestTimeoutMs, handler.handler);
         time.sleep(1500L);
 
         when(networkClient.newClientRequest(

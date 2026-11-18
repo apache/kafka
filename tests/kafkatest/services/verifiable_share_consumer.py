@@ -36,6 +36,10 @@ class ShareConsumerEventHandler(object):
         self.total_consumed = 0
         self.total_acknowledged_successfully = 0
         self.total_acknowledged_failed = 0
+        self.total_accepted = 0
+        self.total_released = 0
+        self.total_rejected = 0
+        self.total_renewed = 0
         self.consumed_per_partition = {}
         self.acknowledged_per_partition = {}
         self.acknowledged_per_partition_failed = {}
@@ -56,6 +60,12 @@ class ShareConsumerEventHandler(object):
             for share_partition_data in event["partitions"]:
                 topic_partition = TopicPartition(share_partition_data["topic"], share_partition_data["partition"])
                 self.acknowledged_per_partition[topic_partition] = self.acknowledged_per_partition.get(topic_partition, 0) + share_partition_data["count"]
+            ack_type_counts = event.get("ackTypeCounts")
+            if ack_type_counts:
+                self.total_accepted += ack_type_counts.get("ACCEPT", 0)
+                self.total_released += ack_type_counts.get("RELEASE", 0)
+                self.total_rejected += ack_type_counts.get("REJECT", 0)
+                self.total_renewed += ack_type_counts.get("RENEW", 0)
             logger.debug("Offsets acknowledged for %s" % (node.account.hostname))
         else:
             self.total_acknowledged_failed += event["count"]
@@ -107,11 +117,16 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                 "collect_default": True}
             }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id, max_messages=-1, 
-                 acknowledgement_mode="auto", version=DEV_BRANCH, stop_timeout_sec=60, 
-                 log_level="INFO", jaas_override_variables=None, on_record_consumed=None):
+    def __init__(self, context, num_nodes, kafka, topic, group_id, max_messages=-1,
+                 acknowledgement_mode="auto", version=DEV_BRANCH, stop_timeout_sec=60,
+                 log_level="INFO", jaas_override_variables=None, on_record_consumed=None,
+                 ack_pattern=None):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
+        :param ack_pattern: A list of acknowledge types (e.g. ["reject", "release", "accept"]) cycled
+            through per record via (offset % len(ack_pattern)). Requires acknowledgement_mode to be
+            "sync" or "async". When None/empty (the default), acknowledgement stays implicit (unchanged
+            behavior).
         """
         super(VerifiableShareConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -120,6 +135,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         self.group_id = group_id
         self.max_messages = max_messages
         self.acknowledgement_mode = acknowledgement_mode
+        self.ack_pattern = ack_pattern
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
@@ -221,6 +237,9 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
 
         cmd += " --acknowledgement-mode %s" % self.acknowledgement_mode
 
+        if self.ack_pattern:
+            cmd += " --ack-pattern %s" % ",".join(self.ack_pattern)
+
         cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
         cmd += " --group-id %s --topic %s" % (self.group_id, self.topic)
@@ -290,6 +309,22 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def total_failed_acknowledged(self):
         with self.lock:
             return self.total_records_acknowledged_failed
+
+    def total_accepted(self):
+        with self.lock:
+            return sum(handler.total_accepted for handler in self.event_handlers.values())
+
+    def total_released(self):
+        with self.lock:
+            return sum(handler.total_released for handler in self.event_handlers.values())
+
+    def total_rejected(self):
+        with self.lock:
+            return sum(handler.total_rejected for handler in self.event_handlers.values())
+
+    def total_renewed(self):
+        with self.lock:
+            return sum(handler.total_renewed for handler in self.event_handlers.values())
 
     def total_consumed_for_a_share_consumer(self, node):
         with self.lock:

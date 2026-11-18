@@ -17,8 +17,12 @@
   "apiKey": 86,
   "type": "response",
   "name": "DeleteShareGroupStateResponse",
-  "validVersions": "0",
+  // Version 1 is the same as version 0 (KIP-1313).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   // - NOT_COORDINATOR (version 0+)
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)

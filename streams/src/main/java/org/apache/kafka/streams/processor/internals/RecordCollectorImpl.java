@@ -56,7 +56,6 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.slf4j.Logger;
 
 import java.text.MessageFormat;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -159,7 +158,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 );
             }
             if (!partitions.isEmpty()) {
-                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
+                final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, headers, partitions.size());
                 if (maybeMulticastPartitions.isEmpty()) {
                     // A null//empty partition indicates we should use the default partitioner
                     send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
@@ -529,7 +528,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
+                sendException.set(new TaskCorruptedException(Set.of(taskId)));
             } else {
                 if (maybeFailResponse(response.result()) == ProductionExceptionHandler.Result.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
@@ -602,13 +601,19 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void closeDirty() {
         log.info("Closing record collector dirty");
-
-        if (streamsProducer.eosEnabled()) {
-            // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
-            streamsProducer.abortTransaction();
+        try {
+            if (streamsProducer.eosEnabled()) {
+                // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
+                streamsProducer.abortTransaction();
+            }
+            checkForException();
+        } finally {
+            offsets.clear();
+            // On the normal path any send exception is cleared by checkForException.
+            // However, if abortTransaction throws, we need to clear the send exception so
+            // the revived task using this collector doesn't throw the stale exception
+            sendException.set(null);
         }
-
-        close();
     }
 
     private void close() {

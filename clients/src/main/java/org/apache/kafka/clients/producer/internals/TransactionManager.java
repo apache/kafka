@@ -74,8 +74,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -275,7 +275,7 @@ public class TransactionManager {
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
-     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
+     *     <li>{@link Producer#commitTransaction()} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
      *     </li>
      *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
@@ -348,7 +348,10 @@ public class TransactionManager {
                     .setEnable2Pc(enable2PC)
                     .setKeepPreparedTxn(keepPreparedTxn);
 
-            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
+            // Use unstable API version when 2PC features are enabled (requires InitProducerId v6)
+            boolean enableUnstableLastVersion = enable2PC || keepPreparedTxn;
+            InitProducerIdHandler handler = new InitProducerIdHandler(
+                    new InitProducerIdRequest.Builder(requestData, enableUnstableLastVersion),
                     isEpochBump);
             enqueueRequest(handler);
             return handler.result;
@@ -1566,6 +1569,9 @@ public class TransactionManager {
                         initProducerIdResponse.data().ongoingTxnProducerId(),
                         initProducerIdResponse.data().ongoingTxnProducerEpoch()
                     );
+                    // Set transactionStarted to true because there is an ongoing transaction
+                    // on the server that needs to be completed with EndTxn.
+                    transactionStarted = true;
                 } else {
                     transitionTo(State.READY);
                 }

@@ -22,15 +22,14 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Utils;
-import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -41,39 +40,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
 
 
 public class AssignorBenchmarkUtils {
-    /**
-     * Generate a reverse look up map of partition to member target assignments from the given member spec.
-     *
-     * @param groupAssignment       The group assignment.
-     * @return Map of topic partition to member assignments.
-     */
-    public static Map<Uuid, Map<Integer, String>> computeInvertedTargetAssignment(
-        GroupAssignment groupAssignment
-    ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, MemberAssignment> memberEntry : groupAssignment.members().entrySet()) {
-            String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().partitions();
-
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
-
-                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
-
-                for (Integer partitionId : partitions) {
-                    partitionMap.put(partitionId, memberId);
-                }
-            }
-        }
-        return invertedTargetAssignment;
-    }
-
     /**
      * Generates a list of topic names for use in benchmarks.
      *
@@ -119,12 +89,14 @@ public class AssignorBenchmarkUtils {
     /**
      * Creates a GroupSpec from the given ConsumerGroupMembers.
      *
+     * @param metadataImage         The metadata image.
      * @param members               The ConsumerGroupMembers.
      * @param subscriptionType      The group's subscription type.
      * @param topicResolver         The TopicResolver to use.
      * @return The new GroupSpec.
      */
     public static GroupSpec createConsumerGroupSpec(
+        CoordinatorMetadataImage metadataImage,
         Map<String, ConsumerGroupMember> members,
         SubscriptionType subscriptionType,
         TopicIds.TopicResolver topicResolver
@@ -143,25 +115,29 @@ public class AssignorBenchmarkUtils {
             ));
         }
 
-        return new GroupSpecImpl(
+        return new GroupSpecImpl.ConsumerGroupSpec(
+            metadataImage,
             memberSpecs,
-            subscriptionType,
-            Map.of()
+            subscriptionType
         );
     }
 
     /**
      * Creates a GroupSpec from the given ShareGroupMembers.
      *
+     * @param metadataImage         The metadata image.
      * @param members               The ShareGroupMembers.
      * @param subscriptionType      The group's subscription type.
      * @param topicResolver         The TopicResolver to use.
+     * @param initializedTopics     The initialized topics.
      * @return The new GroupSpec.
      */
     public static GroupSpec createShareGroupSpec(
+        CoordinatorMetadataImage metadataImage,
         Map<String, ShareGroupMember> members,
         SubscriptionType subscriptionType,
-        TopicIds.TopicResolver topicResolver
+        TopicIds.TopicResolver topicResolver,
+        Map<Uuid, InitMapValue> initializedTopics
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
@@ -177,10 +153,11 @@ public class AssignorBenchmarkUtils {
             ));
         }
 
-        return new GroupSpecImpl(
+        return new GroupSpecImpl.ShareGroupSpec(
+            metadataImage,
             memberSpecs,
             subscriptionType,
-            Map.of()
+            initializedTopics
         );
     }
 

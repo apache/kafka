@@ -57,6 +57,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -74,18 +75,11 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.anEmptyMap;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -136,6 +130,42 @@ public class InternalTopicManagerTest {
     }
 
     @Test
+    public void shouldNotBackOffPerTopicWhenCreatingATopicBatch() {
+        final Map<String, InternalTopicConfig> topicConfigs = new HashMap<>();
+        for (int i = 0; i < 25; i++) {
+            final String topicName = "batch-topic-" + i;
+            topicConfigs.put(topicName, setupRepartitionTopicConfig(topicName, 1));
+        }
+
+        final long before = time.milliseconds();
+        internalTopicManager.makeReady(topicConfigs);
+
+        // Every create succeeds immediately, so makeReady must not back off at all.
+        assertEquals(0L, time.milliseconds() - before);
+    }
+
+    @Test
+    @Timeout(30)
+    public void shouldBackOffBetweenRoundsWhenTopicIsMarkedForDeletion() {
+        mockAdminClient.addTopic(
+            false,
+            topic1,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic1);
+        final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
+
+        final long before = time.milliseconds();
+        // The clock has no auto-tick, so only the round backoff can advance it toward the
+        // deadline: reaching the timeout at all proves the round backs off instead of spinning.
+        assertThrows(
+            TimeoutException.class,
+            () -> internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
+        );
+        assertEquals(50L, time.milliseconds() - before);
+    }
+
+    @Test
     public void shouldCreateTopics() throws Exception {
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
@@ -146,9 +176,9 @@ public class InternalTopicManagerTest {
         ));
 
         final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
-        assertThat(newlyCreatedTopics.size(), is(2));
-        assertThat(newlyCreatedTopics, hasItem(topic1));
-        assertThat(newlyCreatedTopics, hasItem(topic2));
+        assertEquals(2, newlyCreatedTopics.size());
+        assertTrue(newlyCreatedTopics.contains(topic1));
+        assertTrue(newlyCreatedTopics.contains(topic2));
     }
 
     @Test
@@ -157,7 +187,7 @@ public class InternalTopicManagerTest {
         internalTopicManager.setup(Collections.emptyMap());
 
         final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
-        assertThat(newlyCreatedTopics, empty());
+        assertTrue(newlyCreatedTopics.isEmpty());
     }
 
     @Test
@@ -269,10 +299,10 @@ public class InternalTopicManagerTest {
             StreamsException.class,
             () -> topicManager.makeReady(Collections.singletonMap(topic1, topicConfig))
         );
-        assertThat(
-            exception.getMessage(),
-            equalTo("Could not create topic " + topic1 + ", because brokers don't support configuration replication.factor=-1."
-                + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error."));
+        assertEquals(
+            "Could not create topic " + topic1 + ", because brokers don't support configuration replication.factor=-1."
+                + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
+            exception.getMessage());
     }
 
     @Test
@@ -289,10 +319,9 @@ public class InternalTopicManagerTest {
             () -> internalTopicManager.getTopicPartitionInfo(Collections.singleton(topic1))
         );
 
-        assertThat(
-            exception.getMessage(),
-            is("Could not create topics within 50 milliseconds. This can happen if the Kafka cluster is temporarily not available.")
-        );
+        assertEquals(
+            "Could not create topics within 50 milliseconds. This can happen if the Kafka cluster is temporarily not available.",
+            exception.getMessage());
     }
 
     @Test
@@ -310,15 +339,14 @@ public class InternalTopicManagerTest {
             () -> internalTopicManager.setup(Collections.singletonMap(topic1, internalTopicConfig))
         );
 
-        assertThat(
-            exception.getMessage(),
-            is("Setup timeout: Could not create internal topics within " +
-                    (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
+        assertEquals(
+            "Setup timeout: Could not create internal topics within " +
+                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
                 " milliseconds. This can happen if the Kafka cluster is temporarily not available or a topic is marked" +
-                    " for deletion and the broker did not complete its deletion within the timeout." +
-                    " The last errors seen per topic are:" +
-                    " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}")
-        );
+                " for deletion and the broker did not complete its deletion within the timeout." +
+                " The last errors seen per topic are:" +
+                " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}",
+            exception.getMessage());
     }
 
     @Test
@@ -816,12 +844,11 @@ public class InternalTopicManagerTest {
             null
         );
 
-        try {
+        assertThrows(StreamsException.class, () -> {
             final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
             internalTopicConfig.setNumberOfPartitions(1);
             internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException expected) { /* pass */ }
+        }, "Should have thrown StreamsException");
     }
 
     @Test
@@ -861,13 +888,13 @@ public class InternalTopicManagerTest {
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
-        try {
-            topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
-            fail("Should have thrown TimeoutException.");
-        } catch (final TimeoutException expected) {
-            assertThat(expected.getMessage(), is("MakeReady timeout: Could not create topics within 50 milliseconds. " +
-                    "This can happen if the Kafka cluster is temporarily not available."));
-        }
+        final TimeoutException exception = assertThrows(TimeoutException.class,
+            () -> topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig)),
+            "Should have thrown TimeoutException.");
+        assertEquals(
+            "MakeReady timeout: Could not create topics within 50 milliseconds. " +
+                "This can happen if the Kafka cluster is temporarily not available.",
+            exception.getMessage());
     }
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
@@ -892,11 +919,9 @@ public class InternalTopicManagerTest {
             appender.setClassLogger(InternalTopicManager.class, Level.DEBUG);
             internalTopicManager.makeReady(topicConfigMap);
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet.\n" +
-                    "Error message was: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found.")
-            );
+            assertTrue(appender.getMessages().contains(
+                "stream-thread [" + threadName + "] Topic internal-topic is unknown or not found, hence not existed yet.\n" +
+                    "Error message was: org.apache.kafka.common.errors.UnknownTopicOrPartitionException: Topic internal-topic not found."));
         }
     }
 
@@ -994,11 +1019,10 @@ public class InternalTopicManagerTest {
             () -> topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
         );
         assertNull(exception.getCause());
-        assertThat(
-            exception.getMessage(),
-            equalTo("MakeReady timeout: Could not create topics within 50 milliseconds." +
-                " This can happen if the Kafka cluster is temporarily not available.")
-        );
+        assertEquals(
+            "MakeReady timeout: Could not create topics within 50 milliseconds." +
+                " This can happen if the Kafka cluster is temporarily not available.",
+            exception.getMessage());
     }
 
     @Test
@@ -1023,11 +1047,10 @@ public class InternalTopicManagerTest {
             () -> internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig))
         );
         assertNull(exception.getCause());
-        assertThat(
-            exception.getMessage(),
-            equalTo("MakeReady timeout: Could not create topics within 50 milliseconds." +
-                " This can happen if the Kafka cluster is temporarily not available.")
-        );
+        assertEquals(
+            "MakeReady timeout: Could not create topics within 50 milliseconds." +
+                " This can happen if the Kafka cluster is temporarily not available.",
+            exception.getMessage());
     }
 
     @Test
@@ -1042,8 +1065,8 @@ public class InternalTopicManagerTest {
             mkEntry(topic2, internalTopicConfig2)
         ));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1052,8 +1075,8 @@ public class InternalTopicManagerTest {
 
         final ValidationResult validationResult = internalTopicManager.validate(Collections.emptyMap());
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1072,10 +1095,10 @@ public class InternalTopicManagerTest {
         ));
 
         final Set<String> missingTopics = validationResult.missingTopics();
-        assertThat(missingTopics.size(), is(2));
-        assertThat(missingTopics, hasItem(missingTopic1));
-        assertThat(missingTopics, hasItem(missingTopic2));
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertEquals(2, missingTopics.size());
+        assertTrue(missingTopics.contains(missingTopic1));
+        assertTrue(missingTopics.contains(missingTopic2));
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1094,21 +1117,19 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(2));
-        assertThat(misconfigurationsForTopics, hasKey(topic1));
-        assertThat(misconfigurationsForTopics.get(topic1).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic1).get(0),
-            is("Internal topic " + topic1 + " requires 2 partitions, but the existing topic on the broker has 1 partitions.")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic2));
-        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic2).get(0),
-            is("Internal topic " + topic2 + " requires 3 partitions, but the existing topic on the broker has 1 partitions.")
-        );
-        assertThat(misconfigurationsForTopics, not(hasKey(topic3)));
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(2, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic1));
+        assertEquals(1, misconfigurationsForTopics.get(topic1).size());
+        assertEquals(
+            "Internal topic " + topic1 + " requires 2 partitions, but the existing topic on the broker has 1 partitions.",
+            misconfigurationsForTopics.get(topic1).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic2));
+        assertEquals(1, misconfigurationsForTopics.get(topic2).size());
+        assertEquals(
+            "Internal topic " + topic2 + " requires 3 partitions, but the existing topic on the broker has 1 partitions.",
+            misconfigurationsForTopics.get(topic2).get(0));
+        assertFalse(misconfigurationsForTopics.containsKey(topic3));
     }
 
     @Test
@@ -1137,23 +1158,21 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(2));
-        assertThat(misconfigurationsForTopics, hasKey(topic1));
-        assertThat(misconfigurationsForTopics.get(topic1).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic1).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic1 + " should not contain \""
-                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic2));
-        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic2).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic2 + " should not contain \""
-                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
-        );
-        assertThat(misconfigurationsForTopics, not(hasKey(topic3)));
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(2, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic1));
+        assertEquals(1, misconfigurationsForTopics.get(topic1).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic1 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".",
+            misconfigurationsForTopics.get(topic1).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic2));
+        assertEquals(1, misconfigurationsForTopics.get(topic2).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic2 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".",
+            misconfigurationsForTopics.get(topic2).get(0));
+        assertFalse(misconfigurationsForTopics.containsKey(topic3));
     }
 
     @Test
@@ -1186,31 +1205,28 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(3));
-        assertThat(misconfigurationsForTopics, hasKey(topic2));
-        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic2).get(0),
-            is("Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
-                topic2 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic4));
-        assertThat(misconfigurationsForTopics.get(topic4).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic4).get(0),
-            is("Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
-                topic4 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic5));
-        assertThat(misconfigurationsForTopics.get(topic5).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic5).get(0),
-            is("Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic " +
-                topic5 + " is set but it should be unset.")
-        );
-        assertThat(misconfigurationsForTopics, not(hasKey(topic1)));
-        assertThat(misconfigurationsForTopics, not(hasKey(topic3)));
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(3, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic2));
+        assertEquals(1, misconfigurationsForTopics.get(topic2).size());
+        assertEquals(
+            "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
+                topic2 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.",
+            misconfigurationsForTopics.get(topic2).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic4));
+        assertEquals(1, misconfigurationsForTopics.get(topic4).size());
+        assertEquals(
+            "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
+                topic4 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.",
+            misconfigurationsForTopics.get(topic4).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic5));
+        assertEquals(1, misconfigurationsForTopics.get(topic5).size());
+        assertEquals(
+            "Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic " +
+                topic5 + " is set but it should be unset.",
+            misconfigurationsForTopics.get(topic5).get(0));
+        assertFalse(misconfigurationsForTopics.containsKey(topic1));
+        assertFalse(misconfigurationsForTopics.containsKey(topic3));
     }
 
     @Test
@@ -1238,30 +1254,27 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(3));
-        assertThat(misconfigurationsForTopics, hasKey(topic2));
-        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic2).get(0),
-            is("Min compaction lag (" + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + ") of existing internal topic " +
-                topic2 + " is " + shorterCompactionLagMs + " but should be " + compactionLagMs + " or larger.")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic3));
-        assertThat(misconfigurationsForTopics.get(topic3).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic3).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic3 + " should not contain \""
-                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic4));
-        assertThat(misconfigurationsForTopics.get(topic4).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic4).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic4 + " should not contain \""
-                + TopicConfig.CLEANUP_POLICY_DELETE + "\".")
-        );
-        assertThat(misconfigurationsForTopics, not(hasKey(topic1)));
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(3, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic2));
+        assertEquals(1, misconfigurationsForTopics.get(topic2).size());
+        assertEquals(
+            "Min compaction lag (" + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + ") of existing internal topic " +
+                topic2 + " is " + shorterCompactionLagMs + " but should be " + compactionLagMs + " or larger.",
+            misconfigurationsForTopics.get(topic2).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic3));
+        assertEquals(1, misconfigurationsForTopics.get(topic3).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic3 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".",
+            misconfigurationsForTopics.get(topic3).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic4));
+        assertEquals(1, misconfigurationsForTopics.get(topic4).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic " + topic4 + " should not contain \""
+                + TopicConfig.CLEANUP_POLICY_DELETE + "\".",
+            misconfigurationsForTopics.get(topic4).get(0));
+        assertFalse(misconfigurationsForTopics.containsKey(topic1));
     }
 
     @Test
@@ -1298,36 +1311,32 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(4));
-        assertThat(misconfigurationsForTopics, hasKey(topic2));
-        assertThat(misconfigurationsForTopics.get(topic2).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic2).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
-                + topic2 + " should not contain \"" + TopicConfig.CLEANUP_POLICY_COMPACT + "\".")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic3));
-        assertThat(misconfigurationsForTopics.get(topic3).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic3).get(0),
-            is("Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
-                + topic3 + " should not contain \"" + TopicConfig.CLEANUP_POLICY_COMPACT + "\".")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic4));
-        assertThat(misconfigurationsForTopics.get(topic4).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic4).get(0),
-            is("Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic "
-                + topic4 + " is " + retentionMs + " but should be -1.")
-        );
-        assertThat(misconfigurationsForTopics, hasKey(topic5));
-        assertThat(misconfigurationsForTopics.get(topic5).size(), is(1));
-        assertThat(
-            misconfigurationsForTopics.get(topic5).get(0),
-            is("Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic "
-                + topic5 + " is set but it should be unset.")
-        );
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(4, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic2));
+        assertEquals(1, misconfigurationsForTopics.get(topic2).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                + topic2 + " should not contain \"" + TopicConfig.CLEANUP_POLICY_COMPACT + "\".",
+            misconfigurationsForTopics.get(topic2).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic3));
+        assertEquals(1, misconfigurationsForTopics.get(topic3).size());
+        assertEquals(
+            "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                + topic3 + " should not contain \"" + TopicConfig.CLEANUP_POLICY_COMPACT + "\".",
+            misconfigurationsForTopics.get(topic3).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic4));
+        assertEquals(1, misconfigurationsForTopics.get(topic4).size());
+        assertEquals(
+            "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic "
+                + topic4 + " is " + retentionMs + " but should be -1.",
+            misconfigurationsForTopics.get(topic4).get(0));
+        assertTrue(misconfigurationsForTopics.containsKey(topic5));
+        assertEquals(1, misconfigurationsForTopics.get(topic5).size());
+        assertEquals(
+            "Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic "
+                + topic5 + " is set but it should be unset.",
+            misconfigurationsForTopics.get(topic5).get(0));
     }
 
     @Test
@@ -1344,20 +1353,18 @@ public class InternalTopicManagerTest {
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(misconfigurationsForTopics.size(), is(1));
-        assertThat(misconfigurationsForTopics, hasKey(topic1));
-        assertThat(misconfigurationsForTopics.get(topic1).size(), is(2));
-        assertThat(
-            misconfigurationsForTopics.get(topic1).get(0),
-            is("Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
-                topic1 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.")
-        );
-        assertThat(
-            misconfigurationsForTopics.get(topic1).get(1),
-            is("Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic " +
-                topic1 + " is set but it should be unset.")
-        );
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertEquals(1, misconfigurationsForTopics.size());
+        assertTrue(misconfigurationsForTopics.containsKey(topic1));
+        assertEquals(2, misconfigurationsForTopics.get(topic1).size());
+        assertEquals(
+            "Retention time (" + TopicConfig.RETENTION_MS_CONFIG + ") of existing internal topic " +
+                topic1 + " is " + shorterRetentionMs + " but should be " + retentionMs + " or larger.",
+            misconfigurationsForTopics.get(topic1).get(0));
+        assertEquals(
+            "Retention byte (" + TopicConfig.RETENTION_BYTES_CONFIG + ") of existing internal topic " +
+                topic1 + " is set but it should be unset.",
+            misconfigurationsForTopics.get(topic1).get(1));
     }
 
     @Test
@@ -1385,8 +1392,8 @@ public class InternalTopicManagerTest {
         final ValidationResult validationResult =
             internalTopicManager2.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1397,8 +1404,8 @@ public class InternalTopicManagerTest {
 
         final ValidationResult validationResult = internalTopicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1432,8 +1439,8 @@ public class InternalTopicManagerTest {
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1467,8 +1474,8 @@ public class InternalTopicManagerTest {
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test
@@ -1522,8 +1529,8 @@ public class InternalTopicManagerTest {
             mkEntry(topic2, internalTopicConfig2)
         ));
 
-        assertThat(validationResult.missingTopics(), empty());
-        assertThat(validationResult.misconfigurationsForTopics(), anEmptyMap());
+        assertTrue(validationResult.missingTopics().isEmpty());
+        assertTrue(validationResult.misconfigurationsForTopics().isEmpty());
     }
 
     @Test

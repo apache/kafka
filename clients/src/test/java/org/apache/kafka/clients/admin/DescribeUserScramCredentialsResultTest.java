@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +29,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeUserScramCredentialsResultTest {
     @Test
@@ -36,24 +37,9 @@ public class DescribeUserScramCredentialsResultTest {
         KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         dataFuture.completeExceptionally(new RuntimeException());
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
-        try {
-            results.all().get();
-            fail("expected all() to fail when there is a top-level error");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
-        try {
-            results.users().get();
-            fail("expected users() to fail when there is a top-level error");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
-        try {
-            results.description("whatever").get();
-            fail("expected description() to fail when there is a top-level error");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
+        TestUtils.assertFutureThrows(RuntimeException.class, results.all());
+        TestUtils.assertFutureThrows(RuntimeException.class, results.users());
+        TestUtils.assertFutureThrows(RuntimeException.class, results.description("whatever"));
     }
 
     @Test
@@ -70,27 +56,12 @@ public class DescribeUserScramCredentialsResultTest {
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(unknownUser).setErrorCode(Errors.RESOURCE_NOT_FOUND.code()),
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(failedUser).setErrorCode(Errors.DUPLICATE_RESOURCE.code()))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
-        try {
-            results.all().get();
-            fail("expected all() to fail when there is a user-level error");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
+        assertThrows(Exception.class, () -> results.all().get(), "expected all() to fail when there is a user-level error");
         assertEquals(Arrays.asList(goodUser, failedUser), results.users().get(), "Expected 2 users with credentials");
         UserScramCredentialsDescription goodUserDescription = results.description(goodUser).get();
         assertEquals(new UserScramCredentialsDescription(goodUser, Collections.singletonList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescription);
-        try {
-            results.description(failedUser).get();
-            fail("expected description(failedUser) to fail when there is a user-level error");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
-        try {
-            results.description(unknownUser).get();
-            fail("expected description(unknownUser) to fail when there is no such user");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
+        assertThrows(Exception.class, () -> results.description(failedUser).get(), "expected description(failedUser) to fail when there is a user-level error");
+        assertThrows(Exception.class, () -> results.description(unknownUser).get(), "expected description(unknownUser) to fail when there is no such user");
     }
 
     @Test
@@ -110,11 +81,6 @@ public class DescribeUserScramCredentialsResultTest {
         UserScramCredentialsDescription goodUserDescriptionViaAll = allResults.get(goodUser);
         assertEquals(new UserScramCredentialsDescription(goodUser, Collections.singletonList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescriptionViaAll);
         assertEquals(goodUserDescriptionViaAll, results.description(goodUser).get(), "Expected same thing via all() and description()");
-        try {
-            results.description(unknownUser).get();
-            fail("expected description(unknownUser) to fail when there is no such user even when all() succeeds");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
+        assertThrows(Exception.class, () -> results.description(unknownUser).get(), "expected description(unknownUser) to fail when there is no such user even when all() succeeds");
     }
 }

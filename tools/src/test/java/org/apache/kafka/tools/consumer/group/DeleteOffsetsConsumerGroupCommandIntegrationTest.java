@@ -19,7 +19,6 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -90,7 +89,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
             testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
@@ -102,7 +101,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
             testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
@@ -134,7 +133,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.NONE);
             testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
@@ -146,7 +145,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.NONE);
             testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
@@ -257,12 +256,6 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
 
         return new KafkaConsumer<>(consumerConfig);
-    }
-
-    private void createTopic(String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
-        }
     }
 
     private void removeTopic(String topic) {

@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -48,7 +47,7 @@ class KStreamKTableJoin<StreamKey, StreamValue, TableValue, VOut> implements Pro
         this.gracePeriod = gracePeriod;
         this.storeName = bufferStoreBuilder.map(StoreBuilder::name);
 
-        this.stores = bufferStoreBuilder.<Set<StoreBuilder<?>>>map(Collections::singleton).orElse(null);
+        this.stores = bufferStoreBuilder.<Set<StoreBuilder<?>>>map(Set::of).orElse(null);
     }
 
     @Override
@@ -58,7 +57,13 @@ class KStreamKTableJoin<StreamKey, StreamValue, TableValue, VOut> implements Pro
 
     @Override
     public Processor<StreamKey, StreamValue, StreamKey, VOut> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin, gracePeriod, storeName);
+        return new KStreamKTableJoinProcessor<>(
+            valueGetterSupplier.get(),
+            keyValueMapper,
+            (streamKey, mappedKey, value1, value2) -> joiner.apply(streamKey, value1, value2),
+            leftJoin,
+            gracePeriod,
+            storeName);
     }
 
 }

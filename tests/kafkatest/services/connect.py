@@ -26,6 +26,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_connect
+from kafkatest.version import DEV_VERSION
 
 
 class ConnectServiceBase(KafkaPathResolverMixin, Service):
@@ -314,13 +315,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         relative_path = "/connect/" + module + "/build/libs/"
         local_dir = cwd + relative_path
         lib_dir = self.path.home() + relative_path
-        for pwd, dirs, files in os.walk(local_dir):
-            for file in files:
-                if file.endswith(".jar"):
-                    # Use the expected directory on the node instead of the path in the driver node
-                    file_path = lib_dir + file
-                    self.logger.info("Appending %s to Connect worker's CLASSPATH" % file_path)
-                    return "export CLASSPATH=${CLASSPATH}:%s; " % file_path
+        jar_name = "connect-%s-%s.jar" % (module, DEV_VERSION)
+        if os.path.isfile(local_dir + jar_name):
+            # Use the expected directory on the node instead of the path in the driver node
+            file_path = lib_dir + jar_name
+            self.logger.info("Appending %s to Connect worker's CLASSPATH" % file_path)
+            return "export CLASSPATH=${CLASSPATH}:%s; " % file_path
 
         self.logger.info("Jar not found within %s" % local_dir)
         return ""

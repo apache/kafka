@@ -411,6 +411,18 @@ public class WorkerConfig extends AbstractConfig {
     }
 
     /**
+     * Determine whether this worker should automatically create internal topics used by Connect
+     * (such as the offset, config, and status topics).
+     * The default implementation returns {@code true}. Subclasses may override this method
+     * to respect user-provided configuration.
+     *
+     * @return whether the worker should automatically create internal topics
+     */
+    public boolean internalTopicsCreationEnabled() {
+        return true;
+    }
+
+    /**
      * @return the offset commit interval for tasks created by this worker
      */
     public long offsetCommitInterval() {

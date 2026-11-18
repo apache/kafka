@@ -61,9 +61,6 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     // -- Abstract methods to be implemented by backend-specific subclasses --
 
-    /** Append the write to the backend-specific batch (e.g. WriteBatch for RocksDB). */
-    abstract void stageToBackend(K key, byte[] value);
-
     /** Create a base store iterator for the given range. Upper bound is inclusive. Forward direction. */
     abstract ManagedKeyValueIterator<K, byte[]> newBaseIterator(K from, K to);
 
@@ -85,6 +82,12 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
     abstract ManagedKeyValueIterator<K, byte[]> newBaseSnapshotIterator(K from, K to,
                                                                         boolean forward, boolean toInclusive);
 
+    /**
+     * Called by the owner thread before the write lock is taken in {@link #commit()}.
+     * Must not change state that non-owner readers see.
+     */
+    void prepareFlush() { }
+
     /** Atomically apply the accumulated writes to the base store. */
     abstract void flushToBase();
 
@@ -100,9 +103,11 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
     public void stage(final K key, final byte[] value) {
         snapshotLock.writeLock().lock();
         try {
-            pendingWrites.put(key, Optional.ofNullable(value));
+            final Optional<byte[]> previous = pendingWrites.put(key, Optional.ofNullable(value));
+            if (previous != null) {
+                pendingWritesBytes -= estimateKeySize(key) + previous.map(v -> v.length).orElse(0);
+            }
             pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
-            stageToBackend(key, value);
         } finally {
             snapshotLock.writeLock().unlock();
         }
@@ -168,6 +173,7 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public void commit() {
+        prepareFlush();
         snapshotLock.writeLock().lock();
         try {
             flushToBase();

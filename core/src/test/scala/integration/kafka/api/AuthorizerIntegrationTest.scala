@@ -765,7 +765,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new InitializeShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), 3.toShort).build()
 
   private def readShareGroupStateRequest = new ReadShareGroupStateRequest.Builder(
     new ReadShareGroupStateRequestData()
@@ -776,7 +776,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .setPartition(part)
           .setLeaderEpoch(0)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), 3.toShort).build()
 
   private def writeShareGroupStateRequest = new WriteShareGroupStateRequest.Builder(
     new WriteShareGroupStateRequestData()
@@ -786,7 +786,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new WriteShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), 3.toShort).build()
 
   private def deleteShareGroupStateRequest = new DeleteShareGroupStateRequest.Builder(
     new DeleteShareGroupStateRequestData()
@@ -796,7 +796,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new DeleteShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), 3.toShort).build()
 
   private def readShareGroupStateSummaryRequest = new ReadShareGroupStateSummaryRequest.Builder(
     new ReadShareGroupStateSummaryRequestData()
@@ -807,7 +807,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .setPartition(part)
           .setLeaderEpoch(0)
         ).asJava)
-      ).asJava)).build(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)
+      ).asJava), 3.toShort).build(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)
 
   private def describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequest.Builder(
     new DescribeShareGroupOffsetsRequestData()
@@ -1507,12 +1507,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
 
     val consumer = createConsumer()
-    consumer.subscribe(Pattern.compile(topicPattern), new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+    consumer.setRebalanceListener(new RebalanceListener {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       }})
+    consumer.subscribe(Pattern.compile(topicPattern))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
       assignSemaphore.tryAcquire()
@@ -1565,12 +1566,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // internal topics are not included, we should not be assigned any partitions from this topic
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)),  new ResourcePattern(TOPIC,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
-    consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME), new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+    consumer.setRebalanceListener(new RebalanceListener {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       }})
+    consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
       assignSemaphore.tryAcquire()
@@ -3196,9 +3198,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
 
-    // Member on inter-broker listener has all access and is assigned the matching topic
+    // Member on inter-broker listener has all access and is assigned the matching topic.
+    // The first heartbeat only schedules the asynchronous regex resolution, so retry until
+    // the resolution completes and the assignment is available.
     var member1Response = sendAndReceiveFirstRegexHeartbeat("memberWithAllAccess", interBrokerListenerName)
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(2))
+    TestUtils.tryUntilNoAssertionError() {
+      member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(2))
+    }
 
     // Member on client listener has no topic describe access, but is assigned a partition of the
     // unauthorized topic. This is leaking unauthorized topic metadata to member2. Simply filtering out

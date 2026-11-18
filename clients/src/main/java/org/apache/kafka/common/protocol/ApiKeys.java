@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -138,7 +139,8 @@ public enum ApiKeys {
     DESCRIBE_SHARE_GROUP_OFFSETS(ApiMessageType.DESCRIBE_SHARE_GROUP_OFFSETS),
     ALTER_SHARE_GROUP_OFFSETS(ApiMessageType.ALTER_SHARE_GROUP_OFFSETS),
     DELETE_SHARE_GROUP_OFFSETS(ApiMessageType.DELETE_SHARE_GROUP_OFFSETS),
-    STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE(ApiMessageType.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE);
+    STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE(ApiMessageType.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+    UNREGISTER_CONTROLLER(ApiMessageType.UNREGISTER_CONTROLLER, false, true);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -303,6 +305,13 @@ public enum ApiKeys {
 
     public short requestHeaderVersion(short apiVersion) {
         return messageType.requestHeaderVersion(apiVersion);
+    }
+
+    public short latestVersionForRequestHeader(short headerVersion) {
+        for (short version = latestVersion(); version >= oldestVersion(); version--) {
+            if (requestHeaderVersion(version) <= headerVersion) return version;
+        }
+        throw new UnsupportedVersionException(this + " has no version using request header v" + headerVersion + " or lower");
     }
 
     public short responseHeaderVersion(short apiVersion) {

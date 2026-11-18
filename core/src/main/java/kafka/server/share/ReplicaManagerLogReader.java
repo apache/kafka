@@ -16,13 +16,13 @@
  */
 package kafka.server.share;
 
-import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
+import org.apache.kafka.server.quota.QuotaFactory;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -62,52 +63,11 @@ public class ReplicaManagerLogReader implements LogReader {
     }
 
     @Override
-    public LinkedHashMap<TopicIdPartition, LogReadResult> read(
-            FetchParams fetchParams,
-            Set<TopicIdPartition> partitionsToFetch,
-            LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-            LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes) {
-
-        if (partitionsToFetch.isEmpty()) {
-            return new LinkedHashMap<>();
-        }
-
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
-        topicPartitionFetchOffsets.forEach((topicIdPartition, fetchOffset) ->
-            topicPartitionData.put(topicIdPartition,
-                new FetchRequest.PartitionData(
-                    topicIdPartition.topicId(),
-                    fetchOffset,
-                    0,
-                    partitionMaxBytes.get(topicIdPartition),
-                    Optional.empty())
-            ));
-
-        Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
-            fetchParams,
-            CollectionConverters.asScala(
-                partitionsToFetch.stream().map(topicIdPartition ->
-                    new Tuple2<>(topicIdPartition, topicPartitionData.get(topicIdPartition))).collect(Collectors.toList())
-            ),
-            QuotaFactory.UNBOUNDED_QUOTA,
-            true);
-
-        LinkedHashMap<TopicIdPartition, LogReadResult> responseData = new LinkedHashMap<>();
-        responseLogResult.foreach(tpLogResult -> {
-            responseData.put(tpLogResult._1(), tpLogResult._2());
-            return BoxedUnit.UNIT;
-        });
-
-        log.trace("Data successfully retrieved by replica manager: {}", responseData);
-        return responseData;
-    }
-
-    @Override
     public CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readAsync(
             FetchParams fetchParams,
             Set<TopicIdPartition> partitionsToFetch,
-            LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-            LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+            Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+            Map<TopicIdPartition, Integer> partitionMaxBytes,
             boolean readRemote) {
 
         if (partitionsToFetch.isEmpty()) {
@@ -160,6 +120,47 @@ public class ReplicaManagerLogReader implements LogReader {
                 futures.forEach((topicIdPartition, future) -> results.put(topicIdPartition, future.getNow(null)));
                 return results;
             });
+    }
+
+    // Visible for testing
+    LinkedHashMap<TopicIdPartition, LogReadResult> read(
+        FetchParams fetchParams,
+        Set<TopicIdPartition> partitionsToFetch,
+        Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        Map<TopicIdPartition, Integer> partitionMaxBytes
+    ) {
+        if (partitionsToFetch.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
+        topicPartitionFetchOffsets.forEach((topicIdPartition, fetchOffset) ->
+            topicPartitionData.put(topicIdPartition,
+                new FetchRequest.PartitionData(
+                    topicIdPartition.topicId(),
+                    fetchOffset,
+                    0,
+                    partitionMaxBytes.get(topicIdPartition),
+                    Optional.empty())
+            ));
+
+        Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
+            fetchParams,
+            CollectionConverters.asScala(
+                partitionsToFetch.stream().map(topicIdPartition ->
+                    new Tuple2<>(topicIdPartition, topicPartitionData.get(topicIdPartition))).collect(Collectors.toList())
+            ),
+            QuotaFactory.UNBOUNDED_QUOTA,
+            true);
+
+        LinkedHashMap<TopicIdPartition, LogReadResult> responseData = new LinkedHashMap<>();
+        responseLogResult.foreach(tpLogResult -> {
+            responseData.put(tpLogResult._1(), tpLogResult._2());
+            return BoxedUnit.UNIT;
+        });
+
+        log.trace("Data successfully retrieved by replica manager: {}", responseData);
+        return responseData;
     }
 
     /**

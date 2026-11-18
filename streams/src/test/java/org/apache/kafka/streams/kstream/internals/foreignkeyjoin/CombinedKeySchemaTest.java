@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -183,5 +184,24 @@ public class CombinedKeySchemaTest {
         verify(mockDeserializer, never()).deserialize(FK_TOPIC, foreignKeyRaw);
         verify(mockDeserializer).deserialize(PK_TOPIC, HEADERS, primaryKeyRaw);
         verify(mockDeserializer, never()).deserialize(PK_TOPIC, primaryKeyRaw);
+    }
+
+    @Test
+    public void shouldThrowWhenForeignKeyLengthExceedsRemainingBytes() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> FK_TOPIC, Serdes.String(),
+            () -> PK_TOPIC, Serdes.Integer()
+        );
+
+        final byte[] foreignKeyRaw = Serdes.String().serializer().serialize(FK_TOPIC, "foreignKey");
+        final byte[] primaryKeyRaw = Serdes.Integer().serializer().serialize(PK_TOPIC, 1);
+        final int fakeForeignKeyLength = foreignKeyRaw.length + primaryKeyRaw.length + 1; // one past what's actually there
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeyRaw.length + primaryKeyRaw.length);
+        buf.putInt(fakeForeignKeyLength);
+        buf.put(foreignKeyRaw).put(primaryKeyRaw);
+        final Bytes corrupted = Bytes.wrap(buf.array());
+
+        assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted, HEADERS));
     }
 }

@@ -65,9 +65,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -472,7 +469,7 @@ public class CachingPersistentSessionStoreTest {
         }
 
         assertNull(cachingStore.fetchSession(keyA, 0, 0));
-        assertThat(cachingStore.fetchSession(keyB, 0, 0), equalTo("2".getBytes()));
+        assertArrayEquals("2".getBytes(), cachingStore.fetchSession(keyB, 0, 0));
 
     }
 
@@ -827,15 +824,11 @@ public class CachingPersistentSessionStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem(
-                    "Returning empty iterator for fetch with invalid key range: from > to." +
-                        " This may be due to range arguments set in the wrong order, " +
-                        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                        " Note that the built-in numerical serdes do not follow this for negative numbers"
-                )
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 
@@ -850,15 +843,11 @@ public class CachingPersistentSessionStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem(
-                    "Returning empty iterator for fetch with invalid key range: from > to." +
-                        " This may be due to range arguments set in the wrong order, " +
-                        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                        " Note that the built-in numerical serdes do not follow this for negative numbers"
-                )
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 

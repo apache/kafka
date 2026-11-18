@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.junit;
 
+import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
@@ -24,7 +25,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -41,6 +41,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -77,6 +78,8 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -289,24 +292,18 @@ public class ClusterTestExtensionsTest {
     }
 
 
-    @ClusterTest(
-        types = {Type.CO_KRAFT, Type.KRAFT},
-        brokers = 4,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
-    public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testDeleteTopic(ClusterInstance clusterInstance) throws Exception {
+        String testTopic = "testTopic";
+        clusterInstance.createTopic(testTopic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String testTopic = "testTopic";
-            admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
-            clusterInstance.waitTopicCreation(testTopic, 1);
-            admin.deleteTopics(List.of(testTopic));
-            clusterInstance.waitTopicDeletion(testTopic);
+            clusterInstance.deleteTopic(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
                     topic -> topic.name().equals(testTopic)
             ));
+
+            assertInstanceOf(UnknownTopicOrPartitionException.class,
+                assertThrows(RuntimeException.class, () -> clusterInstance.deleteTopic("non-existent-topic")).getCause());
         }
     }
 
@@ -315,8 +312,8 @@ public class ClusterTestExtensionsTest {
         String topic = "topic";
         String key = "key";
         String value = "value";
-        try (Admin adminClient = cluster.admin();
-             Producer<String, String> producer = cluster.producer(Map.of(
+        cluster.createTopic(topic, 1, (short) 1);
+        try (Producer<String, String> producer = cluster.producer(Map.of(
                  ACKS_CONFIG, "all",
                  KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                  VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()));
@@ -324,7 +321,6 @@ public class ClusterTestExtensionsTest {
                  KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
                  VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))
         ) {
-            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
@@ -348,11 +344,10 @@ public class ClusterTestExtensionsTest {
         String topic = "topic";
         byte[] key = "key".getBytes(StandardCharsets.UTF_8);
         byte[] value = "value".getBytes(StandardCharsets.UTF_8);
-        try (Admin adminClient = cluster.admin();
-             Producer<byte[], byte[]> producer = cluster.producer();
+        cluster.createTopic(topic, 1, (short) 1);
+        try (Producer<byte[], byte[]> producer = cluster.producer();
              Consumer<byte[], byte[]> consumer = cluster.consumer()
         ) {
-            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
@@ -379,14 +374,10 @@ public class ClusterTestExtensionsTest {
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 1)
     public void testBrokerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         final String topicName = "topic";
-        try (Admin admin = cluster.admin();
-             Producer<String, String> producer = cluster.producer(Map.of(
+        cluster.createTopic(topicName, 1, (short) 1);
+        try (Producer<String, String> producer = cluster.producer(Map.of(
                  ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                  ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
-            admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
-
-            cluster.waitTopicCreation(topicName, 1);
-
             cluster.brokers().values().forEach(broker -> {
                 broker.shutdown();
                 broker.awaitShutdown();
@@ -593,6 +584,43 @@ public class ClusterTestExtensionsTest {
                 () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
             );
             assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSsl(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+        KafkaBroker broker = clusterInstance.brokers().values().iterator().next();
+        ControllerServer controller = clusterInstance.controllers().values().iterator().next();
+        Function<SocketServer, String> endpoints = socketServer -> socketServer.dataPlaneAcceptors().keySet()
+                .stream().map(endpoint -> String.format("%s:%s", endpoint.listener(), endpoint.securityProtocol())).collect(Collectors.joining(","));
+        assertEquals("EXTERNAL:SSL", endpoints.apply(broker.socketServer()));
+        assertEquals("CONTROLLER:SSL", endpoints.apply(controller.socketServer()));
+
+        String topic = "ssl-topic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            Set<String> topics = admin.listTopics().names().get();
+            assertTrue(topics.contains(topic), String.format("%s not included in %s", topic, topics));
+        }
+
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get();
+            producer.flush();
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
+            consumer.subscribe(List.of(topic));
+            RaftClusterInvocationContext.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                return records.count() == 1;
+            }, "Failed to receive message");
         }
     }
 }

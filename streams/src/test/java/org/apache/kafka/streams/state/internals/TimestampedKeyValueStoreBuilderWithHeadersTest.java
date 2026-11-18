@@ -24,6 +24,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -37,8 +39,12 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
+import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -56,7 +62,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -482,24 +490,6 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore(final boolean cachingEnabled) {
-        // KIP-1356 (point query only): the native header store enables KeyQuery but not RangeQuery, so a
-        // RangeQuery reports UNKNOWN_QUERY_TYPE (caching on or off). RangeQuery support on the native
-        // build is deferred to the range follow-up.
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
-        try {
-            final QueryResult<?> result =
-                store.query(RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
-            assertFalse(result.isSuccess(), "Expected RangeQuery to be unsupported on the native header store");
-            assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
-            assertNotNull(result.getPosition(), "Expected position to be set");
-        } finally {
-            store.close();
-        }
-    }
-
-    @ParameterizedTest
     @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
     public void shouldReturnEmptyPositionInitially(final StoreType storeType) {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
@@ -614,5 +604,230 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             nativeStore.close();
             adapterStore.close();
         }
+    }
+
+    @Test
+    public void shouldHandleRangeQuery() {
+        // KIP-1356: the native header store now serves RangeQuery (header-stripped results). A range
+        // query reads the underlying store directly (never the cache), so caching on/off makes no
+        // difference here; use a store-served (caching-disabled) build, matching the other range tests.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<KeyValueIterator<String, String>> result =
+                store.query(RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+            assertTrue(result.isSuccess(), "Expected RangeQuery to be handled on the native header store");
+            try (KeyValueIterator<String, String> iterator = result.getResult()) {
+                assertTrue(iterator.hasNext(), "Expected the stored record to be returned");
+                final KeyValue<String, String> keyValue = iterator.next();
+                assertEquals("k", keyValue.key);
+                assertEquals("v", keyValue.value);
+                assertFalse(iterator.hasNext());
+            }
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NATIVE", "IN_MEMORY"})
+    public void shouldReturnHeadersForTimestampedRangeWithHeadersQueryOnHeaderPersistingStore(final StoreType storeType) {
+        // Range counterpart of shouldReturnHeadersForTimestampedKeyWithHeadersQueryOnHeaderPersistingStore.
+        // A range query reads the underlying store (it never consults the cache), so use a store-served
+        // (caching-disabled) build; the native and in-memory builds persist headers, so every element carries them.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+        try {
+            final Headers headers = headersWith("h", "x");
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headers));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess(), "Expected TimestampedRangeWithHeadersQuery to succeed");
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                assertTrue(iterator.hasNext());
+                final ReadOnlyRecord<String, String> record = iterator.next();
+                assertEquals("k", record.key());
+                assertEquals("v", record.value());
+                assertEquals(123L, record.timestamp());
+                assertEquals(headers, record.headers());
+                // The IQ result is a read-only snapshot: its headers are immutable.
+                assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]),
+                    "IQ result headers should be read-only");
+                assertFalse(iterator.hasNext());
+            }
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedRangeWithHeadersQueryOnAdapterStore() {
+        // The timestamped adapter keeps the timestamp but drops headers on write. A range query reads
+        // the underlying store (never the cache), so the headers always come back empty (never null) --
+        // unlike the point query, whose warm-cache read can still return them.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess());
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                assertTrue(iterator.hasNext());
+                final ReadOnlyRecord<String, String> record = iterator.next();
+                assertEquals("k", record.key());
+                assertEquals("v", record.value());
+                assertEquals(123L, record.timestamp());
+                assertEquals(new RecordHeaders(), record.headers());
+                assertFalse(iterator.hasNext());
+            }
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldThrowForTimestampedRangeWithHeadersQueryOnPlainLegacyStore() {
+        // A plain (non-timestamped) legacy supplier surfaces every entry with timestamp = -1, which
+        // cannot be represented as a ReadOnlyRecord. A range query reads the underlying store, so the
+        // failure surfaces while iterating (there is no cache-served success path like the point query).
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.PLAIN_ADAPTER, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess(), "The range query itself succeeds; the failure surfaces while iterating");
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                final StreamsException exception = assertThrows(StreamsException.class, iterator::next,
+                    "An entry with ts=-1 cannot be represented as a ReadOnlyRecord");
+                assertTrue(exception.getMessage().contains("timestamp"),
+                    "Expected exception message to mention the timestamp: " + exception.getMessage());
+            }
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldThrowForNegativeStoredTimestampForTimestampedRangeWithHeadersQuery() {
+        // A caller can store a negative timestamp directly. Unlike the point query (which fails the whole
+        // query with STORE_EXCEPTION), a lazily-evaluated range iterator has already been returned, so the
+        // failure surfaces by throwing while advancing.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess());
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                final StreamsException exception = assertThrows(StreamsException.class, iterator::next);
+                assertTrue(exception.getMessage().contains("timestamp"),
+                    "Expected exception message to mention the timestamp: " + exception.getMessage());
+            }
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForTimestampedRangeWithHeadersQueryWhenRequested() {
+        // The range query, run through the metered handler with execution info enabled, must carry both
+        // the wrapped store's entry and the metered handler's entry. (Unlike the point query there is no
+        // query-level failure path -- a negative timestamp surfaces while iterating, not as a failed result.)
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(true));
+
+            assertTrue(result.isSuccess());
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                final String info = String.join("\n", result.getExecutionInfo());
+                assertTrue(
+                    info.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
+                        && info.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
+                    "execution info missing an entry: " + info);
+            }
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldNotCollectExecutionInfoForTimestampedRangeWithHeadersQueryWhenNotRequested() {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecordIterator<String, String>> result =
+                store.query(TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess());
+            try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+                assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info: " + result.getExecutionInfo());
+            }
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldReturnIdenticalRangeResultsForNativeAndAdapterBuiltStores() {
+        // Build-path parity for the existing (header-stripped) range query types. Range queries read the
+        // underlying store (never the cache), so use a store-served (caching-disabled) build. Multiple
+        // keys pin that ordering (not just per-key equality) matches across both build paths.
+        final TimestampedKeyValueStoreWithHeaders<String, String> nativeStore = buildAndInitStore(StoreType.NATIVE, false);
+        final TimestampedKeyValueStoreWithHeaders<String, String> adapterStore = buildAndInitStore(StoreType.ADAPTER, false);
+        try {
+            // Insert in a different order per store: a range result is sorted by key bytes, not insertion
+            // order, so if either build path were (incorrectly) insertion-order-dependent, the two stores
+            // would diverge here instead of accidentally matching.
+            for (final String key : List.of("a", "b", "c")) {
+                nativeStore.put(key, ValueTimestampHeaders.make("v-" + key, 123L, headersWith("h", "x")));
+            }
+            for (final String key : List.of("c", "b", "a")) {
+                adapterStore.put(key, ValueTimestampHeaders.make("v-" + key, 123L, headersWith("h", "x")));
+            }
+
+            final List<KeyValue<String, String>> nativeRange =
+                drain(nativeStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            final List<KeyValue<String, String>> adapterRange =
+                drain(adapterStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            assertEquals(3, nativeRange.size(), "Expected all three keys to be returned");
+            assertEquals(nativeRange, adapterRange,
+                "RangeQuery results (including order) should be identical across native and adapter build paths");
+
+            final List<KeyValue<String, ValueAndTimestamp<String>>> nativeTimestampedRange =
+                drain(nativeStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            final List<KeyValue<String, ValueAndTimestamp<String>>> adapterTimestampedRange =
+                drain(adapterStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            assertEquals(3, nativeTimestampedRange.size(), "Expected all three keys to be returned");
+            assertEquals(nativeTimestampedRange, adapterTimestampedRange,
+                "TimestampedRangeQuery results (including order) should be identical across native and adapter build paths");
+        } finally {
+            nativeStore.close();
+            adapterStore.close();
+        }
+    }
+
+    private static <V> List<KeyValue<String, V>> drain(final KeyValueIterator<String, V> iterator) {
+        final List<KeyValue<String, V>> out = new ArrayList<>();
+        try (iterator) {
+            while (iterator.hasNext()) {
+                out.add(iterator.next());
+            }
+        }
+        return out;
     }
 }

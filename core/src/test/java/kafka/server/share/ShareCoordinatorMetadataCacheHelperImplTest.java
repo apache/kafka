@@ -28,11 +28,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +64,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             null,
             func,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         ));
         assertEquals("metadataCache must not be null", e.getMessage());
 
@@ -68,7 +73,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             null,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         ));
         assertEquals("keyToPartitionMapper must not be null", e.getMessage());
 
@@ -76,7 +82,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             func,
             null,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         ));
         assertEquals("interBrokerListenerName must not be null", e.getMessage());
 
@@ -84,9 +91,19 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             func,
             mock(ListenerName.class),
-            null
+            null,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         ));
         assertEquals("groupConfigManager must not be null", e.getMessage());
+
+        e = assertThrows(NullPointerException.class, () -> new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            func,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            null
+        ));
+        assertEquals("messageMaxBytesSupplier must not be null", e.getMessage());
     }
 
     @Test
@@ -100,7 +117,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -123,7 +141,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -146,7 +165,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(
@@ -167,7 +187,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -256,7 +277,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -313,7 +335,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -370,7 +393,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -428,7 +452,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         when(mockMetadataCache.getAliveBrokerNodes(
@@ -455,7 +480,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             func,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         List<Node> nodes = List.of(
@@ -477,6 +503,57 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         verify(mockMetadataCache, times(1)).getAliveBrokerNodes(eq(mockListenerName));
     }
 
+    @Test
+    public void testRequestHeaderVersionReturnsHeaderV3() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals((short) 3, cache.requestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testRequestHeaderVersionReturnsHeaderV2OnOlderMetadataVersion() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals((short) 2, cache.requestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testRequestHeaderVersionReturnsMinimumVersionHeaderOnException() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertEquals(MetadataVersion.MINIMUM_VERSION.shareGroupStateRequestHeaderVersion(), cache.requestHeaderVersion());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
     // Tests for shareGroupDlqTopic
 
     @Test
@@ -488,7 +565,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.empty(), cache.shareGroupDlqTopic("test-group"));
@@ -506,7 +584,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.of("dlq-topic"), cache.shareGroupDlqTopic("test-group"));
@@ -524,7 +603,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
@@ -542,7 +622,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertTrue(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
@@ -560,7 +641,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
@@ -578,7 +660,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertTrue(cache.isDlqAutoTopicCreateEnabled());
@@ -594,7 +677,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isDlqAutoTopicCreateEnabled());
@@ -612,7 +696,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.of("dlq."), cache.shareGroupDlqTopicPrefix());
@@ -628,7 +713,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mock(MetadataCache.class),
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mockGroupConfigManager
+            mockGroupConfigManager,
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
@@ -646,7 +732,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
@@ -662,7 +749,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
@@ -679,7 +767,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertTrue(cache.isDlqEnabledOnTopic("test-topic"));
@@ -696,10 +785,138 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
+    }
+
+    private ShareCoordinatorMetadataCacheHelperImpl helperWithTopicProps(Properties props) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+        return new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicParsesPaddedStringAndBoolean() {
+        Properties padded = new Properties();
+        padded.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, " TRUE ");
+        assertTrue(helperWithTopicProps(padded).isDlqEnabledOnTopic("test-topic"));
+
+        Properties bool = new Properties();
+        bool.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, true);
+        assertTrue(helperWithTopicProps(bool).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseForInvalidValue() {
+        Properties props = new Properties();
+        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "not-a-boolean");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseWhenFlagMissing() {
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    // Tests for dlqTopicMaxMessageBytes
+
+    @Test
+    public void testDlqTopicMaxMessageBytesFallsBackToBrokerConfigWhenTopicConfigNull() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(null);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(5_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @Test
+    public void testDlqTopicMaxMessageBytesFallsBackToBrokerConfigWhenNoTopicOverride() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(new Properties());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(5_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @Test
+    public void testDlqTopicMaxMessageBytesUsesTopicOverrideWhenPresent() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "10000000");
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        // Topic-level override wins even though it is larger than the broker-configured default.
+        assertEquals(10_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @Test
+    public void testDlqTopicMaxMessageBytesFallsBackToBrokerConfigOnInvalidTopicOverride() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "not-a-number");
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(5_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 0", "1, 1", "2147483647, 2147483647", "-1, 5000000", "-2147483648, 5000000"})
+    public void testDlqTopicMaxMessageBytesAppliesTopicConfigBounds(String override, int expected) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, override);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(expected, cache.dlqTopicMaxMessageBytes("test-topic"));
     }
 
     // Tests for topicName
@@ -714,7 +931,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.of("some-topic"), cache.topicName(topicId));
@@ -731,7 +949,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.empty(), cache.topicName(topicId));
@@ -748,7 +967,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mock(ListenerName.class),
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         assertEquals(Optional.empty(), cache.topicName(topicId));
@@ -776,7 +996,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
@@ -807,7 +1028,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
@@ -831,7 +1053,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
@@ -864,7 +1087,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             mockMetadataCache,
             sharePartitionKey -> 0,
             mockListenerName,
-            mock(GroupConfigManager.class)
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
         ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");

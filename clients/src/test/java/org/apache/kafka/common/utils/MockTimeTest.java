@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(120)
-public class MockTimeTest extends TimeTest {
+public class MockTimeTest {
 
     @Test
     public void testAdvanceClock() {
@@ -41,10 +41,5 @@ public class MockTimeTest extends TimeTest {
         assertEquals(2000200, time.nanoseconds());
         assertEquals(103, time.milliseconds());
         assertEquals(104, time.milliseconds());
-    }
-
-    @Override
-    protected Time createTime() {
-        return new MockTime();
     }
 }

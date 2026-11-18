@@ -18,8 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RocksDbVersionedKeyValueBytesStoreSupplierTest {
 
@@ -46,8 +45,7 @@ public class RocksDbVersionedKeyValueBytesStoreSupplierTest {
     }
 
     private void verifyExpectedSegmentInterval(final long historyRetention, final long expectedSegmentInterval) {
-        assertThat(
-            new RocksDbVersionedKeyValueBytesStoreSupplier(STORE_NAME, historyRetention).segmentIntervalMs(),
-            is(expectedSegmentInterval));
+        assertEquals(expectedSegmentInterval,
+            new RocksDbVersionedKeyValueBytesStoreSupplier(STORE_NAME, historyRetention).segmentIntervalMs());
     }
 }

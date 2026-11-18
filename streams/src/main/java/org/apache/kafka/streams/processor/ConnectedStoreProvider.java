@@ -59,7 +59,7 @@ import java.util.Set;
  *         }
  *
  *         Set<StoreBuilder<?>> stores() {
- *             return Collections.singleton(storeBuilder);
+ *             return Set.of(storeBuilder);
  *         }
  *     }
  *
@@ -83,7 +83,7 @@ import java.util.Set;
  *         }
  *
  *         Set<StoreBuilder<?>> stores() {
- *             return Collections.singleton(storeBuilder);
+ *             return Set.of(storeBuilder);
  *         }
  *     }
  * }

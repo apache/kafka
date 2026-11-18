@@ -77,7 +77,7 @@ object KafkaDockerWrapper extends Logging {
 
   private def parseArguments(args: Array[String]): Namespace = {
     val parser = ArgumentParsers.
-      newArgumentParser("kafka-docker-wrapper", true, "-", "@").
+      newFor("kafka-docker-wrapper").fromFilePrefix("@").build().
       description("The Kafka docker wrapper.")
 
     val subparsers = parser.addSubparsers().dest("command")

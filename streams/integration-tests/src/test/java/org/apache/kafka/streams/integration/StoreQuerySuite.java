@@ -16,32 +16,21 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStoreTest;
-import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStoreTest;
-import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest;
-import org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest;
-import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProviderTest;
-import org.apache.kafka.streams.state.internals.WrappingStoreProviderTest;
-
 import org.junit.platform.suite.api.SelectClasses;
 import org.junit.platform.suite.api.Suite;
 
 /**
- * This suite runs all the tests related to querying StateStores (IQ).
+ * This suite runs the integration tests related to querying StateStores (IQ).
  *
- * It can be used from an IDE to selectively just run these tests.
+ * It can be used from an IDE to selectively just run these integration tests. The unit tests for
+ * StateStore querying live in the {@code streams} module; see
+ * {@code org.apache.kafka.streams.state.internals.StoreQuerySuite}.
  *
  * Tests ending in the word "Suite" are excluded from the gradle build because it
  * already runs the component tests individually.
  */
 @Suite
 @SelectClasses({
-    CompositeReadOnlyKeyValueStoreTest.class,
-    CompositeReadOnlyWindowStoreTest.class,
-    CompositeReadOnlySessionStoreTest.class,
-    GlobalStateStoreProviderTest.class,
-    StreamThreadStateStoreProviderTest.class,
-    WrappingStoreProviderTest.class,
     QueryableStateIntegrationTest.class,
 })
 public class StoreQuerySuite {

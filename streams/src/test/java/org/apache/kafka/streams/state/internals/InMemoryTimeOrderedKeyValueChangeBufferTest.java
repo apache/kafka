@@ -24,10 +24,9 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InMemoryTimeOrderedKeyValueChangeBufferTest {
 
@@ -50,8 +49,8 @@ public class InMemoryTimeOrderedKeyValueChangeBufferTest {
             new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null)
                 .withLoggingEnabled(logConfig);
 
-        assertThat(builder.logConfig(), is(singletonMap("min.insync.replicas", expect)));
-        assertThat(builder.loggingEnabled(), is(true));
+        assertEquals(Map.of("min.insync.replicas", expect), builder.logConfig());
+        assertTrue(builder.loggingEnabled());
     }
 
     @Test
@@ -60,7 +59,7 @@ public class InMemoryTimeOrderedKeyValueChangeBufferTest {
             = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null)
                 .withLoggingDisabled();
 
-        assertThat(builder.logConfig(), is(emptyMap()));
-        assertThat(builder.loggingEnabled(), is(false));
+        assertTrue(builder.logConfig().isEmpty());
+        assertFalse(builder.loggingEnabled());
     }
 }

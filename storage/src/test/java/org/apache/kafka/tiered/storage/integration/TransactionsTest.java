@@ -113,22 +113,22 @@ public class TransactionsTest {
     }
 
     @ClusterTest
-    public void testInitTransactionsTimeout() throws Exception {
+    public void testInitTransactionsTimeout() {
         TransactionsTestHelper.testInitTransactionsTimeout(clusterInstance, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testSendOffsetsToTransactionTimeout() throws Exception {
+    public void testSendOffsetsToTransactionTimeout() {
         TransactionsTestHelper.testSendOffsetsToTransactionTimeout(clusterInstance, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testCommitTransactionTimeout() throws Exception {
+    public void testCommitTransactionTimeout() {
         TransactionsTestHelper.testCommitTransactionTimeout(clusterInstance, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAbortTransactionTimeout() throws Exception {
+    public void testAbortTransactionTimeout() {
         TransactionsTestHelper.testAbortTransactionTimeout(clusterInstance, TOPIC_CONFIG);
     }
 
@@ -185,7 +185,7 @@ public class TransactionsTest {
     }
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
-    public void testEmptyAbortAfterCommit() throws Exception {
+    public void testEmptyAbortAfterCommit() {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, TOPIC_CONFIG);
     }
 }

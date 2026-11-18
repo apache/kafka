@@ -78,13 +78,14 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -147,6 +148,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -186,7 +189,7 @@ public class FetchRequestManagerTest {
     private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private BackgroundEventHandler backgroundEventHandler;
     private FetchMetricsRegistry metricsRegistry;
@@ -277,6 +280,198 @@ public class FetchRequestManagerTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    /**
+     * A fetch response that carries no records must still wake up a thread blocked on the fetch buffer.
+     */
+    @Test
+    public void testEmptyFetchResponseWakesUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Establish an incremental fetch session with a non-empty response first, then consume the records
+        // and the resulting wakeup so the buffer below starts empty.
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100)
+                .setRecords(records));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, partitions, List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        fetcher.fetchBuffer.awaitWakeup(time.timer(0));
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // An empty incremental fetch response (same session, no partition data) must wake the thread blocked on the buffer.
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, new LinkedHashMap<>(), List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+
+        // On a successful run the blocked thread gets unblocked with the response above so this join completes promptly.
+        // This timeout only caps how long we wait before declaring the wakeup missing (failure).
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
+    }
+
+    @Test
+    public void testFailedFetchResponseWakesUpBuffer() throws InterruptedException {
+        // The response body is irrelevant: it is discarded once the response is marked as disconnected.
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(
+                fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true));
+    }
+
+    @Test
+    public void testFetchSessionErrorResponseWakesUpBuffer() throws InterruptedException {
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(FetchResponse.of(
+                Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID, new LinkedHashMap<>(), List.of())));
+    }
+
+    private void assertRequestCompletionWakesUpBuffer(Runnable prepareResponse) throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        prepareResponse.run();
+        networkClientDelegate.poll(time.timer(0));
+
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), "Completed fetch request did not wake the thread blocked on the fetch buffer");
+    }
+
+    @Test
+    public void testNoFetchablePartitionsDoesNotWakeUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // Simulate a network thread cycle that finds nothing to fetch.
+        assertEquals(0, sendFetches());
+
+        // The thread must still be blocked: an eager wakeup here would busy-loop the caller.
+        blockedOnBuffer.join(500);
+        assertTrue(blockedOnBuffer.isAlive(),
+                "Empty fetch result with no fetchable partitions must not wake the thread blocked on the fetch buffer");
+
+        // Clean up: explicitly wake so the daemon thread can exit instead of leaking as a live thread.
+        fetcher.fetchBuffer.wakeup();
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive());
+    }
+
+    @Test
+    public void testMaximumTimeToWaitUnboundedWhenFetchSent() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitBoundedWhenNoInflightRequest() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Fetch data for tp0, but leave it buffered (unconsumed) so the next prepare() finds every fetchable
+        // partition already buffered. With no in-flight request, maximumTimeToWait is bounded.
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        assertEquals(0, sendFetches());
+        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitUnboundedWhenPartitionsSkippedDueToInflight() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // A fetch request is sent successfully; maximumTimeToWait remains unbounded.
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // The in-flight request blocks the node, so the next prepare() skips the partition. maximumTimeToWait
+        // stays unbounded: the in-flight request's completion will wake the buffer regardless.
+        assertEquals(0, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // Complete the in-flight request and consume the buffered data.
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+
+        // A new fetch request can now be sent; maximumTimeToWait remains unbounded.
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToBackoff() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        Node node = metadata.fetch().leaderFor(tp0);
+
+        client.backoff(node, 500);
+        assertEquals(0, sendFetches());
+        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // Once the backoff clears, a fetch request can be sent and maximumTimeToWait reverts to unbounded.
+        time.sleep(500);
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testPartitionsSkippedDueToBackoffDoesNotWakeUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        Node node = metadata.fetch().leaderFor(tp0);
+        client.backoff(node, 500);
+
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        assertEquals(0, sendFetches());
+
+        blockedOnBuffer.join(500);
+        assertTrue(blockedOnBuffer.isAlive(),
+                "Fetch skipped due to reconnect backoff must not wake the thread blocked on the fetch buffer");
+
+        fetcher.fetchBuffer.wakeup();
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive());
     }
 
     @Test
@@ -966,7 +1161,7 @@ public class FetchRequestManagerTest {
         assignFromUser(singleton(tp0));
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buffer));
 
         byte magic = RecordBatch.MAGIC_VALUE_V1;
         byte[] key = "foo".getBytes();
@@ -1004,7 +1199,7 @@ public class FetchRequestManagerTest {
 
         buffer.flip();
 
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
 
         // normal fetch
         assertEquals(1, sendFetches());
@@ -1018,13 +1213,8 @@ public class FetchRequestManagerTest {
         ensureBlockOnRecord(1L);
         seekAndConsumeRecord(buffer, 2L);
         ensureBlockOnRecord(3L);
-        try {
-            // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
-            seekAndConsumeRecord(buffer, 4L);
-            fail("Should have thrown exception when fail to retrieve a record from iterator.");
-        } catch (KafkaException ke) {
-            // let it go
-        }
+        // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
+        assertThrows(KafkaException.class, () -> seekAndConsumeRecord(buffer, 4L), "Should have thrown exception when fail to retrieve a record from iterator.");
         ensureBlockOnRecord(4L);
     }
 
@@ -1038,7 +1228,7 @@ public class FetchRequestManagerTest {
 
     private void seekAndConsumeRecord(ByteBuffer responseBuffer, long toOffset) {
         // Seek to skip the bad record and fetch again.
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
         // Should not throw exception after the seek.
         collectFetch();
         assertEquals(1, sendFetches());
@@ -1057,7 +1247,7 @@ public class FetchRequestManagerTest {
         buildFetcher();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+        ByteBufferOutputStream out = new SingleByteBufferOutputStream(buffer);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,
@@ -1320,7 +1510,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1344,7 +1534,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1439,13 +1629,13 @@ public class FetchRequestManagerTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1471,13 +1661,13 @@ public class FetchRequestManagerTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1561,6 +1751,19 @@ public class FetchRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on fetch error");
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
+    @Test
+    public void testRecordLatencyOnFetchResponseLevelError() {
+        // Latency is recorded on response-level errors (e.g. FETCH_SESSION_TOPIC_ID_ERROR) since the round-trip completed.
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR, 0));
+        networkClientDelegate.poll(time.timer(0));
+        verify(metricsManager).recordLatency(anyString(), anyLong());
     }
 
     @ParameterizedTest
@@ -1897,7 +2100,7 @@ public class FetchRequestManagerTest {
         assertEquals(2, fetchRecords().get(tp0).size());
 
         subscriptions.assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
         partitions = new HashMap<>();
@@ -2588,7 +2791,7 @@ public class FetchRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -2782,8 +2985,8 @@ public class FetchRequestManagerTest {
         buildFetcher(2);
 
         assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
-        subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekValidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekValidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions1 = new LinkedHashMap<>();
@@ -3708,7 +3911,7 @@ public class FetchRequestManagerTest {
 
         // Overwrite tp1's position with an empty leader, but verify that it is still buffered. Having a leaderless,
         // buffered partition is key to triggering the test case.
-        subscriptions.position(tp1, new SubscriptionState.FetchPosition(
+        subscriptions.position(tp1, new ConsumerSubscriptionState.FetchPosition(
             0,
             Optional.empty(),
             Metadata.LeaderAndEpoch.noLeaderOrEpoch()
@@ -3777,9 +3980,9 @@ public class FetchRequestManagerTest {
         // Overwrite node0Partition2's position with an empty leader to trigger the test case.
         subscriptions.position(node0Partition2, null);
 
-        // Confirm that calling SubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
+        // Confirm that calling ConsumerSubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
         // throw an exception, it should return a null position.
-        SubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
+        ConsumerSubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
         assertNull(position);
 
         // sendFetches() call #2 will now fail to send any requests as we have an invalid position in the assignment.
@@ -4085,7 +4288,7 @@ public class FetchRequestManagerTest {
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         buildFetcher(metricConfig, keyDeserializer, valueDeserializer, maxPollRecords, isolationLevel, metadataExpireMs,
                 subscriptionState, logContext);
     }
@@ -4096,7 +4299,7 @@ public class FetchRequestManagerTest {
                                      int maxPollRecords,
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs,
-                                     SubscriptionState subscriptionState,
+                                     ConsumerSubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
@@ -4126,7 +4329,8 @@ public class FetchRequestManagerTest {
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector,
-                apiVersions));
+                apiVersions,
+                retryBackoffMs));
         ConsumerNetworkClient consumerNetworkClient = new ConsumerNetworkClient(
                 logContext,
                 client,
@@ -4148,7 +4352,7 @@ public class FetchRequestManagerTest {
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1, 0, 0);
         subscriptions = subscriptionState;
@@ -4157,7 +4361,7 @@ public class FetchRequestManagerTest {
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
-        metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
+        metricsManager = spy(new FetchMetricsManager(metrics, metricsRegistry));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
         Properties properties = new Properties();
@@ -4182,14 +4386,15 @@ public class FetchRequestManagerTest {
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
                                            ConsumerMetadata metadata,
-                                           SubscriptionState subscriptions,
+                                           ConsumerSubscriptionState subscriptions,
                                            FetchConfig fetchConfig,
                                            FetchBuffer fetchBuffer,
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
-                                           ApiVersions apiVersions) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
+                                           ApiVersions apiVersions,
+                                           long retryBackoffMs) {
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, retryBackoffMs);
             this.fetchCollector = fetchCollector;
         }
 

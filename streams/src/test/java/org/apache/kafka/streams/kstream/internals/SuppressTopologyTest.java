@@ -41,8 +41,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SuppressTopologyTest {
@@ -162,7 +161,7 @@ public class SuppressTopologyTest {
         final String anonymousNodeTopology = anonymousNodeBuilder.build().describe().toString();
 
         // without the name, the suppression node increments the topology index
-        assertThat(anonymousNodeTopology, is(ANONYMOUS_FINAL_TOPOLOGY));
+        assertEquals(ANONYMOUS_FINAL_TOPOLOGY, anonymousNodeTopology);
     }
 
     @Test
@@ -180,7 +179,7 @@ public class SuppressTopologyTest {
         final String namedNodeTopology = namedNodeBuilder.build().describe().toString();
 
         // without the name, the suppression node does not increment the topology index
-        assertThat(namedNodeTopology, is(NAMED_FINAL_TOPOLOGY));
+        assertEquals(NAMED_FINAL_TOPOLOGY, namedNodeTopology);
     }
 
     @Test
@@ -196,7 +195,7 @@ public class SuppressTopologyTest {
         final String anonymousNodeTopology = anonymousNodeBuilder.build().describe().toString();
 
         // without the name, the suppression node increments the topology index
-        assertThat(anonymousNodeTopology, is(ANONYMOUS_INTERMEDIATE_TOPOLOGY));
+        assertEquals(ANONYMOUS_INTERMEDIATE_TOPOLOGY, anonymousNodeTopology);
     }
 
     @Test
@@ -212,7 +211,7 @@ public class SuppressTopologyTest {
         final String namedNodeTopology = namedNodeBuilder.build().describe().toString();
 
         // without the name, the suppression node does not increment the topology index
-        assertThat(namedNodeTopology, is(NAMED_INTERMEDIATE_TOPOLOGY));
+        assertEquals(NAMED_INTERMEDIATE_TOPOLOGY, namedNodeTopology);
     }
 
     @Test

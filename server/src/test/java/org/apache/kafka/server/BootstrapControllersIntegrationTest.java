@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.DescribeFeaturesResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumResult;
@@ -29,7 +28,6 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
@@ -64,8 +62,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -88,7 +84,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 @ClusterTestDefaults(types = {Type.KRAFT})
 public class BootstrapControllersIntegrationTest {
     private Map<String, Object> adminConfig(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
@@ -324,9 +319,7 @@ public class BootstrapControllersIntegrationTest {
                     1, List.of(1, 2, 0),
                     2, List.of(2, 1, 0)
             );
-            CreateTopicsResult createTopicResult = admin.createTopics(List.of(new NewTopic(topicName, assignments)));
-            createTopicResult.all().get();
-            waitForTopics(admin, Set.of(topicName));
+            clusterInstance.createTopicWithAssignment(topicName, assignments);
 
             List<Integer> part0Reassignment = List.of(2, 1, 0);
             List<Integer> part1Reassignment = List.of(0, 1, 2);
@@ -355,11 +348,6 @@ public class BootstrapControllersIntegrationTest {
                 }
             }, "Timed out waiting for replica assignments for topic " + topicName);
         }
-    }
-
-    private static void waitForTopics(Admin admin, Set<String> expectedTopics) throws InterruptedException {
-        TestUtils.waitForCondition(() -> admin.listTopics().names().get().containsAll(expectedTopics),
-                "timed out waiting for topics");
     }
 
     private static List<List<Integer>> translatePartitionInfoToNodeIdList(List<TopicPartitionInfo> partitions) {

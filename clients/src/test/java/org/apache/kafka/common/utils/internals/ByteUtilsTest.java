@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils.internals;
 
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 
@@ -523,7 +521,7 @@ public class ByteUtilsTest {
         assertEquals(value, ByteUtils.readUnsignedVarint(buf.duplicate()));
 
         buf.rewind();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buf));
         ByteUtils.writeUnsignedVarint(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
@@ -539,7 +537,7 @@ public class ByteUtilsTest {
         assertEquals(value, ByteUtils.readVarint(buf.duplicate()));
 
         buf.rewind();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buf));
         ByteUtils.writeVarint(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
@@ -555,7 +553,7 @@ public class ByteUtilsTest {
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
 
         buf.rewind();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buf));
         ByteUtils.writeVarlong(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
@@ -577,7 +575,7 @@ public class ByteUtilsTest {
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
 
         buf.rewind();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buf));
         ByteUtils.writeDouble(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));

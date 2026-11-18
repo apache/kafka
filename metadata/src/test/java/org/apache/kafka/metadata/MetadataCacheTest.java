@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
@@ -42,6 +44,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -502,6 +506,66 @@ public class MetadataCacheTest {
         for (int brokerId : initialBrokerIds) {
             assertTrue(cache.hasAliveBroker(brokerId));
         }
+    }
+
+    @Test
+    public void testGetPartitionLeaderEndpointForKnownPartitionWithoutEndpoint() {
+        MetadataCache cache = createCache();
+        ListenerName listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
+        String topic = "topic";
+        Uuid topicId = Uuid.randomUuid();
+
+        List<ApiMessage> records = List.of(
+            new RegisterBrokerRecord()
+                .setBrokerId(0)
+                .setBrokerEpoch(BROKER_EPOCH)
+                .setRack(null)
+                .setFenced(false)
+                .setEndPoints(new BrokerEndpointCollection(List.of(
+                    new BrokerEndpoint()
+                        .setHost("foo0")
+                        .setPort(9092)
+                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                        .setName(listenerName.value())
+                ))),
+            new TopicRecord().setName(topic).setTopicId(topicId),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(0)
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(0)
+                .setIsr(List.of(0))
+                .setReplicas(List.of(0)),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(1)
+                .setLeader(1)
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(0)
+                .setIsr(List.of(1))
+                .setReplicas(List.of(1)),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(2)
+                .setLeader(LeaderConstants.NO_LEADER)
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(0)
+                .setIsr(List.of())
+                .setReplicas(List.of(0))
+        );
+        updateCache(cache, records);
+
+        assertEquals(Optional.of(new Node(0, "foo0", 9092)), cache.getPartitionLeaderEndpoint(topic, 0, listenerName));
+        assertEquals(Optional.of(Node.noNode()), cache.getPartitionLeaderEndpoint(
+            topic,
+            0,
+            ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
+        ));
+        assertEquals(Optional.of(Node.noNode()), cache.getPartitionLeaderEndpoint(topic, 1, listenerName));
+        assertEquals(Optional.of(Node.noNode()), cache.getPartitionLeaderEndpoint(topic, 2, listenerName));
+        assertEquals(Optional.empty(), cache.getPartitionLeaderEndpoint(topic, 3, listenerName));
+        assertEquals(Optional.empty(), cache.getPartitionLeaderEndpoint("missing-topic", 0, listenerName));
     }
 
     private void updateCacheWithBrokers(MetadataCache cache, List<Integer> brokerIds,
@@ -1006,6 +1070,58 @@ public class MetadataCacheTest {
     }
 
     private record Broker(int id, List<Uuid> dirs) {
+    }
+
+    @Test
+    public void testToClusterIncludesFencedReplicasAsOffline() {
+        MetadataDelta delta = new MetadataDelta.Builder().build();
+        RegisterBrokerRecord broker0RegisterRecord = new RegisterBrokerRecord()
+            .setBrokerId(0)
+            .setFenced(false)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
+                new BrokerEndpoint()
+                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                    .setPort((short) 9092)
+                    .setName("PLAINTEXT")
+                    .setHost("broker-0")
+            )));
+        // Register broker 1 as fenced
+        RegisterBrokerRecord broker1RegisterRecord = new RegisterBrokerRecord()
+            .setBrokerId(1)
+            .setFenced(true)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
+                new BrokerEndpoint()
+                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                    .setPort((short) 9092)
+                    .setName("PLAINTEXT")
+                    .setHost("broker-1")
+            )));
+        delta.replay(broker0RegisterRecord);
+        delta.replay(broker1RegisterRecord);
+
+        String topicName = "foo";
+        Uuid topicId = Uuid.randomUuid();
+        int partitionId = 0;
+        int broker0 = broker0RegisterRecord.brokerId();
+        int broker1 = broker1RegisterRecord.brokerId();
+        delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
+        // Broker 1 is not in the ISR, but it remains in the replica set.
+        // This used to trigger a NullPointerException when fenced brokers were
+        // omitted from the broker map used to build replica metadata.
+        delta.replay(new PartitionRecord()
+            .setTopicId(topicId)
+            .setPartitionId(partitionId)
+            .setReplicas(List.of(broker0, broker1))
+            .setLeader(broker0)
+            .setIsr(List.of(broker0)));
+
+        Cluster cluster = assertDoesNotThrow(() ->
+            MetadataCache.toCluster("cluster-id", delta.apply(MetadataProvenance.EMPTY)));
+        PartitionInfo partition = cluster.partition(new TopicPartition(topicName, partitionId));
+
+        assertEquals(List.of(broker0, broker1), Arrays.stream(partition.replicas()).map(Node::id).toList());
+        assertEquals(List.of(broker1), Arrays.stream(partition.offlineReplicas()).map(Node::id).toList());
+        assertTrue(cluster.nodeById(broker1).isFenced());
     }
 
     private record Partition(int id, List<Integer> replicas, List<Uuid> dirs) {

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.utils;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -29,6 +27,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import org.junit.jupiter.api.Assertions;
@@ -158,7 +157,7 @@ public class TieredStorageTestUtils {
         // Set a small number of retry interval for retrying RemoteLogMetadataManager resources initialization to speed up the test
         overridingProps.setProperty(metadataConfigPrefix(testClassName, REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP), RLMM_INIT_RETRY_INTERVAL_MS.toString());
         // Set 2 log dirs to make sure JBOD feature is working correctly
-        overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().getAbsolutePath() + "," + TestUtils.tempDir().getAbsolutePath());
+        overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDirectory().getAbsolutePath() + "," + TestUtils.tempDirectory().getAbsolutePath());
         // Disable unnecessary log cleaner
         overridingProps.setProperty(CleanerConfig.LOG_CLEANER_ENABLE_PROP, "false");
 

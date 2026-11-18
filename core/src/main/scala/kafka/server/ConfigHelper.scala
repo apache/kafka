@@ -91,7 +91,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(resource, logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
+              // Internal configs are reported only when set on the topic itself, consistent with the CreateTopics response.
+              createResponseConfig(resource, logConfig, logConfig.overriddenConfigs, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -133,7 +134,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap, groupProps)
+              val groupConfig = GroupConfig.fromProps(config.extractGroupConfigMap(config.groupCoordinatorConfig), groupProps)
               createResponseConfig(resource, groupConfig, createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation)(_, _))
             }
 
@@ -219,7 +220,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val configEntryType = LogConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
+    val valueAsString = if (isSensitive)
+      null
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
+    }
     val allSynonyms = {
       val list = Option(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(name))
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))

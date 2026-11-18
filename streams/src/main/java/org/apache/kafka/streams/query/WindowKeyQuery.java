@@ -33,8 +33,8 @@ public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
     private final Optional<Instant> timeTo;
 
     private WindowKeyQuery(final K key,
-                           final Optional<Instant> timeTo,
-                           final Optional<Instant> timeFrom) {
+                           final Optional<Instant> timeFrom,
+                           final Optional<Instant> timeTo) {
         this.key = key;
         this.timeFrom = timeFrom;
         this.timeTo = timeTo;

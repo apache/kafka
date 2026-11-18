@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
@@ -175,7 +176,7 @@ public class StreamsMembershipManager implements RequestManager {
      * Subscription state object holding the current assignment the member has for the topology
      * of the Streams application.
      */
-    private final SubscriptionState subscriptionState;
+    private final ConsumerSubscriptionState subscriptionState;
 
     /**
      * Current state of this member as part of the consumer group, as defined in {@link MemberState}.
@@ -304,7 +305,7 @@ public class StreamsMembershipManager implements RequestManager {
     public StreamsMembershipManager(final String groupId,
                                     final Optional<String> groupInstanceId,
                                     final StreamsRebalanceData streamsRebalanceData,
-                                    final SubscriptionState subscriptionState,
+                                    final ConsumerSubscriptionState subscriptionState,
                                     final BackgroundEventHandler backgroundEventHandler,
                                     final LogContext logContext,
                                     final Time time,
@@ -555,6 +556,7 @@ public class StreamsMembershipManager implements RequestManager {
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
                 "left the group, so onAllTasksLost callback won't be triggered.", memberId, memberEpoch);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
@@ -775,6 +777,12 @@ public class StreamsMembershipManager implements RequestManager {
                 return;
             }
 
+            final Set<String> unknownSubtopologies = unknownSubtopologies(activeTasks, standbyTasks, warmupTasks);
+            if (!unknownSubtopologies.isEmpty()) {
+                failOnUnknownSubtopologies(unknownSubtopologies);
+                return;
+            }
+
             processAssignmentReceived(
                 toTasksAssignment(activeTasks),
                 toTasksAssignment(standbyTasks),
@@ -796,21 +804,35 @@ public class StreamsMembershipManager implements RequestManager {
         }
     }
 
+    /**
+     * Determines whether the group is ready from the statuses of a heartbeat response.
+     * <p>
+     * {@code ASSIGNMENT_DELAYED} only means that the coordinator deferred computing a new target assignment, so it
+     * keeps the previous readiness: a member that has not yet been ready (e.g., during the initial rebalance delay)
+     * stays not ready, while a ready member keeps processing the tasks it owns.
+     */
     private boolean isGroupReady(List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        boolean assignmentDelayed = false;
         if (statuses != null) {
             for (final StreamsGroupHeartbeatResponseData.Status status : statuses) {
                 switch (StreamsGroupHeartbeatResponse.Status.fromCode(status.statusCode())) {
                     case MISSING_SOURCE_TOPICS:
                     case MISSING_INTERNAL_TOPICS:
                     case INCORRECTLY_PARTITIONED_TOPICS:
-                    case ASSIGNMENT_DELAYED:
                         return false;
+                    case ASSIGNMENT_DELAYED:
+                        assignmentDelayed = true;
+                        break;
                     default:
                         // continue checking other statuses
                 }
             }
         }
-        return true;
+        if (assignmentDelayed) {
+            return targetAssignment.isGroupReady;
+        } else {
+            return true;
+        }
     }
 
     /**
@@ -945,6 +967,38 @@ public class StreamsMembershipManager implements RequestManager {
     private static Map<String, SortedSet<Integer>> toTasksAssignment(final List<StreamsGroupHeartbeatResponseData.TaskIds> taskIds) {
         return taskIds.stream()
             .collect(Collectors.toMap(StreamsGroupHeartbeatResponseData.TaskIds::subtopologyId, taskId -> new TreeSet<>(taskId.partitions())));
+    }
+
+    private Set<String> unknownSubtopologies(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
+                                             final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+                                             final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks) {
+        final Set<String> knownSubtopologies = streamsRebalanceData.subtopologies().keySet();
+        final Set<String> unknownSubtopologies = new TreeSet<>(); // use an ordered set for "proper" error logging
+        for (final List<StreamsGroupHeartbeatResponseData.TaskIds> tasks : List.of(activeTasks, standbyTasks, warmupTasks)) {
+            for (final StreamsGroupHeartbeatResponseData.TaskIds taskIds : tasks) {
+                if (!knownSubtopologies.contains(taskIds.subtopologyId())) {
+                    unknownSubtopologies.add(taskIds.subtopologyId());
+                }
+            }
+        }
+        return unknownSubtopologies;
+    }
+
+    private void failOnUnknownSubtopologies(final Set<String> unknownSubtopologies) {
+        final String errorMessage = String.format(
+            "Member %s of Streams group %s was assigned tasks of subtopologies %s, which are not part of the topology "
+                + "of this client (which has subtopologies %s). The assignment cannot be applied, because the "
+                + "partitions of a task are resolved through this client's own topology. This points at a problem on "
+                + "the group coordinator, for example in a custom broker-side task assignor, or at a topology that "
+                + "differs from the one the group was initialized with.",
+            memberId,
+            groupId,
+            unknownSubtopologies,
+            new TreeSet<>(streamsRebalanceData.subtopologies().keySet())
+        );
+        log.error(errorMessage);
+        backgroundEventHandler.add(new ErrorEvent(new KafkaException(errorMessage)));
+        transitionToFatal();
     }
 
     /**

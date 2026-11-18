@@ -17,10 +17,10 @@
 package kafka.server
 
 import kafka.api.SaslSetup
-import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 

@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -148,7 +147,7 @@ public final class QueryableStoreTypes {
     public static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
 
         KeyValueStoreType() {
-            super(Collections.singleton(ReadOnlyKeyValueStore.class));
+            super(Set.of(ReadOnlyKeyValueStore.class));
         }
 
         @Override
@@ -204,7 +203,7 @@ public final class QueryableStoreTypes {
     public static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
 
         WindowStoreType() {
-            super(Collections.singleton(ReadOnlyWindowStore.class));
+            super(Set.of(ReadOnlyWindowStore.class));
         }
 
         @Override
@@ -259,7 +258,7 @@ public final class QueryableStoreTypes {
     public static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
 
         SessionStoreType() {
-            super(Collections.singleton(ReadOnlySessionStore.class));
+            super(Set.of(ReadOnlySessionStore.class));
         }
 
         @Override

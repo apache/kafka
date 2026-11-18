@@ -107,6 +107,13 @@ public class CoordinatorRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(request);
         }
 
+        // When a request is in flight, remainingBackoffMs() can be 0, and returning 0 tells the network thread to
+        // poll again immediately which causes a busy spin. Wait instead by returning a PollResult with a Long.MAX_VALUE
+        // backoff
+        if (coordinatorRequestState.requestInFlight()) {
+            return EMPTY;
+        }
+
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
     }
 
