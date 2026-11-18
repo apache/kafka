@@ -52,6 +52,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -102,6 +103,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private final PollTimeSupplier pollTimeSupplier;
     private final QuorumControllerMetrics controllerMetrics;
     private final FaultHandler faultHandler;
+    private final IntConsumer migrationConflictHandler;
     private final QuorumFeatures quorumFeatures;
     private final RecordRedactor recordRedactor;
     /**
@@ -126,6 +128,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         LegacyPropagator propagator,
         Consumer<MetadataPublisher> initialZkLoadHandler,
         FaultHandler faultHandler,
+        IntConsumer migrationConflictHandler,
         QuorumFeatures quorumFeatures,
         KafkaConfigSchema configSchema,
         QuorumControllerMetrics controllerMetrics,
@@ -149,6 +152,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.firstPublish = false;
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
+        this.migrationConflictHandler = migrationConflictHandler;
         this.quorumFeatures = quorumFeatures;
         this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient, log::error);
         this.recordRedactor = new RecordRedactor(configSchema);
@@ -414,7 +418,19 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         @SuppressWarnings("ThrowableNotThrown")
         @Override
         public void handleException(Throwable e) {
-            if (e instanceof MigrationClientAuthException) {
+            if (e instanceof MigrationConflictException) {
+                transitionTo(MigrationDriverState.INACTIVE);
+                log.error("Encountered ZooKeeper conflict in {}", this, e);
+                // Renounce the epoch this event ran in, not whichever epoch is current by the time we get there
+                int epoch = this instanceof MigrationWriteEvent
+                    ? ((MigrationWriteEvent) this).eventLeaderAndEpoch().epoch()
+                    : KRaftMigrationDriver.this.curLeaderAndEpoch.epoch();
+                try {
+                    KRaftMigrationDriver.this.migrationConflictHandler.accept(epoch);
+                } catch (Throwable t) {
+                    log.error("Failed to handle ZooKeeper conflict in {}", this, t);
+                }
+            } else if (e instanceof MigrationClientAuthException) {
                 KRaftMigrationDriver.this.faultHandler.handleFault("Encountered ZooKeeper authentication in " + this, e);
             } else if (e instanceof MigrationClientException) {
                 log.info(String.format("Encountered ZooKeeper error during event %s. Will retry.", this), e.getCause());
@@ -482,7 +498,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    class MetadataChangeEvent extends MigrationEvent {
+    class MetadataChangeEvent extends MigrationEvent implements MigrationWriteEvent {
         private final MetadataDelta delta;
         private final MetadataImage image;
         private final MetadataProvenance provenance;
@@ -613,6 +629,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void handleException(Throwable e) {
             completionHandler.accept(e);
             super.handleException(e);
+        }
+
+        @Override
+        public LeaderAndEpoch eventLeaderAndEpoch() {
+            return leaderAndEpoch;
         }
 
         @Override
@@ -978,6 +999,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         private LegacyPropagator propagator;
         private Consumer<MetadataPublisher> initialZkLoadHandler;
         private FaultHandler faultHandler;
+        private IntConsumer migrationConflictHandler;
         private QuorumFeatures quorumFeatures;
         private KafkaConfigSchema configSchema;
         private QuorumControllerMetrics controllerMetrics;
@@ -1011,6 +1033,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
         public Builder setFaultHandler(FaultHandler faultHandler) {
             this.faultHandler = faultHandler;
+            return this;
+        }
+
+        public Builder setMigrationConflictHandler(IntConsumer migrationConflictHandler) {
+            this.migrationConflictHandler = migrationConflictHandler;
             return this;
         }
 
@@ -1058,6 +1085,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (faultHandler == null) {
                 throw new IllegalStateException("You must specify the FaultHandler.");
             }
+            if (migrationConflictHandler == null) {
+                throw new IllegalStateException("You must specify the migration conflict handler.");
+            }
             if (configSchema == null) {
                 throw new IllegalStateException("You must specify the KafkaConfigSchema.");
             }
@@ -1077,6 +1107,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 propagator,
                 initialZkLoadHandler,
                 faultHandler,
+                migrationConflictHandler,
                 quorumFeatures,
                 configSchema,
                 controllerMetrics,
