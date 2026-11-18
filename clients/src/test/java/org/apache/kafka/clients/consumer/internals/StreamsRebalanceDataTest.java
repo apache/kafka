@@ -98,6 +98,7 @@ public class StreamsRebalanceDataTest {
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            Set.of(new TopicPartition("topic", 1)),
             true
         );
 
@@ -113,16 +114,22 @@ public class StreamsRebalanceDataTest {
             UnsupportedOperationException.class,
             () -> assignment.warmupTasks().add(new StreamsRebalanceData.TaskId("subtopologyId2", 3))
         );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> assignment.assignedPartitions().add(new TopicPartition("topic", 2))
+        );
     }
 
     @Test
     public void assignmentShouldNotAcceptNulls() {
-        final Exception exception1 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(null, Set.of(), Set.of(), true));
+        final Exception exception1 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(null, Set.of(), Set.of(), Set.of(), true));
         assertEquals("Active tasks cannot be null", exception1.getMessage());
-        final Exception exception2 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), null, Set.of(), true));
+        final Exception exception2 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), null, Set.of(), Set.of(), true));
         assertEquals("Standby tasks cannot be null", exception2.getMessage());
-        final Exception exception3 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), Set.of(), null, true));
+        final Exception exception3 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), Set.of(), null, Set.of(), true));
         assertEquals("Warmup tasks cannot be null", exception3.getMessage());
+        final Exception exception4 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), null, true));
+        assertEquals("assigned partitions cannot be null", exception4.getMessage());
     }
 
     @Test
@@ -132,12 +139,14 @@ public class StreamsRebalanceDataTest {
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            Set.of(new TopicPartition("topic", 1)),
             true
         );
         final StreamsRebalanceData.Assignment assignmentEqual = new StreamsRebalanceData.Assignment(
             assignment.activeTasks(),
             assignment.standbyTasks(),
             assignment.warmupTasks(),
+            assignment.assignedPartitions(),
             assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalActiveTasks = new HashSet<>(assignment.activeTasks());
@@ -146,6 +155,7 @@ public class StreamsRebalanceDataTest {
             unequalActiveTasks,
             assignment.standbyTasks(),
             assignment.warmupTasks(),
+            assignment.assignedPartitions(),
             assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalStandbyTasks = new HashSet<>(assignment.standbyTasks());
@@ -154,6 +164,7 @@ public class StreamsRebalanceDataTest {
             assignment.activeTasks(),
             unequalStandbyTasks,
             assignment.warmupTasks(),
+            assignment.assignedPartitions(),
             assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalWarmupTasks = new HashSet<>(assignment.warmupTasks());
@@ -162,12 +173,23 @@ public class StreamsRebalanceDataTest {
             assignment.activeTasks(),
             assignment.standbyTasks(),
             unequalWarmupTasks,
+            assignment.assignedPartitions(),
+            assignment.isGroupReady()
+        );
+        Set<TopicPartition> unequalAssignedPartitions = new HashSet<>(assignment.assignedPartitions());
+        unequalAssignedPartitions.add(new TopicPartition("topic", 2));
+        final StreamsRebalanceData.Assignment assignmentUnequalAssignedPartitions = new StreamsRebalanceData.Assignment(
+            assignment.activeTasks(),
+            assignment.standbyTasks(),
+            assignment.warmupTasks(),
+            unequalAssignedPartitions,
             assignment.isGroupReady()
         );
         final StreamsRebalanceData.Assignment assignmentUnequalIsGroupReady = new StreamsRebalanceData.Assignment(
             assignment.activeTasks(),
             assignment.standbyTasks(),
             assignment.warmupTasks(),
+            assignment.assignedPartitions(),
             !assignment.isGroupReady()
         );
 
@@ -175,11 +197,13 @@ public class StreamsRebalanceDataTest {
         assertNotEquals(assignment, assignmentUnequalActiveTasks);
         assertNotEquals(assignment, assignmentUnequalStandbyTasks);
         assertNotEquals(assignment, assignmentUnequalWarmupTasks);
+        assertNotEquals(assignment, assignmentUnequalAssignedPartitions);
         assertNotEquals(assignment, assignmentUnequalIsGroupReady);
         assertEquals(assignment.hashCode(), assignmentEqual.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalActiveTasks.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalStandbyTasks.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalWarmupTasks.hashCode());
+        assertNotEquals(assignment.hashCode(), assignmentUnequalAssignedPartitions.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalIsGroupReady.hashCode());
     }
 
@@ -189,6 +213,7 @@ public class StreamsRebalanceDataTest {
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            Set.of(new TopicPartition("topic", 1)),
             true
         );
 

@@ -29,9 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Collections;
 import java.util.Set;
-import java.util.SortedSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -91,7 +89,7 @@ public class StreamsRebalanceListenerInvokerTest {
     @Test
     public void testInvokeMethodsWithNoListener() {
         assertNull(invoker.invokeAllTasksRevoked());
-        assertNull(invoker.invokeTasksAssigned(createMockAssignment(), createMockAssignedPartitions()));
+        assertNull(invoker.invokeTasksAssigned(createMockAssignment()));
         assertNull(invoker.invokeTasksRevoked(createMockTasks()));
         assertNull(invoker.invokeAllTasksLost());
     }
@@ -113,57 +111,53 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksAssignedWithListener() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        SortedSet<TopicPartition> assignedPartitions = createMockAssignedPartitions();
 
-        Exception result = invoker.invokeTasksAssigned(assignment, assignedPartitions);
+        Exception result = invoker.invokeTasksAssigned(assignment);
 
         assertNull(result);
-        verify(mockListener).onTasksAssigned(eq(assignment), eq(assignedPartitions));
+        verify(mockListener).onTasksAssigned(eq(assignment));
     }
 
     @Test
     public void testInvokeTasksAssignedWithWakeupException() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        SortedSet<TopicPartition> assignedPartitions = createMockAssignedPartitions();
 
         WakeupException wakeupException = new WakeupException();
-        doThrow(wakeupException).when(mockListener).onTasksAssigned(assignment, assignedPartitions);
+        doThrow(wakeupException).when(mockListener).onTasksAssigned(assignment);
 
         WakeupException thrownException = assertThrows(WakeupException.class,
-            () -> invoker.invokeTasksAssigned(assignment, assignedPartitions));
+            () -> invoker.invokeTasksAssigned(assignment));
 
         assertEquals(wakeupException, thrownException);
-        verify(mockListener).onTasksAssigned(eq(assignment), eq(assignedPartitions));
+        verify(mockListener).onTasksAssigned(eq(assignment));
     }
 
     @Test
     public void testInvokeTasksAssignedWithInterruptException() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        SortedSet<TopicPartition> assignedPartitions = createMockAssignedPartitions();
         InterruptException interruptException = new InterruptException("Test interrupt");
-        doThrow(interruptException).when(mockListener).onTasksAssigned(assignment, assignedPartitions);
+        doThrow(interruptException).when(mockListener).onTasksAssigned(assignment);
 
         InterruptException thrownException = assertThrows(InterruptException.class,
-            () -> invoker.invokeTasksAssigned(assignment, assignedPartitions));
+            () -> invoker.invokeTasksAssigned(assignment));
 
         assertEquals(interruptException, thrownException);
-        verify(mockListener).onTasksAssigned(eq(assignment), eq(assignedPartitions));
+        verify(mockListener).onTasksAssigned(eq(assignment));
     }
 
     @Test
     public void testInvokeTasksAssignedWithOtherException() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        SortedSet<TopicPartition> assignedPartitions = createMockAssignedPartitions();
         RuntimeException runtimeException = new RuntimeException("Test exception");
-        doThrow(runtimeException).when(mockListener).onTasksAssigned(assignment, assignedPartitions);
+        doThrow(runtimeException).when(mockListener).onTasksAssigned(assignment);
 
-        Exception result = invoker.invokeTasksAssigned(assignment, assignedPartitions);
+        Exception result = invoker.invokeTasksAssigned(assignment);
 
         assertEquals(runtimeException, result);
-        verify(mockListener).onTasksAssigned(eq(assignment), eq(assignedPartitions));
+        verify(mockListener).onTasksAssigned(eq(assignment));
     }
 
     @Test
@@ -270,12 +264,9 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> activeTasks = createMockTasks();
         Set<StreamsRebalanceData.TaskId> standbyTasks = Set.of();
         Set<StreamsRebalanceData.TaskId> warmupTasks = Set.of();
+        Set<TopicPartition> assignedPartitions = Set.of();
 
-        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, true);
-    }
-
-    private SortedSet<TopicPartition> createMockAssignedPartitions() {
-        return Collections.emptySortedSet();
+        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, true);
     }
 
     private Set<StreamsRebalanceData.TaskId> createMockTasks() {

@@ -68,7 +68,6 @@ import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResumePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.StreamsApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
@@ -313,10 +312,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          */
         private void process(final StreamsTasksAssignedEvent event) {
             // Apply assignment via ApplyAssignmentEvent and wait for it to complete
-            ApplyAssignmentEvent applyEvent = new StreamsApplyAssignmentEvent(
+            ApplyAssignmentEvent applyEvent = new ApplyAssignmentEvent(
                 event.assignedPartitions(),
-                event.addedPartitions(),
-                event.assignment()
+                event.addedPartitions()
             );
             try {
                 applicationEventHandler.addAndGet(applyEvent);
@@ -330,7 +328,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // Invoke the onTasksAssigned callback and notify the background thread
             StreamsOnTasksAssignedCallbackCompletedEvent invokedEvent = invokeOnTasksAssignedCallback(
                 event.assignment(),
-                event.assignedPartitions(),
                 event.future()
             );
             applicationEventHandler.add(invokedEvent);
@@ -347,9 +344,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         private StreamsOnTasksAssignedCallbackCompletedEvent invokeOnTasksAssignedCallback(final StreamsRebalanceData.Assignment assignment,
-                                                                                           final SortedSet<TopicPartition> assignedPartitions,
                                                                                            final CompletableFuture<Void> future) {
-            final Optional<Exception> exceptionFromCallback = Optional.ofNullable(streamsRebalanceListenerInvoker().invokeTasksAssigned(assignment, assignedPartitions));
+            final Optional<Exception> exceptionFromCallback = Optional.ofNullable(streamsRebalanceListenerInvoker().invokeTasksAssigned(assignment));
             final Optional<KafkaException> error = exceptionFromCallback.map(e -> ConsumerUtils.maybeWrapAsKafkaException(e, "Task assignment callback throws an error"));
             return new StreamsOnTasksAssignedCallbackCompletedEvent(future, error);
         }

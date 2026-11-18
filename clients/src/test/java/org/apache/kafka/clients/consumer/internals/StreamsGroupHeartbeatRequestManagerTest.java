@@ -66,7 +66,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -993,6 +992,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmupTaskId), // this is technically incorrect, but ensures that `acceptable.recovery.lag == -1` is tested correctly
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1042,6 +1042,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmupTaskId),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1133,6 +1134,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(hotWarmup, coldWarmup),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1202,6 +1204,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(standbyTask),
             Set.of(warmupTask),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1258,6 +1261,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmupTaskId),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1301,6 +1305,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmupTaskId),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1580,6 +1585,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(task), // moved from standby to active so the assignment differs -> assignmentChanged
             Set.of(),
             Set.of(),     // no warmups, so hasAtLeastOneHotWarmupTask cannot be a trigger later
+            Set.of(
+                new TopicPartition(SOURCE_TOPIC_1, 0),
+                new TopicPartition(SOURCE_TOPIC_2, 0),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0)
+            ),
             true
         ));
         final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
@@ -1716,6 +1727,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmup),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1769,6 +1781,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(standbyTaskId),
             Set.of(),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1799,6 +1812,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(),
             Set.of(warmupTaskId),
+            Set.of(),
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1971,6 +1985,17 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
                 ),
+                Set.of(
+                    new TopicPartition(SOURCE_TOPIC_1, 0),
+                    new TopicPartition(SOURCE_TOPIC_1, 1),
+                    new TopicPartition(SOURCE_TOPIC_2, 0),
+                    new TopicPartition(SOURCE_TOPIC_2, 1),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 1),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 1),
+                    new TopicPartition(SOURCE_TOPIC_3, 2)
+                ),
                 true
             )
         );
@@ -2021,6 +2046,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 ),
                 Set.of(
                 ),
+                Set.of(
+                    new TopicPartition(SOURCE_TOPIC_1, 0),
+                    new TopicPartition(SOURCE_TOPIC_2, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0)
+                ),
                 true
             )
         );
@@ -2068,6 +2099,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         final Set<StreamsRebalanceData.TaskId> otherActiveTasks =
             Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0));
+        final Set<TopicPartition> otherAssignedPartitions = Set.of(
+            new TopicPartition(SOURCE_TOPIC_1, 0),
+            new TopicPartition(SOURCE_TOPIC_2, 0),
+            new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
+            new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0)
+        );
         final Set<StreamsRebalanceData.TaskId> otherStandbyTasks =
             Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 1));
         final Set<StreamsRebalanceData.TaskId> otherWarmupTasks =
@@ -2080,13 +2117,17 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 switch (changingRole) {
                     case ACTIVE:
                         return new StreamsRebalanceData.Assignment(
-                            tasksOfChangingRole, otherStandbyTasks, otherWarmupTasks, true);
+                            tasksOfChangingRole, otherStandbyTasks, otherWarmupTasks,
+                            tasksOfChangingRole.stream()
+                                .map(task -> new TopicPartition(SOURCE_TOPIC_3, task.partitionId()))
+                                .collect(Collectors.toSet()),
+                            true);
                     case STANDBY:
                         return new StreamsRebalanceData.Assignment(
-                            otherActiveTasks, tasksOfChangingRole, otherWarmupTasks, true);
+                            otherActiveTasks, tasksOfChangingRole, otherWarmupTasks, otherAssignedPartitions, true);
                     default:
                         return new StreamsRebalanceData.Assignment(
-                            otherActiveTasks, otherStandbyTasks, tasksOfChangingRole, true);
+                            otherActiveTasks, otherStandbyTasks, tasksOfChangingRole, otherAssignedPartitions, true);
                 }
             };
         final StreamsRebalanceData.Assignment withoutTheTask = assignmentWhereRoleHolds.apply(Set.of());
@@ -2162,6 +2203,17 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 3),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
+                ),
+                Set.of(
+                    new TopicPartition(SOURCE_TOPIC_1, 0),
+                    new TopicPartition(SOURCE_TOPIC_1, 1),
+                    new TopicPartition(SOURCE_TOPIC_2, 0),
+                    new TopicPartition(SOURCE_TOPIC_2, 1),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 1),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0),
+                    new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 1),
+                    new TopicPartition(SOURCE_TOPIC_3, 2)
                 ),
                 true
             )
@@ -2934,12 +2986,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private static ConsumerConfig config() {
-        Properties prop = new Properties();
-        prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
-        prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        return new ConsumerConfig(prop);
+        return new ConsumerConfig(Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+            ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS),
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+        ));
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {

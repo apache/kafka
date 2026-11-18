@@ -179,22 +179,27 @@ public class StreamsRebalanceData {
 
         private final Set<TaskId> warmupTasks;
 
+        private final Set<TopicPartition> assignedPartitions;
+
         private final boolean isGroupReady;
 
         private Assignment() {
             this.activeTasks = Set.of();
             this.standbyTasks = Set.of();
             this.warmupTasks = Set.of();
+            this.assignedPartitions = Set.of();
             this.isGroupReady = false;
         }
 
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
                           final Set<TaskId> warmupTasks,
+                          final Set<TopicPartition> assignedPartitions,
                           final boolean isGroupReady) {
             this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
             this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
             this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
+            this.assignedPartitions = Set.copyOf(Objects.requireNonNull(assignedPartitions, "assigned partitions cannot be null"));
             this.isGroupReady = isGroupReady;
         }
 
@@ -208,6 +213,10 @@ public class StreamsRebalanceData {
 
         public Set<TaskId> warmupTasks() {
             return warmupTasks;
+        }
+
+        public Set<TopicPartition> assignedPartitions() {
+            return assignedPartitions;
         }
 
         public boolean isGroupReady() {
@@ -226,16 +235,17 @@ public class StreamsRebalanceData {
             return Objects.equals(activeTasks, that.activeTasks)
                 && Objects.equals(standbyTasks, that.standbyTasks)
                 && Objects.equals(warmupTasks, that.warmupTasks)
+                && Objects.equals(assignedPartitions, that.assignedPartitions)
                 && isGroupReady == that.isGroupReady;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return Objects.hash(activeTasks, standbyTasks, warmupTasks, assignedPartitions, isGroupReady);
         }
 
         public Assignment copy() {
-            return new Assignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return new Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, isGroupReady);
         }
 
         @Override
@@ -244,6 +254,7 @@ public class StreamsRebalanceData {
                 "activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
+                ", assignedPartitions=" + assignedPartitions +
                 ", isGroupReady=" + isGroupReady +
                 '}';
         }

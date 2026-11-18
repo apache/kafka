@@ -3960,7 +3960,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment, assignedPartitions: util.SortedSet[TopicPartition]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
         override def onAllTasksLost(): Unit = ()
       }
     )
