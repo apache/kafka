@@ -449,14 +449,19 @@ public class StoreChangelogReader implements ChangelogReader {
 
     // the restore end offset if known: for an active task the end offset of the partition, capped at the committed
     // offset of the source topic for a source-topic changelog, and for a standby task on a source-topic changelog the
-    // committed offset; otherwise one past the store's end offset, which is the last offset of the changelog
+    // committed offset; otherwise one past the store's end offset, which is the last offset of the changelog; unknown
+    // for a registered standby changelog on a source topic, whose restore end offset is still the 0L from register()
     @Override
     public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
         final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
         for (final Map.Entry<TopicPartition, ChangelogMetadata> entry : changelogs.entrySet()) {
             final ChangelogMetadata metadata = entry.getValue();
             Long endOffset = metadata.restoreEndOffset;
-            if (endOffset == null && metadata.storeMetadata.endOffset() != null) {
+            if (metadata.changelogState == ChangelogState.REGISTERED &&
+                metadata.stateManager.taskType() == Task.TaskType.STANDBY &&
+                metadata.stateManager.changelogAsSource(entry.getKey())) {
+                endOffset = null;
+            } else if (endOffset == null && metadata.storeMetadata.endOffset() != null) {
                 endOffset = metadata.storeMetadata.endOffset() + 1L;
             }
             endOffsets.put(entry.getKey(), endOffset);
@@ -922,6 +927,25 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    /**
+     * Removes the standby changelogs whose committed offset was not found from {@code newPartitionsToRestore}, so they
+     * stay registered and the next loop retries the lookup, like for an active changelog without an end offset.
+     */
+    private void removeStandbyChangelogsWithoutCommittedOffset(
+        final Set<ChangelogMetadata> newPartitionsToRestore,
+        final Set<TopicPartition> partitionsToFindCommittedOffset,
+        final Map<TopicPartition, Long> committedOffsets
+    ) {
+        for (final TopicPartition partition : partitionsToFindCommittedOffset) {
+            final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+            if (changelogMetadata.stateManager.taskType() == Task.TaskType.STANDBY && !committedOffsets.containsKey(partition)) {
+                newPartitionsToRestore.remove(changelogMetadata);
+
+                log.debug("Committed offset for changelog {} cannot be found; will retry in the next time.", partition);
+            }
+        }
+    }
+
     private void initializeChangelogs(final Map<TaskId, Task> tasks,
                                       final Set<ChangelogMetadata> newPartitionsToRestore) {
         // for those changelog partitions whose tasks are not included, in means those tasks
@@ -983,6 +1007,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 log.info("End offset for changelog {} cannot be found; will retry in the next time.", partition);
             }
         }
+
+        removeStandbyChangelogsWithoutCommittedOffset(newPartitionsToRestore, newPartitionsToFindCommittedOffset, committedOffsets);
 
         // try initializing limit offsets for standby tasks for the first time
         if (!committedOffsets.isEmpty()) {
