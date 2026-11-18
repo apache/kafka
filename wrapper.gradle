@@ -82,7 +82,7 @@ task bootstrapWrapper() {
         // TLSv1/TLSv1.1 support some time ago, so older versions of curl (built against OpenSSL library that
         // doesn't support TLSv1.2) would fail to fetch the jar.
         def commits = new JsonSlurper().parse(fetchBytes(
-            "https://api.github.com/repos/gradle/gradle/commits?sha=master&path=gradle/wrapper/gradle-wrapper.jar&per_page=30"))*.sha
+            "https://api.github.com/repos/gradle/gradle/commits?sha=master&path=gradle/wrapper/gradle-wrapper.jar&per_page=100"))*.sha
         String wrapperJarCommit = commits.find {
             sha256(fetchBytes("https://raw.githubusercontent.com/gradle/gradle/$it/gradle/wrapper/gradle-wrapper.jar")) == wrapperChecksum
         }
