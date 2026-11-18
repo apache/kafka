@@ -1409,9 +1409,12 @@ public class GroupMetadataManager {
         }
         classicGroup.createClassicGroupRecords(records);
 
+        // The consumer group no longer exists after the conversion, so we cancel any
+        // in-flight assignor run.
+        cancelTargetAssignmentUpdate(consumerGroup.groupId());
+
         // Directly update the states instead of replaying the records because
         // the classicGroup reference is needed for triggering the rebalance.
-        cancelTargetAssignmentUpdate(consumerGroup.groupId());
         removeGroup(consumerGroup.groupId());
         groups.put(consumerGroup.groupId(), classicGroup);
 
