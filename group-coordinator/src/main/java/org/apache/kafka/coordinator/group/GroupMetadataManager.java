@@ -2315,6 +2315,8 @@ public class GroupMetadataManager {
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
+            // No active task needs to stay with its holder: if the intermediate assignment differs from the assigned
+            // tasks, it starts a new epoch that every member reconciles to, and otherwise it moves nothing.
             refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology, false);
             if (differsFromAssignedTasks(refinedGroupAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
@@ -4806,9 +4808,10 @@ public class GroupMetadataManager {
         if (cached != null) {
             return cached;
         }
-        // If the group had reached this epoch when the coordinator loaded it, its intermediate assignment is lost, and
-        // members may already have reconciled to the epoch under it. They are told nothing new within the epoch, so a
-        // member that holds an active task would never release it to another member.
+        // If the assignment epoch is not newer than the one the group had when the coordinator loaded it, its
+        // intermediate assignment was derived by a previous coordinator and is lost. Members may already have reconciled
+        // to this epoch, and a member that has is not asked to release any task until the next epoch. No active task can
+        // move to another member before then, so every active task stays with the member that holds it.
         final Map<String, TasksTuple> refinedAssignment = refineAssignment(
             group, targetAssignment, configuredTopology, group.isAssignmentEpochFromBeforeLoad(assignmentEpoch));
         maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);

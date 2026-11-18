@@ -248,8 +248,10 @@ public class StreamsGroup implements Group {
 
     /**
      * The assignment epoch of the group when the coordinator loaded it, or -1 if the group was created after the load.
-     * The intermediate assignment of this epoch and of earlier ones was derived by a previous coordinator and is lost,
-     * while members may already have reconciled to it.
+     * The intermediate assignments of this epoch and of earlier ones were derived by a previous coordinator and are lost.
+     * Members may already have reconciled to such an epoch, and a member that has is not asked to release any task
+     * until the next epoch. So when the coordinator derives the intermediate assignment of such an epoch again, it must
+     * not move an active task from one member to another.
      */
     private int assignmentEpochAtLoad = -1;
 

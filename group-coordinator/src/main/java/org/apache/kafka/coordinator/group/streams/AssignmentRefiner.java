@@ -76,10 +76,8 @@ public interface AssignmentRefiner {
      *        implementation must not newly place a warm-up task on a member that is not known to report them, but a
      *        member of unknown version may keep a warm-up task that its process already holds.
      * @param keepActiveTasks
-     *        Whether every active task has to stay with the member that holds it. The coordinator sets this when it
-     *        derives the intermediate assignment again for an assignment epoch that members may already have
-     *        reconciled to, after it loaded the group. Within an epoch, a member that has reconciled to it is told
-     *        nothing new, so it would never release a task to another member.
+     *        Whether every active task has to stay with the member that holds it. If set, the intermediate assignment
+     *        moves no active task from one member to another.
      * @param subtopologies
      *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
      *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator

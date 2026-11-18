@@ -580,7 +580,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         // members' restore progress is unknown, so we can't tell which target owner is best to warm up. We wait for all
         // members, not only for the target owner, because a warm-up task stays once placed: otherwise the members that
         // heartbeat first would get the warm-up tasks. Warm-up tasks that members already hold are kept. A sibling's
-        // standby task that would move onto the target owner is borrowed where it sits instead, which costs no slot.
+        // standby task that would move onto the target owner is borrowed where it sits instead, which costs no warm-up
+        // slot.
         for (final StagedMigration migration : decisions.stagedMigrations()) {
             final Warming warming = warmingOf(migration);
             switch (warming) {
