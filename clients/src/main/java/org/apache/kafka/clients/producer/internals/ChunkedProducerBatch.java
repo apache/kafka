@@ -49,7 +49,8 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * attached chunk capacity already has room (always the case for an empty batch, whose stream
      * is pre-sized for the first record). Positive when the record is within the batch-size limit
      * but the attached chunks lack capacity — the accumulator then allocates exactly the missing
-     * bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
+     * bytes (rounded up to whole chunks, or completed by the pool's smaller remainder chunk) and attaches
+     * them via {@link #addBuffers} before retrying.
      * <p>
      * TODO (KAFKA-20859): improve by reusing size calculation.
      */

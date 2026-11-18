@@ -120,6 +120,26 @@ public class ChunkedRecordAccumulatorTest {
         accum.close();
     }
 
+    /**
+     * When the buffer memory is not a multiple of the chunk size, a record larger than a chunk but
+     * smaller than the buffer memory is still accepted, using the leftover memory as a smaller chunk.
+     */
+    @Test
+    public void testRecordUsesBufferMemoryNotAlignedToChunkSize() throws Exception {
+        int chunkSize = 256;
+        long totalMemory = chunkSize + 100;
+        ChunkedRecordAccumulator accum = newAccumulator(1024, chunkSize, totalMemory, Compression.NONE);
+
+        accum.append(topic, partition1, 0L, key, new byte[chunkSize], Record.EMPTY_HEADERS, null,
+                maxBlockTimeMs, time.milliseconds(), cluster);
+
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        assertEquals(1, dq.size());
+        assertNotNull(dq.peekFirst());
+        assertEquals(1, dq.peekFirst().recordCount);
+        accum.close();
+    }
+
     @Test
     public void testSmallFollowupRecordFitsWithoutExtension() throws Exception {
         int chunkSize = 256;

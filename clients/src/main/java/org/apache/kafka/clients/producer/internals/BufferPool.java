@@ -58,13 +58,20 @@ public class BufferPool {
 
     private final long totalMemory;
     private final int poolableSize;
-    /** Lock held for any read or write of {@link #free}, {@link #waiters}, {@link #nonPooledAvailableMemory}, or {@link #closed}. */
+    /** Lock held for any read or write of {@link #free}, {@link #pooledRemainder}, {@link #waiters}, {@link #nonPooledAvailableMemory}, or {@link #closed}. */
     private final ReentrantLock lock;
     /** Pooled buffers of capacity {@link #poolableSize}, available for reuse. Guarded by {@link #lock}. */
     private final Deque<ByteBuffer> free;
+    /**
+     * The pooled remainder chunk, or null if it is not pooled. Only in {@link AllocationMode#INCREMENTAL} mode, when
+     * {@code totalMemory} is not a multiple of the chunk size: {@link #allocateChunks} allocates the last
+     * {@code totalMemory % poolableSize} bytes of non-pooled memory as this smaller chunk, and {@link #deallocate}
+     * pools it here once it is returned, recognizing it by its capacity. Guarded by {@link #lock}.
+     */
+    private ByteBuffer pooledRemainder;
     /** FIFO queue of pending allocation requests; the longest-waiting thread is woken first. Guarded by {@link #lock}. */
     private final Deque<Condition> waiters;
-    /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize. Guarded by {@link #lock}. */
+    /** Total available memory is the sum of nonPooledAvailableMemory, the number of byte buffers in free * poolableSize, and the capacity of pooledRemainder. Guarded by {@link #lock}. */
     private long nonPooledAvailableMemory;
     private final Metrics metrics;
     private final Time time;
@@ -255,22 +262,26 @@ public class BufferPool {
     }
 
     /**
-     * Allocate {@code ceil(totalSize / poolableSize)} poolable-sized buffers atomically, mirroring
+     * Allocate chunks covering at least {@code totalSize} bytes atomically, mirroring
      * {@link #allocate}: satisfied immediately if memory is available, else blocks up to
      * {@code maxTimeToBlockMs} for the whole request (FIFO on {@link #waiters}). The reservation is
      * tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled from {@link #free}.
      * Any failure refunds the whole reservation and signals the next waiter before the exception
      * propagates, so a failed request leaves nothing reserved.
      * <p>
+     * Chunks are poolable-sized, except that when {@code totalMemory} is not a multiple of the chunk
+     * size, the last {@code totalMemory % poolableSize} bytes of non-pooled memory are allocated as a
+     * smaller remainder chunk, which is then pooled in {@link #pooledRemainder}. This way the whole
+     * buffer memory can be used. The remainder chunk is only handed out when no whole chunk is left.
+     * <p>
      * Used by the incremental buffer.memory allocation strategy; the poolable size is the chunk size.
      *
      * @param totalSize        minimum total bytes of capacity required across the returned chunks
      * @param maxTimeToBlockMs maximum time in milliseconds to block waiting for memory
-     * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
-     *         {@code poolableSize()}
+     * @return {@code ByteBuffer}s with a total capacity of at least {@code totalSize}, each of capacity
+     *         {@code poolableSize()} except possibly the remainder chunk
      * @throws InterruptedException     if interrupted while waiting
-     * @throws IllegalArgumentException if {@code totalSize <= 0}, or if the request rounded up to
-     *         whole chunks exceeds {@code totalMemory()}
+     * @throws IllegalArgumentException if {@code totalSize <= 0}, or if it exceeds {@code totalMemory()}
      * @throws BufferExhaustedException if the request can't be satisfied within {@code maxTimeToBlockMs}
      * @throws KafkaException           if the pool is closed during the wait
      */
@@ -280,15 +291,21 @@ public class BufferPool {
                 + " allocation mode; use allocate()");
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
+        if (totalSize > this.totalMemory) {
+            throw new IllegalArgumentException("Attempt to allocate " + totalSize
+                + " bytes, but there is a hard limit of " + this.totalMemory + " on memory allocations.");
+        }
 
         int chunkSize = poolableSize();
         int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
-        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, memoryRequired);
 
         // Chunks taken from the free list. The remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
         List<ByteBuffer> pooled = new ArrayList<>(numChunks);
+        long nonPoolReserved = 0;
+        // The pooled remainder chunk, if this request takes it.
+        ByteBuffer remainder = null;
 
         lock.lock();
         if (this.closed) {
@@ -296,39 +313,48 @@ public class BufferPool {
             throw new KafkaException("Producer closed while allocating memory");
         }
         try {
-            long freeListBytes = (long) free.size() * chunkSize;
-            if (this.nonPooledAvailableMemory + freeListBytes >= memoryRequired) {
+            long freeListBytes = (long) free.size() * chunkSize + pooledRemainderBytes();
+            if (this.nonPooledAvailableMemory + freeListBytes >= totalSize) {
                 // Enough memory available to allocate the chunks needed
                 while (pooled.size() < numChunks && !free.isEmpty())
                     pooled.add(free.pollFirst());
                 long remainingBytes = memoryRequired - (long) pooled.size() * chunkSize;
                 if (remainingBytes > 0) {
                     // remainingBytes > 0 means the free list was fully drained into `pooled`, so the
-                    // remainder comes entirely from non-pooled memory (sufficient per the check above).
-                    this.nonPooledAvailableMemory -= remainingBytes;
+                    // remainder comes from non-pooled memory. It may hold less than whole chunks need
+                    // if only the remainder is left: then the last chunk is smaller.
+                    nonPoolReserved = Math.min(remainingBytes, this.nonPooledAvailableMemory);
+                    this.nonPooledAvailableMemory -= nonPoolReserved;
+                }
+                long coveredBytes = (long) pooled.size() * chunkSize + nonPoolReserved;
+                if (coveredBytes < totalSize) {
+                    // Nothing else is left, so the pooled remainder covers the rest (sufficient per the check above).
+                    remainder = this.pooledRemainder;
+                    this.pooledRemainder = null;
                 }
             } else {
                 // Not enough memory available, so we wait to acquire the memory needed for all the chunks.
                 // Same as allocate, but for the whole multi-chunk request. A single Condition is added to
                 // the waiter's list to ensure FIFO fairness at the request level.
                 //
-                // `nonPoolAccumulated` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
-                // already taken live in `pooled`), and is always a whole-chunk multiple. If the wait
+                // `nonPoolReserved` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
+                // already taken live in `pooled`). It is reserved in whole chunks, so it is a whole-chunk
+                // multiple until the smaller last chunk that completes the request is reserved. The pooled
+                // remainder is likewise only taken to complete the request. If the wait
                 // does not complete (timeout / close / interrupt), the finally refunds the whole
-                // reservation: `nonPoolAccumulated` back to non-pooled memory, `pooled` back to the free chunks list.
-                long nonPoolAccumulated = 0;
+                // reservation: `nonPoolReserved` back to non-pooled memory, `pooled` back to the free chunks list.
                 boolean allocationCompleted = false;
                 Condition moreMemory = lock.newCondition();
                 try {
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
                     waiters.addLast(moreMemory);
-                    while ((long) pooled.size() * chunkSize + nonPoolAccumulated < memoryRequired) {
+                    while (remainder == null && (long) pooled.size() * chunkSize + nonPoolReserved < totalSize) {
                         // Not recording the buffer-exhausted metric on timeout (recordExhaustedOnTimeout=false):
                         // this may be the extension path, which recovers without dropping the record, so the
                         // caller records the drop if needed.
                         remainingTimeToBlockNs -= awaitMemory(moreMemory, remainingTimeToBlockNs, false,
-                            () -> "Failed to allocate " + memoryRequired + " bytes (" + numChunks + " chunks of "
-                                + chunkSize + ") within the configured max blocking time " + maxTimeToBlockMs
+                            () -> "Failed to allocate " + totalSize + " bytes in chunks of up to "
+                                + chunkSize + " bytes within the configured max blocking time " + maxTimeToBlockMs
                                 + " ms. Total memory: " + totalMemory() + " bytes. Available memory: "
                                 + availableMemory() + " bytes.");
 
@@ -337,24 +363,35 @@ public class BufferPool {
                         // iteration, hand that raw reservation back to the pool.
                         while (pooled.size() < numChunks && !free.isEmpty()) {
                             pooled.add(free.pollFirst());
-                            if (nonPoolAccumulated >= chunkSize) { // nonPoolAccumulated is always chunk-aligned
-                                nonPoolAccumulated -= chunkSize;
+                            if (nonPoolReserved >= chunkSize) { // nonPoolReserved is chunk-aligned while waiting
+                                nonPoolReserved -= chunkSize;
                                 this.nonPooledAvailableMemory += chunkSize;
                             }
                         }
                         // Reserve non-pooled memory for the still-uncovered chunks, in whole chunks
                         // (the buffers themselves are allocated after the lock is released).
-                        while (pooled.size() + (int) (nonPoolAccumulated / chunkSize) < numChunks
+                        while (pooled.size() + (int) (nonPoolReserved / chunkSize) < numChunks
                                 && this.nonPooledAvailableMemory >= chunkSize) {
                             this.nonPooledAvailableMemory -= chunkSize;
-                            nonPoolAccumulated += chunkSize;
+                            nonPoolReserved += chunkSize;
+                        }
+                        // If less than a whole chunk is missing, take the remainder, raw or pooled, but only
+                        // if it completes the request.
+                        long missingBytes = totalSize - (long) pooled.size() * chunkSize - nonPoolReserved;
+                        if (missingBytes > 0 && this.nonPooledAvailableMemory >= missingBytes) {
+                            nonPoolReserved += this.nonPooledAvailableMemory;
+                            this.nonPooledAvailableMemory = 0;
+                        } else if (missingBytes > 0 && this.pooledRemainder != null
+                                && this.pooledRemainder.capacity() >= missingBytes) {
+                            remainder = this.pooledRemainder;
+                            this.pooledRemainder = null;
                         }
                     }
                     allocationCompleted = true;
                 } finally {
                     if (!allocationCompleted) {
                         // Refund all that was reserved (pooled chunks and non-pooled bytes)
-                        this.nonPooledAvailableMemory += nonPoolAccumulated;
+                        this.nonPooledAvailableMemory += nonPoolReserved;
                         for (ByteBuffer chunk : pooled)
                             free.addFirst(chunk);
                         pooled.clear();
@@ -370,15 +407,18 @@ public class BufferPool {
             }
         }
 
-        // Allocate raw chunks for the reserved non-pooled portion outside the lock. On error,
-        // refund all reserved bytes (memoryRequired) and let the next waiter try.
-        int chunksStillNeeded = numChunks - pooled.size();
+        // Allocate raw chunks for the reserved non-pooled portion outside the lock: whole chunks, and a
+        // smaller last one for what is left. On error, refund all reserved bytes and let the next waiter try.
         List<ByteBuffer> result = new ArrayList<>(numChunks);
         result.addAll(pooled);
         boolean error = true;
         try {
-            for (int i = 0; i < chunksStillNeeded; i++)
-                result.add(allocateByteBuffer(chunkSize));
+            for (long left = nonPoolReserved; left > 0; left -= chunkSize) {
+                result.add(allocateByteBuffer((int) Math.min(left, chunkSize)));
+            }
+            if (remainder != null) {
+                result.add(remainder);
+            }
             error = false;
             return result;
         } finally {
@@ -386,19 +426,10 @@ public class BufferPool {
                 // The pooled buffers we already drained are also lost on this path; mirror
                 // safeAllocateByteBuffer's behaviour (the bytes return, the ByteBuffer
                 // instances become garbage).
-                releaseReservedBytes(memoryRequired);
+                releaseReservedBytes((long) pooled.size() * chunkSize + nonPoolReserved
+                    + (remainder != null ? remainder.capacity() : 0));
             }
         }
-    }
-
-    /**
-     * Throw if the request memory rounded up to whole chunks would exceed the pool.
-     */
-    private void throwIfChunksNeededExceedsPool(int totalSize, int numChunks, int chunkSize, long memoryRequired) {
-        if (memoryRequired > totalMemory())
-            throw new IllegalArgumentException("Attempt to allocate " + totalSize + " bytes ("
-                + numChunks + " chunks of " + chunkSize + " = " + memoryRequired + " bytes), but the "
-                + "hard limit on memory allocations is " + totalMemory() + ".");
     }
 
     // Protected for testing
@@ -420,7 +451,7 @@ public class BufferPool {
      * Must be called with {@link #lock} held. No-op if no waiters or no memory is free.
      */
     private void signalNextWaiterIfMemoryAvailable() {
-        if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+        if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty() && this.pooledRemainder == null) && !this.waiters.isEmpty())
             this.waiters.peekFirst().signal();
     }
 
@@ -471,8 +502,8 @@ public class BufferPool {
     }
 
     /**
-     * Return buffers to the pool. If they are of the poolable size add them to the free list, otherwise just mark the
-     * memory as free.
+     * Return buffers to the pool. If they are of the poolable size add them to the free list, if it is the remainder
+     * chunk pool it in {@link #pooledRemainder}, otherwise just mark the memory as free.
      *
      * @param buffer The buffer to return
      * @param size The size of the buffer to mark as deallocated, note that this may be smaller than buffer.capacity
@@ -484,6 +515,10 @@ public class BufferPool {
             if (size == this.poolableSize && size == buffer.capacity()) {
                 buffer.clear();
                 this.free.add(buffer);
+            } else if (this.allocationMode == AllocationMode.INCREMENTAL && this.pooledRemainder == null
+                    && size == buffer.capacity() && size == this.totalMemory % this.poolableSize) {
+                buffer.clear();
+                this.pooledRemainder = buffer;
             } else {
                 this.nonPooledAvailableMemory += size;
             }
@@ -506,7 +541,7 @@ public class BufferPool {
     public long availableMemory() {
         lock.lock();
         try {
-            return this.nonPooledAvailableMemory + freeSize() * (long) this.poolableSize;
+            return this.nonPooledAvailableMemory + freeSize() * (long) this.poolableSize + pooledRemainderBytes();
         } finally {
             lock.unlock();
         }
@@ -515,6 +550,13 @@ public class BufferPool {
     // Protected for testing.
     protected int freeSize() {
         return this.free.size();
+    }
+
+    /**
+     * The capacity of {@link #pooledRemainder}, or 0 if it is not pooled. Must be called with {@link #lock} held.
+     */
+    private int pooledRemainderBytes() {
+        return this.pooledRemainder != null ? this.pooledRemainder.capacity() : 0;
     }
 
     /**
