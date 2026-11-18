@@ -419,7 +419,8 @@ class Benchmark(Test):
 
         The first share group in a cluster creates the __share_group_state topic. This can take
         longer than the timeout of the perf tool, so it must be done before the measured run.
-        The record is released, so the measured run can still read it.
+        The record is released, so the measured run can still read it. Only one record is acquired,
+        so a crashed warm-up does not leave other records locked.
         """
         node = self.kafka.nodes[0]
         common_args = "--bootstrap-server %s --topic %s --command-config %s" % \
@@ -429,14 +430,15 @@ class Benchmark(Test):
             node.account.ssh("echo warmup | %s %s" % (self.kafka.path.script("kafka-console-producer.sh", node), common_args),
                              allow_fail=False)
 
-        cmd = "%s %s --group %s --max-messages 1 --release --timeout-ms 30000 2>&1" % \
+        cmd = "%s %s --group %s --max-messages 1 --release --timeout-ms 30000 " \
+              "--command-property max.poll.records=1 --command-property share.acquire.mode=record_limit 2>&1" % \
               (self.kafka.path.script("kafka-console-share-consumer.sh", node), common_args, group)
         wait_until(lambda: "Processed a total of 1 messages" in self.kafka.run_cli_tool(node, cmd),
                    timeout_sec=120, backoff_sec=1, retry_on_exc=True,
                    err_msg="Share group %s could not read a record" % group)
 
     def check_share_consumer_records(self, num_records):
-        records = sum(r['records'] for r in self.share_consumer.results)
+        records = sum(r['records'] for r in self.share_consumer.results if r is not None)
         assert records >= num_records, "Share consumers read %d records, expected at least %d" % (records, num_records)
 
     def validate_versions(self, client_version, broker_version):
