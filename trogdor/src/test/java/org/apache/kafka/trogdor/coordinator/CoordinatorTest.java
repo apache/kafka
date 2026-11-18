@@ -590,6 +590,15 @@ public class CoordinatorTest {
 
             TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
             assertEquals(expectedState, resp);
+
+            // Wait for the worker to start, so that closing the cluster does not race the heartbeat that sends it to the agent.
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("fooSpec").
+                    taskState(new TaskRunning(updatedSpec, 552, new TextNode("active"))).
+                    workerState(new WorkerRunning("fooSpec", updatedSpec, 552, new TextNode("active"))).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
         }
     }
 
