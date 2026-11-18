@@ -196,8 +196,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<TaskId, ActiveHolder> activeHolder = new HashMap<>();
         final Map<TaskId, List<TaskCopy>> taskCopies = new HashMap<>();
         final Set<String> membersRestoringAnActive = new HashSet<>();
-        final Map<String, Integer> memberCounts = new HashMap<>();
-        final Map<String, Integer> statefulTaskCounts = new HashMap<>();
+        final Map<String, ProcessLoad> processLoad = new HashMap<>();
 
         for (final StreamsGroupMember member : members.values()) {
             final MemberTaskOffsets offsets = taskOffsets.getOrDefault(member.memberId(), MemberTaskOffsets.EMPTY);
@@ -234,13 +233,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 membersRestoringAnActive.add(member.memberId());
             }
 
-            memberCounts.merge(member.processId(), 1, Integer::sum);
-            statefulTaskCounts.merge(member.processId(), statefulTaskCount, Integer::sum);
+            processLoad.merge(member.processId(), new ProcessLoad(statefulTaskCount, 1), ProcessLoad::plus);
         }
-
-        final Map<String, ProcessLoad> processLoad = Utils.newHashMap(memberCounts.size());
-        memberCounts.forEach((processId, memberCount) ->
-            processLoad.put(processId, new ProcessLoad(statefulTaskCounts.get(processId), memberCount)));
 
         final StateOnDisk stateOnDisk =
             new StateOnDisk(members, taskOffsets, statefulSubtopologies, misplacedTasks, activeHolder, taskCopies);
@@ -1343,6 +1337,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        capacity for running tasks.
      */
     record ProcessLoad(int statefulTaskCount, int memberCount) {
+
+        ProcessLoad plus(final ProcessLoad other) {
+            return new ProcessLoad(statefulTaskCount + other.statefulTaskCount, memberCount + other.memberCount);
+        }
 
         double load() {
             return loadWith(0);
