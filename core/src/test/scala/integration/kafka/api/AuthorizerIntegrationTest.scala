@@ -807,7 +807,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .setPartition(part)
           .setLeaderEpoch(0)
         ).asJava)
-      ).asJava), ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)).build(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)
+      ).asJava), ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)).build()
 
   private def describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequest.Builder(
     new DescribeShareGroupOffsetsRequestData()
