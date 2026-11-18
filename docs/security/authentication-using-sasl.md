@@ -658,7 +658,7 @@ For example, if using the OAuth `client_credentials` grant type with a client se
    sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
    ```
 
-Alternatively, the `client_credentials` grant type also supports client assertion authentication as defined in [RFC 7523](https://tools.ietf.org/html/rfc7523). Instead of sending a client secret, the client authenticates by presenting a signed JWT assertion to the OAuth identity provider. This provides enhanced security since private keys never leave the client and assertions are short-lived. See [KIP-1258](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1258%3A+Add+Support+for+OAuth+Client+Assertion+to+client_credentials+Grant+Type) for details.
+Alternatively, the `client_credentials` grant type also supports client assertion authentication as defined in [RFC 7523](https://tools.ietf.org/html/rfc7523). Instead of sending a client secret, the client authenticates by presenting a signed JWT assertion to the OAuth identity provider. This provides enhanced security since private keys never leave the client and assertions are short-lived. See [KIP-1258](https://cwiki.apache.org/confluence/x/dwEXG) for details.
 
 When using client assertion with dynamically-generated JWTs (recommended), the configuration might look like this:
 
