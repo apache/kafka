@@ -32647,7 +32647,21 @@ public class GroupMetadataManagerTest {
         )));
 
         // The target assignment is written.
-        context.processTasks();
+        List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
+        assertEquals(1, tasks.size());
+        assertEquals(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId), tasks.get(0).key());
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+                    )),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of())
+                ),
+                List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()))
+            ),
+            tasks.get(0).result().records()
+        );
 
         // The next assignment is not started automatically.
         assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
