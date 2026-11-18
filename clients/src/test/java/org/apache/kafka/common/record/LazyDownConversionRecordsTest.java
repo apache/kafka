@@ -68,6 +68,24 @@ public class LazyDownConversionRecordsTest {
         assertFalse(convertedRecords.batchIterator().hasNext());
     }
 
+    /**
+     * Test the lazy down-conversion path when the records hold only part of a batch, which happens when a fetch request
+     * up to v2 has a partition limit smaller than the first batch. We must still send an overflow message batch so that
+     * the consumer can raise a RecordTooLargeException.
+     */
+    @Test
+    public void testConversionOfIncompleteBatch() throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(new byte[2048]));
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            fileRecords.append(records);
+            fileRecords.flush();
+
+            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
+                    fileRecords.slice(0, 1024), RecordBatch.MAGIC_VALUE_V1, 0L, Time.SYSTEM);
+            assertEquals(LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH, lazyRecords.sizeInBytes());
+        }
+    }
+
     private static Collection<Arguments> parameters() {
         List<Arguments> arguments = new ArrayList<>();
         for (byte toMagic = RecordBatch.MAGIC_VALUE_V0; toMagic <= RecordBatch.CURRENT_MAGIC_VALUE; toMagic++) {
