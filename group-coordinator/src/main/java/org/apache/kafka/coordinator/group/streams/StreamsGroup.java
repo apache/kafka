@@ -283,11 +283,16 @@ public class StreamsGroup implements Group {
     /**
      * An intermediate assignment together with the assignment epoch it was derived for.
      *
-     * @param assignmentEpoch The assignment epoch, or {@code -1} if nothing was derived yet.
-     * @param assignment      The intermediate assignment keyed by member ID.
+     * @param assignmentEpoch    The assignment epoch, or {@code -1} if nothing was derived yet.
+     * @param assignment         The intermediate assignment keyed by member ID, empty if {@code isTargetAssignment}.
+     * @param isTargetAssignment Whether the intermediate assignment is the target assignment of the epoch.
      */
-    private record RefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> assignment) {
-        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of());
+    private record RefinedAssignment(
+        int assignmentEpoch,
+        Map<String, TasksTuple> assignment,
+        boolean isTargetAssignment
+    ) {
+        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of(), false);
     }
 
     /**
@@ -702,15 +707,21 @@ public class StreamsGroup implements Group {
     /**
      * Returns the intermediate assignment that was derived for the given assignment epoch, if any. A value derived for
      * an earlier epoch is not returned: the intermediate assignment of an epoch is fixed, but a new epoch means a new
-     * refinement step, which has to be derived anew.
+     * refinement step, which has to be derived anew. If the intermediate assignment of that epoch is the target
+     * assignment, the given target assignment is returned, which may include changes whose records are not replayed
+     * yet, such as a static member replacing another.
      *
-     * @param assignmentEpoch The assignment epoch to return the intermediate assignment for.
+     * @param assignmentEpoch  The assignment epoch to return the intermediate assignment for.
+     * @param targetAssignment All members' target assignments of that epoch.
      *
      * @return The intermediate assignment keyed by member ID, or {@code null} if it was not derived for that epoch.
      */
-    public Map<String, TasksTuple> refinedAssignment(int assignmentEpoch) {
+    public Map<String, TasksTuple> refinedAssignment(int assignmentEpoch, Map<String, TasksTuple> targetAssignment) {
         final RefinedAssignment cached = refinedAssignment.get();
-        return cached.assignmentEpoch() == assignmentEpoch ? cached.assignment() : null;
+        if (cached.assignmentEpoch() != assignmentEpoch) {
+            return null;
+        }
+        return cached.isTargetAssignment() ? targetAssignment : cached.assignment();
     }
 
     /**
@@ -718,11 +729,11 @@ public class StreamsGroup implements Group {
      * set from the heartbeat path only, never while replaying records.
      * <p>
      * The given map is copied, so that the cached assignment is genuinely fixed for its epoch rather than tracking
-     * whatever the caller hands over: a refiner that returns the target assignment as-is would otherwise leave the
-     * cache holding a view of {@link #targetAssignment()}, which changes as records are replayed. Only the map itself
-     * is copied -- a {@link TasksTuple} already owns its task sets, so there is nothing else that could change
-     * underneath. The copy is free once the refiner returns a map it built itself, because {@link Map#copyOf} hands
-     * back an already-immutable map unchanged.
+     * whatever the caller hands over. An intermediate assignment that is the target assignment itself is cached with
+     * {@link #setRefinedAssignmentToTargetAssignment} instead, which does not copy it. Only the map itself is copied --
+     * a {@link TasksTuple} already owns its task sets, so there is nothing else that could change underneath. The copy
+     * is free once the refiner returns a map it built itself, because {@link Map#copyOf} hands back an
+     * already-immutable map unchanged.
      *
      * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
@@ -730,8 +741,28 @@ public class StreamsGroup implements Group {
     public void setRefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> refinedAssignment) {
         this.refinedAssignment.set(new RefinedAssignment(
             assignmentEpoch,
-            Map.copyOf(Objects.requireNonNull(refinedAssignment))
+            Map.copyOf(Objects.requireNonNull(refinedAssignment)),
+            false
         ));
+    }
+
+    /**
+     * Caches that the intermediate assignment of the given assignment epoch is its target assignment, without copying
+     * the target assignment. This is transient state; it must be set from the heartbeat path only, never while
+     * replaying records.
+     * <p>
+     * Within an assignment epoch, the target assignment only changes when a static member replaces another, which
+     * relabels the replaced member's target assignment the same way {@link #relabelRefinedAssignment} relabels a cached
+     * copy, and when a member is removed, whose intermediate assignment is then no longer read.
+     *
+     * @param assignmentEpoch The assignment epoch whose intermediate assignment is its target assignment.
+     */
+    public void setRefinedAssignmentToTargetAssignment(int assignmentEpoch) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        if (cached.isTargetAssignment() && cached.assignmentEpoch() == assignmentEpoch) {
+            return;
+        }
+        this.refinedAssignment.set(new RefinedAssignment(assignmentEpoch, Map.of(), true));
     }
 
     /**
@@ -751,13 +782,14 @@ public class StreamsGroup implements Group {
         final TasksTuple refinedTasks = cached.assignment().get(oldMemberId);
         if (refinedTasks == null) {
             // Either nothing was derived for the replaced member, or the cached assignment belongs to another epoch --
-            // in which case refinedAssignment(int) does not hand it out anyway.
+            // in which case refinedAssignment() does not hand it out anyway -- or the intermediate assignment is
+            // the target assignment, which the records of the replacement relabel.
             return;
         }
         final Map<String, TasksTuple> relabeled = new HashMap<>(cached.assignment());
         relabeled.remove(oldMemberId);
         relabeled.put(newMemberId, refinedTasks);
-        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled)));
+        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled), false));
     }
 
     /**

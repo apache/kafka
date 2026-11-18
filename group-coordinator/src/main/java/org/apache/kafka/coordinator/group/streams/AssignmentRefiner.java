@@ -43,7 +43,7 @@ import java.util.SortedMap;
  *     coordinator failover.</li>
  *     <li>It is <b>frozen for the duration of an assignment epoch</b>: every refinement step is an epoch of its own, so
  *     the decisions of a step are taken once, when the epoch is minted, and do not change while the members reconcile
- *     towards it. See {@link StreamsGroup#refinedAssignment(int)}.</li>
+ *     towards it. See {@link StreamsGroup#refinedAssignment(int, Map)}.</li>
  * </ul>
  * <p>
  * An implementation need not be thread-safe, and holds no per-group state: the two per-group configurations a

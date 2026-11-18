@@ -2319,12 +2319,13 @@ public class GroupMetadataManager {
         }
 
         Map<String, TasksTuple> refinedGroupAssignment = null;
+        Map<String, TasksTuple> targetAssignment = null;
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
             // No active task needs to stay with its holder: if the intermediate assignment differs from the assigned
             // tasks, it starts a new epoch that every member reconciles to, and otherwise it moves nothing.
-            Map<String, TasksTuple> targetAssignment = group.targetAssignment();
+            targetAssignment = group.targetAssignment();
             refinedGroupAssignment = refineAssignment(group, targetAssignment, updatedConfiguredTopology, false);
             if (differsFromAssignedTasks(refinedGroupAssignment, targetAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
@@ -2391,7 +2392,12 @@ public class GroupMetadataManager {
                 updatedConfiguredTopology
             );
         } else {
-            maybeCacheRefinedAssignment(group, updateTargetAssignmentResult.targetAssignmentEpoch(), refinedGroupAssignment);
+            maybeCacheRefinedAssignment(
+                group,
+                updateTargetAssignmentResult.targetAssignmentEpoch(),
+                refinedGroupAssignment,
+                targetAssignment
+            );
         }
         TasksTuple refinedAssignment = refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
 
@@ -4827,7 +4833,7 @@ public class GroupMetadataManager {
         final Map<String, TasksTuple> targetAssignment,
         final ConfiguredTopology configuredTopology
     ) {
-        final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch);
+        final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch, targetAssignment);
         if (cached != null) {
             return cached;
         }
@@ -4837,7 +4843,7 @@ public class GroupMetadataManager {
         // move to another member before then, so every active task stays with the member that holds it.
         final Map<String, TasksTuple> refinedAssignment = refineAssignment(
             group, targetAssignment, configuredTopology, group.isAssignmentEpochFromBeforeLoad(assignmentEpoch));
-        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
+        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment, targetAssignment);
         return refinedAssignment;
     }
 
@@ -4846,19 +4852,26 @@ public class GroupMetadataManager {
      * refinement step do not change while the members reconcile toward it.
      * <p>
      * Nothing is kept for a group that has warm-up tasks disabled: the intermediate assignment is then just the target
-     * assignment, which the caller has anyway, so there is nothing to freeze.
+     * assignment, which the caller has anyway, so there is nothing to freeze. An intermediate assignment that is the
+     * target assignment itself is kept without copying it.
      *
      * @param group              The streams group.
      * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
+     * @param targetAssignment   All members' target assignments, which the intermediate assignment was refined from.
      */
     private void maybeCacheRefinedAssignment(
         final StreamsGroup group,
         final int assignmentEpoch,
-        final Map<String, TasksTuple> refinedAssignment
+        final Map<String, TasksTuple> refinedAssignment,
+        final Map<String, TasksTuple> targetAssignment
     ) {
         if (streamsGroupNumWarmupReplicas(group.groupId()) > 0) {
-            group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+            if (refinedAssignment == targetAssignment) {
+                group.setRefinedAssignmentToTargetAssignment(assignmentEpoch);
+            } else {
+                group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+            }
         }
     }
 

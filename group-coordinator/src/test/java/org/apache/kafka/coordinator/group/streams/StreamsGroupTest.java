@@ -81,6 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -198,18 +199,18 @@ public class StreamsGroupTest {
     public void testCacheAndRetrieveRefinedAssignment() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
-        assertNull(streamsGroup.refinedAssignment(0));
+        assertNull(streamsGroup.refinedAssignment(0, streamsGroup.targetAssignment()));
 
         Map<String, TasksTuple> refinedAssignment = Map.of(
             "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
         );
         streamsGroup.setRefinedAssignment(5, refinedAssignment);
 
-        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
         // An intermediate assignment derived for one assignment epoch must not be used for another one: a new epoch is
         // a new refinement step.
-        assertNull(streamsGroup.refinedAssignment(4));
-        assertNull(streamsGroup.refinedAssignment(6));
+        assertNull(streamsGroup.refinedAssignment(4, streamsGroup.targetAssignment()));
+        assertNull(streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
     }
 
     @Test
@@ -222,12 +223,15 @@ public class StreamsGroupTest {
 
         streamsGroup.setRefinedAssignment(5, derived);
 
-        // The intermediate assignment of an epoch is fixed once derived. A refiner that returns the target assignment
-        // as-is hands over a view of it, which changes as records are replayed, so the cache must copy rather than alias.
+        // The intermediate assignment of an epoch is fixed once derived, so the cache copies the map it is handed
+        // rather than aliasing it.
         derived.put("late-member-id", new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of()));
         derived.remove("member-id");
 
-        assertEquals(Map.of("member-id", memberTasks), streamsGroup.refinedAssignment(5));
+        assertEquals(
+            Map.of("member-id", memberTasks),
+            streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment())
+        );
     }
 
     @Test
@@ -247,10 +251,10 @@ public class StreamsGroupTest {
         // the epoch's decisions must not change while the group reconciles towards it.
         assertEquals(
             Map.of("new-member-id", oldMemberTasks, "other-member-id", otherMemberTasks),
-            streamsGroup.refinedAssignment(5)
+            streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment())
         );
         // Re-keying does not make the entry apply to a different epoch.
-        assertNull(streamsGroup.refinedAssignment(6));
+        assertNull(streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
     }
 
     @Test
@@ -266,7 +270,7 @@ public class StreamsGroupTest {
         // assignment of the epoch must not be disturbed.
         streamsGroup.relabelRefinedAssignment("not-in-the-cache", "new-member-id");
 
-        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
     }
 
     @Test
@@ -285,8 +289,97 @@ public class StreamsGroupTest {
 
         // The cache is a single slot, so deriving for a new epoch evicts the previous one rather than accumulating an
         // entry per epoch. Only the epoch the members are currently reconciling towards is ever asked for.
-        assertEquals(refinedAssignmentOfEpoch6, streamsGroup.refinedAssignment(6));
-        assertNull(streamsGroup.refinedAssignment(5));
+        assertEquals(refinedAssignmentOfEpoch6, streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
+        assertNull(streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
+    }
+
+    @Test
+    public void testRefinedAssignmentIsTargetAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        TasksTuple memberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        streamsGroup.updateTargetAssignment("member-id", memberTasks);
+
+        streamsGroup.setRefinedAssignmentToTargetAssignment(5);
+
+        assertEquals(
+            Map.of("member-id", memberTasks),
+            streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment())
+        );
+        assertNull(streamsGroup.refinedAssignment(4, streamsGroup.targetAssignment()));
+        assertNull(streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
+
+        // The given target assignment is handed out as it is, including changes whose records are not replayed yet.
+        Map<String, TasksTuple> targetAssignment = Map.of("new-member-id", memberTasks);
+        assertSame(targetAssignment, streamsGroup.refinedAssignment(5, targetAssignment));
+        assertNull(streamsGroup.refinedAssignment(6, targetAssignment));
+
+        streamsGroup.setRefinedAssignmentToTargetAssignment(6);
+
+        assertEquals(
+            Map.of("member-id", memberTasks),
+            streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment())
+        );
+        assertNull(streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
+    }
+
+    @Test
+    public void testRefinedAssignmentIsTargetAssignmentFollowsTheTargetAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        TasksTuple memberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        streamsGroup.updateTargetAssignment("old-member-id", memberTasks);
+        streamsGroup.setRefinedAssignmentToTargetAssignment(5);
+
+        // A static member replacing another relabels the target assignment, without a new assignment epoch, and
+        // relabeling the intermediate assignment leaves nothing to re-key.
+        streamsGroup.relabelRefinedAssignment("old-member-id", "new-member-id");
+        streamsGroup.removeTargetAssignment("old-member-id");
+        streamsGroup.updateTargetAssignment("new-member-id", memberTasks);
+
+        assertEquals(
+            Map.of("new-member-id", memberTasks),
+            streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment())
+        );
+    }
+
+    @Test
+    public void testRefinedAssignmentReplacesRefinedAssignmentIsTargetAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        TasksTuple targetTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of(), Map.of(), Map.of("sub-1", Set.of(0)))
+        );
+        streamsGroup.updateTargetAssignment("member-id", targetTasks);
+
+        streamsGroup.setRefinedAssignmentToTargetAssignment(5);
+        streamsGroup.setRefinedAssignment(6, refinedAssignment);
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
+        assertNull(streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
+
+        streamsGroup.setRefinedAssignmentToTargetAssignment(7);
+
+        assertEquals(
+            Map.of("member-id", targetTasks),
+            streamsGroup.refinedAssignment(7, streamsGroup.targetAssignment())
+        );
+        assertNull(streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
+    }
+
+    @Test
+    public void testRefinedAssignmentIsTargetAssignmentRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        streamsGroup.setRefinedAssignmentToTargetAssignment(6);
+        snapshotRegistry.revertToSnapshot(0);
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5, streamsGroup.targetAssignment()));
+        assertNull(streamsGroup.refinedAssignment(6, streamsGroup.targetAssignment()));
     }
 
     @Test
