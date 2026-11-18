@@ -380,6 +380,41 @@ public class GlobalStateManagerImplTest {
 
 
     @Test
+    public void shouldRestoreFromBeginningWhenStoreReportsUnknownCommittedOffset() {
+        final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<>(storeName1, true, stateRestoreCallback) {
+            // otherwise the store is wrapped and its offset is read from the legacy checkpoint file
+            @Deprecated
+            @Override
+            public boolean managesOffsets() {
+                return true;
+            }
+
+            @Override
+            public Long committedOffset(final TopicPartition partition) {
+                return OffsetCheckpoint.OFFSET_UNKNOWN;
+            }
+        };
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            withGlobalStores(List.of(store), Map.of(storeName1, t1.topic()), Map.of(storeName1, Optional.empty())),
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfig
+        );
+        stateManager.setGlobalProcessorContext(processorContext);
+        processorContext.setStateManger(stateManager);
+        initializeConsumer(2, 5, t1);
+
+        stateManager.initialize();
+
+        // a real consumer refuses to seek to the negative sentinel
+        assertEquals(5L, stateRestoreListener.restoreStartOffset);
+        assertEquals(2, stateRestoreCallback.restored.size());
+    }
+
+    @Test
     public void shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered() {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();
