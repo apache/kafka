@@ -4416,6 +4416,9 @@ public class GroupMetadataManager {
 
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
+     * When the assignor is offloaded, this method only schedules the assignor run and returns
+     * the last target assignment. The new target assignment is installed later by
+     * {@link #handleOffloadedConsumerTargetAssignmentResult}.
      *
      * @param group            The ConsumerGroup.
      * @param groupEpoch       The group epoch.
@@ -4423,7 +4426,8 @@ public class GroupMetadataManager {
      * @param updatedMember    The updated member.
      * @param subscriptionType The group subscription type.
      * @param records          The list to accumulate any new records.
-     * @return The new target assignment.
+     * @return The new target assignment if it was computed in this call, otherwise the last
+     *         target assignment.
      */
     private UpdateTargetAssignmentResult<Assignment> maybeUpdateTargetAssignment(
         ConsumerGroup group,
