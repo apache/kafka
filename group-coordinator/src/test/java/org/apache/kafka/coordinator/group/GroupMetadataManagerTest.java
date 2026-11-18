@@ -36205,7 +36205,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testShareGroupAsyncTargetAssignmentRescheduledOnAssignorFailure() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -36219,18 +36220,35 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        ShareGroupMember member1 = new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withShareGroupAssignor(assignor)
             .withMetadataImage(metadataImage)
+            .withShareGroup(new ShareGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
             .build();
 
-        // Member joins the group and gets no assignment yet.
+        // Member 2 joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(fooTopicName)));
 
@@ -36252,17 +36270,17 @@ public class GroupMetadataManagerTest {
         // The next assignment is not started automatically.
         assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
 
-        // Member heartbeats again.
+        // Member 2 heartbeats again.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(1));
+                .setMemberId(memberId2)
+                .setMemberEpoch(10));
 
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
+                .setMemberId(memberId2)
+                .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000),
             result.response().getKey()
         );
@@ -36274,7 +36292,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testShareGroupAsyncTargetAssignmentRescheduledOnFailedWrite() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -36285,18 +36304,35 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        ShareGroupMember member1 = new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withShareGroupAssignor(assignor)
             .withMetadataImage(metadataImage)
+            .withShareGroup(new ShareGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
             .build();
 
-        // Member joins the group and gets no assignment yet.
+        // Member 2 joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(fooTopicName)));
         context.commit();
@@ -36306,26 +36342,31 @@ public class GroupMetadataManagerTest {
 
         // Assignor completes on executor.
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
-            memberId, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)
             ))
         )));
 
         // The target assignment is written.
         List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> tasks = context.processTasks();
-        assertEquals(
+        assertEquals(1, tasks.size());
+        assertEquals(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId), tasks.get(0).key());
+        assertUnorderedRecordsEquals(
             List.of(
-                new MockCoordinatorExecutor.ExecutorResult<>(
-                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
-                    new CoordinatorResult<>(List.of(
-                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
-                            mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
-                        )),
-                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())
+                List.of(
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)
+                    )),
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId2, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)
                     ))
-                )
+                ),
+                List.of(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()))
             ),
-            tasks
+            tasks.get(0).result().records()
         );
 
         // Simulate a failed write to the log.
@@ -36334,12 +36375,12 @@ public class GroupMetadataManagerTest {
         // The next assignment is not started automatically.
         assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
 
-        // Member heartbeats again.
+        // Member 2 heartbeats again.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(1));
+                .setMemberId(memberId2)
+                .setMemberEpoch(10));
 
         // The next assignor run is scheduled.
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
