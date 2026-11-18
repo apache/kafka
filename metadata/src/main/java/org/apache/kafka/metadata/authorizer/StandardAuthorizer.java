@@ -65,9 +65,9 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorabl
     private final CompletableFuture<Void> initialLoadFuture = new CompletableFuture<>();
 
     /**
-     * The current data. We use a read-write lock to synchronize reads and writes to the data. We
-     * expect one writer and multiple readers accessing the ACL data, and we use the lock to make
-     * sure we have consistent reads when writer tries to change the data.
+     * The current data. There is a single writer (the metadata loader thread) and multiple
+     * readers (the request handler threads). Incremental ACL changes are published through the
+     * volatile aclCache field in StandardAuthorizerData.
      */
     private volatile StandardAuthorizerData data = StandardAuthorizerData.createEmpty();
 
