@@ -96,7 +96,7 @@ public class AdminMetadataManagerTest {
         assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
 
         // Even if we explicitly request an update, the backoff should be respected
-        mgr.requestUpdate();
+        mgr.requestUpdate(false);
         assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
 
         time.sleep(refreshBackoffMs);
@@ -142,7 +142,7 @@ public class AdminMetadataManagerTest {
 
         mgr.transitionToUpdatePending(time.milliseconds());
         mgr.updateFailed(new RuntimeException());
-        mgr.requestUpdate();
+        mgr.requestUpdate(false);
         assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
     }
 
@@ -283,7 +283,7 @@ public class AdminMetadataManagerTest {
     private void fetchAndRequestUpdate(Cluster cluster) {
         mgr.transitionToUpdatePending(time.milliseconds());
         mgr.update(cluster, time.milliseconds());
-        mgr.requestUpdate();
+        mgr.requestUpdate(false);
     }
 
     private static Cluster mockCluster() {

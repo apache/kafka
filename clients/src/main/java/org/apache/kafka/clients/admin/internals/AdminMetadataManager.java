@@ -36,9 +36,9 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages the metadata for KafkaAdminClient.
@@ -90,7 +90,7 @@ public class AdminMetadataManager {
     /**
      * The number of successive metadata responses that did not change the cluster nodes.
      */
-    private long equivalentResponseCount = 0;
+    private final AtomicLong equivalentResponseCount = new AtomicLong(0);
 
     /**
      * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
@@ -148,7 +148,7 @@ public class AdminMetadataManager {
         @Override
         public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
             maybeFatalException.ifPresent(AdminMetadataManager.this::updateFailed);
-            AdminMetadataManager.this.requestUpdate();
+            AdminMetadataManager.this.requestUpdate(false);
         }
 
         @Override
@@ -270,7 +270,10 @@ public class AdminMetadataManager {
         return cluster.nodeById(nodeId);
     }
 
-    public void requestUpdate() {
+    public void requestUpdate(boolean resetEquivalentResponseBackoff) {
+        if (resetEquivalentResponseBackoff) {
+            this.equivalentResponseCount.set(0);
+        }
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;
             log.debug("Requesting metadata update.");
@@ -315,8 +318,9 @@ public class AdminMetadataManager {
 
     private long delayBeforeNextAttemptMs(long now) {
         long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
-        long backoffMs = equivalentResponseCount > 0 ?
-            refreshBackoff.backoff(equivalentResponseCount - 1) :
+        long count = equivalentResponseCount.get();
+        long backoffMs = count > 0 ?
+            refreshBackoff.backoff(count - 1) :
             refreshBackoff.initialInterval();
         return Math.max(0, backoffMs - timeSinceAttempt);
     }
@@ -338,7 +342,7 @@ public class AdminMetadataManager {
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
-        this.equivalentResponseCount = 0;
+        this.equivalentResponseCount.set(0);
 
         if (RequestUtils.isFatalException(exception)) {
             // avoid unchecked/unconfirmed cast to ApiException
@@ -374,10 +378,11 @@ public class AdminMetadataManager {
             // A response is equivalent if it has the same nodes as the previous one and that one has not expired.
             // The controller is not compared because brokers return a random alive broker as the controller.
             if (now - lastMetadataUpdateMs < metadataExpireMs &&
-                new HashSet<>(cluster.nodes()).equals(new HashSet<>(this.cluster.nodes()))) {
-                this.equivalentResponseCount++;
+                cluster.nodes().size() == this.cluster.nodes().size() &&
+                cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())))) {
+                this.equivalentResponseCount.incrementAndGet();
             } else {
-                this.equivalentResponseCount = 0;
+                this.equivalentResponseCount.set(0);
             }
             this.lastMetadataUpdateMs = now;
         }

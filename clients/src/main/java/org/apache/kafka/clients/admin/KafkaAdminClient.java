@@ -833,7 +833,7 @@ public class KafkaAdminClient extends AdminClient {
             // metadata update and hope it appears.  This behavior is useful for avoiding
             // flaky behavior in tests when the cluster is starting up and not all nodes
             // have appeared.
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -863,7 +863,7 @@ public class KafkaAdminClient extends AdminClient {
                 (metadataManager.controller() != null)) {
                 return metadataManager.controller();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -884,7 +884,7 @@ public class KafkaAdminClient extends AdminClient {
                 // In that case, we will postpone node assignment.
                 return client.leastLoadedNode(time.milliseconds()).node();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -910,7 +910,7 @@ public class KafkaAdminClient extends AdminClient {
                     return client.leastLoadedNode(time.milliseconds()).node();
                 }
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -4282,7 +4282,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private void handleNotControllerError(Errors error) throws ApiException {
         metadataManager.clearController();
-        metadataManager.requestUpdate();
+        metadataManager.requestUpdate(true);
         throw error.exception();
     }
 
