@@ -4933,6 +4933,9 @@ public class GroupMetadataManager {
 
     /**
      * Updates the target assignment according to the updated member and metadata image.
+     * When the assignor is offloaded, this method only schedules the assignor run and returns
+     * the last target assignment. The new target assignment is installed later by
+     * {@link #handleOffloadedStreamsTargetAssignmentResult}.
      *
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
@@ -4941,7 +4944,8 @@ public class GroupMetadataManager {
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
      *                             instead of re-running the assignor.
-     * @return The target assignment epoch and the full per-member target assignment.
+     * @return The target assignment epoch and the full per-member target assignment. These are
+     *         the new ones if they were computed in this call, otherwise the last ones.
      */
     private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
