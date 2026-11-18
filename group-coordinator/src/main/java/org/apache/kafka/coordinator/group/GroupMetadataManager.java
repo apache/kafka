@@ -4602,6 +4602,24 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Whether the member is a static member that replaces another member of the group with the same instance ID, which
+     * relabels the replaced member's target assignment to the member.
+     *
+     * @param group  The streams group.
+     * @param member The member.
+     *
+     * @return True if the member replaces another static member.
+     */
+    private static boolean replacesStaticMember(StreamsGroup group, StreamsGroupMember member) {
+        String instanceId = member.instanceId().orElse(null);
+        if (instanceId == null) {
+            return false;
+        }
+        String previousMemberId = group.staticMemberId(instanceId);
+        return previousMemberId != null && !previousMemberId.equals(member.memberId());
+    }
+
+    /**
      * Updates the target assignment according to the updated member and metadata image.
      *
      * @param group                The StreamsGroup.
@@ -4632,6 +4650,13 @@ public class GroupMetadataManager {
             ));
 
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
+        }
+
+        if (group.assignmentEpoch() >= groupEpoch
+            && updatedMember.map(member -> !replacesStaticMember(group, member)).orElse(true)) {
+            // The assignment is up to date, and only a static member replacing another changes the target assignment
+            // within an assignment epoch, so the group's target assignment is current.
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
         }
 
         // Apply the unwritten membership change (e.g. the relabelling of a replacing static member) to the
