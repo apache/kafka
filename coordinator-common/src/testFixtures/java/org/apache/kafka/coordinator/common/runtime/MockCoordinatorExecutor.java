@@ -41,11 +41,15 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
 
         CoordinatorResult<Void, T> execute() {
+            // As in CoordinatorExecutorImpl, only an exception thrown by the task is passed to the
+            // operation. An exception thrown by the operation is thrown by poll().
+            R result;
             try {
-                return operation.onComplete(task.run(), null);
+                result = task.run();
             } catch (Throwable ex) {
                 return operation.onComplete(null, ex);
             }
+            return operation.onComplete(result, null);
         }
     }
 
@@ -67,7 +71,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
     }
 
-    private final Map<String, TaskRunnable<?>> tasks = new HashMap<>();
+    private final Map<String, ExecutorTask<?>> tasks = new HashMap<>();
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
 
     @Override
@@ -76,8 +80,9 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         TaskRunnable<R> task,
         TaskOperation<T, R> operation
     ) {
-        if (tasks.putIfAbsent(key, task) != null) return false;
-        return queue.add(new ExecutorTask<>(key, task, operation));
+        var executorTask = new ExecutorTask<>(key, task, operation);
+        if (tasks.putIfAbsent(key, executorTask) != null) return false;
+        return queue.add(executorTask);
     }
 
     @Override
@@ -86,7 +91,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     }
 
     public int size() {
-        return queue.size();
+        return tasks.size();
     }
 
     @Override
@@ -97,7 +102,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     public List<ExecutorResult<T>> poll() {
         List<ExecutorResult<T>> results = new ArrayList<>();
         for (ExecutorTask<?> task : queue) {
-            tasks.remove(task.key, task.task);
+            if (!tasks.remove(task.key, task)) continue;
             results.add(new ExecutorResult<>(task.key, task.execute()));
         }
         queue.clear();

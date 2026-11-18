@@ -184,6 +184,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 if (assignmentChanged
                     || taskOffsetIntervalPassed(now)
                     || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
+                    || hasAtLeastOneHotRestoringActiveTask(reconciledAssignment.activeTasks(), taskOffsetSum, taskEndOffsetSum)
+                    || hasAtLeastOneActiveTaskStartedOrFinishedRestoring(reconciledAssignment.activeTasks(), taskOffsetSum)
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
@@ -222,26 +224,57 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
             final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
         ) {
-            if (warmupTasks.isEmpty()) {
+            return warmupTasks.stream().anyMatch(taskId -> isHot(taskId, taskOffsetSum, taskEndOffsetSum));
+        }
+
+        /**
+         * Whether an active task is restoring with a lag within the acceptable recovery lag: a client reports the
+         * offsets of an active task only while restoring it, so a running active task is never hot here.
+         */
+        private boolean hasAtLeastOneHotRestoringActiveTask(
+            final Set<StreamsRebalanceData.TaskId> activeTasks,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
+            return activeTasks.stream().anyMatch(taskId -> isHot(taskId, taskOffsetSum, taskEndOffsetSum));
+        }
+
+        private boolean isHot(
+            final StreamsRebalanceData.TaskId taskId,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
+            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
+
+            final Long offset = taskOffsetSum.get(taskId);
+            final Long endOffset = taskEndOffsetSum.get(taskId);
+
+            // offset and endOffset might not be known,
+            // or be capped at MAX_VALUE due to overflow
+            if (offset == null || offset == Long.MAX_VALUE
+                || endOffset == null || endOffset == Long.MAX_VALUE) {
                 return false;
             }
 
-            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
+            return endOffset - offset <= acceptableRecoveryLag;
+        }
 
-            return warmupTasks.stream()
-                .anyMatch(taskId -> {
-                    final Long offset = taskOffsetSum.get(taskId);
-                    final Long endOffset = taskEndOffsetSum.get(taskId);
+        /**
+         * Whether an active task is in exactly one of the last sent task offsets and the current ones: a client reports
+         * the offsets of an active task only while restoring it, so the task finished restoring, or started restoring
+         * again without an assignment change, as after a {@code TaskCorruptedException}.
+         */
+        private boolean hasAtLeastOneActiveTaskStartedOrFinishedRestoring(
+            final Set<StreamsRebalanceData.TaskId> activeTasks,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum
+        ) {
+            final Map<StreamsRebalanceData.TaskId, Long> lastSentTaskOffsets = lastSentFields.taskOffsets;
+            if (lastSentTaskOffsets == null) {
+                return false;
+            }
 
-                    // offset and endOffset might not be known,
-                    // or be capped at MAX_VALUE due to overflow
-                    if (offset == null || offset == Long.MAX_VALUE
-                        || endOffset == null || endOffset == Long.MAX_VALUE) {
-                        return false;
-                    }
-
-                    return endOffset - offset <= acceptableRecoveryLag;
-                });
+            return activeTasks.stream()
+                .anyMatch(taskId -> lastSentTaskOffsets.containsKey(taskId) != taskOffsetSum.containsKey(taskId));
         }
 
         private static List<StreamsGroupHeartbeatRequestData.TaskIds> fromStreamsToHeartbeatRequest(final Set<StreamsRebalanceData.TaskId> tasks) {

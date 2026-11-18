@@ -675,7 +675,7 @@ public class RestoreIntegrationTest {
 
         // Ensure all the restoring tasks are in active state before starting the new instance.
         // Otherwise, the tasks which assigned to first kafka streams won't encounter "restoring suspend" after being reassigned to the second instance.
-        waitForActiveRestoringTask(kafkaStreams, 5, IntegrationTestUtils.DEFAULT_TIMEOUT);
+        waitForActiveRestoringTask(kafkaStreams, 5, IntegrationTestUtils.DEFAULT_TIMEOUT_MS);
 
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationStarts());
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilBatchRestoredIsCalled());
@@ -863,7 +863,7 @@ public class RestoreIntegrationTest {
         }
 
         private static boolean awaitLatchWithTimeout(final CountDownLatch latch) throws InterruptedException {
-            return latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            return latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
     }
 

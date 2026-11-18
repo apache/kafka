@@ -491,6 +491,8 @@ class ControllerApis(
         } else {
           new ApiError(GROUP_AUTHORIZATION_FAILED)
         }
+      case ConfigResource.Type.CLUSTER_MIRROR =>
+        new ApiError(UNSUPPORTED_VERSION, "Cluster mirror configs are not supported yet.")
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }
   }

@@ -282,4 +282,29 @@ public class CopartitionedTopicsEnforcerTest {
         ), enforced);
     }
 
+    @Test
+    public void shouldOnlyReportFixedTopicsOfTheGroupWhenTheirPartitionCountsDiffer() {
+        final Map<String, Integer> topicPartitionCounts = Map.of(
+            REPARTITION_TOPIC_1, 3,
+            REPARTITION_TOPIC_2, 5,
+            REPARTITION_TOPIC_3, 4
+        );
+        final CopartitionedTopicsEnforcer enforcer =
+            new CopartitionedTopicsEnforcer(LOG, topicPartitionProvider(topicPartitionCounts));
+
+        final TopicConfigurationException ex = assertThrows(
+            TopicConfigurationException.class,
+            () -> enforcer.enforce(
+                Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, REPARTITION_TOPIC_3),
+                Set.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2),
+                Set.of(REPARTITION_TOPIC_3)
+            )
+        );
+
+        assertEquals(Status.INCORRECTLY_PARTITIONED_TOPICS, ex.status());
+        assertEquals(String.format(
+            "Following topics do not have the same number of partitions: [%s]",
+            new TreeMap<>(Map.of(REPARTITION_TOPIC_1, 3, REPARTITION_TOPIC_2, 5))), ex.getMessage());
+    }
+
 }

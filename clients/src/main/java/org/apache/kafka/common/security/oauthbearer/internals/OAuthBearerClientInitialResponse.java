@@ -30,11 +30,11 @@ import javax.security.sasl.SaslException;
 public class OAuthBearerClientInitialResponse {
     static final String SEPARATOR = "\u0001";
 
-    private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
+    private static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)++";
     private static final String KEY = "[A-Za-z]+";
     private static final String VALUE = "[\\x21-\\x7E \t\r\n]+";
 
-    private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
+    private static final String KVPAIRS = String.format("(%s=%s%s)*+", KEY, VALUE, SEPARATOR);
     private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_~+/\\.a-zA-Z0-9]+([=]*))");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));

@@ -40,11 +40,12 @@ public class ScramMessages {
         static final String VALUE_SAFE = "[\\x01-\\x7F&&[^=,]]+";
         static final String VALUE = "[\\x01-\\x7F&&[^,]]+";
         static final String PRINTABLE = "[\\x21-\\x7E&&[^,]]+";
-        static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
+        static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)++";
         static final String BASE64_CHAR = "[a-zA-Z0-9/+]";
         static final String BASE64 = String.format("(?:%s{4})*(?:%s{3}=|%s{2}==)?", BASE64_CHAR, BASE64_CHAR, BASE64_CHAR);
         static final String RESERVED = String.format("(m=%s,)?", VALUE);
-        static final String EXTENSIONS = String.format("(,%s=%s)*", ALPHA, VALUE);
+        static final String EXTENSIONS = String.format("(,%s=%s)*+", ALPHA, VALUE);
+        static final String EXTENSIONS_BEFORE_PROOF = String.format("(,%s=%s(?=,))*+", ALPHA, VALUE);
 
         abstract String toMessage();
 
@@ -192,7 +193,7 @@ public class ScramMessages {
                 "c=(?<channel>%s),r=(?<nonce>%s)%s,p=(?<proof>%s)",
                 BASE64,
                 PRINTABLE,
-                EXTENSIONS,
+                EXTENSIONS_BEFORE_PROOF,
                 BASE64));
 
         private final byte[] channelBinding;

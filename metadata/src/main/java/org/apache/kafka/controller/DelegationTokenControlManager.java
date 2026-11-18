@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Time;
@@ -338,7 +339,8 @@ public class DelegationTokenControlManager {
         long now = time.milliseconds();
         List<ApiMessageAndVersion> records = new ArrayList<>(0);
 
-        for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
+        for (DelegationToken token : tokenCache.tokens()) {
+            TokenInformation oldTokenInformation = token.tokenInfo();
             if ((oldTokenInformation.maxTimestamp() < now) ||
                 (oldTokenInformation.expiryTimestamp() < now)) {
                 log.info("Delegation token expired for token: {} for owner: {}",
