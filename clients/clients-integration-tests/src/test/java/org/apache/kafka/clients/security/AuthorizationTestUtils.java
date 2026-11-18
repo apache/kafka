@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.security;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -58,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.ClientsTestUtils.waitForPollThrowException;
 import static org.apache.kafka.common.acl.AclOperation.CREATE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclOperation.READ;
@@ -204,26 +205,13 @@ public final class AuthorizationTestUtils {
         TopicPartition tp,
         long timeoutMs
     ) throws InterruptedException {
-        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
-        while (records.size() < numRecords && System.nanoTime() < deadline) {
-            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-        }
+        var records = ClientsTestUtils.consumeRecords(consumer, numRecords, Integer.MAX_VALUE, timeoutMs);
         assertEquals(numRecords, records.size(), "Timed out waiting for records");
         for (int i = 0; i < numRecords; i++) {
             var record = records.get(i);
             assertEquals(tp.topic(), record.topic());
             assertEquals(tp.partition(), record.partition());
             assertEquals((long) startingOffset + i, record.offset());
-        }
-    }
-
-    private static void consumeRecordsIgnoreOneAuthorizationException(Consumer<byte[], byte[]> consumer, int startingOffset,
-                                                                      TopicPartition tp) throws InterruptedException {
-        try {
-            consumeRecords(consumer, NUM_RECORDS, startingOffset, tp, 10_000);
-        } catch (TopicAuthorizationException e) {
-            consumeRecords(consumer, NUM_RECORDS, startingOffset, tp, 10_000);
         }
     }
 
@@ -308,9 +296,9 @@ public final class AuthorizationTestUtils {
         }
 
         public static void testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(
-                TestContext context,
-                GroupProtocol groupProtocol,
-                boolean idempotenceEnabled
+            TestContext context,
+            GroupProtocol groupProtocol,
+            boolean idempotenceEnabled
         ) throws Exception {
             createAcls(context, List.of(context.acl(new ResourcePattern(GROUP, GROUP_ID, LITERAL), READ)));
             Map<String, Object> overrides = Map.of(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotenceEnabled);
@@ -319,7 +307,7 @@ public final class AuthorizationTestUtils {
                  var admin = context.admin()) {
                 assertThrows(TopicAuthorizationException.class, () -> sendRecords(producer, NUM_RECORDS, TP));
                 consumer.assign(List.of(TP));
-                assertThrows(TopicAuthorizationException.class, () -> consumeRecords(consumer));
+                waitForPollThrowException(consumer, TopicAuthorizationException.class);
                 var e1 = assertThrows(ExecutionException.class, () -> admin.describeTopics(Set.of(TOPIC_NAME)).allTopicNames().get());
                 assertInstanceOf(TopicAuthorizationException.class, e1.getCause());
 
@@ -337,11 +325,11 @@ public final class AuthorizationTestUtils {
         }
 
         private static void verifyAuthorizationRecovery(
-                TestContext context,
-                Producer<byte[], byte[]> producer,
-                Consumer<byte[], byte[]> consumer,
-                Admin admin,
-                TopicPartition tp2
+            TestContext context,
+            Producer<byte[], byte[]> producer,
+            Consumer<byte[], byte[]> consumer,
+            Admin admin,
+            TopicPartition tp2
         ) throws Exception {
             sendRecords(producer, NUM_RECORDS, tp2);
             consumer.assign(List.of(tp2));
@@ -368,10 +356,10 @@ public final class AuthorizationTestUtils {
 
             setReadAndWriteAcls(context, TP);
             if (!topic2RecordConsumed.get()) {
-                consumeRecordsIgnoreOneAuthorizationException(consumer, 1, tp2);
+                consumeRecords(consumer, NUM_RECORDS, 1, tp2, 10_000);
             }
             sendRecords(producer, NUM_RECORDS, TP);
-            consumeRecordsIgnoreOneAuthorizationException(consumer, 0, TP);
+            consumeRecords(consumer);
             var recoveredResults = admin.describeTopics(Set.of(TOPIC_NAME, tp2.topic())).topicNameValues();
             assertEquals(1, recoveredResults.get(TOPIC_NAME).get().partitions().size());
             assertEquals(1, recoveredResults.get(tp2.topic()).get().partitions().size());
@@ -394,7 +382,7 @@ public final class AuthorizationTestUtils {
             noConsumeWithoutDescribeAclSetup(context);
             try (var consumer = context.consumer(groupProtocol)) {
                 consumer.assign(List.of(TP));
-                assertThrows(KafkaException.class, () -> consumeRecords(consumer));
+                waitForPollThrowException(consumer, KafkaException.class);
                 confirmReauthenticationMetrics(context);
             }
         }
@@ -403,25 +391,14 @@ public final class AuthorizationTestUtils {
             noConsumeWithoutDescribeAclSetup(context);
             try (var consumer = context.consumer(groupProtocol)) {
                 consumer.subscribe(List.of(TOPIC_NAME));
-                assertThrows(TopicAuthorizationException.class, () -> consumeRecords(consumer, NUM_RECORDS, 0, TP, 3000));
+                waitForPollThrowException(consumer, TopicAuthorizationException.class);
 
                 setReadAndWriteAcls(context, TP);
                 consumer.subscribe(List.of(TOPIC_NAME, "topic2"));
-                assertThrows(TopicAuthorizationException.class, () -> consumeRecords(consumer, NUM_RECORDS, 0, TP, 3000));
+                waitForPollThrowException(consumer, TopicAuthorizationException.class);
 
                 consumer.subscribe(List.of(TOPIC_NAME));
-                if (groupProtocol == GroupProtocol.CLASSIC) {
-                    consumeRecordsIgnoreOneAuthorizationException(consumer, 0, TP);
-                } else {
-                    TestUtils.waitForCondition(() -> {
-                        try {
-                            consumeRecords(consumer);
-                            return true;
-                        } catch (TopicAuthorizationException e) {
-                            return false;
-                        }
-                    }, "Consumer did not recover after granting authorization");
-                }
+                consumeRecords(consumer);
             }
         }
 
@@ -440,7 +417,7 @@ public final class AuthorizationTestUtils {
             noConsumeWithDescribeAclSetup(context);
             try (var consumer = context.consumer(groupProtocol)) {
                 consumer.assign(List.of(TP));
-                var e = assertThrows(TopicAuthorizationException.class, () -> consumeRecords(consumer));
+                var e = waitForPollThrowException(consumer, TopicAuthorizationException.class);
                 assertEquals(Set.of(TOPIC_NAME), e.unauthorizedTopics());
                 confirmReauthenticationMetrics(context);
             }
@@ -450,7 +427,7 @@ public final class AuthorizationTestUtils {
             noConsumeWithDescribeAclSetup(context);
             try (var consumer = context.consumer(groupProtocol)) {
                 consumer.subscribe(List.of(TOPIC_NAME));
-                var e = assertThrows(TopicAuthorizationException.class, () -> consumeRecords(consumer));
+                var e = waitForPollThrowException(consumer, TopicAuthorizationException.class);
                 assertEquals(Set.of(TOPIC_NAME), e.unauthorizedTopics());
                 confirmReauthenticationMetrics(context);
             }
@@ -470,7 +447,7 @@ public final class AuthorizationTestUtils {
             try (var producer = context.producer(); var consumer = context.consumer(groupProtocol)) {
                 sendRecords(producer, NUM_RECORDS, TP);
                 consumer.assign(List.of(TP));
-                var e = assertThrows(GroupAuthorizationException.class, () -> consumeRecords(consumer));
+                var e = waitForPollThrowException(consumer, GroupAuthorizationException.class);
                 assertEquals(GROUP_ID, e.groupId());
                 confirmReauthenticationMetrics(context);
             }
