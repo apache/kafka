@@ -125,9 +125,9 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
       assertEquals(1, member1.assignment.activeTasks.size)
       assertEquals("subtopology-1", member1.assignment.activeTasks.get(0).subtopologyId)
       assertEquals(
-        s"Describe version $version must include active tasks pending revocation",
         Set[Integer](0, 1),
-        member1.assignment.activeTasks.get(0).partitions.asScala.toSet
+        member1.assignment.activeTasks.get(0).partitions.asScala.toSet,
+        s"Describe version $version must include active tasks pending revocation"
       )
     }
 
