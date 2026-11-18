@@ -177,8 +177,8 @@ public class TopologyMetadata {
 
     public void executeTopologyUpdatesAndBumpThreadVersion(final Consumer<Set<String>> handleTopologyAdditions,
                                                            final Consumer<Set<String>> handleTopologyRemovals) {
+        version.topologyLock.lock();
         try {
-            version.topologyLock.lock();
             final long latestTopologyVersion = topologyVersion();
             handleTopologyAdditions.accept(namedTopologiesView());
             handleTopologyRemovals.accept(namedTopologiesView());
@@ -189,8 +189,8 @@ public class TopologyMetadata {
     }
 
     public void maybeNotifyTopologyVersionListeners() {
+        lock();
         try {
-            lock();
             final long minThreadVersion = minimumThreadVersion();
             final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
             TopologyVersionListener topologyVersionListener;
@@ -215,8 +215,8 @@ public class TopologyMetadata {
     }
 
     public void wakeupThreads() {
+        lock();
         try {
-            lock();
             version.topologyCV.signalAll();
         } finally {
             unlock();
@@ -225,8 +225,8 @@ public class TopologyMetadata {
 
     public void maybeWaitForNonEmptyTopology(final Supplier<StreamThread.State> threadState) {
         if (isEmpty() && threadState.get().isAlive()) {
+            lock();
             try {
-                lock();
                 while (isEmpty() && threadState.get().isAlive()) {
                     try {
                         log.debug("Detected that the topology is currently empty, waiting for something to process");
@@ -247,8 +247,8 @@ public class TopologyMetadata {
      * Adds the topology and registers a future that listens for all threads on the older version to see the update
      */
     public void registerAndBuildNewTopology(final KafkaFutureImpl<Void> future, final InternalTopologyBuilder newTopologyBuilder) {
+        lock();
         try {
-            lock();
             buildAndVerifyTopology(newTopologyBuilder);
             log.info("New NamedTopology {} passed validation and will be added, old topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
@@ -294,8 +294,8 @@ public class TopologyMetadata {
      */
     public KafkaFuture<Void> unregisterTopology(final KafkaFutureImpl<Void> removeTopologyFuture,
                                                 final String topologyName) {
+        lock();
         try {
-            lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
             version.activeTopologyUpdateListeners.add(new TopologyVersionListener(topologyVersion(), removeTopologyFuture));

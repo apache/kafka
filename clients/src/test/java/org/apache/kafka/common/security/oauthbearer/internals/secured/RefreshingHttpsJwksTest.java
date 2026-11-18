@@ -19,10 +19,12 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestUtils;
 
 import org.jose4j.http.SimpleResponse;
 import org.jose4j.jwk.HttpsJwks;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mockito;
 
 import java.util.AbstractMap;
@@ -37,11 +39,16 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -145,6 +152,40 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             time.sleep(REFRESH_MS + 1);
             verify(httpsJwks, times(3)).refresh();
             assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+        }
+    }
+
+    @Test
+    public void testLockFailureIsNotMaskedByUnlock() throws Exception {
+        final RuntimeException lockFailure = new RuntimeException("lock failed");
+        final Lock failingLock = new ReentrantLock() {
+            @Override
+            public void lock() {
+                throw lockFailure;
+            }
+        };
+        final ReadWriteLock failingReadWriteLock = new ReadWriteLock() {
+            @Override
+            public Lock readLock() {
+                return failingLock;
+            }
+
+            @Override
+            public Lock writeLock() {
+                return failingLock;
+            }
+        };
+
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(new MockTime(), spyHttpsJwks())) {
+            TestUtils.setFieldValue(refreshingHttpsJwks, "refreshLock", failingReadWriteLock);
+
+            final List<Executable> operations = List.of(
+                refreshingHttpsJwks::init,
+                refreshingHttpsJwks::getJsonWebKeys,
+                () -> refreshingHttpsJwks.maybeExpediteRefresh("abc123")
+            );
+            for (Executable operation : operations)
+                assertSame(lockFailure, assertThrows(RuntimeException.class, operation));
         }
     }
 
