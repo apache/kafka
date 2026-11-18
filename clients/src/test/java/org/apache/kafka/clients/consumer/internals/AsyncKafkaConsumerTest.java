@@ -2351,7 +2351,7 @@ public class AsyncKafkaConsumerTest {
             new StreamsTasksAssignedEvent(
                 new TreeSet<>(TOPIC_PARTITION_COMPARATOR),
                 new TreeSet<>(TOPIC_PARTITION_COMPARATOR),
-                new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), true))
+                new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), 1L, true))
         );
     }
 
@@ -2846,7 +2846,7 @@ public class AsyncKafkaConsumerTest {
         // Add StreamsTasksAssignedEvent to background queue
         backgroundEventQueue.add(new StreamsTasksAssignedEvent(
             new TreeSet<>(), new TreeSet<>(),
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), true)));
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), 1L, true)));
 
         completeAsyncPollEventSuccessfully();
 

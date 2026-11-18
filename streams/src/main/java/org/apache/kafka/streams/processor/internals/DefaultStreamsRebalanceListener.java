@@ -160,6 +160,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
             standbyTasks,
             warmupTasks,
             assignment.assignedPartitions(),
+            assignment.localEpoch(),
             assignment.isGroupReady()
         );
     }

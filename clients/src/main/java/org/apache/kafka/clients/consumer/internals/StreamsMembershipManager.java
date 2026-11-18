@@ -143,10 +143,6 @@ public class StreamsMembershipManager implements RequestManager {
                 isGroupReady == that.isGroupReady;
         }
 
-        boolean isAssignedMetadataFromBroker() {
-            return this.assignedPartitions != null;
-        }
-
         @Override
         public String toString() {
             return "LocalAssignment{" +
@@ -703,6 +699,8 @@ public class StreamsMembershipManager implements RequestManager {
     private void clearTaskAndPartitionAssignment() {
         subscriptionState.assignFromSubscribed(Collections.emptySet());
         notifyAssignmentChange(Collections.emptySet());
+        final Set<String> inputTopics = assignedInputTopics(currentAssignment);
+        topicPartitionsCache.keySet().retainAll(inputTopics);
         currentAssignment = LocalAssignment.NONE;
         targetAssignment = LocalAssignment.NONE;
     }
@@ -1185,7 +1183,7 @@ public class StreamsMembershipManager implements RequestManager {
         // This limitation is accepted when broker-provided assignment metadata is
         // unavailable. Local metadata alone cannot establish which partition counts
         // the coordinator used for the assignment.
-        // TODO: KAFKA-21256
+        // TODO: KAFKA-21526
         // Use broker-provided topic IDs and partition counts to resolve and
         // validate the assignment against the coordinator's metadata snapshot.
         return currentAssignment.reconcilingCompleted(targetAssignment);
@@ -1309,9 +1307,11 @@ public class StreamsMembershipManager implements RequestManager {
                 markReconciliationCompleted();
             } else {
                 if (isReconciliationInProgress() && !maybeAbortReconciliation()) {
+                    if (assignTasksResult.newCurrentAssignment.isPresent()) {
+                        currentAssignment = assignTasksResult.newCurrentAssignment.get();
+                        transitionTo(MemberState.ACKNOWLEDGING);
+                    }
                     lastReconciledMetadataVersion = assignTasksResult.metadataVersion();
-                    currentAssignment = assignTasksResult.newCurrentAssignment;
-                    transitionTo(MemberState.ACKNOWLEDGING);
                     markReconciliationCompleted();
                 }
             }
@@ -1364,11 +1364,6 @@ public class StreamsMembershipManager implements RequestManager {
                 .collect(Collectors.joining(", "))
         );
 
-        // TODO: KAFKA-21256
-        if (assignmentToReconcile.isAssignedMetadataFromBroker()) {
-            throw new IllegalStateException("This protocol currently is not supported yet.");
-        }
-
         final Cluster metadataSnapshot = metadata.fetch();
         final int metadataVersion = metadata.updateVersion();
 
@@ -1406,7 +1401,7 @@ public class StreamsMembershipManager implements RequestManager {
         if (resolvedPartitionsToAssign.equals(previousAssignedAssignment.assignedPartitions) &&
             resolvedLocalAssignment.reconcilingCompleted(previousAssignedAssignment)
         ) {
-            return CompletableFuture.completedFuture(new AssignTasksResult(resolvedLocalAssignment, metadataVersion));
+            return CompletableFuture.completedFuture(new AssignTasksResult(null, metadataVersion));
         }
 
         // Enqueue event to app thread to apply assignment within poll() and invoke callback.
@@ -1420,12 +1415,18 @@ public class StreamsMembershipManager implements RequestManager {
                     standbyTasksToAssign,
                     warmupTasksToAssign,
                     resolvedLocalAssignment.assignedPartitions,
+                    resolvedLocalAssignment.localEpoch,
                     isGroupReady
                 )
             );
+
+        // Retain cached partition counts only for input topics of the tasks in the new assignment.
+        final Set<String> assignedInputTopics = assignedInputTopics(resolvedLocalAssignment);
+
         return partitionsAssignedAndCallbackExecuted.whenComplete((__, callbackError) -> {
             if (callbackError == null) {
                 subscriptionState.enablePartitionsAwaitingCallback(resolvedLocalAssignment.assignedPartitions);
+                topicPartitionsCache.keySet().retainAll(assignedInputTopics);
             } else {
                 if (!partitionsToAssignNotPreviouslyOwned.isEmpty() && subscriptionState.assignedPartitions().containsAll(partitionsToAssignNotPreviouslyOwned)) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
@@ -1676,6 +1677,15 @@ public class StreamsMembershipManager implements RequestManager {
         }
     }
 
+    private Set<String> assignedInputTopics(LocalAssignment currentAssignment) {
+        return currentAssignment.activeTasks.entrySet()
+            .stream()
+            .filter(entry -> !entry.getValue().isEmpty())
+            .flatMap(entry -> streamsRebalanceData.subtopologies()
+                .get(entry.getKey()).inputTopics().stream())
+            .collect(Collectors.toSet());
+    }
+
     // visible for testing
     List<MemberStateListener> stateListeners() {
         return unmodifiableList(stateUpdatesListeners);
@@ -1687,14 +1697,14 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private static final class AssignTasksResult {
-        private final LocalAssignment newCurrentAssignment;
+        private final Optional<LocalAssignment> newCurrentAssignment;
         private final int metadataVersion;
 
         private AssignTasksResult(
             final LocalAssignment newCurrentAssignment,
             final int metadataVersion
         ) {
-            this.newCurrentAssignment = newCurrentAssignment;
+            this.newCurrentAssignment = Optional.ofNullable(newCurrentAssignment);
             this.metadataVersion = metadataVersion;
         }
 

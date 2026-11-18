@@ -144,7 +144,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_2));
         final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_2));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L);
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedFullPartitionsToAssign);
 
@@ -170,7 +170,7 @@ public class StreamsMembershipManagerReconciliationTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of());
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of(), 0L);
         assertEquals(Set.of(), onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(Set.of(), onTasksAssignedCallbackExecuted.addedPartitions());
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(Set.of(), Set.of());
@@ -198,7 +198,7 @@ public class StreamsMembershipManagerReconciliationTest {
             Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_2));
         final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_2));
         final StreamsTasksAssignedEvent resolvedAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L);
         assertEquals(expectedFullPartitionsToAssign, resolvedAssignment.assignedPartitions());
         assertEquals(expectedFullPartitionsToAssign, resolvedAssignment.addedPartitions());
         verifyInStateReconciling(membershipManager);
@@ -228,7 +228,7 @@ public class StreamsMembershipManagerReconciliationTest {
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
 
         final StreamsTasksAssignedEvent partialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of());
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of(), 0L);
         assertEquals(Set.of(), partialAssignment.assignedPartitions());
         assertTrue(membershipManager.isReconciliationInProgress());
         assertFalse(membershipManager.isPartialAssignmentReconciled());
@@ -259,7 +259,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_2));
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_2));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L);
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
         completeAssignment(onTasksAssignedCallbackExecuted);
@@ -284,7 +284,7 @@ public class StreamsMembershipManagerReconciliationTest {
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
 
         final StreamsTasksAssignedEvent partialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of());
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(), Set.of(), Set.of(), Set.of(), 0L);
         assertEquals(Set.of(), partialAssignment.assignedPartitions());
 
         assertTrue(membershipManager.isReconciliationInProgress());
@@ -309,7 +309,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_2));
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_2));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L);
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
 
         acknowledging(onTasksAssignedCallbackExecuted);
@@ -341,7 +341,7 @@ public class StreamsMembershipManagerReconciliationTest {
         ));
 
         final StreamsTasksAssignedEvent partialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions, 0L);
         assertEquals(previouslyAssignedPartitions, partialAssignment.assignedPartitions());
 
         assertTrue(membershipManager.isReconciliationInProgress());
@@ -370,7 +370,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_0));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
             verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
-                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign
+                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L
             );
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedNewPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
@@ -379,6 +379,86 @@ public class StreamsMembershipManagerReconciliationTest {
 
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
+        verifyThatNoTasksHaveBeenRevoked();
+
+        membershipManager.onHeartbeatRequestGenerated();
+
+        verifyInStateStable(membershipManager);
+    }
+
+    @Test
+    public void testPartialReconciliationSkipsAcknowledgementWhenMetadataUpdateDoesNotChangeAssignment() {
+        setupStreamsReabalanceDataWithTwoSubtopologies(SUBTOPOLOGY_ID_0, TOPIC_0, SUBTOPOLOGY_ID_1, TOPIC_1);
+        when(metadata.fetch()).thenReturn(TestUtils.clusterWith(1, Map.of(TOPIC_0, 1)));
+        when(metadata.updateVersion()).thenReturn(1);
+        final StreamsRebalanceData.TaskId initialTask = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0);
+        final StreamsRebalanceData.TaskId unresolvedTask = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_1, PARTITION_0);
+        final Set<TopicPartition> initialPartitions = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
+        joining();
+
+        reconcile(makeHeartbeatResponseWithActiveTasks(
+            SUBTOPOLOGY_ID_0, List.of(PARTITION_0),
+            SUBTOPOLOGY_ID_1, List.of(PARTITION_0)
+        ));
+        final StreamsTasksAssignedEvent partialAssignment = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(initialTask),
+            Set.of(),
+            Set.of(),
+            initialPartitions,
+            0L
+        );
+        acknowledging(partialAssignment);
+        when(subscriptionState.assignedPartitions()).thenReturn(initialPartitions);
+        membershipManager.onHeartbeatRequestGenerated();
+        verifyInStateReconciling(membershipManager);
+
+        // A newer metadata version still cannot resolve TOPIC_1, so there is nothing new to acknowledge.
+        when(metadata.updateVersion()).thenReturn(2);
+
+        membershipManager.poll(time.milliseconds());
+
+        verifyInStateReconciling(membershipManager);
+        assertFalse(membershipManager.isReconciliationInProgress());
+        assertTrue(membershipManager.isPartialAssignmentReconciled());
+        verifyNoAdditionalTasksAssigned();
+        verify(subscriptionState, times(1)).assignFromSubscribedAwaitingCallback(any(), any());
+        verify(subscriptionState, times(1)).enablePartitionsAwaitingCallback(any());
+        verify(metadata, times(2)).requestUpdate(true);
+
+        // Remember the metadata version even when no assignment changed, and wait for another update.
+        membershipManager.poll(time.milliseconds());
+
+        verify(metadata, times(2)).fetch();
+        verify(metadata, times(3)).requestUpdate(true);
+        verifyNoAdditionalTasksAssigned();
+        verifyInStateReconciling(membershipManager);
+        assertFalse(membershipManager.isReconciliationInProgress());
+
+        when(metadata.fetch()).thenReturn(TestUtils.clusterWith(1, Map.of(TOPIC_0, 1, TOPIC_1, 1)));
+        when(metadata.updateVersion()).thenReturn(3);
+
+        membershipManager.poll(time.milliseconds());
+
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(
+            new TopicPartition(TOPIC_0, PARTITION_0),
+            new TopicPartition(TOPIC_1, PARTITION_0)
+        );
+        final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_0));
+        final StreamsTasksAssignedEvent resolvedAssignment =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+                Set.of(initialTask, unresolvedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L
+            );
+        assertEquals(expectedFullPartitionsToAssign, resolvedAssignment.assignedPartitions());
+        assertEquals(expectedNewPartitionsToAssign, resolvedAssignment.addedPartitions());
+        verifyInStateReconciling(membershipManager);
+        assertTrue(membershipManager.isReconciliationInProgress());
+
+        completeAssignment(resolvedAssignment);
+
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
+        assertFalse(membershipManager.isReconciliationInProgress());
+        assertFalse(membershipManager.isPartialAssignmentReconciled());
         verifyThatNoTasksHaveBeenRevoked();
 
         membershipManager.onHeartbeatRequestGenerated();
@@ -404,7 +484,7 @@ public class StreamsMembershipManagerReconciliationTest {
         ));
 
         final StreamsTasksAssignedEvent partialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions, 0L);
         assertEquals(previouslyAssignedPartitions, partialAssignment.assignedPartitions());
 
         assertTrue(membershipManager.isReconciliationInProgress());
@@ -434,7 +514,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_0));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
             verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
-                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign
+                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L
             );
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedNewPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
@@ -468,7 +548,7 @@ public class StreamsMembershipManagerReconciliationTest {
         ));
 
         final StreamsTasksAssignedEvent partialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(Set.of(previouslyAssignedTask), Set.of(), Set.of(), previouslyAssignedPartitions, 0L);
         assertEquals(previouslyAssignedPartitions, partialAssignment.assignedPartitions());
 
         assertTrue(membershipManager.isReconciliationInProgress());
@@ -498,7 +578,7 @@ public class StreamsMembershipManagerReconciliationTest {
         final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_1, PARTITION_0));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
             verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
-                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign
+                Set.of(previouslyAssignedTask, newlyAssignedTask), Set.of(), Set.of(), expectedFullPartitionsToAssign, 0L
             );
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedNewPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
@@ -526,7 +606,7 @@ public class StreamsMembershipManagerReconciliationTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         final StreamsTasksAssignedEvent initialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), assignedPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), assignedPartitions, 0L);
         acknowledging(initialAssignment);
         when(subscriptionState.assignedPartitions()).thenReturn(assignedPartitions);
         verify(subscriptionState).enablePartitionsAwaitingCallback(assignedPartitions);
@@ -543,7 +623,7 @@ public class StreamsMembershipManagerReconciliationTest {
         ));
 
         final StreamsTasksAssignedEvent pendingAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, Set.of(), assignedPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, Set.of(), assignedPartitions, 1L);
         membershipManager.applyAssignment(pendingAssignment.assignedPartitions(), pendingAssignment.addedPartitions());
 
         membershipManager.onFenced();
@@ -579,7 +659,7 @@ public class StreamsMembershipManagerReconciliationTest {
         joining();
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
         final StreamsTasksAssignedEvent initialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions, 0L);
         assertEquals(initialPartitions, initialAssignment.assignedPartitions());
         acknowledging(initialAssignment);
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(initialPartitions, initialPartitions);
@@ -623,7 +703,7 @@ public class StreamsMembershipManagerReconciliationTest {
         joining();
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
         final StreamsTasksAssignedEvent initialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions, 0L);
         assertEquals(initialPartitions, initialAssignment.assignedPartitions());
         acknowledging(initialAssignment);
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(initialPartitions, initialPartitions);
@@ -667,7 +747,7 @@ public class StreamsMembershipManagerReconciliationTest {
         joining();
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_2)));
         final StreamsTasksAssignedEvent initialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), initialPartitions, 0L);
         assertEquals(initialPartitions, initialAssignment.assignedPartitions());
         acknowledging(initialAssignment);
         when(subscriptionState.assignedPartitions()).thenReturn(initialPartitions);
@@ -710,7 +790,7 @@ public class StreamsMembershipManagerReconciliationTest {
             new TopicPartition(TOPIC_0, PARTITION_2)
         );
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(expectedActiveTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(expectedActiveTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 1L);
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedNewPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
         verify(subscriptionState, times(1)).assignFromSubscribedAwaitingCallback(any(), any());
@@ -742,7 +822,7 @@ public class StreamsMembershipManagerReconciliationTest {
         joining();
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         final StreamsTasksAssignedEvent initialAssignment =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(initialActiveTasks, Set.of(), Set.of(), initialPartitions);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(initialActiveTasks, Set.of(), Set.of(), initialPartitions, 0L);
         membershipManager.applyAssignment(initialAssignment.assignedPartitions(), initialAssignment.addedPartitions());
         when(subscriptionState.assignedPartitions()).thenReturn(initialPartitions);
 
@@ -765,7 +845,7 @@ public class StreamsMembershipManagerReconciliationTest {
         );
         final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
         final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
-            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(nextActiveTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign);
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(nextActiveTasks, Set.of(), Set.of(), expectedFullPartitionsToAssign, 1L);
         assertEquals(expectedFullPartitionsToAssign, onTasksAssignedCallbackExecuted.assignedPartitions());
         assertEquals(expectedNewPartitionsToAssign, onTasksAssignedCallbackExecuted.addedPartitions());
         completeAssignment(onTasksAssignedCallbackExecuted);
@@ -829,20 +909,6 @@ public class StreamsMembershipManagerReconciliationTest {
         assertFalse(membershipManager.isLeavingGroup());
     }
 
-    private static void verifyInStateLeaving(final StreamsMembershipManager membershipManager) {
-        assertEquals(MemberState.LEAVING, membershipManager.state());
-        assertTrue(membershipManager.shouldNotWaitForHeartbeatInterval());
-        assertFalse(membershipManager.shouldSkipHeartbeat());
-        assertTrue(membershipManager.isLeavingGroup());
-    }
-
-    private static void verifyInStatePrepareLeaving(final StreamsMembershipManager membershipManager) {
-        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
-        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
-        assertFalse(membershipManager.shouldSkipHeartbeat());
-        assertTrue(membershipManager.isLeavingGroup());
-    }
-
     private static void verifyInStateUnsubscribed(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
@@ -874,35 +940,26 @@ public class StreamsMembershipManagerReconciliationTest {
     private StreamsTasksAssignedEvent verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
                                                                                                             final Set<StreamsRebalanceData.TaskId> standbyTasks,
                                                                                                             final Set<StreamsRebalanceData.TaskId> warmupTasks,
-                                                                                                            final Set<TopicPartition> assignedPartitions
-                                                                                                            ) {
-        return verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, warmupTasks, assignedPartitions, true);
+                                                                                                            final Set<TopicPartition> assignedPartitions,
+                                                                                                            final long localEpoch) {
+        return verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, warmupTasks, assignedPartitions, localEpoch, true);
     }
 
     private StreamsTasksAssignedEvent verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
                                                                                                             final Set<StreamsRebalanceData.TaskId> standbyTasks,
                                                                                                             final Set<StreamsRebalanceData.TaskId> warmupTasks,
                                                                                                             final Set<TopicPartition> assignedPartitions,
+                                                                                                            final long localEpoch,
                                                                                                             final boolean isGroupReady) {
         verify(backgroundEventHandler, times(++tasksAssignedAddCount)).add(tasksAssignedEventCaptor.capture());
         final StreamsTasksAssignedEvent streamsTasksAssignedEvent = tasksAssignedEventCaptor.getValue();
-        assertEquals(makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, isGroupReady), streamsTasksAssignedEvent.assignment());
+        assertEquals(makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, localEpoch, isGroupReady), streamsTasksAssignedEvent.assignment());
         return streamsTasksAssignedEvent;
     }
 
     private void completeAssignment(final StreamsTasksAssignedEvent event) {
         membershipManager.applyAssignment(event.assignedPartitions(), event.addedPartitions());
         event.future().complete(null);
-    }
-
-    private CompletableFuture<Void> verifyOnTasksRevokedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
-        verify(backgroundEventHandler).add(onTasksRevokedCallbackNeededEventCaptor.capture());
-        final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = onTasksRevokedCallbackNeededEventCaptor.getValue();
-        assertEquals(
-            activeTasksToRevoke,
-            onTasksRevokedCallbackNeededEvent.activeTasksToRevoke()
-        );
-        return onTasksRevokedCallbackNeededEvent.future();
     }
 
     private CompletableFuture<Void> verifyOnAllTasksLostCallbackNeededEventAddedToBackgroundEventHandler() {
@@ -971,12 +1028,14 @@ public class StreamsMembershipManagerReconciliationTest {
                                                                final Set<StreamsRebalanceData.TaskId> standbyTasks,
                                                                final Set<StreamsRebalanceData.TaskId> warmupTasks,
                                                                final Set<TopicPartition> assignedPartitions,
+                                                               final long localEpoch,
                                                                final boolean isGroupReady) {
         return new StreamsRebalanceData.Assignment(
             activeTasks,
             standbyTasks,
             warmupTasks,
             assignedPartitions,
+            localEpoch,
             isGroupReady
         );
     }

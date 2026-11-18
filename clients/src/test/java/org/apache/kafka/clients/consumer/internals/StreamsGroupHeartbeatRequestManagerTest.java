@@ -993,6 +993,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmupTaskId), // this is technically incorrect, but ensures that `acceptable.recovery.lag == -1` is tested correctly
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1043,6 +1044,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmupTaskId),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1135,6 +1137,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(hotWarmup, coldWarmup),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1205,6 +1208,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(standbyTask),
             Set.of(warmupTask),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1262,6 +1266,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmupTaskId),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1306,6 +1311,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmupTaskId),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1591,6 +1597,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
                 new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0)
             ),
+            1L,
             true
         ));
         final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
@@ -1728,6 +1735,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmup),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1782,6 +1790,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(standbyTaskId),
             Set.of(),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1813,6 +1822,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(),
             Set.of(warmupTaskId),
             Set.of(),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1996,6 +2006,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 1),
                     new TopicPartition(SOURCE_TOPIC_3, 2)
                 ),
+                1L,
                 true
             )
         );
@@ -2052,6 +2063,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new TopicPartition(REPARTITION_SOURCE_TOPIC_1, 0),
                     new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 0)
                 ),
+                1L,
                 true
             )
         );
@@ -2075,6 +2087,31 @@ class StreamsGroupHeartbeatRequestManagerTest {
             nonJoiningRequestDataWithChanges.standbyTasks()
         );
         assertEquals(List.of(), nonJoiningRequestDataWithChanges.warmupTasks());
+
+        final StreamsRebalanceData.Assignment assignment = streamsRebalanceData.reconciledAssignment();
+        streamsRebalanceData.setReconciledAssignment(assignment.copy());
+        final StreamsGroupHeartbeatRequestData requestWithoutChanges = heartbeatState.buildRequestData();
+        assertNull(requestWithoutChanges.activeTasks());
+        assertNull(requestWithoutChanges.standbyTasks());
+        assertNull(requestWithoutChanges.warmupTasks());
+
+        // A new local epoch must resend all owned tasks even when the assignment contents are unchanged.
+        final StreamsRebalanceData.Assignment assignmentWithNewEpoch = new StreamsRebalanceData.Assignment(
+            assignment.activeTasks(),
+            assignment.standbyTasks(),
+            assignment.warmupTasks(),
+            assignment.assignedPartitions(),
+            2L,
+            assignment.isGroupReady()
+        );
+        streamsRebalanceData.setReconciledAssignment(assignmentWithNewEpoch);
+
+        assertOwnedTasksFullyReported(assignmentWithNewEpoch, heartbeatState.buildRequestData());
+
+        final StreamsGroupHeartbeatRequestData requestAfterResend = heartbeatState.buildRequestData();
+        assertNull(requestAfterResend.activeTasks());
+        assertNull(requestAfterResend.standbyTasks());
+        assertNull(requestAfterResend.warmupTasks());
     }
 
     private enum OwnedTaskRole { ACTIVE, STANDBY, WARMUP }
@@ -2121,13 +2158,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
                             tasksOfChangingRole.stream()
                                 .map(task -> new TopicPartition(SOURCE_TOPIC_3, task.partitionId()))
                                 .collect(Collectors.toSet()),
-                            true);
+                            1L, true);
                     case STANDBY:
                         return new StreamsRebalanceData.Assignment(
-                            otherActiveTasks, tasksOfChangingRole, otherWarmupTasks, otherAssignedPartitions, true);
+                            otherActiveTasks, tasksOfChangingRole, otherWarmupTasks, otherAssignedPartitions, 1L, true);
                     default:
                         return new StreamsRebalanceData.Assignment(
-                            otherActiveTasks, otherStandbyTasks, tasksOfChangingRole, otherAssignedPartitions, true);
+                            otherActiveTasks, otherStandbyTasks, tasksOfChangingRole, otherAssignedPartitions, 1L, true);
                 }
             };
         final StreamsRebalanceData.Assignment withoutTheTask = assignmentWhereRoleHolds.apply(Set.of());
@@ -2215,7 +2252,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new TopicPartition(REPARTITION_SOURCE_TOPIC_2, 1),
                     new TopicPartition(SOURCE_TOPIC_3, 2)
                 ),
-                true
+                1L, true
             )
         );
         StreamsGroupHeartbeatRequestData requestDataBeforeReset = heartbeatState.buildRequestData();

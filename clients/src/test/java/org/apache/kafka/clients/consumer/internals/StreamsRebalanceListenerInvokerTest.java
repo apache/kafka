@@ -266,7 +266,7 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> warmupTasks = Set.of();
         Set<TopicPartition> assignedPartitions = Set.of();
 
-        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, true);
+        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, 1L, true);
     }
 
     private Set<StreamsRebalanceData.TaskId> createMockTasks() {
