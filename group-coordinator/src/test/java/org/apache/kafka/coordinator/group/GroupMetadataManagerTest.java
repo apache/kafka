@@ -11668,7 +11668,13 @@ public class GroupMetadataManagerTest {
             context.lastCommittedOffset
         );
 
-        assertEquals(List.of("classic-group-1"), groups.stream().map(ListGroupsResponseData.ListedGroup::groupId).toList());
+        assertEquals(List.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId("classic-group-1")
+                .setProtocolType("classic")
+                .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString())
+        ), groups);
         // The consumer group does not match the types filter, so the group id filter is not applied to it.
         assertEquals(Set.of("classic-group-1", "classic-group-2"), testedGroupIds);
     }

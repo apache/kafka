@@ -47,7 +47,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     testListGroups(false)
   }
 
-  // grp-3's member never heartbeats again, so keep its session alive for the states filter assertion.
+  // The consumer group members never heartbeat again, so keep their sessions alive.
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, value = "600000"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "600000")
@@ -92,13 +92,16 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       expectedError = Errors.NONE
     )
 
+    // grp-5 is a consumer group without offsets.
+    joinConsumerGroup("grp-5", useNewProtocol = true)
+
     // Without the filter, all groups are returned.
-    assertEquals(Set("grp-1", "grp-2", "grp-3"), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set("grp-1", "grp-2", "grp-3", "grp-5"), listGroupIds(requireCommittedOffsets = false))
 
     // With the filter, only groups with committed offsets are returned.
     assertEquals(Set("grp-1", "grp-3"), listGroupIds(requireCommittedOffsets = true))
 
-    // The filter is combined with the types filter.
+    // The filter is combined with the types filter. grp-3 and grp-5 are consumer groups, but only grp-3 has an offset.
     assertEquals(Set("grp-3"), listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.CONSUMER.toString)))
 
     // Delete the only offset of grp-1. The classic group must be empty first.
@@ -108,10 +111,6 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       useNewProtocol = false,
       version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
     )
-
-    // The filter is combined with the states filter.
-    assertEquals(Set("grp-1"), listGroupIds(requireCommittedOffsets = true, statesFilter = List(ClassicGroupState.EMPTY.toString)))
-
     deleteOffset(
       groupId = "grp-1",
       topic = "foo",
@@ -120,7 +119,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     )
 
     assertEquals(Set("grp-3"), listGroupIds(requireCommittedOffsets = true))
-    assertEquals(Set("grp-1", "grp-2", "grp-3"), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set("grp-1", "grp-2", "grp-3", "grp-5"), listGroupIds(requireCommittedOffsets = false))
 
     // grp-4 is created by an offset commit without group membership.
     commitOffset(
@@ -134,12 +133,13 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       expectedError = Errors.NONE
     )
     assertEquals(Set("grp-3", "grp-4"), listGroupIds(requireCommittedOffsets = true))
+
+    // The filter is combined with the states filter. grp-1 and grp-4 are empty, but only grp-4 has an offset.
+    assertEquals(Set("grp-4"), listGroupIds(requireCommittedOffsets = true, statesFilter = List(ClassicGroupState.EMPTY.toString)))
   }
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
@@ -187,14 +187,26 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       expectedError = Errors.NONE
     )
 
+    // streams-grp-2 is a streams group without offsets.
+    streamsGroupHeartbeat(
+      groupId = "streams-grp-2",
+      memberId = "streams-member-2",
+      rebalanceTimeoutMs = 1000,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty,
+      topology = topology
+    )
+
     // share-grp is a share group. Share groups never have committed offsets.
     shareGroupHeartbeat(
       groupId = "share-grp",
       subscribedTopicNames = List("foo")
     )
 
-    assertEquals(Set("streams-grp", "share-grp"), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set("streams-grp", "streams-grp-2", "share-grp"), listGroupIds(requireCommittedOffsets = false))
     assertEquals(Set("streams-grp"), listGroupIds(requireCommittedOffsets = true))
+    assertEquals(Set("streams-grp"), listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.STREAMS.toString)))
     assertEquals(Set.empty, listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.SHARE.toString)))
   }
 

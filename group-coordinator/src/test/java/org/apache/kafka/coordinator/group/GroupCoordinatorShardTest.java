@@ -2844,8 +2844,7 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetricsShard.class)
         );
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Predicate<String>> groupIdFilterCaptor = ArgumentCaptor.forClass(Predicate.class);
+        ArgumentCaptor<Predicate<String>> groupIdFilterCaptor = ArgumentCaptor.captor();
         List<ListGroupsResponseData.ListedGroup> groups = List.of(new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets"));
         when(groupMetadataManager.listGroups(eq(Set.of()), eq(Set.of()), groupIdFilterCaptor.capture(), eq(100L))).thenReturn(groups);
 

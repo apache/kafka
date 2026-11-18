@@ -456,17 +456,17 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(List.of(listGroupV5)));
 
-            // The committed-offsets filter cannot be used with an older broker.
+            // The request cannot be built at version 5, so the prepared response is never returned.
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
-            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
-                request instanceof ListGroupsRequest && ((ListGroupsRequest) request).data().requireCommittedOffsets()
-            );
+            env.kafkaClient().prepareResponse(new ListGroupsResponse(new ListGroupsResponseData()));
 
             ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().requireCommittedOffsets(true));
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
-            assertEquals(1, result.errors().get().size());
-            assertInstanceOf(UnsupportedVersionException.class, result.errors().get().iterator().next());
-            assertTrue(result.valid().get().isEmpty());
+            assertEquals(
+                List.of(UnsupportedVersionException.class),
+                result.errors().get().stream().map(Throwable::getClass).collect(Collectors.toList())
+            );
+            assertEquals(List.of(), new ArrayList<>(result.valid().get()));
         }
     }
 
@@ -496,11 +496,11 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
 
             ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().requireCommittedOffsets(true));
 
-            // all() fails, errors() has one entry for the unsupported broker, and valid() has
-            // only the groups from the broker that supports the filter.
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
-            assertEquals(1, result.errors().get().size());
-            assertInstanceOf(UnsupportedVersionException.class, result.errors().get().iterator().next());
+            assertEquals(
+                List.of(UnsupportedVersionException.class),
+                result.errors().get().stream().map(Throwable::getClass).collect(Collectors.toList())
+            );
             assertEquals(
                 List.of(new GroupListing("group-1", Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))),
                 new ArrayList<>(result.valid().get())

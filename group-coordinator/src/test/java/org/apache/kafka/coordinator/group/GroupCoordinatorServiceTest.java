@@ -1506,9 +1506,8 @@ public class GroupCoordinatorServiceTest {
                 .setGroupType("consumer")
         );
 
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ListGroupsResponseData.ListedGroup>>> readOperationCaptor =
-            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
+            ArgumentCaptor.captor();
 
         when(runtime.scheduleReadAllOperation(
             ArgumentMatchers.eq("list-groups"),
