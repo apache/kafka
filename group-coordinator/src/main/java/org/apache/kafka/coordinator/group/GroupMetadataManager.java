@@ -4407,7 +4407,11 @@ public class GroupMetadataManager {
      */
     private void cancelTargetAssignmentUpdate(String groupId) {
         executor.cancel(groupTargetAssignmentUpdateKey(groupId));
-        inflightOffloadedAssignorEpochs.remove(groupId);
+        Integer assignmentEpoch = inflightOffloadedAssignorEpochs.remove(groupId);
+        if (assignmentEpoch != null) {
+            log.info("[GroupId {}] Cancelled computing a new target assignment for epoch {}.",
+                groupId, assignmentEpoch);
+        }
     }
 
     /**
