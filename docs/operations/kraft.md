@@ -102,6 +102,17 @@ When provisioning new broker and controller nodes that we want to add to an exis
     
     $ bin/kafka-storage.sh format --cluster-id <cluster-id> --config config/kraft/server.properties --no-initial-controllers
 
+### Formatting Nodes During a KRaft Migration
+
+During an ongoing migration, when scaling a cluster or replacing nodes, storage formatting must be done in a special way. In order for the formatted storage of a newly provisioned node to remain compatible with rollback of the KRaft migration, the `format` command must be invoked with the `--zk-rollback-compatible` flag. Unless this is done, newly provisioned brokers will fail to start when configured into migration mode during a rollback sequence.
+
+To produce a storage directory that's formatted in a rollback compatible way, pass `--zk-rollback-compatible`.
+
+    # Broker added during a migration
+    $ bin/kafka-storage.sh format --cluster-id <cluster-id> --config config/kraft/server.properties --no-initial-controllers --zk-rollback-compatible
+
+Once the migration has been finalized, rollback to ZooKeeper mode is no longer possible, and this flag should no longer be used when formatting nodes.
+
 ## Controller membership changes
 
 ### Static versus Dynamic KRaft Quorums
@@ -266,6 +277,8 @@ In general, the migration process passes through several phases.
   * In **hybrid phase** , some brokers are in ZK mode, but there is a KRaft controller.
   * In **dual-write phase** , all brokers are KRaft, but the KRaft controller is continuing to write to ZK.
   * When the migration has been **finalized** , we no longer write metadata to ZooKeeper.
+
+If you need to replace or add a node while the migration is still in progress, see [Formatting Nodes During a KRaft Migration](#formatting-nodes-during-a-kraft-migration).
 
 
 
