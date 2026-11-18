@@ -175,6 +175,9 @@ org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImageTest:
 - testTopicIdAndTopicNameOfEmptyImage
 org.apache.kafka.coordinator.common.runtime.KafkaMetricHistogramTest:
 - testStats
+org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutorTest:
+- testPollWhenOperationFails
+- testPollWhenTaskFails
 org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessorTest:
 - testCreateAndClose
 - testEventsAreDrainedWhenClosed
