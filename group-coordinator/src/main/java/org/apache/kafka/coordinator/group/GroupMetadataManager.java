@@ -4600,7 +4600,7 @@ public class GroupMetadataManager {
         }
 
         if (exception != null) {
-            log.error("[GroupId {}] Failed to compute a new target assignment for epoch {}: {}.",
+            log.error("[GroupId {}] Failed to compute a new target assignment for epoch {}: {}",
                 groupId, targetAssignmentEpoch, exception.getMessage(), exception);
             return new CoordinatorResult<>(List.of());
         }
@@ -4643,7 +4643,7 @@ public class GroupMetadataManager {
                 groupId, targetAssignmentEpoch);
             return new CoordinatorResult<>(List.of());
         } catch (Throwable t) {
-            log.error("[GroupId {}] Failed to install new target assignment for epoch {}: {}.",
+            log.error("[GroupId {}] Failed to install new target assignment for epoch {}: {}",
                 groupId, targetAssignmentEpoch, t.getMessage(), t);
             return new CoordinatorResult<>(List.of());
         }
