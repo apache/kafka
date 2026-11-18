@@ -16,12 +16,12 @@
  */
 package kafka.server;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.server.config.DynamicLogConfig;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -29,10 +29,12 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogManager;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -391,28 +393,27 @@ public class DynamicLogConfigTest {
     }
 
     private static Properties createBrokerConfig(int logDirCount) {
-        return TestUtils.createBrokerConfig(
-            0,
-            true,
-            true,
-            8181,
-            Option.empty(),
-            Option.empty(),
-            Option.empty(),
-            true,
-            false,
-            TestUtils.RandomPort(),
-            false,
-            TestUtils.RandomPort(),
-            false,
-            TestUtils.RandomPort(),
-            Option.empty(),
-            logDirCount,
-            false,
-            1,
-            (short) 1,
-            false
-        );
+        Properties props = new Properties();
+        props.put(KRaftConfigs.NODE_ID_CONFIG, "0");
+        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
+        props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+        props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0");
+        props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:8181");
+        props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:8181");
+        props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT");
+
+        if (logDirCount > 1) {
+            List<String> logDirs = new ArrayList<>();
+            for (int i = 0; i < logDirCount; i++) {
+                logDirs.add(i % 2 == 0
+                    ? TestUtils.tempRelativeDir("data").getPath()
+                    : TestUtils.tempDirectory().getAbsolutePath());
+            }
+            props.put(ServerLogConfigs.LOG_DIRS_CONFIG, String.join(",", logDirs));
+        } else {
+            props.put(ServerLogConfigs.LOG_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        }
+        return props;
     }
 
     private static class DynamicLogConfigContext {
