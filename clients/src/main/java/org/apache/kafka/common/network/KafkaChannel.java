@@ -394,7 +394,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     public NetworkSend maybeCompleteSend() {
-        if (send != null && send.completed() && !transportLayer.hasPendingWrites()) {
+        if (send != null && send.completed()) {
             midWrite = false;
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             NetworkSend result = send;
@@ -437,13 +437,7 @@ public class KafkaChannel implements AutoCloseable {
             return 0;
 
         midWrite = true;
-        transportLayer.startWriteBatch();
-        try {
-            // A send can be complete while the transport layer still holds some of its bytes, then only they are left
-            return send.completed() ? 0 : send.writeTo(transportLayer);
-        } finally {
-            transportLayer.endWriteBatch();
-        }
+        return send.writeTo(transportLayer);
     }
 
     /**
