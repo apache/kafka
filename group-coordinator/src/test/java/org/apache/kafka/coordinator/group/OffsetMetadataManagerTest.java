@@ -207,6 +207,7 @@ public class OffsetMetadataManagerTest {
             this.metrics = metrics;
             this.groupMetadataManager = groupMetadataManager;
             this.offsetMetadataManager = offsetMetadataManager;
+            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
         }
 
         public Group getOrMaybeCreateGroup(
@@ -521,8 +522,6 @@ public class OffsetMetadataManagerTest {
             long producerId,
             CoordinatorRecord record
         ) {
-            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
-
             ApiMessage key = record.key();
             ApiMessageAndVersion value = record.value();
 
@@ -546,15 +545,16 @@ public class OffsetMetadataManagerTest {
             }
 
             lastWrittenOffset++;
+            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
         }
 
         private void replayEndTransactionMarker(
             long producerId,
             TransactionResult result
         ) {
-            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
             offsetMetadataManager.replayEndTransactionMarker(producerId, result);
             lastWrittenOffset++;
+            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
         }
 
         public void testOffsetDeleteWith(
