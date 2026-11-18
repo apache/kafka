@@ -32,6 +32,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,10 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class DefaultJwtValidatorTest extends OAuthBearerTest {
 
@@ -67,6 +72,21 @@ public class DefaultJwtValidatorTest extends OAuthBearerTest {
         DefaultJwtValidator jwtValidator = new DefaultJwtValidator(verificationKeyResolver);
         assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
         assertInstanceOf(BrokerJwtValidator.class, jwtValidator.delegate());
+    }
+
+    @Test
+    public void testDoesNotConfigureOrCloseInjectedVerificationKeyResolver() throws IOException {
+        CloseableVerificationKeyResolver verificationKeyResolver = mock(CloseableVerificationKeyResolver.class);
+        Map<String, ?> configs = getSaslConfigs(Map.of(
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+        DefaultJwtValidator jwtValidator = new DefaultJwtValidator(verificationKeyResolver);
+        jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        jwtValidator.close();
+
+        // The code that supplied the resolver manages its lifecycle.
+        verify(verificationKeyResolver, never()).configure(any(), any(), any());
+        verify(verificationKeyResolver, never()).close();
     }
 
     @Test
