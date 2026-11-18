@@ -340,9 +340,6 @@ public class OffsetMetadataManagerTest {
         }
 
         public boolean hasCommittedOffsets(String groupId) {
-            // The runtime keeps a snapshot at the last written offset; replay() in this
-            // context only snapshots the state before each record, so create it here.
-            snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
             return offsetMetadataManager.hasCommittedOffsets(groupId, lastCommittedOffset);
         }
 

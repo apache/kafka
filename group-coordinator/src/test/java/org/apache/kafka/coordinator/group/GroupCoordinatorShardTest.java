@@ -2877,22 +2877,44 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetricsShard.class)
         );
 
-        // All four groups are empty. Committing an offset to an unknown group creates a simple classic group.
-        context.commitOffset("classic-with-offsets", "foo", 0, 100L, 1);
+        // All groups are empty. Committing an offset to an unknown group creates a simple classic group.
         context.getOrMaybeCreateGroup(Group.GroupType.CLASSIC, "classic-without-offsets");
         context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-with-offsets");
-        context.commitOffset("consumer-with-offsets", "foo", 0, 100L, 1);
         context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-without-offsets");
+        context.getOrMaybeCreateGroup(Group.GroupType.STREAMS, "streams-with-offsets");
+        context.groupMetadataManager.getOrMaybeCreatePersistedShareGroup("share-group", true);
+        context.commitOffset("classic-with-offsets", "foo", 0, 100L, 1);
+        context.commitOffset("consumer-with-offsets", "foo", 0, 100L, 1);
+        context.commitOffset("streams-with-offsets", "foo", 0, 100L, 1);
+        context.commit();
+
+        // These writes are not committed yet, so a read at the committed offset does not see them.
+        context.commitOffset("consumer-without-offsets", "foo", 0, 100L, 1);
+        context.testOffsetDeleteWith("classic-with-offsets", "foo", 0, Errors.NONE);
 
         BiFunction<List<String>, List<String>, Set<String>> listGroupIds = (statesFilter, typesFilter) ->
-            coordinator.listGroups(statesFilter, typesFilter, true, Long.MAX_VALUE).stream()
+            coordinator.listGroups(statesFilter, typesFilter, true, context.lastCommittedOffset).stream()
                 .map(ListGroupsResponseData.ListedGroup::groupId)
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets"), listGroupIds.apply(List.of(), List.of()));
-        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of()));
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets", "streams-with-offsets"), listGroupIds.apply(List.of(), List.of()));
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets", "streams-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of()));
         assertEquals(Set.of(), listGroupIds.apply(List.of("Stable"), List.of()));
         assertEquals(Set.of("consumer-with-offsets"), listGroupIds.apply(List.of(), List.of("consumer")));
+        assertEquals(Set.of("streams-with-offsets"), listGroupIds.apply(List.of(), List.of("streams")));
         assertEquals(Set.of("classic-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of("classic")));
+
+        // The share group exists but never has committed offsets.
+        assertEquals(
+            List.of("share-group"),
+            coordinator.listGroups(List.of(), List.of("share"), false, context.lastCommittedOffset).stream()
+                .map(ListGroupsResponseData.ListedGroup::groupId)
+                .toList()
+        );
+        assertEquals(Set.of(), listGroupIds.apply(List.of(), List.of("share")));
+
+        // Once committed, the new offset and the deletion are visible.
+        context.commit();
+        assertEquals(Set.of("consumer-with-offsets", "consumer-without-offsets", "streams-with-offsets"), listGroupIds.apply(List.of(), List.of()));
     }
 }
