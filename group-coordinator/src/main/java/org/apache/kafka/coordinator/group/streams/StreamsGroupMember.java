@@ -385,7 +385,12 @@ public record StreamsGroupMember(String memberId,
                 .setWarmupTasks(taskIdsFromMap(targetAssignment.warmupTasks()));
         }
 
-        final TasksTupleWithEpochs assignedTasksWithPendingRevocation = assignedTasks.merge(tasksPendingRevocation);
+        // The assignment includes both assigned tasks and tasks pending
+        // revocation because the member is still responsible for the latter until
+        // revocation is complete.
+        final TasksTupleWithEpochs assignedTasksWithPendingRevocation = tasksPendingRevocation.isEmpty() ?
+            assignedTasks :
+            assignedTasks.merge(tasksPendingRevocation);
         return new StreamsGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
