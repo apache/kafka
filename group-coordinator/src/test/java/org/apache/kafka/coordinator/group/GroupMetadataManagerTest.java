@@ -32604,7 +32604,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupAsyncTargetAssignmentWithJoiningClassicMember() throws Exception {
+    public void testConsumerGroupAsyncTargetAssignmentWithClassicMember() throws Exception {
         // In testConsumerGroupAsyncTargetAssignment, a second member joins using the consumer
         // protocol while an assignor run is in flight. Here, the second member uses the classic
         // protocol and its heartbeat schedules the next run.
