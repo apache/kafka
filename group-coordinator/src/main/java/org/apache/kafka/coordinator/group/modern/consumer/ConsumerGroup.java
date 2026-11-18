@@ -614,42 +614,42 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * on {@link ConsumerGroup#serverAssignors} persisted structure
      * but it does not update it.
      *
-     * @param oldMember     The old member.
-     * @param newMember     The new member.
-     * @param assignorNames The names of the configured assignors in order of preference.
+     * @param oldMember               The old member.
+     * @param newMember               The new member.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
      *
-     * @return An Optional containing the preferred assignor.
+     * @return The preferred assignor.
      */
-    public Optional<String> computePreferredServerAssignor(
+    public String computePreferredServerAssignor(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember,
-        List<String> assignorNames
+        List<String> configuredAssignorNames
     ) {
         // Copy the current count and update it.
         Map<String, Integer> counts = new HashMap<>(this.serverAssignors);
         maybeUpdateServerAssignors(counts, oldMember, newMember);
 
-        return selectPreferredServerAssignor(assignorNames, counts::get);
+        return selectPreferredServerAssignor(configuredAssignorNames, counts::get);
     }
 
     /**
-     * @param assignorNames The names of the configured assignors in order of preference.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
      *
      * @return The preferred assignor for the group.
      */
-    public Optional<String> preferredServerAssignor(List<String> assignorNames) {
-        return preferredServerAssignor(Long.MAX_VALUE, assignorNames);
+    public String preferredServerAssignor(List<String> configuredAssignorNames) {
+        return preferredServerAssignor(Long.MAX_VALUE, configuredAssignorNames);
     }
 
     /**
-     * @param committedOffset The committed offset.
-     * @param assignorNames   The names of the configured assignors in order of preference.
+     * @param committedOffset         The committed offset.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
      *
      * @return The preferred assignor for the group with given offset.
      */
-    public Optional<String> preferredServerAssignor(long committedOffset, List<String> assignorNames) {
+    public String preferredServerAssignor(long committedOffset, List<String> configuredAssignorNames) {
         return selectPreferredServerAssignor(
-            assignorNames,
+            configuredAssignorNames,
             assignorName -> serverAssignors.get(assignorName, committedOffset)
         );
     }
@@ -657,27 +657,28 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Selects the preferred assignor among the configured assignors. The assignor
      * with the most votes wins. When several assignors have the same number of
-     * votes, the one that comes first in the configured assignors wins.
+     * votes, the one that comes first in the configured assignors wins. When none
+     * of them has a vote, the first configured assignor is the default.
      *
-     * @param assignorNames The names of the configured assignors in order of preference.
-     * @param votes         The number of votes of an assignor, or null if it has none.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
+     * @param votes                   The number of votes of an assignor, or null if it has none.
      *
-     * @return An Optional containing the preferred assignor.
+     * @return The preferred assignor.
      */
-    private static Optional<String> selectPreferredServerAssignor(
-        List<String> assignorNames,
+    private static String selectPreferredServerAssignor(
+        List<String> configuredAssignorNames,
         Function<String, Integer> votes
     ) {
-        String preferredAssignorName = null;
+        String preferredAssignorName = configuredAssignorNames.get(0);
         int maxVotes = 0;
-        for (String assignorName : assignorNames) {
+        for (String assignorName : configuredAssignorNames) {
             Integer assignorVotes = votes.apply(assignorName);
             if (assignorVotes != null && assignorVotes > maxVotes) {
                 preferredAssignorName = assignorName;
                 maxVotes = assignorVotes;
             }
         }
-        return Optional.ofNullable(preferredAssignorName);
+        return preferredAssignorName;
     }
 
     /**
@@ -1256,13 +1257,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
-        String defaultAssignor,
-        List<String> assignorNames,
+        List<String> configuredAssignorNames,
         CoordinatorMetadataImage image
     ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
-            .setAssignorName(preferredServerAssignor(committedOffset, assignorNames).orElse(defaultAssignor))
+            .setAssignorName(preferredServerAssignor(committedOffset, configuredAssignorNames))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());

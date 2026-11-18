@@ -622,16 +622,17 @@ public class ConsumerGroupTest {
             .setServerAssignorName("uniform")
             .build();
 
-        // The group is empty so the preferred assignor should be empty.
+        // The group is empty so the preferred assignor should be uniform, the first
+        // configured assignor.
         assertEquals(
-            Optional.empty(),
+            "uniform",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 1 has got an updated assignor but this is not reflected in the group yet so
         // we pass the updated member. The assignor should be range.
         assertEquals(
-            Optional.of("range"),
+            "range",
             consumerGroup.computePreferredServerAssignor(null, member1, assignorNames)
         );
 
@@ -640,21 +641,22 @@ public class ConsumerGroupTest {
 
         // Member 1 is in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
+            "range",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 1 has been removed but this is not reflected in the group yet so
-        // we pass the removed member. The assignor should be range.
+        // we pass the removed member. No vote is left so the assignor should be uniform,
+        // the first configured assignor.
         assertEquals(
-            Optional.empty(),
+            "uniform",
             consumerGroup.computePreferredServerAssignor(member1, null, assignorNames)
         );
 
         // Member 2 has got an updated assignor but this is not reflected in the group yet so
         // we pass the updated member. The assignor should be range.
         assertEquals(
-            Optional.of("range"),
+            "range",
             consumerGroup.computePreferredServerAssignor(null, member2, assignorNames)
         );
 
@@ -663,7 +665,7 @@ public class ConsumerGroupTest {
 
         // Member 1 and 2 are in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
+            "range",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
@@ -672,7 +674,7 @@ public class ConsumerGroupTest {
 
         // Member 1, 2 and 3 are in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
+            "range",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
@@ -691,7 +693,7 @@ public class ConsumerGroupTest {
         // we pass the updated member. Range and uniform have one vote each so the assignor
         // should be uniform, which comes first in the configured assignors.
         assertEquals(
-            Optional.of("uniform"),
+            "uniform",
             consumerGroup.computePreferredServerAssignor(member1, updatedMember1, assignorNames)
         );
 
@@ -700,14 +702,14 @@ public class ConsumerGroupTest {
 
         // The assignor should be uniform.
         assertEquals(
-            Optional.of("uniform"),
+            "uniform",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 2 has removed it assignor but this is not reflected in the group yet so
         // we pass the updated member. The assignor should be uniform.
         assertEquals(
-            Optional.of("uniform"),
+            "uniform",
             consumerGroup.computePreferredServerAssignor(member2, updatedMember2, assignorNames)
         );
 
@@ -716,23 +718,24 @@ public class ConsumerGroupTest {
 
         // Only member 3 is left in the group so the assignor should be uniform.
         assertEquals(
-            Optional.of("uniform"),
+            "uniform",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 3 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be empty.
+        // we pass the updated member. No vote is left so the assignor should be uniform,
+        // the first configured assignor.
         assertEquals(
-            Optional.empty(),
+            "uniform",
             consumerGroup.computePreferredServerAssignor(member3, updatedMember3, assignorNames)
         );
 
         // Update the group.
         consumerGroup.updateMember(updatedMember3);
 
-        // The group is empty so the assignor should be empty as well.
+        // No vote is left in the group so the assignor should be uniform as well.
         assertEquals(
-            Optional.empty(),
+            "uniform",
             consumerGroup.preferredServerAssignor(assignorNames)
         );
     }
@@ -754,7 +757,7 @@ public class ConsumerGroupTest {
         // Range and uniform have one vote each so the preferred assignor should be the one
         // that comes first in the configured assignors, whichever member is updated.
         for (List<String> assignorNames : List.of(List.of("uniform", "range"), List.of("range", "uniform"))) {
-            Optional<String> expectedAssignor = Optional.of(assignorNames.get(0));
+            String expectedAssignor = assignorNames.get(0);
 
             assertEquals(expectedAssignor, consumerGroup.preferredServerAssignor(assignorNames));
             assertEquals(expectedAssignor, consumerGroup.computePreferredServerAssignor(member1, member1, assignorNames));
@@ -781,12 +784,13 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(member3);
 
         // Uniform has the most votes but only range is configured so the assignor should be range.
-        assertEquals(Optional.of("range"), consumerGroup.preferredServerAssignor(List.of("range")));
-        assertEquals(Optional.of("range"), consumerGroup.computePreferredServerAssignor(member1, member1, List.of("range")));
+        assertEquals("range", consumerGroup.preferredServerAssignor(List.of("range")));
+        assertEquals("range", consumerGroup.computePreferredServerAssignor(member1, member1, List.of("range")));
 
-        // None of the voted assignors is configured so the assignor should be empty.
-        assertEquals(Optional.empty(), consumerGroup.preferredServerAssignor(List.of("custom")));
-        assertEquals(Optional.empty(), consumerGroup.computePreferredServerAssignor(member1, member1, List.of("custom")));
+        // None of the voted assignors is configured so the assignor should be custom, the
+        // first configured assignor.
+        assertEquals("custom", consumerGroup.preferredServerAssignor(List.of("custom")));
+        assertEquals("custom", consumerGroup.computePreferredServerAssignor(member1, member1, List.of("custom")));
     }
 
     @Test
@@ -1303,7 +1307,7 @@ public class ConsumerGroupTest {
                     .setSubscribedTopicRegex("")
                     .setMemberType((byte) 1)
             ));
-        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1,
             List.of("assignorName"), new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
 
         assertEquals(expected, actual);
