@@ -937,19 +937,6 @@ kafka.log.LogConfigTest:
 - testValidRemoteLogCopyDisabled
 - testValidRemoteLogDeleteOnDisable
 - testValidateBrokerLogConfigs
-kafka.metrics.MetricsTest:
-- testBrokerStateMetric
-- testBrokerTopicMetricsBytesInOut
-- testBrokerTopicMetricsUnregisteredAfterDeletingTopic
-- testClusterIdMetric
-- testGeneralBrokerTopicMetricsAreGreedilyRegistered
-- testJMXFilter
-- testKRaftControllerMetrics
-- testLinuxIoMetrics
-- testMetricsReporterAfterDeletingTopic
-- testUpdateJMXFilter
-- testWindowsStyleTagNames
-- testYammerMetricsCountMetric
 kafka.network.ConnectionQuotasTest:
 - testBrokerConnectionRateLimitWhenActualRateAboveLimit
 - testBrokerConnectionRateLimitWhenActualRateBelowLimit

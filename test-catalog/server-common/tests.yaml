@@ -271,6 +271,7 @@ org.apache.kafka.server.metrics.KafkaMetricsGroupTest:
 - testTaggedMetricName
 - testTaggedMetricNameWithEmptyValue
 - testUntaggedMetricName
+- testWindowsStyleTagNames
 org.apache.kafka.server.metrics.KafkaYammerMetricsTest:
 - testTaggedMetricName
 - testTaggedMetricNameWithEmptyValue

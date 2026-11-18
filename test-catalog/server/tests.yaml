@@ -503,6 +503,19 @@ org.apache.kafka.server.metrics.LinuxIoMetricsCollectorTest:
 - testAllMetricsWithRealWorldValues
 - testReadProcFile
 - testUnableToReadNonexistentProcFile
+org.apache.kafka.server.metrics.MetricsTest:
+- testAsyncConsumerBrokerTopicMetricsBytesInOut
+- testBrokerStateMetric
+- testBrokerTopicMetricsUnregisteredAfterDeletingTopic
+- testClassicConsumerBrokerTopicMetricsBytesInOut
+- testClusterIdMetric
+- testGeneralBrokerTopicMetricsAreGreedilyRegistered
+- testJMXFilter
+- testKRaftControllerMetrics
+- testLinuxIoMetrics
+- testMetricsReporterAfterDeletingTopic
+- testUpdateJMXFilter
+- testYammerMetricsCountMetric
 org.apache.kafka.server.metrics.NodeMetricsTest:
 - testMetricsExported
 org.apache.kafka.server.mirror.MirrorCoordinatorRecordSerdeIntegrationTest:
