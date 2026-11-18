@@ -493,7 +493,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 metadata.stateManager.taskType() == Task.TaskType.STANDBY &&
                 metadata.stateManager.changelogAsSource(entry.getKey())) {
                 endOffset = null;
-	    } else if (endOffset == null && metadata.storeMetadata.lastChangelogOffset() != null) {
+            } else if (endOffset == null && metadata.storeMetadata.lastChangelogOffset() != null) {
                 endOffset = metadata.storeMetadata.lastChangelogOffset() + 1L;
             }
             endOffsets.put(entry.getKey(), endOffset);
