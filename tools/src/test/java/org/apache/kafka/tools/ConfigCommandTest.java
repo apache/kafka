@@ -390,6 +390,13 @@ public class ConfigCommandTest {
             "--describe"
         ));
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "cluster-mirrors",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
@@ -434,6 +441,7 @@ public class ConfigCommandTest {
         testExpectedEntityTypeNames(List.of("ips"), List.of("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
         testExpectedEntityTypeNames(List.of("client-metrics"), List.of("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
         testExpectedEntityTypeNames(List.of("groups"), List.of("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of("cluster-mirrors"), List.of("A"), connectOpts, "--entity-type", "cluster-mirrors", "--entity-name", "A");
         testExpectedEntityTypeNames(List.of("users", "clients"), List.of("A", ""), connectOpts,
             "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
         testExpectedEntityTypeNames(List.of("users", "clients"), List.of("", "B"), connectOpts,
@@ -1293,6 +1301,116 @@ public class ConfigCommandTest {
         };
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
         verify(alterResult).all();
+    }
+
+    @Test
+    public void shouldAlterClusterMirrorConfig() throws Exception {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--alter",
+            "--delete-config", "a",
+            "--add-config", "b=c"));
+        alterOpts.checkArgs();
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                assertEquals(Map.of(new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, "mirror"), List.of(
+                    new AlterConfigOp(new ConfigEntry("a", ""), AlterConfigOp.OpType.DELETE),
+                    new AlterConfigOp(new ConfigEntry("b", "c"), AlterConfigOp.OpType.SET)
+                )), configs);
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        verify(alterResult).all();
+    }
+
+    @Test
+    public void shouldPropagateUnsupportedVersionWhenAlteringClusterMirrorConfig() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--alter",
+            "--add-config", "b=c"));
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.completeExceptionally(new UnsupportedVersionException("Cluster mirror configs are not supported yet."));
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                return alterResult;
+            }
+        };
+        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class,
+            () -> ConfigCommand.alterConfig(mockAdminClient, alterOpts));
+        assertEquals("Cluster mirror configs are not supported yet.", exception.getMessage());
+    }
+
+    @Test
+    public void shouldDescribeClusterMirrorConfig() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--describe"));
+        describeOpts.checkArgs();
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, "mirror");
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(new ConfigEntry("a", "b"))));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.values()).thenReturn(Map.of(resource, future));
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertEquals(List.of(resource), List.copyOf(resources));
+                return describeResult;
+            }
+        };
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        // UNKNOWN is a placeholder dynamic source for cluster mirrors
+        assertTrue(output.contains("Dynamic configs for cluster-mirror mirror are:"), output);
+        assertTrue(output.contains("a=b"), output);
+    }
+
+    @Test
+    public void shouldNotDescribeClusterMirrorConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--describe"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("An entity name must be specified with --describe of cluster-mirrors", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotAlterClusterMirrorConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--alter",
+            "--add-config", "a=b"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("An entity name must be specified with --alter of cluster-mirrors", exception.getMessage());
     }
 
     @Test
