@@ -38429,14 +38429,26 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)), context.executor.cancelledTasks());
     }
 
-    @Test
-    public void testStreamsGroupAsyncTargetAssignmentWithReplacedStaticMember() {
+    /**
+     * Tests that when a static member is replaced while an offloaded assignor run is in flight, the
+     * new member inherits the target assignment computed for the old member.
+     *
+     * @param replaceJoiningMember Whether to replace the static member whose join scheduled the run
+     *                             rather than the static member already in the group. The two cases
+     *                             differ because the joining member is not yet in the group's static
+     *                             members when the run is scheduled.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStreamsGroupAsyncTargetAssignmentWithReplacedStaticMember(boolean replaceJoiningMember) {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
         String memberId3 = Uuid.randomUuid().toString();
         String instanceId1 = "instance-id-1";
         String instanceId2 = "instance-id-2";
+        String replacedMemberId = replaceJoiningMember ? memberId2 : memberId1;
+        String replacedInstanceId = replaceJoiningMember ? instanceId2 : instanceId1;
 
         String subtopology = "subtopology";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -38497,8 +38509,8 @@ public class GroupMetadataManagerTest {
         context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setInstanceId(instanceId2)
+                .setMemberId(replacedMemberId)
+                .setInstanceId(replacedInstanceId)
                 .setMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH));
 
         // Static member re-joins the group with a new member id.
@@ -38506,7 +38518,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId3)
-                .setInstanceId(instanceId2)
+                .setInstanceId(replacedInstanceId)
                 .setMemberEpoch(0)
                 .setProcessId("process-id-3")
                 .setRebalanceTimeoutMs(1500)
@@ -38532,11 +38544,11 @@ public class GroupMetadataManagerTest {
         assertUnorderedRecordsEquals(
             List.of(
                 List.of(
-                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, replaceJoiningMember ? memberId1 : memberId3,
                         TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                             TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2)
                         )),
-                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId3,
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, replaceJoiningMember ? memberId3 : memberId2,
                         TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                             TaskAssignmentTestUtil.mkTasks(subtopology, 3, 4, 5)
                         ))
