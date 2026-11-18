@@ -34,8 +34,13 @@ abstract class AbstractPartitionGroup {
         private final boolean ready;
         // KAFKA-21372: built lazily, since readyToProcess runs per record and the caller rarely logs the message
         private final Optional<Supplier<String>> logMessage;
+        private final boolean normalIdling;
 
         ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage) {
+            this(ready, logMessage, false);
+        }
+
+        ReadyToProcessResult(final boolean ready, final Optional<Supplier<String>> logMessage, final boolean normalIdling) {
             if (ready && logMessage.isPresent()) {
                 throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is true but a log message is present.");
             } else if (!ready && logMessage.isEmpty()) {
@@ -43,14 +48,23 @@ abstract class AbstractPartitionGroup {
             }
             this.ready = ready;
             this.logMessage = logMessage;
+            this.normalIdling = normalIdling;
         }
 
         boolean isReady() {
             return ready;
         }
 
+        boolean isNormalIdling() {
+            return normalIdling;
+        }
+
         Optional<String> getLogMessage() {
             return logMessage.map(Supplier::get);
+        }
+
+        Optional<Supplier<String>> getLogMessageSupplier() {
+            return logMessage;
         }
     }
 

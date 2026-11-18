@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
@@ -48,6 +49,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -93,6 +95,21 @@ public class StreamsGroupTest {
             snapshotRegistry,
             groupId
         );
+    }
+
+    private StreamsGroup createReadyStreamsGroup(String groupId) {
+        StreamsGroup streamsGroup = createStreamsGroup(groupId);
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
+        streamsGroup.setValidatedTopologyEpoch(1);
+        return streamsGroup;
+    }
+
+    private static StreamsGroupMember member(String memberId, MemberState state, int memberEpoch) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setState(state)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
+            .build();
     }
 
     @Test
@@ -354,8 +371,27 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
         assertTrue(streamsGroup.hasMember("member"));
 
+        TasksTuple otherAssignment = new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of());
+        streamsGroup.updateTargetAssignment("member", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of()));
+        streamsGroup.updateTargetAssignment("other-member", otherAssignment);
+
         streamsGroup.removeMember("member");
         assertFalse(streamsGroup.hasMember("member"));
+
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), streamsGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        streamsGroup.updateTargetAssignment("member1", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of()));
+        streamsGroup.updateTargetAssignment("member2", new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of()));
+        assertEquals(Set.of("member1", "member2"), streamsGroup.targetAssignment().keySet());
+
+        streamsGroup.clearTargetAssignment();
+        assertEquals(Map.of(), streamsGroup.targetAssignment());
     }
 
     @Test
@@ -680,79 +716,120 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
 
-        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        streamsGroup.updateMember(member1);
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
         streamsGroup.setGroupEpoch(2);
 
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         streamsGroup.setValidatedTopologyEpoch(1);
 
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
 
-        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        streamsGroup.updateMember(member2);
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
         streamsGroup.setGroupEpoch(3);
 
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
 
         streamsGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
 
-        member1 = new StreamsGroupMember.Builder(member1)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
 
-        streamsGroup.updateMember(member1);
-
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
 
         // Member 2 is not stable so the group stays in reconciling state.
-        member2 = new StreamsGroupMember.Builder(member2)
-            .setState(MemberState.UNREVOKED_TASKS)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        streamsGroup.updateMember(member("member2", MemberState.UNREVOKED_TASKS, 3));
 
-        streamsGroup.updateMember(member2);
-
-        assertEquals(MemberState.UNREVOKED_TASKS, member2.state());
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
 
-        member2 = new StreamsGroupMember.Builder(member2)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 3));
 
-        streamsGroup.updateMember(member2);
-
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
 
         streamsGroup.removeMember("member1");
         streamsGroup.removeMember("member2");
 
         assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+    }
+
+    @Test
+    public void testUpdateMemberGroupState() {
+        StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
+        streamsGroup.setGroupEpoch(2);
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
+
+        // Member 2 is counted once although it was updated twice, so the group
+        // reconciles when member 1 is no longer stable.
+        streamsGroup.updateMember(member("member1", MemberState.UNREVOKED_TASKS, 2));
+
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
+    }
+
+    @Test
+    public void testSetTargetAssignmentMetadataGroupState() {
+        StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
+        streamsGroup.setGroupEpoch(3);
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 3));
+
+        assertEquals(StreamsGroupState.ASSIGNING, streamsGroup.state());
+
+        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
+    }
+
+    @Test
+    public void testRemoveMemberGroupState() {
+        StreamsGroup streamsGroup = createReadyStreamsGroup("foo");
+        streamsGroup.setGroupEpoch(2);
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member3", MemberState.UNREVOKED_TASKS, 2));
+
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        // Member 3 is not stable so the group stays in reconciling state.
+        streamsGroup.removeMember("member1");
+
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        streamsGroup.removeMember("member3");
+
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
+    }
+
+    @Test
+    public void testGroupStateRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
+        streamsGroup.setValidatedTopologyEpoch(1);
+        streamsGroup.setGroupEpoch(2);
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
+        streamsGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        streamsGroup.updateMember(member("member1", MemberState.UNREVOKED_TASKS, 2));
+
+        assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        // The group state is reverted with the snapshot too. Updating member 2
+        // computes it again from the number of stable members at the snapshot.
+        snapshotRegistry.revertToSnapshot(0);
+        streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
     }
 
     @Test
@@ -1617,5 +1694,48 @@ public class StreamsGroupTest {
         when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
 
         assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testBuildEndpointToPartitionsWithoutReadyTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host2").setPort(9093))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+        group.updateMember(member1);
+        group.updateMember(member2);
+
+        // No configured topology yet.
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Topology configuration failed because source topics are missing.
+        group.setConfiguredTopology(new ConfiguredTopology(
+            1, 0, Optional.empty(), Map.of(), Optional.of(TopicConfigurationException.missingSourceTopics("Source topics foo are missing."))));
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Subtopologies are configured, but internal topics are still missing.
+        group.setConfiguredTopology(new ConfiguredTopology(
+            1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.of(TopicConfigurationException.missingInternalTopics("Internal topics are missing."))));
+        assertEquals(List.of(), group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null));
+
+        // Once the topology is ready, every member with an endpoint is reported.
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitions =
+            group.buildEndpointToPartitions(member1, CoordinatorMetadataImage.EMPTY, null);
+        assertEquals(
+            Set.of("host1:9092", "host2:9093"),
+            endpointToPartitions.stream()
+                .map(e -> e.userEndpoint().host() + ":" + e.userEndpoint().port())
+                .collect(Collectors.toSet())
+        );
+        endpointToPartitions.forEach(e -> {
+            assertEquals(List.of(), e.activePartitions());
+            assertEquals(List.of(), e.standbyPartitions());
+        });
     }
 }

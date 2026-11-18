@@ -689,24 +689,25 @@ public class PlaintextConsumerCallbackTest {
 
         var revokedCount = new AtomicInteger();
         var lostCount = new AtomicInteger();
-        var listener = new ConsumerRebalanceListener() {
+        var listener = new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 revokedCount.incrementAndGet();
             }
 
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             }
 
             @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 lostCount.incrementAndGet();
             }
         };
 
         try (Consumer<byte[], byte[]> consumer = createConsumer(groupProtocol)) {
-            consumer.subscribe(List.of(topicName), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topicName));
             ClientsTestUtils.awaitAssignment(consumer, bothPartitions);
             assertEquals(0, revokedCount.get());
             assertEquals(0, lostCount.get());

@@ -953,17 +953,30 @@ public class StreamThread extends Thread implements ProcessingThread {
             return;
         }
         boolean cleanRun = false;
+        // An interrupt that stops the run loop must not leak into the exception handler or the shutdown:
+        // with the flag set, the task removal waits give up immediately and the tasks are closed dirty,
+        // and a replacement thread cannot be created on the dying thread. The flag is cleared before
+        // either runs and restored once the shutdown completes.
+        boolean interrupted = false;
         try {
             taskManager.init();
             initLatencyWindowsIfNeeded(time.milliseconds());
             cleanRun = runLoop();
         } catch (final Throwable e) {
+            interrupted = Thread.interrupted();
             failedStreamThreadSensor.record();
             requestLeaveGroupOnFailure();
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
-            completeShutdown(cleanRun);
+            interrupted |= Thread.interrupted();
+            try {
+                completeShutdown(cleanRun);
+            } finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
     }
 

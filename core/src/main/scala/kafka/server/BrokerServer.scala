@@ -24,7 +24,7 @@ import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
 import kafka.server.share.{ReplicaManagerLogReader, ReplicaManagerPartitionMetadataProvider, ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -48,8 +48,8 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, QuotaConfig}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, MetadataVersion, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, QuotaConfig}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
@@ -121,7 +121,7 @@ class BrokerServer(
 
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[ConfigType, ConfigHandler] = _
+  var dynamicConfigHandlers: Map[ConfigResource.Type, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
 
@@ -311,7 +311,8 @@ class BrokerServer(
         time,
         metrics,
         s"broker-${config.nodeId}-",
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        () => requestHeaderVersion(_.alterPartitionRequestHeaderVersion)
       )
       alterPartitionManager.start()
 
@@ -414,7 +415,8 @@ class BrokerServer(
         config.brokerId,
         time,
         () => lifecycleManager.brokerEpoch,
-        clientToControllerChannelManager
+        clientToControllerChannelManager,
+        () => requestHeaderVersion(_.allocateProducerIdsRequestHeaderVersion)
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
@@ -432,11 +434,11 @@ class BrokerServer(
         time,
       )
 
-      dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
-        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
-        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
-        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
+      dynamicConfigHandlers = Map[ConfigResource.Type, ConfigHandler](
+        ConfigResource.Type.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
+        ConfigResource.Type.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigResource.Type.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigResource.Type.GROUP -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures)
 
@@ -672,6 +674,15 @@ class BrokerServer(
     }
   }
 
+  private def requestHeaderVersion(headerVersion: MetadataVersion => Short): Short = {
+    try {
+      headerVersion(metadataCache.metadataVersion())
+    } catch {
+      // The metadata version is unknown until the first metadata image is loaded.
+      case _: IllegalStateException => headerVersion(MetadataVersion.MINIMUM_VERSION)
+    }
+  }
+
   private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
     new NetworkPartitionMetadataClient(
       metadataCache,
@@ -884,9 +895,6 @@ class BrokerServer(
 
       if (transactionCoordinator != null)
         Utils.swallow(this.logger.underlying, () => transactionCoordinator.shutdown())
-
-      if (groupConfigManager != null)
-        Utils.swallow(this.logger.underlying, () => groupConfigManager.close())
 
       if (groupCoordinator != null)
         Utils.swallow(this.logger.underlying, () => groupCoordinator.shutdown())
