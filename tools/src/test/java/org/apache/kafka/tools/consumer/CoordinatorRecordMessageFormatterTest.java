@@ -62,7 +62,9 @@ public abstract class CoordinatorRecordMessageFormatterTest {
             formatter.configure(Map.of());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             formatter.writeTo(record, new PrintStream(out));
-            assertEquals(expectedOutput.replaceAll("\\s+", ""), out.toString());
+            // A printed record is followed by one newline and a skipped record prints nothing.
+            String expectedJson = expectedOutput.replaceAll("\\s+", "");
+            assertEquals(expectedJson.isEmpty() ? "" : expectedJson + "\n", out.toString());
         }
     }
 }
