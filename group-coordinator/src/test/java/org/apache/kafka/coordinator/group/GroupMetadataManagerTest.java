@@ -109,6 +109,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
+import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -36635,6 +36636,103 @@ public class GroupMetadataManagerTest {
                 )
             ),
             tasks
+        );
+    }
+
+    @Test
+    public void testShareGroupAsyncTargetAssignmentWithUpdatedMetadataImage() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        SimpleAssignor assignor = new SimpleAssignor();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        ShareGroupMember member1 = new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+
+        ShareGroupMember member2 = new ShareGroupMember.Builder(memberId2)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(metadataImage)
+            .withShareGroup(new ShareGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
+            .build();
+
+        // The share partitions are initialized.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            Map.of(),
+            Map.of(fooTopicId, new InitMapValue(fooTopicName, Set.of(0, 1, 2, 3, 4, 5), 1)),
+            Map.of()
+        ));
+
+        // Member 2 leaves the group.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+
+        // Member 1 heartbeats.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10));
+
+        // Assignor for epoch 11 is scheduled on executor.
+        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+
+        // The metadata image is updated.
+        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .buildCoordinatorMetadataImage();
+        context.groupMetadataManager.onMetadataUpdate(newMetadataImage.emptyDelta(), newMetadataImage);
+
+        // The target assignment is written, computed from the metadata image from when the run was scheduled.
+        assertEquals(
+            List.of(
+                new MockCoordinatorExecutor.ExecutorResult<>(
+                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
+                    new CoordinatorResult<>(List.of(
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+                            mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+                        )),
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds())
+                    ))
+                )
+            ),
+            context.processTasks()
         );
     }
 
