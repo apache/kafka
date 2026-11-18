@@ -2324,8 +2324,9 @@ public class GroupMetadataManager {
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
             // No active task needs to stay with its holder: if the intermediate assignment differs from the assigned
             // tasks, it starts a new epoch that every member reconciles to, and otherwise it moves nothing.
-            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology, false);
-            if (differsFromAssignedTasks(refinedGroupAssignment, group)) {
+            Map<String, TasksTuple> targetAssignment = group.targetAssignment();
+            refinedGroupAssignment = refineAssignment(group, targetAssignment, updatedConfiguredTopology, false);
+            if (differsFromAssignedTasks(refinedGroupAssignment, targetAssignment, group)) {
                 assignmentUpdate = AssignmentUpdate.REFINED;
             }
         }
@@ -4785,14 +4786,21 @@ public class GroupMetadataManager {
      * {@code -2}, which keeps the group out of {@code STABLE}.
      *
      * @param refinedAssignment The intermediate assignment keyed by member ID.
+     * @param targetAssignment  All members' target assignments, which the intermediate assignment was refined from.
      * @param group             The streams group.
      *
      * @return True if a member's intermediate assignment differs from its assigned tasks.
      */
     private static boolean differsFromAssignedTasks(
         final Map<String, TasksTuple> refinedAssignment,
+        final Map<String, TasksTuple> targetAssignment,
         final StreamsGroup group
     ) {
+        if (refinedAssignment == targetAssignment) {
+            // The group counts the members whose assigned tasks are their target assignment, so no member has to be
+            // compared.
+            return !group.allMembersOnTargetAssignment();
+        }
         for (final StreamsGroupMember member : group.members().values()) {
             if (!refinedAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY).sameTasks(member.assignedTasks())) {
                 return true;

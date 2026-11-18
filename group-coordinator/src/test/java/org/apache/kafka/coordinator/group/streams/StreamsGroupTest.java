@@ -65,6 +65,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -72,6 +73,8 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -844,6 +847,162 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member("member2", MemberState.STABLE, 2));
 
         assertEquals(StreamsGroupState.STABLE, streamsGroup.state());
+    }
+
+    private static StreamsGroupMember memberWithAssignedTasks(String memberId, TasksTupleWithEpochs assignedTasks) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setAssignedTasks(assignedTasks)
+            .build();
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentWhenMemberIsReplayedFirst() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0, 1))));
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0, 1)));
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentWhenTargetAssignmentIsReplayedFirst() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0, 1)));
+
+        // A target assignment without a member is not counted.
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.updateMember(memberWithAssignedTasks("member1", TasksTupleWithEpochs.EMPTY));
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0, 1))));
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentIgnoresAssignmentEpochsOfActiveTasks() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0)));
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0))));
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 5, mkTasks("subtopology1", 0))));
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentComparesStandbyAndWarmupTasks() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.STANDBY, mkTasks("subtopology1", 0)));
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 1, mkTasks("subtopology1", 0))));
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.STANDBY, 1, mkTasks("subtopology1", 0))));
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentAfterRemovals() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0)));
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0))));
+        streamsGroup.updateTargetAssignment("member2", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 1)));
+        streamsGroup.updateMember(memberWithAssignedTasks("member2", TasksTupleWithEpochs.EMPTY));
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        // Without its target assignment, member 2 has the empty target assignment, which it is on.
+        streamsGroup.removeTargetAssignment("member2");
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+
+        // Member 1 is not on the empty target assignment.
+        streamsGroup.clearTargetAssignment();
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.removeMember("member1");
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+
+        streamsGroup.removeMember("member2");
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0)));
+        streamsGroup.updateMember(memberWithAssignedTasks(
+            "member1", mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0))));
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        streamsGroup.updateTargetAssignment("member1", mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 1)));
+
+        assertFalse(streamsGroup.allMembersOnTargetAssignment());
+
+        snapshotRegistry.revertToSnapshot(0);
+
+        assertTrue(streamsGroup.allMembersOnTargetAssignment());
+    }
+
+    @Test
+    public void testAllMembersOnTargetAssignmentMatchesComparingEveryMember() {
+        // Applies random updates and removals of members and target assignments, in any order, and compares the result
+        // with comparing every member's assigned tasks with its target assignment.
+        List<String> memberIds = List.of("member1", "member2", "member3");
+        List<TasksTuple> targetAssignments = List.of(
+            TasksTuple.EMPTY,
+            mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0)),
+            mkTasksTuple(TaskRole.ACTIVE, mkTasks("subtopology1", 0, 1))
+        );
+        List<TasksTupleWithEpochs> assignedTasks = List.of(
+            TasksTupleWithEpochs.EMPTY,
+            mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1, mkTasks("subtopology1", 0)),
+            mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 2, mkTasks("subtopology1", 0, 1))
+        );
+        Random random = new Random(42);
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        for (int i = 0; i < 2000; i++) {
+            String memberId = memberIds.get(random.nextInt(memberIds.size()));
+            int operation = random.nextInt(10);
+            if (operation < 4) {
+                streamsGroup.updateMember(
+                    memberWithAssignedTasks(memberId, assignedTasks.get(random.nextInt(assignedTasks.size()))));
+            } else if (operation < 8) {
+                streamsGroup.updateTargetAssignment(
+                    memberId, targetAssignments.get(random.nextInt(targetAssignments.size())));
+            } else if (operation == 8) {
+                if (streamsGroup.members().containsKey(memberId)) {
+                    streamsGroup.removeMember(memberId);
+                }
+            } else if (random.nextInt(10) == 0) {
+                streamsGroup.clearTargetAssignment();
+            } else {
+                streamsGroup.removeTargetAssignment(memberId);
+            }
+
+            boolean expected = streamsGroup.members().values().stream().allMatch(member ->
+                streamsGroup.targetAssignment().getOrDefault(member.memberId(), TasksTuple.EMPTY)
+                    .sameTasks(member.assignedTasks()));
+            assertEquals(expected, streamsGroup.allMembersOnTargetAssignment(), "after operation " + i);
+        }
     }
 
     @Test

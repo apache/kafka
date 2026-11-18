@@ -42,6 +42,7 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineHashSet;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
@@ -176,6 +177,11 @@ public class StreamsGroup implements Group {
      * The number of stable members at each member epoch.
      */
     private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
+     * The IDs of the members who reached their target assignment.
+     */
+    private final TimelineHashSet<String> membersOnTargetAssignment;
 
     /**
      * The static group members.
@@ -344,6 +350,7 @@ public class StreamsGroup implements Group {
         this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.membersOnTargetAssignment = new TimelineHashSet<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         // Match the schema default (-1) so a freshly-created in-memory group is indistinguishable
@@ -592,6 +599,9 @@ public class StreamsGroup implements Group {
         maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(oldMember, newMember);
         maybeUpdateNumStableMembers(oldMember, newMember);
+        if (oldMember == null || oldMember.assignedTasks() != newMember.assignedTasks()) {
+            updateMembersOnTargetAssignment(newMember, targetAssignment.get(newMember.memberId()));
+        }
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(newMember.memberId());
     }
@@ -619,6 +629,7 @@ public class StreamsGroup implements Group {
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
+        membersOnTargetAssignment.remove(memberId);
 
         // Compaction can remove the target assignment tombstone of the member and keep its member
         // metadata tombstone, so the member metadata tombstone is treated as authoritative and
@@ -838,6 +849,10 @@ public class StreamsGroup implements Group {
      */
     public void updateTargetAssignment(String memberId, TasksTuple newTargetAssignment) {
         targetAssignment.put(memberId, newTargetAssignment);
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            updateMembersOnTargetAssignment(member, newTargetAssignment);
+        }
     }
 
     /**
@@ -847,6 +862,10 @@ public class StreamsGroup implements Group {
      */
     public void removeTargetAssignment(String memberId) {
         targetAssignment.remove(memberId);
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            updateMembersOnTargetAssignment(member, null);
+        }
     }
 
     /**
@@ -854,6 +873,16 @@ public class StreamsGroup implements Group {
      */
     public void clearTargetAssignment() {
         targetAssignment.clear();
+        for (StreamsGroupMember member : members.values()) {
+            updateMembersOnTargetAssignment(member, null);
+        }
+    }
+
+    /**
+     * @return Whether the assigned tasks of every member are its target assignment.
+     */
+    public boolean allMembersOnTargetAssignment() {
+        return membersOnTargetAssignment.size() == members.size();
     }
 
     /**
@@ -1353,6 +1382,26 @@ public class StreamsGroup implements Group {
         if (newStable) {
             // The new member is counted at its member epoch.
             numStableMembersByEpoch.compute(newMember.memberEpoch(), Utils::incValue);
+        }
+    }
+
+    /**
+     * Adds the member to {@link #membersOnTargetAssignment} if its assigned tasks are the given target assignment, and
+     * removes it otherwise. Tasks are compared, not the assignment epochs of active tasks, and missing assigned tasks
+     * or a missing target assignment count as empty. Each update compares the member's current assigned tasks with its
+     * current target assignment, so the result is the same in whichever order member and target assignment records
+     * are replayed.
+     *
+     * @param member           The member.
+     * @param targetAssignment The member's target assignment, or null if it has none.
+     */
+    private void updateMembersOnTargetAssignment(StreamsGroupMember member, TasksTuple targetAssignment) {
+        TasksTupleWithEpochs assignedTasks =
+            member.assignedTasks() == null ? TasksTupleWithEpochs.EMPTY : member.assignedTasks();
+        if ((targetAssignment == null ? TasksTuple.EMPTY : targetAssignment).sameTasks(assignedTasks)) {
+            membersOnTargetAssignment.add(member.memberId());
+        } else {
+            membersOnTargetAssignment.remove(member.memberId());
         }
     }
 
