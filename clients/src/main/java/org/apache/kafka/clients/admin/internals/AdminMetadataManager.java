@@ -375,8 +375,7 @@ public class AdminMetadataManager {
             bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
-            // A response is equivalent if it has the same nodes as the previous one and that one has not expired.
-            // The controller is not compared because brokers return a random alive broker as the controller.
+            // Only the nodes are compared, since brokers report a random broker as the controller.
             if (now - lastMetadataUpdateMs < metadataExpireMs &&
                 cluster.nodes().size() == this.cluster.nodes().size() &&
                 cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())))) {
