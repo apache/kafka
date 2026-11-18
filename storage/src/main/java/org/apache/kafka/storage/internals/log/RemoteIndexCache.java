@@ -154,8 +154,15 @@ public class RemoteIndexCache implements Closeable {
         cacheDir = new File(logDir, DIR_NAME);
 
         internalCache = initEmptyCache(maxSize, ttlMs, recordStats, ticker);
-        init();
+        // Restoring cached entries can trigger eviction, so cleanup scheduling must already be available.
         cleanerScheduler.startup();
+        try {
+            init();
+        } catch (IOException | RuntimeException | Error e) {
+            Utils.closeQuietly(cleanerScheduler::shutdown, "remote index cache cleaner", log);
+            internalCache.asMap().forEach((uuid, entry) -> entry.close());
+            throw e;
+        }
     }
 
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {

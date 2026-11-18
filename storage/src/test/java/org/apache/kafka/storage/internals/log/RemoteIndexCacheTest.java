@@ -27,14 +27,19 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
+
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.InOrder;
+import org.mockito.MockedConstruction;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +50,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -82,10 +88,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -540,6 +550,54 @@ public class RemoteIndexCacheTest {
         }
 
         verifyNoMoreInteractions(rsm);
+    }
+
+    @Test
+    public void testCacheEntriesEvictedDuringInitializationAreScheduledForCleanup() throws IOException {
+        cache.close();
+        File cacheDir = cache.cacheDir();
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(2, idPartition);
+        for (RemoteLogSegmentMetadata metadata : metadataList) {
+            try (OffsetIndex offsetIndex = createOffsetIndexForSegmentMetadata(metadata, cacheDir);
+                 TimeIndex timeIndex = createTimeIndexForSegmentMetadata(metadata, cacheDir);
+                 TransactionIndex transactionIndex = createTxIndexForSegmentMetadata(metadata, cacheDir)) {
+                maybeAppendIndexEntries(offsetIndex, timeIndex);
+                assertTrue(transactionIndex.isEmpty());
+            }
+        }
+
+        // Run cache maintenance inline so entries are evicted during init(), before the constructor returns.
+        Caffeine<Object, Object> builder = Caffeine.newBuilder().executor(Runnable::run);
+        try (var mockedCaffeine = mockStatic(Caffeine.class, CALLS_REAL_METHODS)) {
+            mockedCaffeine.when(Caffeine::newBuilder).thenReturn(builder);
+            try (RemoteIndexCache reloadedCache = new RemoteIndexCache(1L, rsm, logDir.toString())) {
+                assertEquals(0, reloadedCache.internalCache().estimatedSize());
+                assertEquals(3 * metadataList.size(), countFiles(cacheDir,
+                    name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
+                assertEquals(metadataList.size(), reloadedCache.expiredIdxPendingForDeletion(),
+                    "Every entry evicted during initialization must retain its cleanup task");
+            }
+        }
+        verifyNoInteractions(rsm);
+    }
+
+    @Test
+    public void testInitializationFailureClosesCleanerScheduler() throws IOException, InterruptedException {
+        cache.close();
+        Path cacheDir = cache.cacheDir().toPath();
+        Files.delete(cacheDir);
+        Files.createFile(cacheDir);
+
+        try (MockedConstruction<KafkaScheduler> schedulers = mockConstruction(KafkaScheduler.class)) {
+            NotDirectoryException exception = assertThrows(NotDirectoryException.class,
+                () -> new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString()));
+            assertEquals(cacheDir.toString(), exception.getFile());
+            assertEquals(1, schedulers.constructed().size());
+            KafkaScheduler scheduler = schedulers.constructed().get(0);
+            InOrder order = inOrder(scheduler);
+            order.verify(scheduler).startup();
+            order.verify(scheduler).shutdown();
+        }
     }
 
     @Test
