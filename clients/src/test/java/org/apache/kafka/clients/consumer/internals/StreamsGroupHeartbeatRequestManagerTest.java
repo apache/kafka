@@ -1380,6 +1380,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(activeTaskId),
             Set.of(),
             Set.of(),
+            Set.of(
+                new TopicPartition(SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(SOURCE_TOPIC_2, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_2, activeTaskId.partitionId())
+            ),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1427,6 +1434,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(activeTaskId),
             Set.of(),
             Set.of(),
+            Set.of(
+                new TopicPartition(SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(SOURCE_TOPIC_2, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_2, activeTaskId.partitionId())
+            ),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1496,6 +1510,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(activeTaskId),
             Set.of(standbyTaskId),
             Set.of(),
+            Set.of(
+                new TopicPartition(SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(SOURCE_TOPIC_2, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_2, activeTaskId.partitionId())
+            ),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
@@ -1849,6 +1870,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Set.of(activeTaskId),
             Set.of(),
             Set.of(),
+            Set.of(
+                new TopicPartition(SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(SOURCE_TOPIC_2, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_1, activeTaskId.partitionId()),
+                new TopicPartition(REPARTITION_SOURCE_TOPIC_2, activeTaskId.partitionId())
+            ),
+            1L,
             true
         ));
         rebalanceData.setTaskOffsetIntervalMs(1000);
