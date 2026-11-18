@@ -40,9 +40,9 @@ def parse_rat_report(fp):
 
     for resource in root.findall(".//resource"):
         file_name = resource.get("name")
-        license_approval_elem = resource.find("license-approval")
+        licenses = resource.findall("license")
 
-        if license_approval_elem is not None and license_approval_elem.get("name") == "false":
+        if any(license_elem.get("approval") == "false" for license_elem in licenses):
             file_count += 1
             unapproved_licenses.append(file_name)
         else:
