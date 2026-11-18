@@ -34,10 +34,12 @@ org.apache.kafka.coordinator.transaction.TransactionLogTest:
 - shouldReturnTxnTombstoneForNullValue
 - shouldRoundTripPreviousAndNextProducerIds
 - shouldThrowExceptionWriteInvalidTxn
+- testAllPersistedFieldsRoundTrip
 - testDeserializeFutureTransactionLogValue
 - testDeserializeHighestSupportedTransactionLogValue
 - testReadReturnsUnknownKeyVersionForInvalidKey
 - testReadReturnsUnknownValueVersionForInvalidValue
+- testSerializeClientTransactionVersionToNonFlexibleVersion
 - testSerializeTransactionLogValueToFlexibleVersion
 - testSerializeTransactionLogValueToHighestNonFlexibleVersion
 org.apache.kafka.coordinator.transaction.TransactionMetadataTest:
@@ -51,9 +53,13 @@ org.apache.kafka.coordinator.transaction.TransactionMetadataTest:
 - testEpochBumpWithCurrentEpochProvided
 - testFenceProducerAfterEpochsExhausted
 - testFenceProducerNotAllowedIfItWouldOverflow
+- testFenceProducerWithKeptPreparedTxnBumpsClientFacingEpoch
 - testInitializeEpoch
 - testInvalidTransitionFromCompleteAbortToFence
 - testInvalidTransitionFromCompleteCommitToFence
+- testKeepPreparedTxnTransitionsRequireOngoingState
+- testNextProducerEpochCannotBeCarriedOverOutsideKeptTxn
+- testNextProducerEpochCannotBeSetForTxnThatWasNotKept
 - testNormalEpochBump
 - testRotateProducerId
 - testRotateProducerIdInOngoingState

@@ -1087,6 +1087,14 @@ org.apache.kafka.tiered.storage.integration.TransactionsTest:
 - testReadCommittedConsumerShouldNotSeeUndecidedData
 - testRecoveryFromEpochOverflow
 - testSendOffsetsToTransactionTimeout
+org.apache.kafka.tiered.storage.integration.TransactionsWith2PCTest:
+- testFencingWithDualIdentity
+- testPrepareAndCompleteTransactionAbort
+- testPrepareAndCompleteTransactionCommit
+- testProducerCrashAndRecoverWith2PCAbort
+- testProducerCrashAndRecoverWith2PCCommit
+- testProducerIdRotationWithEpochExhaustion
+- testProducerMultipleCrashesAndRecoverWith2PC
 org.apache.kafka.tiered.storage.integration.TransactionsWithMaxInFlightOneTest:
 - testTransactionalProducerSingleBrokerMaxInFlightOne
 org.apache.kafka.tiered.storage.integration.TransactionsWithTieredStoreTest:
