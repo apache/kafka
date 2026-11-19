@@ -167,6 +167,37 @@ $ bin/kafka-topics.sh --delete --topic tieredTopic --bootstrap-server localhost:
 
 After topics are deleted, you're safe to set `remote.log.storage.system.enable=false` in the broker configuration.
 
+## Delay Upload
+
+By default, non-active log segments are uploaded to remote storage as soon as they are eligible, keeping data in remote storage as up to date as possible. As a result, some segments before local retention are stored redundantly in both the local and remote tiers. If you do not need remote storage to always hold the newest data, you can delay upload with `remote.copy.lag.ms` and `remote.copy.lag.bytes` to reduce this redundancy and save remote storage space. The remote log manager uses these time-based and size-based lag parameters to decide when a segment becomes eligible for upload; the same settings are also available at the broker level as `log.remote.copy.lag.ms` and `log.remote.copy.lag.bytes`.
+
+For example, assume a topic with 7-day overall retention, 3-day local retention, and no size limits:
+
+```properties
+retention.ms=604800000
+retention.bytes=-1
+local.retention.ms=259200000
+local.retention.bytes=-1
+```
+
+* Delay upload by 1 day (so remote storage does not hold a redundant copy of the newest day of data). Because `local.retention.bytes` is unlimited, the default `remote.copy.lag.bytes=-1` does not enable a size-based check:
+
+```properties
+# 1 day. Default is 0 (upload immediately).
+remote.copy.lag.ms=86400000
+```
+
+* Delay upload until there is at least 10 GiB of newer local data after a segment. Do not leave `remote.copy.lag.ms` at its default of 0, or uploads remain immediately eligible; set it to `-1` so the time-based check follows `local.retention.ms` (3 days). A segment becomes eligible when either the size lag or the time lag is met:
+
+```properties
+# Follow local.retention.ms (3 days). Default is 0 (upload immediately).
+remote.copy.lag.ms=-1
+# 10 GiB. Default is -1 (follow local.retention.bytes).
+remote.copy.lag.bytes=10737418240
+```
+
+For more examples and information, please check [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
+
 ## Limitations
 
 While the Tiered Storage works for most use cases, it is still important to be aware of the following limitations: 

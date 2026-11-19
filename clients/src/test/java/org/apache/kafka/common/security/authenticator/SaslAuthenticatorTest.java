@@ -88,9 +88,9 @@ import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.MockTime;
@@ -148,7 +148,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
@@ -176,7 +175,7 @@ public class SaslAuthenticatorTest {
         CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        credentialCache = new CredentialCache();
+        credentialCache = new CredentialCache(ScramMechanism.mechanismNames());
         TestLogin.loginCount.set(0);
         CountingKafkaPrincipalBuilder.buildCount = 0;
     }
@@ -574,6 +573,23 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests that SASL/SCRAM clients fail authentication if the server requests more than the maximum iterations.
+     */
+    @Test
+    public void testServerIterationsAboveMaximumSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        server = createEchoServer(securityProtocol);
+        ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
+        ScramCredential credential = new ScramFormatter(mechanism).generateCredential(TestJaasConfig.PASSWORD, mechanism.maxIterations() + 1);
+        credentialCache.cache(mechanism.mechanismName()).put(TestJaasConfig.USERNAME, credential);
+
+        Exception exception = createAndCheckClientConnectionFailure(securityProtocol, "0").exception();
+        assertInstanceOf(SaslAuthenticationException.class, exception);
+        assertTrue(exception.getMessage().contains("Requested iterations 16385 is greater than the maximum 16384"), exception.getMessage());
+    }
+
+    /**
      * Tests that SASL/SCRAM clients fail authentication if credentials are not available for
      * the specific SCRAM mechanism.
      */
@@ -584,7 +600,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
-        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
+        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName()).remove(TestJaasConfig.USERNAME);
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
@@ -642,7 +658,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
             System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         createAndCheckClientConnectionFailure(securityProtocol, "0");
         server.verifyAuthenticationMetrics(0, 2);
 
@@ -693,7 +709,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
                 System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         updateTokenCredentialCache(tokenId, tokenHmac);
         // initial authentication must succeed
         createClientConnection(securityProtocol, "0");
@@ -1287,9 +1303,8 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         try {
-            createAndCheckClientConnectionFailure(securityProtocol, node);
-            fail("Did not generate exception prior to creating channel");
-        } catch (IOException expected) {
+            IOException expected = assertThrows(IOException.class, () -> createAndCheckClientConnectionFailure(securityProtocol, node),
+                "Did not generate exception prior to creating channel");
             server.verifyAuthenticationMetrics(0, 0);
             server.verifyReauthenticationMetrics(0, 0);
             Throwable underlyingCause = expected.getCause().getCause().getCause();
@@ -1594,7 +1609,7 @@ public class SaslAuthenticatorTest {
          * original token with a new one.
          */
         delay(1000L);
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyReauthenticationMetrics(0, 1);
     }
 
@@ -1714,7 +1729,7 @@ public class SaslAuthenticatorTest {
          * to sleep long enough so that the next write will trigger a re-authentication.
          */
         delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyAuthenticationMetrics(1, 0);
         server.verifyReauthenticationMetrics(0, 1);
     }
@@ -2035,10 +2050,6 @@ public class SaslAuthenticatorTest {
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
-
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
@@ -2063,10 +2074,6 @@ public class SaslAuthenticatorTest {
         final Map<String, ?> configs = Collections.emptyMap();
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
@@ -2319,6 +2326,12 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
+    private void assertClientConnectionDisconnects(String node) {
+        AssertionFailedError e = assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"),
+            "Expected disconnection failure, but got: " + e.getMessage());
+    }
+
     private void closeClientConnectionIfNecessary() {
         if (selector != null) {
             selector.close();
@@ -2471,7 +2484,7 @@ public class SaslAuthenticatorTest {
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
                 ScramCredential credential = formatter.generateCredential(password, 4096);
-                credentialCache.cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
+                credentialCache.cache(scramMechanism.mechanismName()).put(username, credential);
             }
         }
     }

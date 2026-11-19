@@ -115,11 +115,13 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     /**
      * Creates a TasksTupleWithEpochs from a current assignment record.
      *
-     * @param activeTasks                    The active tasks from the record.
-     * @param standbyTasks                   The standby tasks from the record.
-     * @param warmupTasks                    The warmup tasks from the record.
-     * @param memberEpoch                    The member epoch to use as default for tasks without explicit epochs.
-     * @return The TasksTupleWithEpochs
+     * @param log          The logger.
+     * @param groupId      The group id.
+     * @param activeTasks  The active tasks from the record.
+     * @param standbyTasks The standby tasks from the record.
+     * @param warmupTasks  The warmup tasks from the record.
+     * @param memberEpoch  The member epoch to use as default for tasks without explicit epochs.
+     * @return The TasksTupleWithEpochs.
      */
     public static TasksTupleWithEpochs fromCurrentAssignmentRecord(
         Logger log,

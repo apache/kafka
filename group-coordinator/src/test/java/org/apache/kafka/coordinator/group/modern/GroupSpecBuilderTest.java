@@ -22,13 +22,13 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,15 +51,14 @@ public class GroupSpecBuilderTest {
                 .withMembers(Map.of())
                 .withSubscriptionType(HOMOGENEOUS)
                 .withTargetAssignment(Map.of())
-                .withInvertedTargetAssignment(Map.of())
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new GroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
+                metadataImage,
                 Map.of(),
-                HOMOGENEOUS,
-                Map.of()
+                HOMOGENEOUS
             ),
             builder.build()
         );
@@ -111,29 +110,12 @@ public class GroupSpecBuilderTest {
                     "member-2", assignment2,
                     "member-3", assignment3
                 ))
-                .withInvertedTargetAssignment(Map.of(
-                    fooTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    ),
-                    barTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    )
-                ))
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new GroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
+                metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
                         Optional.empty(),
@@ -154,25 +136,7 @@ public class GroupSpecBuilderTest {
                         assignment3
                     )
                 ),
-                HETEROGENEOUS,
-                Map.of(
-                    fooTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    ),
-                    barTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    )
-                )
+                HETEROGENEOUS
             ),
             builder.build()
         );
@@ -209,7 +173,6 @@ public class GroupSpecBuilderTest {
                     "member-2", Assignment.EMPTY,
                     "member-3", Assignment.EMPTY
                 ))
-                .withInvertedTargetAssignment(Map.of())
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of(
                     "foo*", new ResolvedRegularExpression(
@@ -220,7 +183,8 @@ public class GroupSpecBuilderTest {
                 ));
 
         assertEquals(
-            new GroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
+                metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
                         Optional.empty(),
@@ -241,15 +205,47 @@ public class GroupSpecBuilderTest {
                         Assignment.EMPTY
                     )
                 ),
-                HETEROGENEOUS,
-                Map.of()
+                HETEROGENEOUS
             ),
             builder.build()
         );
     }
 
     @Test
-    public void testAssignorOffload() {
+    public void testShareGroupStatePartitionMetadata() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .buildCoordinatorMetadataImage();
+
+        Map<Uuid, InitMapValue> initializedTopics = Map.of(
+            fooTopicId, new InitMapValue("foo", Set.of(1, 2, 3), 1L)
+        );
+
+        GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+            .withMembers(Map.of())
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(Map.of())
+            .withMetadataImage(metadataImage)
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .build();
+
+        assertEquals(
+            new GroupSpecImpl.ShareGroupSpec(
+                metadataImage,
+                Map.of(),
+                HOMOGENEOUS,
+                initializedTopics
+            ),
+            groupSpec
+        );
+    }
+
+    @Test
+    public void testConsumerGroupSpecImmutable() {
+        // The assignor may run on a background thread while the group continues to change, so
+        // the GroupSpec must not be affected by modifications made after it has been built.
         Uuid fooTopicId = Uuid.randomUuid();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
@@ -268,14 +264,6 @@ public class GroupSpecBuilderTest {
             ))
         ));
 
-        Map<Integer, String> fooInvertedTargetAssignment = new HashMap<>(Map.of(
-            1, "member-1",
-            2, "member-1"
-        ));
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>(Map.of(
-            fooTopicId, fooInvertedTargetAssignment
-        ));
-
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>(Map.of(
             "foo*", new ResolvedRegularExpression(
                 Set.of("foo"),
@@ -284,33 +272,22 @@ public class GroupSpecBuilderTest {
             )
         ));
 
-        Set<Integer> fooAssignablePartitions = new HashSet<>(List.of(1, 2, 3));
-        Map<Uuid, Set<Integer>> topicAssignablePartitions = new HashMap<>(Map.of(
-            fooTopicId, fooAssignablePartitions
-        ));
-
         GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
             .withMembers(members)
             .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(targetAssignment)
-            .withInvertedTargetAssignment(invertedTargetAssignment)
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(resolvedRegularExpressions)
-            .withTopicAssignablePartitionsMap(topicAssignablePartitions)
-            .withAssignorOffload(true)
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
         members.clear();
         targetAssignment.clear();
-        fooInvertedTargetAssignment.clear();
-        invertedTargetAssignment.clear();
         resolvedRegularExpressions.clear();
-        fooAssignablePartitions.clear();
-        topicAssignablePartitions.clear();
 
         assertEquals(
-            new GroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
+                metadataImage,
                 // members
                 Map.of("member-1", new MemberSubscriptionAndAssignmentImpl(
                     Optional.empty(),
@@ -323,11 +300,47 @@ public class GroupSpecBuilderTest {
                     // targetAssignment
                     new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
                 )),
+                HOMOGENEOUS
+            ),
+            groupSpec
+        );
+    }
+
+    @Test
+    public void testShareGroupSpecImmutable() {
+        // The assignor may run on a background thread while the group continues to change, so
+        // the GroupSpec must not be affected by modifications made after it has been built.
+        // We only test the fields specific to share groups, since testConsumerGroupSpecImmutable
+        // covers the common fields.
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .buildCoordinatorMetadataImage();
+
+        Map<Uuid, InitMapValue> initializedTopics = Map.of(
+            fooTopicId, new InitMapValue("foo", Set.of(1, 2, 3), 1L)
+        );
+
+        GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+            .withMembers(Map.of())
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(Map.of())
+            .withMetadataImage(metadataImage)
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .build();
+
+        // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
+        // This is currently a no-op, since ShareGroupStatePartitionMetadataInfo is immutable by
+        // convention. New share group specific fields should be modified here.
+
+        assertEquals(
+            new GroupSpecImpl.ShareGroupSpec(
+                metadataImage,
+                Map.of(),
                 HOMOGENEOUS,
-                // invertedTargetAssignment
-                Map.of(fooTopicId, Map.of(1, "member-1", 2, "member-1")),
-                // topicAssignablePartitionsMap
-                Optional.of(Map.of(fooTopicId, Set.of(1, 2, 3)))
+                // shareGroupStatePartitionMetadata
+                initializedTopics
             ),
             groupSpec
         );

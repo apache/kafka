@@ -353,6 +353,12 @@ class ControllerApisTest {
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName("foo").
             setValue("bar")))),
+        new OldAlterConfigsResource().
+          setResourceName("mirror").
+          setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()).
+          setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
+            setName("foo").
+            setValue("bar")))),
         )))
     val request = buildRequest(new AlterConfigsRequest(requestData, 0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
@@ -375,6 +381,11 @@ class ControllerApisTest {
         setErrorMessage("Unknown resource type 123.").
         setResourceName("baz").
         setResourceType(123.toByte),
+      new OldAlterConfigsResourceResponse().
+        setErrorCode(UNSUPPORTED_VERSION.code()).
+        setErrorMessage("Cluster mirror configs are not supported yet.").
+        setResourceName("mirror").
+        setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()),
       new OldAlterConfigsResourceResponse().
         setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
         setErrorMessage("Cluster authorization failed.").
@@ -415,7 +426,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-        new AlterPartitionRequestData()).build(ApiKeys.ALTER_PARTITION.latestVersion)))
+        new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.latestVersion)).build(ApiKeys.ALTER_PARTITION.latestVersion)))
     })
   }
 
@@ -554,6 +565,73 @@ class ControllerApisTest {
   }
 
   @ParameterizedTest
+  @ValueSource(ints = Array(-1, 4, 127))
+  def testInvalidIncrementalAlterConfigsOperation(invalidOperation: Int): Unit = {
+    val invalidResource = new ConfigResource(ConfigResource.Type.TOPIC, "invalid")
+    val validResource = new ConfigResource(ConfigResource.Type.TOPIC, "valid")
+    val requestData = new IncrementalAlterConfigsRequestData().setResources(
+      new AlterConfigsResourceCollection(util.Arrays.asList(
+        new AlterConfigsResource().
+          setResourceName(invalidResource.name()).
+          setResourceType(invalidResource.`type`().id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(
+            new AlterableConfig().
+              setName(TopicConfig.FLUSH_MS_CONFIG).
+              setValue("1000").
+              setConfigOperation(AlterConfigOp.OpType.SET.id()),
+            new AlterableConfig().
+              setName(TopicConfig.RETENTION_MS_CONFIG).
+              setValue("2000").
+              setConfigOperation(invalidOperation.toByte),
+            new AlterableConfig().
+              setName(TopicConfig.RETENTION_MS_CONFIG).
+              setValue("3000").
+              setConfigOperation(AlterConfigOp.OpType.SET.id()),
+            new AlterableConfig().
+              setName(TopicConfig.FLUSH_MS_CONFIG).
+              setValue("4000").
+              setConfigOperation(126.toByte)))),
+        new AlterConfigsResource().
+          setResourceName(validResource.name()).
+          setResourceType(validResource.`type`().id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName(TopicConfig.FLUSH_MS_CONFIG).
+            setValue("1000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))))))
+    requestData.resources().add(requestData.resources().asScala.last.duplicate().setResourceName(invalidResource.name()))
+    val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
+    val controller = spy(new MockController.Builder().build())
+    controllerApis = createControllerApis(None, controller)
+    controllerApis.handleIncrementalAlterConfigs(request).get()
+
+    val capturedChanges = ArgumentCaptor.forClass(
+      classOf[util.Map[ConfigResource, util.Map[String, util.Map.Entry[AlterConfigOp.OpType, String]]]])
+    verify(controller).incrementalAlterConfigs(any(classOf[ControllerRequestContext]),
+      capturedChanges.capture(), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false))
+    assertEquals(Set(validResource), capturedChanges.getValue.keySet().asScala.toSet)
+    assertEquals(Map(TopicConfig.FLUSH_MS_CONFIG ->
+      new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](AlterConfigOp.OpType.SET, "1000")),
+      capturedChanges.getValue.get(validResource).asScala.toMap)
+
+    val capturedResponse = ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(ArgumentMatchers.eq(request), capturedResponse.capture())
+    val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
+    assertEquals(2, response.data().responses().size())
+    assertEquals(Set(
+      new AlterConfigsResourceResponse().
+        setResourceName(invalidResource.name()).
+        setResourceType(invalidResource.`type`().id()).
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage(s"Unknown operation type $invalidOperation"),
+      new AlterConfigsResourceResponse().
+        setResourceName(validResource.name()).
+        setResourceType(validResource.`type`().id()).
+        setErrorCode(NONE.code()).
+        setErrorMessage(null)),
+      response.data().responses().asScala.toSet)
+  }
+
+  @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
   def testInvalidIncrementalAlterConfigsResources(denyAllAuthorizer: Boolean): Unit = {
     val requestData = new IncrementalAlterConfigsRequestData().setResources(
@@ -582,6 +660,13 @@ class ControllerApisTest {
         new AlterConfigsResource().
           setResourceName("foo").
           setResourceType(124.toByte).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("foo").
+            setValue("bar").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
+        new AlterConfigsResource().
+          setResourceName("mirror").
+          setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("foo").
             setValue("bar").
@@ -661,6 +746,11 @@ class ControllerApisTest {
         setResourceName("foo").
         setResourceType(124.toByte),
       new AlterConfigsResourceResponse().
+        setErrorCode(UNSUPPORTED_VERSION.code()).
+        setErrorMessage("Cluster mirror configs are not supported yet.").
+        setResourceName("mirror").
+        setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()),
+      new AlterConfigsResourceResponse().
         setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
         setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
         setResourceName("sub").
@@ -697,7 +787,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData()).build()))
+        new AllocateProducerIdsRequestData(), ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion)).build()))
     })
   }
 
@@ -1209,7 +1299,8 @@ class ControllerApisTest {
     val request = new AllocateProducerIdsRequest.Builder(
       new AllocateProducerIdsRequestData()
         .setBrokerId(4)
-        .setBrokerEpoch(93234)
+        .setBrokerEpoch(93234),
+      ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion)
     ).build()
 
     when(controller.allocateProducerIds(
@@ -1227,7 +1318,8 @@ class ControllerApisTest {
     val authorizer = mock(classOf[Authorizer])
     val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     controllerApis = createControllerApis(Some(authorizerPlugin), controller)
-    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(),
+      ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion)).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
       AclOperation.CLUSTER_ACTION,

@@ -74,10 +74,10 @@ public class Assignment implements MemberAssignment {
     }
 
     /**
-     * Creates a {{@link Assignment}} from a {{@link ConsumerGroupTargetAssignmentMemberValue}}.
+     * Creates an {@link Assignment} from a {@link ConsumerGroupTargetAssignmentMemberValue}.
      *
      * @param record The record.
-     * @return A {{@link Assignment}}.
+     * @return An {@link Assignment}.
      */
     public static Assignment fromRecord(
         ConsumerGroupTargetAssignmentMemberValue record
@@ -90,10 +90,10 @@ public class Assignment implements MemberAssignment {
     }
 
     /**
-     * Creates a {{@link Assignment}} from a {{@link ShareGroupTargetAssignmentMemberValue}}.
+     * Creates an {@link Assignment} from a {@link ShareGroupTargetAssignmentMemberValue}.
      *
      * @param record The record.
-     * @return A {{@link Assignment}}.
+     * @return An {@link Assignment}.
      */
     public static Assignment fromRecord(
         ShareGroupTargetAssignmentMemberValue record

@@ -611,7 +611,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
-            if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
+            if (!subscriptions.isSubscribed()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
             }
 

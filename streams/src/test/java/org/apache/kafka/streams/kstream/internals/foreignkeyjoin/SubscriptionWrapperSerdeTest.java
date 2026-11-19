@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -273,6 +274,34 @@ public class SubscriptionWrapperSerdeTest {
             originalKey,
             (byte) 0x80,
             primaryPartition));
+    }
+
+    @Test
+    public void shouldThrowOnDataShorterThanHeaderTest() {
+        final SubscriptionWrapperSerde<String> swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+        assertThrows(SerializationException.class,
+            () -> swSerde.deserializer().deserialize(null, HEADERS, new byte[] {(byte) 0x01}));
+    }
+
+    @Test
+    public void shouldThrowOnTruncatedV1DataWithHashTest() {
+        final SubscriptionWrapperSerde<String> swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+        assertThrows(SerializationException.class,
+            () -> swSerde.deserializer().deserialize(null, HEADERS, new byte[] {(byte) 0x01, (byte) 0x02}));
+    }
+
+    @Test
+    public void shouldThrowOnTruncatedV1DataWithNullHashTest() {
+        final SubscriptionWrapperSerde<String> swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+        assertThrows(SerializationException.class,
+            () -> swSerde.deserializer().deserialize(null, HEADERS, new byte[] {(byte) 0x81, (byte) 0x02, (byte) 0x00}));
+    }
+
+    @Test
+    public void shouldThrowOnUnsupportedVersionDuringDeserializationTest() {
+        final SubscriptionWrapperSerde<String> swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+        assertThrows(UnsupportedVersionException.class,
+            () -> swSerde.deserializer().deserialize(null, HEADERS, new byte[] {(byte) 0x05, (byte) 0x02}));
     }
 
     @Test

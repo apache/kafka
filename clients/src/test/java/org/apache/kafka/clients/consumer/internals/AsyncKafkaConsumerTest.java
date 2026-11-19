@@ -669,6 +669,86 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testPartitionsAssignedEventWithNullRebalanceListenerCompletesWithoutCallback() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final TopicPartition tp = new TopicPartition(topicName, 3);
+        doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
+        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        addedPartitions.add(tp);
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.setRebalanceListener(failingRebalanceListener());
+        consumer.subscribe(Collections.singletonList(topicName));
+        consumer.setRebalanceListener(null);
+
+        PartitionsAssignedEvent event = new PartitionsAssignedEvent(Set.of(tp), addedPartitions);
+        backgroundEventQueue.add(event);
+        completeAsyncPollEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+
+        // without a listener the app thread completes the event itself, so the background
+        // thread is never asked to wait for a callback to finish
+        assertTrue(event.future().isDone());
+        assertFalse(event.future().isCompletedExceptionally());
+        verify(applicationEventHandler, never()).add(isA(ConsumerRebalanceListenerCallbackCompletedEvent.class));
+    }
+
+    @Test
+    public void testPartitionsRemovedEventWithNullRebalanceListenerInvokesNothing() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
+        SortedSet<TopicPartition> partitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        partitions.add(new TopicPartition(topicName, 3));
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.setRebalanceListener(failingRebalanceListener());
+        consumer.subscribe(Collections.singletonList(topicName));
+        consumer.setRebalanceListener(null);
+
+        backgroundEventQueue.add(new PartitionsRemovedEvent(ON_PARTITIONS_REVOKED, partitions));
+        backgroundEventQueue.add(new PartitionsRemovedEvent(ON_PARTITIONS_LOST, partitions));
+        completeAsyncPollEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+
+        // both events are processed and reported back without an error, they just run no callback
+        ArgumentCaptor<ConsumerRebalanceListenerCallbackCompletedEvent> completedEvents =
+            ArgumentCaptor.forClass(ConsumerRebalanceListenerCallbackCompletedEvent.class);
+        verify(applicationEventHandler, times(2)).add(completedEvents.capture());
+        List<ConsumerRebalanceListenerMethodName> reportedMethods = new ArrayList<>();
+        for (ConsumerRebalanceListenerCallbackCompletedEvent event : completedEvents.getAllValues()) {
+            reportedMethods.add(event.methodName());
+            assertEquals(Optional.empty(), event.error());
+        }
+        assertEquals(List.of(ON_PARTITIONS_REVOKED, ON_PARTITIONS_LOST), reportedMethods);
+    }
+
+    @Test
+    public void testCloseWithNullRebalanceListenerSkipsCallbacks() {
+        final String topicName = "topic";
+        final Set<TopicPartition> partitions = singleton(new TopicPartition(topicName, 0));
+
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
+            completeTopicSubscriptionChangeEventSuccessfully();
+            consumer.setRebalanceListener(failingRebalanceListener());
+            consumer.subscribe(singletonList(topicName));
+            consumer.subscriptions().assignFromSubscribed(partitions);
+            consumer.setGroupAssignmentSnapshot(partitions);
+
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(1), "memberId");
+
+            // the assignment snapshot is what close() would revoke, see
+            // testCloseRunsRevocationCallbackAndSendsLeaveGroupEventOnInterrupt
+            consumer.setRebalanceListener(null);
+            assertDoesNotThrow(() -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
+            consumer = null;
+        }
+    }
+
+    @Test
     public void testClearWakeupTriggerAfterPoll() {
         consumer = newConsumer();
         final String topicName = "foo";
@@ -722,7 +802,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(-1).when(metadata).updateVersion();
 
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
         // Simulate partition assignment from group coordinator
         subscriptions.assignFromSubscribed(singleton(tp));
 
@@ -780,7 +860,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(-1).when(metadata).updateVersion();
 
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
         // Simulate partition assignment from group coordinator
         subscriptions.assignFromSubscribed(singleton(tp));
 
@@ -1107,7 +1187,7 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton("topic"));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -1142,7 +1222,7 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp1 = new TopicPartition(topicName, 1);
         final TopicPartition tp2 = new TopicPartition(topicName, 2);
 
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
 
         // Simulate rebalance that reconciled a new assignment of tp0 and tp1
         subscriptions.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), Set.of(tp0, tp1));
@@ -1170,7 +1250,7 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton("topic"));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -2418,6 +2498,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternValidation() {
         consumer = newConsumer();
 
@@ -2434,6 +2515,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternThrowsIfNoGroupId() {
         consumer = newConsumer(requiredConsumerConfig());
         assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(new SubscriptionPattern("t*")));
@@ -2442,6 +2524,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternGeneratesEvent() {
         consumer = newConsumer();
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();
@@ -2654,6 +2737,25 @@ public class AsyncKafkaConsumerTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(AssignmentChangeEvent.class));
+    }
+
+    private RebalanceListener failingRebalanceListener() {
+        return new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
+                fail("onPartitionsAssigned must not be invoked once the listener has been removed");
+            }
+
+            @Override
+            public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
+                fail("onPartitionsRevoked must not be invoked once the listener has been removed");
+            }
+
+            @Override
+            public void onPartitionsLost(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
+                fail("onPartitionsLost must not be invoked once the listener has been removed");
+            }
+        };
     }
 
     private void completeTopicSubscriptionChangeEventSuccessfully() {

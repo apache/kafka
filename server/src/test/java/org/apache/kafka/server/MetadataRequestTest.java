@@ -48,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -156,7 +155,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testIsInternal() throws InterruptedException, IOException {
+    public void testIsInternal() throws IOException {
         String internalTopic = Topic.GROUP_METADATA_TOPIC_NAME;
         String notInternalTopic = "notInternal";
         // create the topics
@@ -177,7 +176,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testNoTopicsRequest() throws InterruptedException, IOException {
+    public void testNoTopicsRequest() throws IOException {
         // create some topics
         clusterInstance.createTopic("t1", 3, (short) 2);
         clusterInstance.createTopic("t2", 3, (short) 2);
@@ -233,7 +232,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testAllTopicsRequest() throws InterruptedException, IOException {
+    public void testAllTopicsRequest() throws IOException {
         // create some topics
         clusterInstance.createTopic("t1", 3, (short) 2);
         clusterInstance.createTopic("t2", 3, (short) 2);
@@ -250,7 +249,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testTopicIdsInResponse() throws ExecutionException, InterruptedException, IOException {
+    public void testTopicIdsInResponse() throws IOException {
         Map<Integer, List<Integer>> replicaAssignment = Map.of(0, List.of(1, 2, 0), 1, List.of(2, 0, 1));
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -279,7 +278,7 @@ public class MetadataRequestTest {
      * Preferred replica should be the first item in the replicas list
      */
     @ClusterTest
-    public void testPreferredReplica() throws ExecutionException, InterruptedException, IOException {
+    public void testPreferredReplica() throws IOException {
         Map<Integer, List<Integer>> replicaAssignment = Map.of(0, List.of(1, 2, 0), 1, List.of(2, 0, 1));
         clusterInstance.createTopicWithAssignment("t1", replicaAssignment);
         // Test metadata on two different brokers to ensure that metadata propagation works correctly
@@ -303,7 +302,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testPartitionInfoPreferredReplica() throws ExecutionException, InterruptedException, IOException {
+    public void testPartitionInfoPreferredReplica() throws IOException {
         Map<Integer, List<Integer>> replicaAssignment = Map.of(0, List.of(1, 2, 0));
         String topic = "testPartitionInfoPreferredReplicaTopic";
         clusterInstance.createTopicWithAssignment(topic, replicaAssignment);
@@ -384,7 +383,7 @@ public class MetadataRequestTest {
     }
 
     @ClusterTest
-    public void testIsrAfterBrokerShutDownAndJoinsBack() throws InterruptedException {
+    public void testIsrAfterBrokerShutDownAndJoinsBack() {
         String topic = "isr-after-broker-shutdown";
         short replicaCount = 3;
         clusterInstance.createTopic(topic, 1, replicaCount);

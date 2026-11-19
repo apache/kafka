@@ -102,6 +102,7 @@
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
         <allow pkg="org.apache.kafka.coordinator.transaction"/>
+        <allow class="org.apache.logging.log4j.Level" />
     </subpackage>
 
     <subpackage name="storage.log">

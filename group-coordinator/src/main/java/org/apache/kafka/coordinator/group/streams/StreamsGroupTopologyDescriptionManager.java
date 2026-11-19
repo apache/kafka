@@ -63,7 +63,7 @@ import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPO
  * and the per-group re-solicitation back-off. The push-RPC chain (validate → convert →
  * plugin → metadata write → back-off mutation, see {@link #pushTopology}) and the periodic
  * cleanup cycle's body (list eligible groups → mark uncertain → plugin delete → finalize, see
- * {@link #runCleanupCycle}) both live here now, reading and writing group state through
+ * {@link #runCleanupCycle}) both live here, reading and writing group state through
  * {@link TopologyDescriptionRuntime} so the same chains run unchanged on any host that supplies
  * an implementation of that interface. {@code GroupCoordinatorService} still owns the broker
  * timer and starts the cycle via {@link #startCleanupCycle}, which wraps the supplied cycle body
@@ -478,8 +478,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             try {
                 return maybeSetTopologyDescriptionRequired(result, groupId, apiVersion, memberEpoch);
             } catch (Throwable t) {
-                log.warn("Failed to apply topology-description post-processing on the "
-                    + "streams group heartbeat response for group {}; returning the response unmodified.",
+                log.warn("[GroupId {}] Failed to apply topology-description post-processing on the "
+                    + "streams group heartbeat response; returning the response unmodified.",
                     groupId, t);
                 return result;
             }
@@ -544,23 +544,26 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * @return true while the window armed by {@link #throttleConversionDelete} is in effect for
-     *         the group, i.e. a recent classic-join conversion delete failed and the join path
-     *         must not re-invoke the plugin yet.
+     * @return true if the back-off window set by {@link #throttleConversionDelete} is still
+     *         active for the group. When it is, a classic JoinGroup must not call
+     *         {@code deleteTopology} on the plugin yet.
      */
     private boolean isConversionDeleteThrottled(String groupId) {
         return backoff.isActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
     }
 
     /**
-     * Arm (or continue) the back-off chain that throttles the classic-join conversion delete
-     * against a failing plugin. On {@code REBALANCE_IN_PROGRESS} the classic client retries the
-     * join immediately (no client-side back-off), so without this window a broken plugin would
-     * be hit with {@code deleteTopology} in a tight loop. Keyed at
-     * {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN} — the group's stored epoch after the
-     * barrier write and never a real push epoch — so heartbeat/push windows are not disturbed;
-     * a stale real-epoch entry left from before the group emptied is replaced. The window is
-     * dropped by {@link #clearBackoffGroup} when a conversion or cleanup-cycle delete succeeds.
+     * Starts a back-off window after {@code deleteTopology} fails during a classic JoinGroup.
+     *
+     * <p>Background: when a classic consumer joins an empty streams group, the group is
+     * converted to a classic group. Before that, the broker must delete the group's topology
+     * from the plugin. If the delete fails, the join fails with {@code REBALANCE_IN_PROGRESS}.
+     * The client retries right away, so without this window a broken plugin would receive
+     * {@code deleteTopology} calls in a tight loop.
+     *
+     * <p>The window is tagged with epoch {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     * which never matches a real topology epoch, so it does not throttle heartbeats or pushes.
+     * {@link #clearBackoffGroup} removes it once a delete succeeds.
      */
     private void throttleConversionDelete(String groupId) {
         backoff.armIfNotActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
@@ -603,11 +606,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * Drop the back-off entry for a group unconditionally. Currently called when a group is
-     * removed via explicit DeleteGroups and on a post-plugin write failing with
-     * GroupIdNotFoundException. NOTE: groups removed by other lifecycle paths (session expiry,
-     * partition unload, tombstone-via-replay) are not yet wired to this, so their back-off
-     * entries can leak until the group id is reused. Delegates to
+     * Drop the back-off entry for a group unconditionally. Called once the plugin delete has
+     * succeeded for the group, by the cleanup cycle, the DeleteGroups flow and the classic-join
+     * conversion. NOTE: groups removed by other lifecycle paths (session expiry, partition
+     * unload, tombstone-via-replay) are not yet wired to this, so their back-off entries can
+     * leak until the group id is reused. Delegates to
      * {@link StreamsGroupTopologyDescriptionBackoff#clearGroup}.
      */
     private void clearBackoffGroup(String groupId) {
@@ -625,9 +628,9 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * exceptional future.
      *
      * <p>Pure plugin invocation: does not read group state, does not touch the back-off
-     * map, and does not record metrics. The service layer pre-filters the input, records
-     * delete-success / delete-error sensors on the returned failure count, and is
-     * responsible for invoking {@link #clearBackoffGroup} for the groups it chose to clear.
+     * map, and does not record metrics. The callers pre-filter the input, record the
+     * delete-success and delete-error sensors on the returned failure count, and invoke
+     * {@link #clearBackoffGroup} for the groups whose delete succeeded.
      */
     private CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
         if (plugin.isEmpty() || groupIds.isEmpty()) {
@@ -923,7 +926,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     ) {
         if (throwable != null) {
             Throwable cause = Errors.maybeUnwrapException(throwable);
-            log.warn("Topology description plugin getTopology failed for group {}.",
+            log.warn("[GroupId {}] Topology description plugin getTopology failed.",
                 describedGroup.groupId(), cause != null ? cause : throwable);
             recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);

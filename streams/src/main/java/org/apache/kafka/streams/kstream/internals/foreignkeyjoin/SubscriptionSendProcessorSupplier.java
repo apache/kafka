@@ -241,7 +241,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                 hash(record),
                 deleteKeyNoPropagate,
                 record.key(),
-                context().recordMetadata().get().partition()
+                context().taskId().partition()
             );
             context().forward(record.withKey(foreignKey).withValue(wrapper));
         }

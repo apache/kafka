@@ -180,7 +180,7 @@ docker buildx imagetools create --tag apache/kafka-native:3.8.0 apache/kafka-nat
 Using the image in a docker container
 -------------------------------------
 
-Please check [this](./examples/README.md) for usage guide of the docker image.
+Please check [docs/getting-started/docker.md](../docs/getting-started/docker.md) for the usage guide of the docker image, and [examples/README.md](./examples/README.md) for Docker Compose examples.
 
 Releasing the Docker Official Image
 -----------------------------------

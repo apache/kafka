@@ -107,7 +107,7 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
     }
 
     @BeforeEach
-    public void setupTopics() throws InterruptedException {
+    public void setupTopics() {
         cluster.createTopic(topic1, 2, (short) 1);
         cluster.createTopicWithAssignment(topic2, Map.of(0, List.of(0), 1, List.of(1)));
         cluster.createTopicWithAssignment(topic3, Map.of(0, List.of(0), 1, List.of(1)));

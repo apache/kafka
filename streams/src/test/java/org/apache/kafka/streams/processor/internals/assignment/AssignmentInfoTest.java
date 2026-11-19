@@ -22,7 +22,10 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -237,5 +240,30 @@ public class AssignmentInfoTest {
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
         info.setNextRebalanceTime(1000L);
         assertEquals(1000L, AssignmentInfo.decode(info.encode()).nextRebalanceMs());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {5, 6, LATEST_SUPPORTED_VERSION})
+    public void shouldThrowOnTopicIndexNotInDictionary(final int version) {
+        final int partition = 123_456_789;
+        final AssignmentInfo info = new AssignmentInfo(version, List.of(), Map.of(),
+            Map.of(new HostInfo("localhost", 8088), Set.of(new TopicPartition("t0", partition))), Map.of(), 0);
+        final ByteBuffer encoded = info.encode();
+        final byte[] bytes = new byte[encoded.remaining()];
+        encoded.get(bytes);
+        final byte[] partitionBytes = ByteBuffer.allocate(Integer.BYTES).putInt(partition).array();
+        int partitionOffset = -1;
+        for (int i = 0; i + Integer.BYTES <= bytes.length; i++) {
+            if (ByteBuffer.wrap(bytes, i, Integer.BYTES).equals(ByteBuffer.wrap(partitionBytes))) {
+                partitionOffset = i;
+            }
+        }
+        ByteBuffer.wrap(bytes).putInt(partitionOffset - Integer.BYTES, 99);
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> AssignmentInfo.decode(ByteBuffer.wrap(bytes))
+        );
+        assertEquals("Corrupted user data byte[]. Topic index 99 is not in the topic dictionary.", exception.getMessage());
     }
 }

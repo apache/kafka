@@ -58,21 +58,21 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
     private final PartitionStates<Boolean> assignment;
 
-    /* whether the consumer is currently subscribed to a share group */
-    private boolean subscribedToShareGroup;
+    /* whether the consumer is currently subscribed */
+    private boolean subscribed;
 
     public ShareSubscriptionState(LogContext logContext) {
         this.log = logContext.logger(this.getClass());
         this.subscription = Collections.emptySet();
         this.assignedTopicIds = Collections.emptySet();
         this.assignment = new PartitionStates<>();
-        this.subscribedToShareGroup = false;
+        this.subscribed = false;
     }
 
     @Override
     public synchronized String toString() {
         return "ShareSubscriptionState{" +
-            "subscribed=" + subscribedToShareGroup +
+            "subscribed=" + subscribed +
             ", subscription=" + String.join(",", subscription) +
             ", assignment=" + assignment.partitionSet() + "}";
     }
@@ -82,8 +82,8 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
      *
      * @return {@code true} if the subscribed topics changed as a result of this call.
      */
-    public synchronized boolean subscribeToShareGroup(Set<String> topics) {
-        subscribedToShareGroup = true;
+    public synchronized boolean subscribe(Set<String> topics) {
+        subscribed = true;
         if (subscription.equals(topics))
             return false;
         subscription = topics;
@@ -94,8 +94,8 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
         return subscription;
     }
 
-    public synchronized boolean hasNoSubscriptionOrUserAssignment() {
-        return !subscribedToShareGroup;
+    public synchronized boolean isSubscribed() {
+        return subscribed;
     }
 
     /**
@@ -139,11 +139,14 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
 
     @Override
     public synchronized boolean hasAutoAssignedPartitions() {
-        return subscribedToShareGroup;
+        return subscribed;
     }
 
     @Override
     public synchronized void assignFromSubscribed(Collection<TopicPartition> assignments) {
+        if (!subscribed)
+            throw new IllegalArgumentException("Attempt to dynamically assign partitions while not subscribed");
+
         Map<TopicPartition, Boolean> assignedPartitionStates = new LinkedHashMap<>(assignments.size());
         for (TopicPartition tp : assignments) {
             assignedPartitionStates.put(tp, Boolean.TRUE);
@@ -157,7 +160,7 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
         subscription = Collections.emptySet();
         assignment.clear();
         assignedTopicIds = Collections.emptySet();
-        subscribedToShareGroup = false;
+        subscribed = false;
     }
 
     @Override

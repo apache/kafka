@@ -159,7 +159,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -412,12 +411,8 @@ public class WorkerTest {
         assertStatistics(worker, 0, 0);
         FutureCallback<TargetState> onStart = new FutureCallback<>();
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onStart);
-        try {
-            onStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed to start connector");
-        } catch (ExecutionException e) {
-            assertEquals(exception, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> onStart.get(0, TimeUnit.MILLISECONDS), "Should have failed to start connector");
+        assertEquals(exception, e.getCause());
 
         assertStartupStatistics(worker, 1, 1, 0, 0);
         assertEquals(Set.of(), worker.connectorNames());
@@ -980,6 +975,7 @@ public class WorkerTest {
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
 
+        @SuppressWarnings("unchecked")
         Transformation<SourceRecord> brokenTransform = mock(Transformation.class);
         when(brokenTransform.config()).thenReturn(new ConfigDef());
         doThrow(new RuntimeException("Failed to configure transform")).when(brokenTransform).configure(any());

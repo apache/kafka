@@ -108,6 +108,39 @@ public class DefaultTaskManagerTest {
         assertNull(taskManager.assignNextTask(taskExecutor));
     }
 
+    @Test
+    public void shouldNotAssignTaskWhileProcessingPaused() {
+        taskManager.add(Collections.singleton(task));
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+
+        taskManager.setProcessingPaused(true);
+        assertTrue(taskManager.processingPaused());
+        assertNull(taskManager.assignNextTask(taskExecutor));
+
+        taskManager.setProcessingPaused(false);
+        assertFalse(taskManager.processingPaused());
+        assertEquals(task, taskManager.assignNextTask(taskExecutor));
+    }
+
+    @Test
+    public void shouldReturnFromAwaitWhenProcessingResumed() throws InterruptedException {
+        when(taskExecutionMetadata.canProcessTask(eq(task), anyLong())).thenReturn(true);
+        taskManager.setProcessingPaused(true);
+
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+
+        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
+
+        taskManager.setProcessingPaused(false);
+
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+        awaitingThread.join();
+    }
+
     private class AwaitingRunnable implements Runnable {
         private final CountDownLatch awaitDone = new CountDownLatch(1);
         private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);

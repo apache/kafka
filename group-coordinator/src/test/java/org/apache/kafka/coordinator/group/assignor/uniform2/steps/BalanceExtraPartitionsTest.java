@@ -33,8 +33,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -220,8 +218,8 @@ public class BalanceExtraPartitionsTest {
     public void testWithinACohortTheLargestGivesToTheSmallest() {
         var topics = Set.of(T1, T2);
         var spec = new GroupSpecFixture()
-            .withMember("A", topics, mkAssignment(mkTopicAssignment(T1, 0, 1, 2), mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", topics, mkAssignment(mkTopicAssignment(T1, 3, 4), mkTopicAssignment(T2, 2, 3, 4)))
+            .withMember("A", topics, Map.of(T1, Set.of(0, 1, 2), T2, Set.of(0, 1)))
+            .withMember("B", topics, Map.of(T1, Set.of(3, 4), T2, Set.of(2, 3, 4)))
             .withMember("C", topics)
             .build();
         var describer = new TopicsFixture()
@@ -251,8 +249,8 @@ public class BalanceExtraPartitionsTest {
         var topics = Set.of(T1, T2, T3);
         var spec = new GroupSpecFixture()
             .withMember("A", topics)
-            .withMember("B", topics, mkAssignment(mkTopicAssignment(T2, 0, 1)))
-            .withMember("C", topics, mkAssignment(mkTopicAssignment(T1, 0, 1)))
+            .withMember("B", topics, Map.of(T2, Set.of(0, 1)))
+            .withMember("C", topics, Map.of(T1, Set.of(0, 1)))
             .build();
         var describer = new TopicsFixture()
             .withTopic(T1, 4)
@@ -278,7 +276,7 @@ public class BalanceExtraPartitionsTest {
     @Test
     public void testTheGiverGivesAFreeExtraPartitionBeforeAnOwnedOne() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3), mkAssignment(mkTopicAssignment(T2, 0, 1)))
+            .withMember("A", Set.of(T1, T2, T3), Map.of(T2, Set.of(0, 1)))
             .withMember("B", Set.of(T1, T2))
             .build();
         var describer = new TopicsFixture()
@@ -306,8 +304,8 @@ public class BalanceExtraPartitionsTest {
     public void testOnEqualSizesAGiverWithAFreeExtraPartitionGivesFirst() {
         var topics = Set.of(T1, T2, T3, T4);
         var spec = new GroupSpecFixture()
-            .withMember("A", topics, mkAssignment(mkTopicAssignment(T1, 0, 1), mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", topics, mkAssignment(mkTopicAssignment(T3, 0, 1)))
+            .withMember("A", topics, Map.of(T1, Set.of(0, 1), T2, Set.of(0, 1)))
+            .withMember("B", topics, Map.of(T3, Set.of(0, 1)))
             .withMember("C", topics)
             .build();
         var describer = new TopicsFixture()
@@ -365,7 +363,7 @@ public class BalanceExtraPartitionsTest {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T1))
-            .withMember("C", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1, 2)))
+            .withMember("C", Set.of(T1), Map.of(T1, Set.of(1, 2)))
             .build();
         var describer = new TopicsFixture()
             .withTopic(T1, 4)

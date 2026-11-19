@@ -67,7 +67,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -168,9 +167,14 @@ public class ClientMetricsManager implements AutoCloseable {
                 return request.getErrorResponse(0, invalidClientInstanceIdException(clientInstanceId));
             }
         } else {
-            clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
-                .filter(id -> !id.equals(Uuid.ZERO_UUID))
-                .orElseGet(this::generateNewClientId);
+            Uuid requested = request.data().clientInstanceId();
+            if (requested == null || requested.equals(Uuid.ZERO_UUID)) {
+                clientInstanceId = generateNewClientId();
+            } else if (!isValidClientInstanceId(requested)) {
+                return request.getErrorResponse(0, invalidClientInstanceIdException(requested));
+            } else {
+                clientInstanceId = requested;
+            }
         }
 
         /*
