@@ -1249,12 +1249,6 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
-    public void testSingleArgSetRebalanceListenerRejectsNull() {
-        // unlike setRebalanceListener(listener, consumer), the test-only overload rejects null
-        assertThrows(NullPointerException.class, () -> state.setRebalanceListener(null));
-    }
-
-    @Test
     public void testRebalanceListenerCanBeRestoredAfterNull() {
         List<String> calls = new ArrayList<>();
         RebalanceListener first = new RebalanceListener() {

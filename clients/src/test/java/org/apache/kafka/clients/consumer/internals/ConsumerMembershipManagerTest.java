@@ -1402,11 +1402,11 @@ public class ConsumerMembershipManagerTest {
 
         // Fatal error received in response for the last heartbeat. Member should remain in FATAL
         // state but no callbacks should be triggered because the member already left the group.
-        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
-        subscriptionState.setRebalanceListener(rebalanceListener);
-        membershipManager.onHeartbeatFailure(false);
+        mockListener(new CounterConsumerRebalanceListener());
+        clearInvocations(backgroundEventHandler);
         membershipManager.transitionToFatal();
-        assertEquals(0, rebalanceListener.lostCount);
+        membershipManager.onHeartbeatFailure(false);
+        verify(backgroundEventHandler, never()).add(any(PartitionsRemovedEvent.class));
 
         assertEquals(MemberState.FATAL, membershipManager.state());
 
