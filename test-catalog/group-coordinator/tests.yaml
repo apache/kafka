@@ -541,9 +541,11 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testHeartbeatEmptyGroup
 - testHeartbeatExpirationShouldRemoveMember
 - testHeartbeatExpirationShouldRemovePendingMember
+- testHeartbeatIgnoresVoteForUnconfiguredServerAssignor
 - testHeartbeatIllegalGeneration
 - testHeartbeatUnknownGroup
 - testHeartbeatUnknownMemberExistingGroup
+- testHeartbeatsKeepGroupEpochWhenServerAssignorVoteIsTied
 - testInitializeShareGroupStateWithMissingOrNonShareGroup
 - testJoinEmptyStreamsGroupAndDescribe
 - testJoinGroupAppendErrorConversion
@@ -1505,6 +1507,8 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testNumClassicProtocolMembers
 - testOffsetExpirationCondition
 - testPreferredServerAssignor
+- testPreferredServerAssignorSkipsUnconfiguredAssignors
+- testPreferredServerAssignorWithTiedVote
 - testRemoveMember
 - testRemoveMemberGroupState
 - testRemovePartitionEpochs
