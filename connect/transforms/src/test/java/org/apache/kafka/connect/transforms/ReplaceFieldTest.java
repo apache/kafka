@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
@@ -142,6 +143,40 @@ public class ReplaceFieldTest {
         assertEquals(2, updatedValue.schema().fields().size());
         assertEquals(Integer.valueOf(42), updatedValue.getInt32("xyz"));
         assertEquals(true, updatedValue.getBoolean("bar"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"exclude,a", "include,b"})
+    public void retainsFieldWhenRenameSourceIsFiltered(String configName, String configValue) {
+        xform.configure(Map.of(configName, configValue, "renames", "a:b"));
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("a", Schema.INT32_SCHEMA)
+                .field("b", Schema.INT32_SCHEMA)
+                .build();
+        final Struct value = new Struct(schema).put("a", 1).put("b", 2);
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+
+        final Struct result = (Struct) xform.apply(record).value();
+
+        assertEquals(1, result.schema().fields().size());
+        assertEquals(Integer.valueOf(2), result.getInt32("b"));
+    }
+
+    @Test
+    public void retainsFieldWhenRenameSourceIsMissing() {
+        xform.configure(Map.of("renames", "a:b"));
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("b", Schema.INT32_SCHEMA)
+                .build();
+        final Struct value = new Struct(schema).put("b", 2);
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+
+        final Struct result = (Struct) xform.apply(record).value();
+
+        assertEquals(1, result.schema().fields().size());
+        assertEquals(Integer.valueOf(2), result.getInt32("b"));
     }
 
     @Test
