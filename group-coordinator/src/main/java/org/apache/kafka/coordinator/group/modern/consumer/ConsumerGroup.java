@@ -1299,7 +1299,21 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
-        consumerGroup.setGroupEpoch(classicGroup.generationId());
+        int groupEpoch = switch (classicGroup.currentState()) {
+            case EMPTY, DEAD -> classicGroup.generationId();
+            case PREPARING_REBALANCE -> classicGroup.generationId() + 1; // We are expecting a new assignment.
+            case COMPLETING_REBALANCE -> {
+                // We are expecting a new assignment. The generation was already bumped when the join
+                // phase completed, but the members have not received its assignment yet. The members
+                // may have already observed the bumped generation id in their JoinGroup responses and
+                // will send it in their SyncGroup and Heartbeat requests. We must keep the generation id
+                // as their member epoch and the target assignment epoch, and bump the group epoch
+                // a second time to compute a new target assignment.
+                yield classicGroup.generationId() + 1;
+            }
+            case STABLE -> classicGroup.generationId();
+        };
+        consumerGroup.setGroupEpoch(groupEpoch);
         consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
