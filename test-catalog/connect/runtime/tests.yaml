@@ -617,6 +617,7 @@ org.apache.kafka.connect.runtime.WorkerTaskTest:
 - stopBeforeStarting
 - testCloseClosesManagedResources
 - testCloseClosesManagedResourcesIfSubclassThrows
+- testConnectorTypeMetricIsString
 - testErrorReporterConfigurationExceptionPropagation
 - testErrorReportersConfigured
 - updateMetricsOnListenerEventsForStartupPauseResumeAndFailure
