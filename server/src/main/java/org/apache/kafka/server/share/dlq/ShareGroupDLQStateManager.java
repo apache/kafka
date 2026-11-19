@@ -1026,7 +1026,7 @@ public class ShareGroupDLQStateManager {
             .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
 
         return new CoalesceResults(
-            new ProduceRequest.Builder(ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersionForRequestHeader(requestHeaderVersion), data),
+            new ProduceRequest.Builder(ProduceRequest.MINIMUM_VERSION_WITH_TOPIC_IDS, ApiKeys.PRODUCE.latestVersionForRequestHeader(requestHeaderVersion), data),
             liveHandlers,
             deferredHandlers
         );

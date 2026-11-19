@@ -41,6 +41,7 @@ import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 public class ProduceRequest extends AbstractRequest {
 
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 11;
+    public static final short MINIMUM_VERSION_WITH_TOPIC_IDS = 13;
 
     public static Builder builder(ProduceRequestData data, boolean useTransactionV1Version) {
         // When we use transaction V1 protocol in transaction we set the request version upper limit to
