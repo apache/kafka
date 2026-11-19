@@ -37,6 +37,7 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV2;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_2_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_4_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.LATEST_PRODUCTION;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -242,5 +243,33 @@ class MetadataVersionTest {
         } else {
             assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testAlterPartitionRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.alterPartitionRequestHeaderVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testAssignReplicasToDirsRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.assignReplicasToDirsRequestHeaderVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testAllocateProducerIdsRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.allocateProducerIdsRequestHeaderVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testControllerRegistrationRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.controllerRegistrationRequestHeaderVersion());
     }
 }

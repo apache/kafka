@@ -98,6 +98,14 @@ public class ConsumerGroupTest {
         );
     }
 
+    private static ConsumerGroupMember member(String memberId, MemberState state, int memberEpoch) {
+        return new ConsumerGroupMember.Builder(memberId)
+            .setState(state)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
+            .build();
+    }
+
     @Test
     public void testGetOrCreateMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
@@ -170,9 +178,32 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(member);
         assertTrue(consumerGroup.hasMember("member"));
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        Assignment otherAssignment = new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 2, 3)));
+        consumerGroup.updateTargetAssignment("member", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        consumerGroup.updateTargetAssignment("other-member", otherAssignment);
+
         consumerGroup.removeMember("member");
         assertFalse(consumerGroup.hasMember("member"));
 
+        // The target assignment of the member is removed with the member.
+        assertEquals(Map.of("other-member", otherAssignment), consumerGroup.targetAssignment());
+    }
+
+    @Test
+    public void testClearTargetAssignment() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 0, 1))));
+        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 2, 3))));
+        assertEquals(Set.of("member1", "member2"), consumerGroup.targetAssignment().keySet());
+
+        consumerGroup.clearTargetAssignment();
+        assertEquals(Map.of(), consumerGroup.targetAssignment());
     }
 
     @Test
@@ -456,72 +487,112 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
-        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
         consumerGroup.setGroupEpoch(2);
 
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
-        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member2);
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
         consumerGroup.setGroupEpoch(3);
 
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         consumerGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
-        member1 = new ConsumerGroupMember.Builder(member1)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
 
-        consumerGroup.updateMember(member1);
-
-        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         // Member 2 is not stable so the group stays in reconciling state.
-        member2 = new ConsumerGroupMember.Builder(member2)
-            .setState(MemberState.UNREVOKED_PARTITIONS)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member2", MemberState.UNREVOKED_PARTITIONS, 3));
 
-        consumerGroup.updateMember(member2);
-
-        assertEquals(MemberState.UNREVOKED_PARTITIONS, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
-        member2 = new ConsumerGroupMember.Builder(member2)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(3)
-            .setPreviousMemberEpoch(2)
-            .build();
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
 
-        consumerGroup.updateMember(member2);
-
-        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
 
         consumerGroup.removeMember("member1");
         consumerGroup.removeMember("member2");
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+    }
+
+    @Test
+    public void testUpdateMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+
+        // Member 2 is counted once although it was updated twice, so the group
+        // reconciles when member 1 is no longer stable.
+        consumerGroup.updateMember(member("member1", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+    }
+
+    @Test
+    public void testSetTargetAssignmentMetadataGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(3);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 3));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 3));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
+
+        consumerGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+    }
+
+    @Test
+    public void testRemoveMemberGroupState() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member3", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        // Member 3 is not stable so the group stays in reconciling state.
+        consumerGroup.removeMember("member1");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        consumerGroup.removeMember("member3");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+    }
+
+    @Test
+    public void testGroupStateRevertToSnapshot() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "foo");
+        consumerGroup.setGroupEpoch(2);
+        consumerGroup.setTargetAssignmentMetadata(2, 12345L);
+        consumerGroup.updateMember(member("member1", MemberState.STABLE, 2));
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        consumerGroup.updateMember(member("member1", MemberState.UNREVOKED_PARTITIONS, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+
+        // The group state is reverted with the snapshot too. Updating member 2
+        // computes it again from the number of stable members at the snapshot.
+        snapshotRegistry.revertToSnapshot(0);
+        consumerGroup.updateMember(member("member2", MemberState.STABLE, 2));
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
     }
 
     @Test
@@ -539,6 +610,7 @@ public class ConsumerGroupTest {
     @Test
     public void testPreferredServerAssignor() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<String> assignorNames = List.of("uniform", "range");
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setServerAssignorName("range")
@@ -550,17 +622,18 @@ public class ConsumerGroupTest {
             .setServerAssignorName("uniform")
             .build();
 
-        // The group is empty so the preferred assignor should be empty.
+        // The group is empty so the preferred assignor should be uniform, the first
+        // configured assignor.
         assertEquals(
-            Optional.empty(),
-            consumerGroup.preferredServerAssignor()
+            "uniform",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 1 has got an updated assignor but this is not reflected in the group yet so
         // we pass the updated member. The assignor should be range.
         assertEquals(
-            Optional.of("range"),
-            consumerGroup.computePreferredServerAssignor(null, member1)
+            "range",
+            consumerGroup.computePreferredServerAssignor(null, member1, assignorNames)
         );
 
         // Update the group with member 1.
@@ -568,22 +641,23 @@ public class ConsumerGroupTest {
 
         // Member 1 is in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
-            consumerGroup.preferredServerAssignor()
+            "range",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 1 has been removed but this is not reflected in the group yet so
-        // we pass the removed member. The assignor should be range.
+        // we pass the removed member. No vote is left so the assignor should be uniform,
+        // the first configured assignor.
         assertEquals(
-            Optional.empty(),
-            consumerGroup.computePreferredServerAssignor(member1, null)
+            "uniform",
+            consumerGroup.computePreferredServerAssignor(member1, null, assignorNames)
         );
 
         // Member 2 has got an updated assignor but this is not reflected in the group yet so
         // we pass the updated member. The assignor should be range.
         assertEquals(
-            Optional.of("range"),
-            consumerGroup.computePreferredServerAssignor(null, member2)
+            "range",
+            consumerGroup.computePreferredServerAssignor(null, member2, assignorNames)
         );
 
         // Update the group with member 2.
@@ -591,8 +665,8 @@ public class ConsumerGroupTest {
 
         // Member 1 and 2 are in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
-            consumerGroup.preferredServerAssignor()
+            "range",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Update the group with member 3.
@@ -600,8 +674,8 @@ public class ConsumerGroupTest {
 
         // Member 1, 2 and 3 are in the group so the assignor should be range.
         assertEquals(
-            Optional.of("range"),
-            consumerGroup.preferredServerAssignor()
+            "range",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Members without assignors
@@ -616,18 +690,27 @@ public class ConsumerGroupTest {
             .build();
 
         // Member 1 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be range or uniform.
-        Optional<String> assignor = consumerGroup.computePreferredServerAssignor(member1, updatedMember1);
-        assertTrue(assignor.equals(Optional.of("range")) || assignor.equals(Optional.of("uniform")));
+        // we pass the updated member. Range and uniform have one vote each so the assignor
+        // should be uniform, which comes first in the configured assignors.
+        assertEquals(
+            "uniform",
+            consumerGroup.computePreferredServerAssignor(member1, updatedMember1, assignorNames)
+        );
 
         // Update the group.
         consumerGroup.updateMember(updatedMember1);
 
-        // Member 2 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be range or uniform.
+        // The assignor should be uniform.
         assertEquals(
-            Optional.of("uniform"),
-            consumerGroup.computePreferredServerAssignor(member2, updatedMember2)
+            "uniform",
+            consumerGroup.preferredServerAssignor(assignorNames)
+        );
+
+        // Member 2 has removed it assignor but this is not reflected in the group yet so
+        // we pass the updated member. The assignor should be uniform.
+        assertEquals(
+            "uniform",
+            consumerGroup.computePreferredServerAssignor(member2, updatedMember2, assignorNames)
         );
 
         // Update the group.
@@ -635,25 +718,79 @@ public class ConsumerGroupTest {
 
         // Only member 3 is left in the group so the assignor should be uniform.
         assertEquals(
-            Optional.of("uniform"),
-            consumerGroup.preferredServerAssignor()
+            "uniform",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
 
         // Member 3 has removed it assignor but this is not reflected in the group yet so
-        // we pass the updated member. The assignor should be empty.
+        // we pass the updated member. No vote is left so the assignor should be uniform,
+        // the first configured assignor.
         assertEquals(
-            Optional.empty(),
-            consumerGroup.computePreferredServerAssignor(member3, updatedMember3)
+            "uniform",
+            consumerGroup.computePreferredServerAssignor(member3, updatedMember3, assignorNames)
         );
 
         // Update the group.
         consumerGroup.updateMember(updatedMember3);
 
-        // The group is empty so the assignor should be empty as well.
+        // No vote is left in the group so the assignor should be uniform as well.
         assertEquals(
-            Optional.empty(),
-            consumerGroup.preferredServerAssignor()
+            "uniform",
+            consumerGroup.preferredServerAssignor(assignorNames)
         );
+    }
+
+    @Test
+    public void testPreferredServerAssignorWithTiedVote() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setServerAssignorName("uniform")
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setServerAssignorName("range")
+            .build();
+
+        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member2);
+
+        // Range and uniform have one vote each so the preferred assignor should be the one
+        // that comes first in the configured assignors, whichever member is updated.
+        for (List<String> assignorNames : List.of(List.of("uniform", "range"), List.of("range", "uniform"))) {
+            String expectedAssignor = assignorNames.get(0);
+
+            assertEquals(expectedAssignor, consumerGroup.preferredServerAssignor(assignorNames));
+            assertEquals(expectedAssignor, consumerGroup.computePreferredServerAssignor(member1, member1, assignorNames));
+            assertEquals(expectedAssignor, consumerGroup.computePreferredServerAssignor(member2, member2, assignorNames));
+        }
+    }
+
+    @Test
+    public void testPreferredServerAssignorSkipsUnconfiguredAssignors() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setServerAssignorName("uniform")
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setServerAssignorName("uniform")
+            .build();
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setServerAssignorName("range")
+            .build();
+
+        consumerGroup.updateMember(member1);
+        consumerGroup.updateMember(member2);
+        consumerGroup.updateMember(member3);
+
+        // Uniform has the most votes but only range is configured so the assignor should be range.
+        assertEquals("range", consumerGroup.preferredServerAssignor(List.of("range")));
+        assertEquals("range", consumerGroup.computePreferredServerAssignor(member1, member1, List.of("range")));
+
+        // None of the voted assignors is configured so the assignor should be custom, the
+        // first configured assignor.
+        assertEquals("custom", consumerGroup.preferredServerAssignor(List.of("custom")));
+        assertEquals("custom", consumerGroup.computePreferredServerAssignor(member1, member1, List.of("custom")));
     }
 
     @Test
@@ -1170,8 +1307,8 @@ public class ConsumerGroupTest {
                     .setSubscribedTopicRegex("")
                     .setMemberType((byte) 1)
             ));
-        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
-            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1,
+            List.of("assignorName"), new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
 
         assertEquals(expected, actual);
     }
@@ -1463,7 +1600,10 @@ public class ConsumerGroupTest {
         assertEquals(expectedConsumerGroup.assignmentEpoch(), consumerGroup.assignmentEpoch());
         assertEquals(expectedConsumerGroup.assignmentTimestamp(), consumerGroup.assignmentTimestamp());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
-        assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
+        assertEquals(
+            expectedConsumerGroup.preferredServerAssignor(List.of("uniform", "range")),
+            consumerGroup.preferredServerAssignor(List.of("uniform", "range"))
+        );
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());
     }
 

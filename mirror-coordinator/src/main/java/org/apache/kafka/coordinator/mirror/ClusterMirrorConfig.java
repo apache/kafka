@@ -79,7 +79,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final long CONNECTIONS_MAX_IDLE_MS_DEFAULT = 10 * 60 * 1000L;
 
     public static final String SOCKET_TIMEOUT_MS_CONFIG = "socket.timeout.ms";
-    private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests.";
+    private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests to the source cluster.";
     private static final long SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000L;
 
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
@@ -87,7 +87,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 64 * 1024;
 
     public static final String FETCH_WAIT_MAX_MS_CONFIG = "fetch.wait.max.ms";
-    private static final String FETCH_WAIT_MAX_MS_DOC = "The maximum wait time for each fetcher request issued by mirror replicas.";
+    private static final String FETCH_WAIT_MAX_MS_DOC = "The maximum wait time for each mirror fetch request from the source cluster.";
     private static final int FETCH_WAIT_MAX_MS_DEFAULT = 1000;
 
     public static final String FETCH_BACKOFF_MS_CONFIG = "fetch.backoff.ms";
@@ -96,16 +96,18 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final long FETCH_BACKOFF_MS_DEFAULT = 1000;
 
     public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
-    private static final String FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each fetch response.";
+    private static final String FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each mirror fetch response from the source cluster. " +
+            "If not enough bytes are available, the fetch request waits up to fetch.wait.max.ms.";
     private static final int FETCH_MIN_BYTES_DEFAULT = 1;
 
     public static final String FETCH_RESPONSE_MAX_BYTES_CONFIG = "fetch.response.max.bytes";
-    private static final String FETCH_RESPONSE_MAX_BYTES_DOC = "Maximum bytes expected for the entire fetch response. Records are fetched in batches, " +
-            "and if the first record batch in the first non-empty partition is larger than this value, the record batch will still be returned.";
+    private static final String FETCH_RESPONSE_MAX_BYTES_DOC = "Maximum bytes expected for the entire mirror fetch response from the source cluster. " +
+            "Records are fetched in batches, and if the first record batch in the first non-empty partition of the fetch is larger than this value, " +
+            "the record batch will still be returned.";
     private static final int FETCH_RESPONSE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024;
 
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
-    private static final String FETCH_MAX_BYTES_DOC = "The number of bytes of messages to attempt to fetch for each partition.";
+    private static final String FETCH_MAX_BYTES_DOC = "The number of bytes of messages to attempt to fetch for each partition in a mirror fetch request.";
     private static final int FETCH_MAX_BYTES_DEFAULT = 1024 * 1024;
 
     public static final String TOPIC_PROPERTIES_EXCLUDE_CONFIG = "topic.properties.exclude";
@@ -203,7 +205,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                     throw new ConfigException(name, value, "Invalid ACL rule: " + e.getMessage());
                 }
             },
-            () -> "Valid ACL rules separated by || with six semicolon-separated fields"
+            () -> "Valid ACL rules separated by || with up to six semicolon-separated fields"
     );
 
     private static final ConfigDef CONFIG_DEF = buildConfigDef();
@@ -225,7 +227,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT,
                         atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
                 .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
-                .define(SOCKET_TIMEOUT_MS_CONFIG, LONG, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
+                .define(SOCKET_TIMEOUT_MS_CONFIG, LONG, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0L), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
                 .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT,
                         SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR, MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
                 .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT,
@@ -387,6 +389,17 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return getString(SaslConfigs.SASL_MECHANISM);
     }
 
+    /**
+     * An ACL filter rule parsed from the format:
+     * resourceType;resourceName;host;operation;permissionType;principal
+     *
+     * @param resourceType        The resource type, or null for any
+     * @param resourceNamePattern Regex for the resource name, or null for any
+     * @param hostPattern         Regex for the ACL host, or null for any
+     * @param operation           The ACL operation, or null for any
+     * @param permissionType      The ACL permission type, or null for any
+     * @param principal           Exact principal string (e.g. User:alice), or null for any
+     */
     public record MirrorAclRule(
             ResourceType resourceType,
             Pattern resourceNamePattern,
@@ -406,9 +419,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 + "The resourceType, operation, and permissionType fields use enum values (e.g. TOPIC, READ, ALLOW). "
                 + "Use ANY or empty to match all values for these fields. "
                 + "The resourceName and host fields support regex patterns (e.g. test-.*, 192\\.168\\..*). "
-                + "The principal field uses exact string matching (e.g. User:alice, User:*). "
-                + "Empty principal means match all. "
-                + "Use .* as the entire value to match all ACLs."
+                + "The principal field uses exact string matching (e.g. User:alice). "
+                + "Use User:* to match only wildcard-principal ACLs, or leave empty to match all principals."
                 + "\n\nExamples:\n"
                 + ".* (match all ACLs)\n"
                 + "TOPIC;orders.* (all ACLs for topics matching orders.*)\n"
@@ -437,8 +449,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             String[] parts = trimmed.split(SEPARATOR, 6);
             return new MirrorAclRule(
                     parseResourceType(parts, 0),
-                    parseResourceName(parts, 1),
-                    parseHost(parts, 2),
+                    parsePattern(parts, 1), // Resource name
+                    parsePattern(parts, 2), // Host
                     parseOperation(parts, 3),
                     parsePermissionType(parts, 4),
                     parsePrincipal(parts, 5)
@@ -457,14 +469,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             return ResourceType.valueOf(upper);
         }
 
-        private static Pattern parseResourceName(String[] parts, int index) {
-            if (index >= parts.length) return null;
-            String value = parts[index].trim();
-            if (value.isEmpty()) return null;
-            return compilePattern(value);
-        }
-
-        private static Pattern parseHost(String[] parts, int index) {
+        private static Pattern parsePattern(String[] parts, int index) {
             if (index >= parts.length) return null;
             String value = parts[index].trim();
             if (value.isEmpty()) return null;

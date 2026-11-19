@@ -20,6 +20,8 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -106,5 +108,22 @@ public class TopicTest {
         Collections.reverse(underscoreFirstMiddleLastNone);
         for (int i = 0; i < periodFirstMiddleLastNone.size(); ++i)
             assertFalse(Topic.hasCollision(periodFirstMiddleLastNone.get(i), underscoreFirstMiddleLastNone.get(i)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "__consumer_offsets",
+        "__transaction_state",
+        "__share_group_state",
+        "__mirror_state"
+    })
+    public void testCoordinatorTopicsAreInternal(String topic) {
+        assertTrue(Topic.isInternal(topic));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"foo", "bar"})
+    public void testUserTopicsAreNotInternal(String topic) {
+        assertFalse(Topic.isInternal(topic));
     }
 }

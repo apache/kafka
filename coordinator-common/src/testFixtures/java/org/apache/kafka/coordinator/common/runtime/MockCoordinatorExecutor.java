@@ -42,11 +42,15 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
 
         CoordinatorResult<Void, T> execute() {
+            // As in CoordinatorExecutorImpl, only an exception thrown by the task is passed to the
+            // operation. An exception thrown by the operation is thrown by poll().
+            R result;
             try {
-                return operation.onComplete(task.run(), null);
+                result = task.run();
             } catch (Throwable ex) {
                 return operation.onComplete(null, ex);
             }
+            return operation.onComplete(result, null);
         }
     }
 

@@ -773,7 +773,7 @@ Producer/Consumer/Broker Configuration Property
 <tr>  
 <td>
 
-`sasl.login.refresh.min.buffer.seconds`
+`sasl.login.refresh.buffer.seconds`
 </td> </tr> </table>
 #### Secure/Production Use of SASL/OAUTHBEARER
 

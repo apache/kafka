@@ -36,8 +36,14 @@ public class AssignReplicasToDirsRequest extends AbstractRequest {
 
         private final AssignReplicasToDirsRequestData data;
 
-        public Builder(AssignReplicasToDirsRequestData data) {
-            super(ApiKeys.ASSIGN_REPLICAS_TO_DIRS);
+        /**
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
+        public Builder(AssignReplicasToDirsRequestData data, short requestHeaderVersion) {
+            super(ApiKeys.ASSIGN_REPLICAS_TO_DIRS,
+                ApiKeys.ASSIGN_REPLICAS_TO_DIRS.oldestVersion(),
+                ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

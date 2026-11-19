@@ -2938,6 +2938,186 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testHeartbeatsKeepGroupEpochWhenServerAssignorVoteIsTied() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor uniformAssignor = new MockPartitionAssignor("uniform");
+        MockPartitionAssignor rangeAssignor = new MockPartitionAssignor("range");
+        GroupAssignment groupAssignment = new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)
+            ))
+        ));
+        uniformAssignor.prepareGroupAssignment(groupAssignment);
+        rangeAssignor.prepareGroupAssignment(groupAssignment);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("uniform")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
+            .build();
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addRacks()
+            .build();
+
+        // Consumer group with one vote for the uniform assignor and one vote for the range assignor.
+        // The range assignor comes first in the configured assignors.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(rangeAssignor, uniformAssignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setRebalanceTimeoutMs(5000)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
+                ))))
+            .build();
+
+        // Member 1, member 2 and member 1 again heartbeat with unchanged votes. The group
+        // stays at epoch 10 and no record is written.
+        for (String memberId : List.of(memberId1, memberId2, memberId1)) {
+            CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(10));
+
+            assertEquals(List.of(), result.records());
+            assertEquals(10, result.response().memberEpoch());
+        }
+
+        // Member 1 switches its vote from uniform to range. Range comes first in the configured
+        // assignors so it is the preferred assignor of the group before and after the switch. The
+        // group stays at epoch 10 and only the updated member is written.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10)
+                .setServerAssignor("range"));
+
+        assertRecordsEquals(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(
+                groupId,
+                new ConsumerGroupMember.Builder(member1)
+                    .setServerAssignorName("range")
+                    .build()
+            )),
+            result.records()
+        );
+        assertEquals(10, result.response().memberEpoch());
+    }
+
+    @Test
+    public void testHeartbeatIgnoresVoteForUnconfiguredServerAssignor() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addTopic(barTopicId, barTopicName, 3)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        // The member voted for the uniform assignor, which has been removed from the
+        // configured assignors since then. The range assignor is the only configured assignor.
+        MockPartitionAssignor rangeAssignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(rangeAssignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("uniform")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                ))))
+            .build();
+
+        rangeAssignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )))
+        ));
+
+        // The member subscribes to bar, which triggers a new target assignment. The vote for
+        // the uniform assignor is ignored and the range assignor computes the assignment.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setSubscribedTopicNames(List.of("foo", "bar")));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(0, 1, 2, 3, 4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(List.of(0, 1, 2))
+                    ))),
+            result.response()
+        );
+    }
+
+    @Test
     public void testNoGroupEpochBumpWhenStaticMemberTemporarilyLeaves() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
@@ -11665,6 +11845,46 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testListGroupsAppliesGroupIdFilterAfterStatesAndTypesFilters() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder("consumer-group-id", 10))
+            .build();
+        for (String groupId : List.of("classic-group-1", "classic-group-2")) {
+            context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord(
+                groupId,
+                new GroupMetadataValue()
+                    .setMembers(List.of())
+                    .setGeneration(2)
+                    .setLeader(null)
+                    .setProtocolType("classic")
+                    .setProtocol("range")
+                    .setCurrentStateTimestamp(context.time.milliseconds())));
+        }
+        context.commit();
+
+        Set<String> testedGroupIds = new HashSet<>();
+        List<ListGroupsResponseData.ListedGroup> groups = context.groupMetadataManager.listGroups(
+            Set.of(),
+            Set.of(Group.GroupType.CLASSIC.toString()),
+            groupId -> {
+                testedGroupIds.add(groupId);
+                return groupId.equals("classic-group-1");
+            },
+            context.lastCommittedOffset
+        );
+
+        assertEquals(List.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId("classic-group-1")
+                .setProtocolType("classic")
+                .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString())
+        ), groups);
+        // The consumer group does not match the types filter, so the group id filter is not applied to it.
+        assertEquals(Set.of("classic-group-1", "classic-group-2"), testedGroupIds);
+    }
+
+    @Test
     public void testConsumerGroupDescribeNoErrors() {
         List<String> consumerGroupIds = List.of("group-id-1", "group-id-2");
         int epoch = 10;
@@ -11676,7 +11896,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor, new MockPartitionAssignor("assignorName")))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
                 .withMember(memberBuilder.build()))
@@ -14018,6 +14238,322 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroupWithoutSelectedProtocol() throws Exception {
+        String groupId = "group-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String memberId3 = "member-id-3";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(Map.of()),
+            memberId2, new MemberAssignmentImpl(Map.of()),
+            memberId3, new MemberAssignmentImpl(Map.of())
+        )));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // The first protocol, "range", subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
+
+        // A classic group that has members but has not completed a generation has no selected
+        // protocol.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                new byte[0]
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        assertEquals(Optional.empty(), group.protocolName());
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(List.of(fooTopicName))
+                .setTopicPartitions(List.of())
+        );
+
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(5000)
+            .setAssignedPartitions(Map.of())
+            .build();
+        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 0, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+
+        // Member 1 was converted before its classic group completed a rebalance. It rejoins with
+        // the classic protocol and is told its first protocol.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId1)
+                .withProtocols(protocols)
+                .withSessionTimeoutMs(5000)
+                .withRebalanceTimeoutMs(10000)
+                .build()
+        );
+        joinResult.appendFuture.complete(null);
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId1)
+                .setGenerationId(1)
+                .setProtocolType("consumer")
+                .setProtocolName("range"),
+            joinResult.joinFuture.get()
+        );
+    }
+
+    @Test
+    public void testConsumerGroupHeartbeatWithClassicGroupMemberNotSupportingSelectedProtocol() {
+        String groupId = "group-id";
+        String memberId1 = "member-id-1";
+        String memberId2 = "member-id-2";
+        String memberId3 = "member-id-3";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        Map<Uuid, Set<Integer>> assignment1 = mkAssignment(mkTopicAssignment(fooTopicId, 0));
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(assignment1),
+            memberId2, new MemberAssignmentImpl(Map.of()),
+            memberId3, new MemberAssignmentImpl(Map.of())
+        )));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // The first protocol of each member subscribes to foo.
+        JoinGroupRequestProtocolCollection protocols1 = GroupMetadataManagerTestContext.toProtocols("range", "cooperative-sticky");
+        JoinGroupRequestProtocolCollection protocols2 = GroupMetadataManagerTestContext.toProtocols("cooperative-sticky");
+
+        // The group is stable on "range" at generation 1, then a member that only supports
+        // "cooperative-sticky" joins.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols1,
+                Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+                    List.of(new TopicPartition(fooTopicName, 0))
+                )))
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
+        group.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols2,
+                new byte[0]
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        assertEquals(Optional.of("range"), group.protocolName());
+        assertEquals(1, group.generationId());
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId3)
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
+                .setSubscribedTopicNames(List.of(fooTopicName))
+                .setTopicPartitions(List.of())
+        );
+
+        // The assignment of the first member is kept.
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
+            .setAssignedPartitions(toAssignmentWithEpochs(assignment1, 1))
+            .build();
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(1)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(10000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setRebalanceTimeoutMs(5000)
+            .setAssignedPartitions(Map.of())
+            .build();
+        long groupHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, assignment1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 1, 0),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2, groupHash),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId3, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+    }
+
+    @Test
     public void testClassicGroupJoinToConsumerGroupFailsOnMalformedSubscriptionMetadata() {
         String groupId = "group-id";
         String existingMemberId = Uuid.randomUuid().toString();
@@ -15007,11 +15543,17 @@ public class GroupMetadataManagerTest {
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
 
+        // The consumer group is no longer subscribed to its topics.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
+
         // Simulate a failed write to the log.
         context.rollback();
 
         // The group is reverted back to the consumer group.
         assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(fooTopicName));
+        assertEquals(Set.of(groupId), context.groupMetadataManager.groupsSubscribedToTopic(barTopicName));
     }
 
     @Test
@@ -20507,84 +21049,92 @@ public class GroupMetadataManagerTest {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();
         String memberB = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        String changelogTopicName = "changelog";
-        Uuid fooTopicId = Uuid.randomUuid();
-        // Only a task with a changelog can be warmed up, so the subtopology has to be stateful for the refiner to
-        // hold anything back.
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology()
-                .setSubtopologyId(subtopology1)
-                .setSourceTopics(List.of(fooTopicName))
-                .setStateChangelogTopics(List.of(new TopicInfo().setName(changelogTopicName)))
-        ));
-
-        // The changelog has to exist, or the topology never becomes ready and the refiner is not consulted at all.
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 3)
-            .addTopic(Uuid.randomUuid(), changelogTopicName, 3)
-            .buildCoordinatorMetadataImage();
-        long metadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-            changelogTopicName, computeTopicHash(changelogTopicName, metadataImage)
-        ));
-
-        // memberA runs all three tasks and the target assignment moves 0_2 to memberB, on a process that holds
-        // nothing of it -- the shape the refiner exists for.
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
-            .withStreamsGroupAssignmentRefiner(new AssignmentRefinerImpl())
-            .withMetadataImage(metadataImage)
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
-                .withMember(streamsGroupMemberBuilderWithDefaults(memberA)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(10)
-                    .setProcessId(DEFAULT_PROCESS_ID)
-                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
-                    .build())
-                .withMember(streamsGroupMemberBuilderWithDefaults(memberB)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(10)
-                    .setProcessId("process-b")
-                    .build())
-                .withTargetAssignment(memberA, mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)))
-                .withTargetAssignment(memberB, mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 2)))
-                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
-                .withTargetAssignmentEpoch(10)
-                .withMetadataHash(metadataHash)
-                .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
-            .build();
-
-        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberB)
-                .setMemberEpoch(10)
-                .setProcessId("process-b")
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-
-        // memberB is handed a warm-up task rather than the active one: 0_2 keeps running on memberA until the
-        // warm-up has caught up, which is a refinement step of its own and so bumps the epoch.
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 10, memberA, memberB, 10, TasksTupleWithEpochs.EMPTY);
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // The coordinator has not heard from memberA since it loaded the group, so it does not plant a warm-up task
+        // yet: it could not tell which destination is the best one to warm up.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10));
+        assertEquals(10, group.groupEpoch());
+        assertEquals(List.of(), result.response().data().warmupTasks());
+
+        // Once every member has been heard from, memberB is handed a warm-up task rather than the active one: 0_2
+        // keeps running on memberA until the warm-up has caught up. The warm-up task is a refinement step of its own,
+        // so memberA's heartbeat bumps the epoch.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
         assertEquals(11, group.groupEpoch());
-        assertEquals(mkResponseTasks(subtopology1, 2), result.response().data().warmupTasks());
+        result = context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10));
+        assertEquals(mkResponseTasks("subtopology1", 2), result.response().data().warmupTasks());
         assertEquals(List.of(), result.response().data().activeTasks());
         assertEquals(
-            mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)),
+            mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks("subtopology1", 2)),
             group.refinedAssignment(group.assignmentEpoch()).get(memberB)
         );
         assertEquals(
-            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1, 2)),
             group.refinedAssignment(group.assignmentEpoch()).get(memberA)
         );
+    }
+
+    @Test
+    public void testStreamsGroupGrantsATaskAtOnceToAVersion0MemberInsteadOfWarmingItUp() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 10, memberA, memberB, 10, TasksTupleWithEpochs.EMPTY);
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
+
+        // memberB runs an older client that never reports its restore progress, so a warm-up task could not be
+        // promoted. It gets the active task right away, which memberA is told to give up.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 10), (short) 0);
+
+        assertEquals(11, group.groupEpoch());
+        assertEquals(List.of(), result.response().data().warmupTasks());
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 2)),
+            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+        );
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1)),
+            group.refinedAssignment(group.assignmentEpoch()).get(memberA)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupDoesNotGrantATaskColdToAMemberOfUnknownVersion() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 10, memberA, memberB, 10, TasksTupleWithEpochs.EMPTY);
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // After a coordinator failover memberB could be running either version. memberA keeps the task rather than
+        // handing it over cold, as it would to a member known to be on version 0.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
+        assertEquals(10, group.groupEpoch());
+        assertEquals(Set.of(memberA), group.heartbeatVersions().keySet());
+        assertEquals(
+            mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1, 2)),
+            group.getMemberOrThrow(memberA).assignedTasks()
+        );
+    }
+
+    private StreamsGroupHeartbeatRequestData heartbeatOfIdleMemberB(String groupId, String memberB, int memberEpoch) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberB)
+            .setMemberEpoch(memberEpoch)
+            .setProcessId("process-b")
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 
     @Test
@@ -20593,55 +21143,10 @@ public class GroupMetadataManagerTest {
         String memberA = Uuid.randomUuid().toString();
         String memberB = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        String changelogTopicName = "changelog";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology()
-                .setSubtopologyId(subtopology1)
-                .setSourceTopics(List.of(fooTopicName))
-                .setStateChangelogTopics(List.of(new TopicInfo().setName(changelogTopicName)))
-        ));
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 3)
-            .addTopic(Uuid.randomUuid(), changelogTopicName, 3)
-            .buildCoordinatorMetadataImage();
-        long metadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-            changelogTopicName, computeTopicHash(changelogTopicName, metadataImage)
-        ));
-
-        // The step after the one above: memberB already holds the warm-up task for 0_2, which memberA still runs.
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
-            .withStreamsGroupAssignmentRefiner(new AssignmentRefinerImpl())
-            .withMetadataImage(metadataImage)
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 11)
-                .withMember(streamsGroupMemberBuilderWithDefaults(memberA)
-                    .setMemberEpoch(11)
-                    .setPreviousMemberEpoch(11)
-                    .setProcessId(DEFAULT_PROCESS_ID)
-                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 11,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
-                    .build())
-                .withMember(streamsGroupMemberBuilderWithDefaults(memberB)
-                    .setMemberEpoch(11)
-                    .setPreviousMemberEpoch(11)
-                    .setProcessId("process-b")
-                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 2)))
-                    .build())
-                .withTargetAssignment(memberA, mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)))
-                .withTargetAssignment(memberB, mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 2)))
-                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
-                .withTargetAssignmentEpoch(11)
-                .withMetadataHash(metadataHash)
-                .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
-            .build();
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 11, memberA, memberB, 11,
+            mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)));
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 11));
 
         // While the warm-up task is still far behind, the migration stays staged: memberA keeps running 0_2 and
         // memberB keeps warming it.
@@ -20671,6 +21176,143 @@ public class GroupMetadataManagerTest {
             ),
             group.refinedAssignment(group.assignmentEpoch())
         );
+    }
+
+    @Test
+    public void testStreamsGroupMovesACaughtUpWarmupTaskInANewEpochBeforeEveryMemberHasHeartbeated() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 11, memberA, memberB, 11,
+            mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)));
+        context.groupMetadataManager.onLoaded();
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // memberA has not heartbeated since the coordinator loaded the settled group. The move of 0_2 to memberB is a
+        // refinement step of its own, which memberA reconciles to as well, so it does not have to wait for memberA.
+        context.streamsGroupHeartbeat(warmupProgressHeartbeat(groupId, memberB, subtopology1, 1000L, 1050L));
+        assertEquals(12, group.groupEpoch());
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)),
+            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupDoesNotGrantATaskAgainstAnOwnerThatHasReconciledBeforeTheCoordinatorFailedOver() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        // The group is in the middle of a refinement step when the coordinator loads it: memberA has already
+        // reconciled to epoch 12, which kept 0_2 with it, while memberB, which holds the warm-up task for 0_2, has not.
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 12, memberA, memberB, 11,
+            mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)));
+        context.groupMetadataManager.onLoaded();
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // memberB is the first to heartbeat after the load, and reports its warm-up task caught up. Within epoch 12
+        // memberA is not told anything new, so a grant to memberB would leave it waiting for 0_2 forever. memberB
+        // keeps the warm-up task instead and reconciles to epoch 12.
+        context.streamsGroupHeartbeat(warmupProgressHeartbeat(groupId, memberB, subtopology1, 1000L, 1050L));
+
+        assertEquals(12, group.groupEpoch());
+        assertEquals(
+            org.apache.kafka.coordinator.group.streams.MemberState.STABLE,
+            group.getMemberOrThrow(memberB).state()
+        );
+        assertEquals(12, group.getMemberOrThrow(memberB).memberEpoch());
+        assertEquals(
+            mkTasksTupleWithCommonEpoch(TaskRole.WARMUP, 11, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)),
+            group.getMemberOrThrow(memberB).assignedTasks()
+        );
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
+            group.refinedAssignment(12).get(memberA)
+        );
+    }
+
+    /**
+     * A streams group with one stateful subtopology of three tasks, handled by the real {@link AssignmentRefinerImpl},
+     * whose target assignment moves 0_2 from memberA to memberB, on another process. memberA holds all three tasks as
+     * active tasks at the group epoch, and memberB holds the given tasks at the given member epoch. None of the
+     * members has heartbeated since the coordinator loaded the group.
+     */
+    private GroupMetadataManagerTestContext streamsGroupContextMovingTask2ToMemberB(
+        String groupId,
+        int groupEpoch,
+        String memberA,
+        String memberB,
+        int memberEpochOfMemberB,
+        TasksTupleWithEpochs tasksOfMemberB
+    ) {
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        String changelogTopicName = "changelog";
+        // Only a task with a changelog can be warmed up, so the subtopology has to be stateful for the refiner to
+        // hold anything back.
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId(subtopology1)
+                .setSourceTopics(List.of(fooTopicName))
+                .setStateChangelogTopics(List.of(new TopicInfo().setName(changelogTopicName)))
+        ));
+
+        // The changelog has to exist, or the topology never becomes ready and the refiner is not consulted at all.
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), fooTopicName, 3)
+            .addTopic(Uuid.randomUuid(), changelogTopicName, 3)
+            .buildCoordinatorMetadataImage();
+        long metadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+            changelogTopicName, computeTopicHash(changelogTopicName, metadataImage)
+        ));
+
+        return new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withStreamsGroupAssignmentRefiner(new AssignmentRefinerImpl())
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberA)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setProcessId(DEFAULT_PROCESS_ID)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, groupEpoch,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberB)
+                    .setMemberEpoch(memberEpochOfMemberB)
+                    .setPreviousMemberEpoch(memberEpochOfMemberB)
+                    .setProcessId("process-b")
+                    .setAssignedTasks(tasksOfMemberB)
+                    .build())
+                .withTargetAssignment(memberA, mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)))
+                .withTargetAssignment(memberB, mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 2)))
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withMetadataHash(metadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .build();
+    }
+
+    private StreamsGroupHeartbeatRequestData heartbeatOfMemberA(String groupId, String memberA, int memberEpoch) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberA)
+            .setMemberEpoch(memberEpoch)
+            .setProcessId(DEFAULT_PROCESS_ID)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId("subtopology1")
+                .setPartitions(List.of(0, 1, 2))))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 
     /**
@@ -20703,6 +21345,7 @@ public class GroupMetadataManagerTest {
                 .setPartition(2)
                 .setOffset(endOffset)));
     }
+
 
     /**
      * A streams group that is settled at epoch 10 -- every member reconciled to its target assignment -- which is the
@@ -24707,6 +25350,386 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointAndMissingSourceTopics() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        // The source topic does not exist, so the configured topology has no subtopologies.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        // A client that has not yet received endpoint information sends -1 as the endpoint information epoch.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
+                .setEndpointInformationEpoch(-1));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setPartitionsByUserEndpoint(List.of())
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                    .setStatusDetail("Source topics foo are missing.")))
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000),
+            result.response().data()
+        );
+
+        // The client now knows the group's endpoint information epoch, so no mapping is sent again.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        assertNull(result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsDeleted() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+
+        // Delete the source topic while the member still owns its tasks.
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        // The tasks are revoked, and clients are told that there is nothing to route to.
+        assertEquals(List.of(), result.response().data().activeTasks());
+        assertEquals(1, result.response().data().endpointInformationEpoch());
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Source topics foo are missing.")),
+            result.response().data().status()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsDeletedBeforeAssignmentChanges() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Assignment updates are delayed, so the tasks of the member stay unchanged after the topic is deleted.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 10_000)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The first heartbeat of a new group runs on a group that is not retained, so the topology is configured
+        // again on the second heartbeat.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+        int endpointInformationEpoch = result.response().data().endpointInformationEpoch();
+
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // The topology is no longer ready, so the member refetches the endpoint information although its tasks are unchanged.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(endpointInformationEpoch));
+        assertNull(result.response().data().activeTasks());
+        assertEquals(endpointInformationEpoch + 1, result.response().data().endpointInformationEpoch());
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenSourceTopicIsRecreatedBeforeAssignmentChanges() {
+        String groupId = "fooup";
+        String memberIdA = Uuid.randomUuid().toString();
+        String memberIdB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Assignment updates are delayed, so the tasks of member A stay unchanged throughout the test.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 10_000)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberIdA, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // Member A has an endpoint and owns both tasks.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdA)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+
+        // The source topic is deleted.
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // Member B joins without an endpoint while the topology is not ready.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdB)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setEndpointInformationEpoch(-1));
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+
+        // The source topic is created again before any assignment changes.
+        Uuid newFooTopicId = Uuid.randomUuid();
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(newFooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(newFooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(newFooTopicId).setPartitionId(1));
+        image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        // The topology is ready again, so member B receives the endpoint of member A.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberIdB)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatWithUserEndpointWhenMissingSourceTopicsAreCreated() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+        StreamsGroupHeartbeatRequestData.Endpoint endpoint =
+            new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092);
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .build();
+
+        // The source topic is missing, so the member joins without endpoint information.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(-1));
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+
+        // Create the source topic.
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
+        delta.replay(new TopicRecord().setTopicId(fooTopicId).setName(fooTopicName));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(0));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(1));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The member's assignment changes, so it receives the endpoint information it was missing.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setUserEndpoint(endpoint)
+                .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
+
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+                .setStandbyPartitions(List.of())),
+            result.response().data().partitionsByUserEndpoint()
+        );
+    }
+
+    @Test
     public void testStreamsGroupEndpointInformationIncludesNewMember() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
@@ -25296,9 +26319,18 @@ public class GroupMetadataManagerTest {
     @Test
     public void testClassicGroupJoinWithEmptyStreamsGroup() throws Exception {
         String streamsGroupId = "streams-group-id";
+        String subtopologyId = "subtopology-1";
+        String topicName = "foo";
+        StreamsTopology topology = new StreamsTopology(1, Map.of(subtopologyId,
+            new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of(topicName))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10).withTopology(topology))
             .build();
+
+        // The empty streams group is subscribed to the topics of its topology.
+        assertEquals(Set.of(streamsGroupId), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(streamsGroupId)
@@ -25319,6 +26351,10 @@ public class GroupMetadataManagerTest {
             Group.GroupType.CLASSIC,
             context.groupMetadataManager.getOrMaybeCreateClassicGroup(streamsGroupId, false).type()
         );
+
+        // The streams group is removed without replaying its tombstones. It must no longer be
+        // subscribed to the topics of its topology.
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
     }
 
     @Test
@@ -26184,6 +27220,39 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayConsumerGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0, 1, 2)), 10))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ConsumerGroupMemberMetadata tombstone without the ConsumerGroupCurrentMemberAssignment
+        // and ConsumerGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+    }
+
+    @Test
     public void testReplayConsumerGroupMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -26202,6 +27271,38 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+    }
+
+    @Test
+    public void testReplayConsumerGroupMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0, 1, 2)), 10))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ConsumerGroupMetadata tombstone without the member and
+        // ConsumerGroupTargetAssignmentMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
@@ -26310,6 +27411,28 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testReplayConsumerGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group with a target assignment.
+        Uuid topicId = Uuid.randomUuid();
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
+
+        // Replay the ConsumerGroupTargetAssignmentMetadata tombstone without the
+        // ConsumerGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.consumerGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.consumerGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.consumerGroup("foo").targetAssignment());
+    }
+
+    @Test
     public void testReplayConsumerGroupCurrentMemberAssignment() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -26343,6 +27466,113 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMemberMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupMemberMetadata tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupMemberMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ShareGroupMember member = new ShareGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord("foo", member));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+
+        // Replay the ShareGroupMemberMetadata tombstone without the ShareGroupCurrentMemberAssignment
+        // and ShareGroupTargetAssignmentMember tombstones, as can happen when compaction removed
+        // them. The member is removed along with its target assignment.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+    }
+
+    @Test
+    public void testReplayShareGroupMetadataTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupMetadata tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+    }
+
+    @Test
+    public void testReplayShareGroupMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ShareGroupMember member = new ShareGroupMember.Builder("m1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setSubscribedTopicNames(List.of("bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2)))
+            .build();
+
+        // Create the group and the member, including their target and current assignments.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord("foo", member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord("foo",
+            Map.of(), Map.of(topicId, new InitMapValue("bar", Set.of(0, 1, 2), 1)), Map.of()));
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertTrue(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey("foo"));
+
+        // Replay the ShareGroupMetadata tombstone without the member, ShareGroupTargetAssignmentMetadata
+        // and ShareGroupStatePartitionMetadata tombstones, as can happen when compaction removed
+        // them. The group is removed along with its topic subscriptions and its state partition
+        // metadata.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertFalse(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey("foo"));
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMemberTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ShareGroupTargetAssignmentMember tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("foo"));
     }
 
     @Test
@@ -26381,6 +27611,45 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
         assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayShareGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Create the group with a target assignment.
+        Uuid topicId = Uuid.randomUuid();
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord("foo", "m1", mkAssignment(
+            mkTopicAssignment(topicId, 0, 1, 2))));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
+        assertEquals(10, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+
+        // Replay the ShareGroupTargetAssignmentMetadata tombstone without the
+        // ShareGroupTargetAssignmentMember tombstone, as can happen when compaction removed it.
+        // The target assignment is removed along with the epoch.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.shareGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.shareGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.shareGroup("foo").targetAssignment());
+    }
+
+    @Test
+    public void testReplayShareGroupCurrentMemberAssignmentTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // ShareGroupCurrentMemberAssignment tombstone should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord("foo", 10, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.shareGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the ShareGroupCurrentMemberAssignment tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
     }
 
     @Test
@@ -26433,7 +27702,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26450,7 +27719,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupMemberMetadataTombstoneExisting() {
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26468,25 +27737,31 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
-        assertEquals("Received a tombstone record to delete member m1 but did not receive "
-                + "StreamsGroupCurrentMemberAssignmentValue tombstone.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
-
-        IllegalStateException e2 = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
-        assertEquals("Received a tombstone record to delete member m1 but did not receive "
-                + "StreamsGroupTargetAssignmentMetadataValue tombstone.",
-            e2.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-
+        // The member is still in the group with a live member epoch and a target assignment,
+        // i.e. the StreamsGroupCurrentMemberAssignment and StreamsGroupTargetAssignmentMember
+        // tombstones have not been seen. This can happen when the coordinator loads while
+        // compaction removed them. The member tombstone is authoritative and removes the member.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
 
         assertFalse(context.groupMetadataManager.streamsGroup("foo").hasMember("m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadataTombstoneWithoutCurrentMemberAssignment() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Only the StreamsGroupMemberMetadata record of the member is replayed, so the member
+        // has no member epoch.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+            "foo",
+            streamsGroupMemberBuilderWithDefaults("m1").build()
+        ));
+
+        // The member tombstone is authoritative and removes the member.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").members());
     }
 
     @Test
@@ -26500,7 +27775,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneNotExisting() {
+    public void testReplayStreamsGroupMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26511,7 +27786,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupEpochTombstoneExisting() {
+    public void testReplayStreamsGroupMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26521,34 +27796,30 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
                     TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             );
+        final StreamsTopology topology = StreamsTopology.fromRecord(new StreamsGroupTopologyValue()
+            .setEpoch(0)
+            .setSubtopologies(List.of(new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("subtopology-1")
+                .setSourceTopics(List.of("bar")))));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
                     .withTargetAssignmentEpoch(10)
                     .withMember(streamsGroupMemberBuilderWithDefaults("m1").build())
                     .withTargetAssignment("m1", tasks)
+                    .withTopology(topology)
             )
             .build();
+        assertEquals(Set.of("foo"), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
-        assertEquals("Received a tombstone record to delete group foo but the group still has 1 members.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
-
-        IllegalStateException e2 = assertThrows(IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
-        assertEquals("Received a tombstone record to delete group foo but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.",
-            e2.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
-
+        // The group still has a member, a target assignment epoch and a topology, i.e. the member,
+        // StreamsGroupTargetAssignmentMetadata and StreamsGroupTopology tombstones have not been
+        // seen. This can happen when the coordinator loads while compaction removed them. The group
+        // tombstone is authoritative and removes the group along with its topic subscriptions.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
 
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
     }
 
     @Test
@@ -26596,7 +27867,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMemberTombstoneNonExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMemberTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26638,7 +27909,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneNotExisting() {
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26650,6 +27921,25 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTargetAssignmentEpoch(10)
+                    .withTargetAssignmentTimestamp(12345L)
+            )
+            .build();
+
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+
+        // Replay the tombstone. It should reset both the epoch and the timestamp.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
+        assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+        assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneWithMissingSiblingTombstones() {
         final TasksTuple tasks =
             new TasksTuple(
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(
@@ -26669,19 +27959,15 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        IllegalStateException e = assertThrows(
-            IllegalStateException.class,
-            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"))
-        );
-        assertEquals("Received a tombstone record to delete target assignment of foo but the assignment still has 1 members.",
-            e.getMessage());
-
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
-
+        // The target assignment still has a member, i.e. the StreamsGroupTargetAssignmentMember
+        // tombstone has not been seen. This can happen when the coordinator loads while compaction
+        // removed it. The metadata tombstone is authoritative: the target assignment is removed
+        // along with the epoch.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord("foo"));
 
         assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(0L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignment());
     }
 
     @Test
@@ -26709,7 +27995,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupCurrentMemberAssignmentTombstoneNotExisting() {
+    public void testReplayStreamsGroupCurrentMemberAssignmentTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26785,7 +28071,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneNotExists() {
+    public void testReplayStreamsGroupTopologyTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -26802,7 +28088,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayStreamsGroupTopologyTombstoneExists() {
+    public void testReplayStreamsGroupTopologyTombstoneExisting() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(
                 new StreamsGroupBuilder("foo", 10)
