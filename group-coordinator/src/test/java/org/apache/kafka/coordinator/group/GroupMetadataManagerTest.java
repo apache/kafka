@@ -2709,6 +2709,186 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testHeartbeatsKeepGroupEpochWhenServerAssignorVoteIsTied() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor uniformAssignor = new MockPartitionAssignor("uniform");
+        MockPartitionAssignor rangeAssignor = new MockPartitionAssignor("range");
+        GroupAssignment groupAssignment = new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)
+            ))
+        ));
+        uniformAssignor.prepareGroupAssignment(groupAssignment);
+        rangeAssignor.prepareGroupAssignment(groupAssignment);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("uniform")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)), 10))
+            .build();
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addRacks()
+            .build();
+
+        // Consumer group with one vote for the uniform assignor and one vote for the range assignor.
+        // The range assignor comes first in the configured assignors.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(rangeAssignor, uniformAssignor))
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setRebalanceTimeoutMs(5000)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
+                ))))
+            .build();
+
+        // Member 1, member 2 and member 1 again heartbeat with unchanged votes. The group
+        // stays at epoch 10 and no record is written.
+        for (String memberId : List.of(memberId1, memberId2, memberId1)) {
+            CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(10));
+
+            assertEquals(List.of(), result.records());
+            assertEquals(10, result.response().memberEpoch());
+        }
+
+        // Member 1 switches its vote from uniform to range. Range comes first in the configured
+        // assignors so it is the preferred assignor of the group before and after the switch. The
+        // group stays at epoch 10 and only the updated member is written.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10)
+                .setServerAssignor("range"));
+
+        assertRecordsEquals(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(
+                groupId,
+                new ConsumerGroupMember.Builder(member1)
+                    .setServerAssignorName("range")
+                    .build()
+            )),
+            result.records()
+        );
+        assertEquals(10, result.response().memberEpoch());
+    }
+
+    @Test
+    public void testHeartbeatIgnoresVoteForUnconfiguredServerAssignor() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addTopic(barTopicId, barTopicName, 3)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        // The member voted for the uniform assignor, which has been removed from the
+        // configured assignors since then. The range assignor is the only configured assignor.
+        MockPartitionAssignor rangeAssignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(rangeAssignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("uniform")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                ))))
+            .build();
+
+        rangeAssignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )))
+        ));
+
+        // The member subscribes to bar, which triggers a new target assignment. The vote for
+        // the uniform assignor is ignored and the range assignor computes the assignment.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setSubscribedTopicNames(List.of("foo", "bar")));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(0, 1, 2, 3, 4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(List.of(0, 1, 2))
+                    ))),
+            result.response()
+        );
+    }
+
+    @Test
     public void testNoGroupEpochBumpWhenStaticMemberTemporarilyLeaves() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
@@ -10639,7 +10819,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor, new MockPartitionAssignor("assignorName")))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
                 .withMember(memberBuilder.build()))
