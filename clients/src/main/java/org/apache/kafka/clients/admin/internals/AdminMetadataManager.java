@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -375,10 +376,15 @@ public class AdminMetadataManager {
             bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
-            // Only the nodes are compared, since brokers report a random broker as the controller.
-            if (now - lastMetadataUpdateMs < metadataExpireMs &&
+            boolean equivalent = now - lastMetadataUpdateMs < metadataExpireMs &&
                 cluster.nodes().size() == this.cluster.nodes().size() &&
-                cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())))) {
+                cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())));
+            // The controller is only compared when talking to the controller quorum, which reports
+            // the active controller. Brokers report a random broker instead.
+            if (usingBootstrapControllers && !Objects.equals(cluster.controller(), this.cluster.controller())) {
+                equivalent = false;
+            }
+            if (equivalent) {
                 this.equivalentResponseCount.incrementAndGet();
             } else {
                 this.equivalentResponseCount.set(0);
