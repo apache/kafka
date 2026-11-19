@@ -885,6 +885,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
 - testClientInstanceIdNoTelemetryReporterRegistered
+- testCloseAfterNullRebalanceListenerSkipsCallbacks
 - testCloseInterrupt
 - testCloseNoWait
 - testCloseShouldBeIdempotent
@@ -975,6 +976,8 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testReturnRecordsDuringRebalance
 - testSecondPollWithDeserializationErrorThrowsRecordDeserializationException
 - testSeekNegative
+- testSetRebalanceListenerNullRemovesListenerFromDeprecatedSubscribe
+- testSetRebalanceListenerNullSkipsCallbacksOnRebalance
 - testShouldAttemptToRejoinGroupAfterSyncGroupFailed
 - testShouldNotCallMetricReporterMetricRemovalWithExistingConsumerMetric
 - testShouldOnlyCallMetricReporterMetricChangeOnceWithExistingConsumerMetric
@@ -991,6 +994,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testSubscriptionOnNullTopic
 - testSubscriptionOnNullTopicCollection
 - testSubscriptionWithEmptyPartitionAssignment
+- testUnsubscribeAfterNullRebalanceListenerSkipsRevoked
 - testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled
 - testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration
 - testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration
@@ -1035,6 +1039,10 @@ org.apache.kafka.clients.consumer.MockConsumerTest:
 - testRe2JPatternSubscription
 - testRebalanceListener
 - testRebalanceWithConsumerAwareListener
+- testSetRebalanceListenerNullRemovesListenerFromDeprecatedSubscribe
+- testSetRebalanceListenerNullStopsCallbacks
+- testSetRebalanceListenerNullWithoutPreviousListener
+- testSetRebalanceListenerOverridesListenerFromDeprecatedSubscribe
 - testSimpleMock
 org.apache.kafka.clients.consumer.MockShareConsumerTest:
 - testSimpleMock
@@ -1252,6 +1260,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testCloseLeavesGroupDespiteInterrupt
 - testCloseLeavesGroupDespiteOnPartitionsLostError
 - testCloseRunsRevocationCallbackAndSendsLeaveGroupEventOnInterrupt
+- testCloseWithNullRebalanceListenerSkipsCallbacks
 - testCloseWrapsStreamsRebalanceListenerException
 - testCommitAsyncShouldCopyOffsets
 - testCommitAsyncUserSuppliedCallbackNoException
@@ -1300,6 +1309,8 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testOffsetsForTimesTimeoutException
 - testOffsetsForTimesWithZeroTimeout
 - testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails
+- testPartitionsAssignedEventWithNullRebalanceListenerCompletesWithoutCallback
+- testPartitionsRemovedEventWithNullRebalanceListenerInvokesNothing
 - testPauseFlagPreservedForRetainedPartitionAcrossRebalance
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation
@@ -1615,6 +1626,17 @@ org.apache.kafka.clients.consumer.internals.ConsumerProtocolTest:
 - serializeDeserializeSubscriptionAllVersions
 - serializeSubscriptionShouldOrderOwnedPartitions
 - serializeSubscriptionShouldOrderTopics
+org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvokerTest:
+- testInvokeCallbacksWithRebalanceListenerDispatches
+- testInvokePartitionsAssignedRethrows
+- testInvokePartitionsAssignedReturnsListenerException
+- testInvokePartitionsAssignedWithoutRebalanceListenerSkipsDispatch
+- testInvokePartitionsLostRethrows
+- testInvokePartitionsLostReturnsListenerException
+- testInvokePartitionsLostWithoutRebalanceListenerSkipsDispatch
+- testInvokePartitionsRevokedRethrows
+- testInvokePartitionsRevokedReturnsListenerException
+- testInvokePartitionsRevokedWithoutRebalanceListenerSkipsDispatch
 org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionStateTest:
 - cantAssignPartitionForUnmatchedPattern
 - cantAssignPartitionForUnsubscribedTopics
@@ -1654,17 +1676,22 @@ org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionStateTest:
 - testMaybeCompleteValidationAfterPositionChange
 - testMaybeValidatePositionForCurrentLeader
 - testMixedPatternSubscriptionNotAllowed
+- testNullRebalanceListenerFromInitialState
+- testNullRebalanceListenerSkipsAllCallbacks
 - testOffsetResetWhileAwaitingValidation
 - testOnPartitionsAssignedCreatesViewAndDelegates
 - testOnPartitionsLostCreatesViewAndDelegates
 - testOnPartitionsRevokedCreatesViewAndDelegates
 - testPositionOrNull
 - testPreferredReadReplicaLease
+- testRebalanceListenerCanBeRestoredAfterNull
 - testRequestOffsetResetIfPartitionAssigned
 - testSeekUnvalidatedWithNoEpochClearsAwaitingValidation
 - testSeekUnvalidatedWithNoOffsetEpoch
 - testSeekUnvalidatedWithOffsetEpoch
 - testSeekValidatedShouldClearAwaitingValidation
+- testSetRebalanceListenerNullRemovesListener
+- testSingleArgSetRebalanceListenerRejectsNull
 - testSubscribeToRe2JPattern
 - testSubscriptionPattern
 - testTruncationDetectionUnknownDivergentOffsetWithResetPolicy
