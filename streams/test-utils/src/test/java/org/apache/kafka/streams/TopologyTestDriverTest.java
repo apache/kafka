@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -1983,5 +1984,86 @@ public abstract class TopologyTestDriverTest {
                 out.readKeyValuesToList()
             );
         }
+    }
+
+    @Test
+    public void shouldCloseStateStoresWhenConstructorFails() {
+        final AtomicBoolean witnessOpened = new AtomicBoolean(false);
+        final AtomicBoolean witnessClosed = new AtomicBoolean(false);
+
+        final Topology topology = new Topology();
+        topology.addSource("source", "input-topic");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                new KeyValueBytesStoreSupplier() {
+                    @Override
+                    public KeyValueStore<Bytes, byte[]> get() {
+                        return new org.apache.kafka.streams.state.internals.InMemoryKeyValueStore("witness") {
+                            @Override
+                            public void init(final org.apache.kafka.streams.processor.StateStoreContext context,
+                                             final org.apache.kafka.streams.processor.StateStore root) {
+                                witnessOpened.set(true);
+                                super.init(context, root);
+                            }
+
+                            @Override
+                            public void close() {
+                                witnessClosed.set(true);
+                                super.close();
+                            }
+                        };
+                    }
+
+                    @Override
+                    public String name() {
+                        return "witness";
+                    }
+
+                    @Override
+                    public String metricsScope() {
+                        return "in-memory-state";
+                    }
+                },
+                Serdes.Bytes(),
+                Serdes.ByteArray())
+                .withLoggingDisabled());
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                new KeyValueBytesStoreSupplier() {
+                    @Override
+                    public KeyValueStore<Bytes, byte[]> get() {
+                        return new org.apache.kafka.streams.state.internals.InMemoryKeyValueStore("failing") {
+                            @Override
+                            public void init(final org.apache.kafka.streams.processor.StateStoreContext context,
+                                             final org.apache.kafka.streams.processor.StateStore root) {
+                                throw new IllegalStateException("boom: store init fails");
+                            }
+                        };
+                    }
+
+                    @Override
+                    public String name() {
+                        return "failing";
+                    }
+
+                    @Override
+                    public String metricsScope() {
+                        return "in-memory-state";
+                    }
+                },
+                Serdes.Bytes(),
+                Serdes.ByteArray())
+                .withLoggingDisabled());
+        topology.addProcessor("processor",
+            () -> new org.apache.kafka.streams.processor.api.ContextualProcessor<byte[], byte[], Void, Void>() {
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<byte[], byte[]> record) { }
+            },
+            "source");
+        topology.connectProcessorAndStateStores("processor", "witness", "failing");
+
+        assertThrows(IllegalStateException.class, () -> new TopologyTestDriver(topology));
+        assertTrue(witnessOpened.get(), "the first store should have been opened before the failure");
+        assertTrue(witnessClosed.get(), "opened stores must be closed when the constructor fails");
     }
 }

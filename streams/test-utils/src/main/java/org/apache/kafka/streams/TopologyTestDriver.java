@@ -332,6 +332,7 @@ public class TopologyTestDriver implements Closeable {
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
+    @SuppressWarnings("this-escape")
     TopologyTestDriver(final InternalTopologyBuilder builder,
                        final Properties config,
                        final long initialWallClockTimeMs) {
@@ -376,8 +377,16 @@ public class TopologyTestDriver implements Closeable {
             logContext
         );
 
-        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        try {
+            setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
+            setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        } catch (final Throwable constructionFailure) {
+            // The tasks opened their state stores; the caller never gets this driver, so it
+            // cannot close them itself. For a persistent store that leaves the RocksDB
+            // instance (and its LOCK file) open until the JVM exits (KAFKA-21580).
+            close();
+            throw constructionFailure;
+        }
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
