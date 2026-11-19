@@ -227,15 +227,7 @@ public class RemoteIndexCache implements Closeable {
                 .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
                     if (entry != null) {
-                        try {
-                            enqueueEntryForCleanup(entry, true);
-                        } catch (RuntimeException e) {
-                            // The entry has already been removed from the cache and no cleanup task will run for it, so
-                            // release its resources now. Any index file that was not renamed remains on disk and is
-                            // handled on the next initialization.
-                            log.error("Error occurred while enqueuing evicted entry {} for cleanup, closing it instead.", entry, e);
-                            entry.close();
-                        }
+                        enqueueEntryForCleanup(entry, true);
                     } else {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
@@ -429,28 +421,17 @@ public class RemoteIndexCache implements Closeable {
                             Files.exists(timestampIndexFile.toPath()) &&
                             Files.exists(txnIndexFile.toPath())) {
                         long offset = offsetFromRemoteIndexFileName(indexFileName);
-                        OffsetIndex offsetIndex = null;
-                        TimeIndex timeIndex = null;
-                        TransactionIndex txnIndex = null;
-                        try {
-                            offsetIndex = new OffsetIndex(offsetIndexFile, offset, Integer.MAX_VALUE, false);
-                            offsetIndex.sanityCheck();
+                        OffsetIndex offsetIndex = new OffsetIndex(offsetIndexFile, offset, Integer.MAX_VALUE, false);
+                        offsetIndex.sanityCheck();
 
-                            timeIndex = new TimeIndex(timestampIndexFile, offset, Integer.MAX_VALUE, false);
-                            timeIndex.sanityCheck();
+                        TimeIndex timeIndex = new TimeIndex(timestampIndexFile, offset, Integer.MAX_VALUE, false);
+                        timeIndex.sanityCheck();
 
-                            txnIndex = new TransactionIndex(offset, txnIndexFile);
-                            txnIndex.sanityCheck();
+                        TransactionIndex txnIndex = new TransactionIndex(offset, txnIndexFile);
+                        txnIndex.sanityCheck();
 
-                            internalCache.put(uuid, new Entry(offsetIndex, timeIndex, txnIndex));
-                        } catch (IOException | RuntimeException | Error e) {
-                            // Until the entry has been added to the cache, the indexes are not owned by anything else,
-                            // so close the ones already opened here.
-                            Utils.closeQuietly(offsetIndex, "OffsetIndex");
-                            Utils.closeQuietly(timeIndex, "TimeIndex");
-                            Utils.closeQuietly(txnIndex, "TransactionIndex");
-                            throw e;
-                        }
+                        Entry entry = new Entry(offsetIndex, timeIndex, txnIndex);
+                        internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
                         tryAll(List.of(

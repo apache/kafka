@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -32,7 +31,6 @@ import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 
@@ -41,7 +39,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 import org.mockito.invocation.InvocationOnMock;
@@ -66,7 +63,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -91,21 +87,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
@@ -652,40 +643,6 @@ public class RemoteIndexCacheTest {
     }
 
     @Test
-    public void testInitializationFailureClosesIndexesOfSegmentFailingRestoration() throws IOException {
-        cache.close();
-        File cacheDir = cache.cacheDir();
-        RemoteLogSegmentMetadata metadata = generateRemoteLogSegmentMetadata(1, idPartition).get(0);
-        try (OffsetIndex offsetIndex = createOffsetIndexForSegmentMetadata(metadata, cacheDir);
-             TimeIndex timeIndex = createTimeIndexForSegmentMetadata(metadata, cacheDir);
-             TransactionIndex transactionIndex = createTxIndexForSegmentMetadata(metadata, cacheDir)) {
-            maybeAppendIndexEntries(offsetIndex, timeIndex);
-            assertTrue(transactionIndex.isEmpty());
-        }
-        // A time index whose size is not a multiple of the entry size fails the sanity check, after the offset index of
-        // the same segment has already been opened.
-        Files.write(remoteTimeIndexFile(cacheDir, metadata).toPath(), new byte[7]);
-
-        ArgumentCaptor<AutoCloseable> closedResources = ArgumentCaptor.forClass(AutoCloseable.class);
-        try (var mockedUtils = mockStatic(Utils.class, CALLS_REAL_METHODS)) {
-            assertThrows(CorruptIndexException.class,
-                () -> new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString()));
-            mockedUtils.verify(() -> Utils.closeQuietly(closedResources.capture(), anyString()), atLeastOnce());
-        }
-
-        List<OffsetIndex> offsetIndexes = resourcesOfType(closedResources.getAllValues(), OffsetIndex.class);
-        assertEquals(1, offsetIndexes.size(), "The opened offset index must be closed");
-        assertEquals(remoteOffsetIndexFile(cacheDir, metadata), offsetIndexes.get(0).file());
-        assertNull(offsetIndexes.get(0).mmap());
-
-        List<TimeIndex> timeIndexes = resourcesOfType(closedResources.getAllValues(), TimeIndex.class);
-        assertEquals(1, timeIndexes.size(), "The opened time index must be closed");
-        assertEquals(remoteTimeIndexFile(cacheDir, metadata), timeIndexes.get(0).file());
-        assertNull(timeIndexes.get(0).mmap());
-        verifyNoInteractions(rsm);
-    }
-
-    @Test
     public void testCloseClosesEntriesPendingCleanup() throws IOException {
         // Make sure that the delayed cleanup task does not run before the cache is closed.
         cache.setFileDeleteDelayMs(60_000);
@@ -726,54 +683,6 @@ public class RemoteIndexCacheTest {
         verify(spyEntry, times(2)).close();
         verify(spyEntry, times(0)).cleanup();
         assertEquals(0, cache.expiredIdxPendingForDeletion());
-    }
-
-    @Test
-    public void testEvictedEntryIsClosedWhenMarkingForCleanupFails() throws IOException {
-        Uuid key = rlsMetadata.remoteLogSegmentId().id();
-        File cacheDir = cache.cacheDir();
-        OffsetIndex offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, cacheDir));
-        TimeIndex timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, cacheDir));
-        TransactionIndex txnIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, cacheDir));
-        // Give the entry a non-zero weight so that it can be evicted by size.
-        maybeAppendIndexEntries(offsetIndex, timeIndex);
-        RemoteIndexCache.Entry spyEntry = spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txnIndex));
-        assertTrue(spyEntry.entrySizeBytes() > 1L);
-        doThrow(new IOException("Failed to rename index files")).when(spyEntry).markForCleanup();
-        cache.internalCache().put(key, spyEntry);
-
-        // Evict the entry and wait for the eviction to complete.
-        cache.resizeCacheSize(1L);
-        cache.internalCache().cleanUp();
-
-        // The evicted entry is neither in the cache nor tracked by a cleanup task, so it must be closed directly.
-        assertNull(cache.internalCache().getIfPresent(key));
-        assertEquals(0, cache.expiredIdxPendingForDeletion());
-        verify(spyEntry).close();
-        verify(spyEntry.offsetIndex()).close();
-        verify(spyEntry.timeIndex()).close();
-        verify(spyEntry.txnIndex()).close();
-        verify(spyEntry, times(0)).cleanup();
-    }
-
-    @Test
-    public void testRemoveKeepsEntryInCacheWhenMarkingForCleanupFails() throws IOException {
-        Uuid key = rlsMetadata.remoteLogSegmentId().id();
-        RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry(rlsMetadata.remoteLogSegmentId());
-        doThrow(new IOException("Failed to rename index files")).when(spyEntry).markForCleanup();
-        cache.internalCache().put(key, spyEntry);
-
-        assertThrows(KafkaException.class, () -> cache.remove(key));
-
-        // The entry is still owned by the cache, so it must neither be closed nor scheduled for cleanup now.
-        assertSame(spyEntry, cache.internalCache().getIfPresent(key));
-        assertEquals(0, cache.expiredIdxPendingForDeletion());
-        verify(spyEntry, times(0)).close();
-
-        // It is closed together with the other cached entries when the cache is closed.
-        cache.close();
-        verify(spyEntry).close();
-        verify(spyEntry, times(0)).cleanup();
     }
 
     @Test
@@ -845,51 +754,6 @@ public class RemoteIndexCacheTest {
         assertTrue(remoteTimeIndexFile(cacheDir, rlsMetadata).exists());
         assertTrue(remoteTransactionIndexFile(cacheDir, rlsMetadata).exists());
         assertEquals(0, countFiles(cacheDir, name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
-    }
-
-    @Test
-    public void testInitializationFailureClosesIndexesWhenAddingEntryToCacheFails() throws IOException {
-        cache.close();
-        File cacheDir = cache.cacheDir();
-        RemoteLogSegmentMetadata metadata = generateRemoteLogSegmentMetadata(1, idPartition).get(0);
-        try (OffsetIndex offsetIndex = createOffsetIndexForSegmentMetadata(metadata, cacheDir);
-             TimeIndex timeIndex = createTimeIndexForSegmentMetadata(metadata, cacheDir);
-             TransactionIndex transactionIndex = createTxIndexForSegmentMetadata(metadata, cacheDir)) {
-            maybeAppendIndexEntries(offsetIndex, timeIndex);
-            assertTrue(transactionIndex.isEmpty());
-        }
-
-        // Make adding the restored entry to the cache fail after all its indexes have been opened.
-        @SuppressWarnings("unchecked")
-        Cache<Object, Object> failingCache = mock(Cache.class);
-        when(failingCache.asMap()).thenReturn(new ConcurrentHashMap<>());
-        doThrow(new IllegalStateException("Failed to add entry")).when(failingCache).put(any(), any());
-        Caffeine<Object, Object> builder = spy(Caffeine.newBuilder());
-        doReturn(failingCache).when(builder).build();
-
-        ArgumentCaptor<AutoCloseable> closedResources = ArgumentCaptor.forClass(AutoCloseable.class);
-        try (var mockedCaffeine = mockStatic(Caffeine.class, CALLS_REAL_METHODS);
-             var mockedUtils = mockStatic(Utils.class, CALLS_REAL_METHODS)) {
-            mockedCaffeine.when(Caffeine::newBuilder).thenReturn(builder);
-            assertThrows(IllegalStateException.class,
-                () -> new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString()));
-            mockedUtils.verify(() -> Utils.closeQuietly(closedResources.capture(), anyString()), atLeastOnce());
-        }
-
-        List<OffsetIndex> offsetIndexes = resourcesOfType(closedResources.getAllValues(), OffsetIndex.class);
-        assertEquals(1, offsetIndexes.size(), "The opened offset index must be closed");
-        assertEquals(remoteOffsetIndexFile(cacheDir, metadata), offsetIndexes.get(0).file());
-        assertNull(offsetIndexes.get(0).mmap());
-
-        List<TimeIndex> timeIndexes = resourcesOfType(closedResources.getAllValues(), TimeIndex.class);
-        assertEquals(1, timeIndexes.size(), "The opened time index must be closed");
-        assertEquals(remoteTimeIndexFile(cacheDir, metadata), timeIndexes.get(0).file());
-        assertNull(timeIndexes.get(0).mmap());
-
-        List<TransactionIndex> txnIndexes = resourcesOfType(closedResources.getAllValues(), TransactionIndex.class);
-        assertEquals(1, txnIndexes.size(), "The opened transaction index must be closed");
-        assertEquals(remoteTransactionIndexFile(cacheDir, metadata), txnIndexes.get(0).file());
-        verifyNoInteractions(rsm);
     }
 
     @Test
@@ -1505,10 +1369,6 @@ public class RemoteIndexCacheTest {
         assertEquals(0, countFiles(cacheDir, name -> true));
         assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
         assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
-    }
-
-    private static <T> List<T> resourcesOfType(List<AutoCloseable> resources, Class<T> type) {
-        return resources.stream().filter(type::isInstance).map(type::cast).collect(Collectors.toList());
     }
 
     private static void corruptOffsetIndexFiles(File cacheDir) {
