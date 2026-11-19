@@ -24,6 +24,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -48,9 +50,9 @@ public class TaskMetadataImplTest {
     public void setUp() {
         taskMetadata = new TaskMetadataImpl(
             TASK_ID,
-            TOPIC_PARTITIONS,
-            COMMITTED_OFFSETS,
-            END_OFFSETS,
+            new HashSet<>(TOPIC_PARTITIONS),
+            new HashMap<>(COMMITTED_OFFSETS),
+            new HashMap<>(END_OFFSETS),
             TIME_CURRENT_IDLING_STARTED);
     }
 
