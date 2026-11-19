@@ -495,8 +495,13 @@ public abstract class TopologyTestDriverTest {
         topology.addSource("source", SOURCE_TOPIC_1);
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
-            Stores.keyValueStoreBuilder(corruptedStoreSupplier("store"), Serdes.String(), Serdes.Long()),
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
             "processor");
+        // the store of a later processor is initialized later, here after the first store has been registered
+        topology.addProcessor("corruptedProcessor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(corruptedStoreSupplier("corruptedStore"), Serdes.String(), Serdes.Long()),
+            "corruptedProcessor");
         config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
 
@@ -508,6 +513,7 @@ public abstract class TopologyTestDriverTest {
         assertFalse(new File(applicationDir, "0_0").exists());
     }
 
+    // as a RocksDB store found corrupted when it is opened, the store fails before it registers itself
     private static KeyValueBytesStoreSupplier corruptedStoreSupplier(final String name) {
         return new KeyValueBytesStoreSupplier() {
             @Override
@@ -520,14 +526,7 @@ public abstract class TopologyTestDriverTest {
                 return new InMemoryKeyValueStore(name) {
                     @Override
                     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-                        super.init(stateStoreContext, root);
-                        throw new TaskCorruptedException(Set.of(new TaskId(0, 0)));
-                    }
-
-                    // only a task with a persistent store has a directory
-                    @Override
-                    public boolean persistent() {
-                        return true;
+                        throw new TaskCorruptedException(Set.of(stateStoreContext.taskId()));
                     }
                 };
             }
