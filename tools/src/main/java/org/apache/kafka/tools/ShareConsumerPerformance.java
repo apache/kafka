@@ -26,6 +26,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -64,6 +65,10 @@ public class ShareConsumerPerformance {
     }
 
     static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator) {
+        run(args, shareConsumerCreator, Time.SYSTEM);
+    }
+
+    static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator, Time time) {
         try {
             LOG.info("Starting share consumer/consumers...");
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
@@ -87,9 +92,9 @@ public class ShareConsumerPerformance {
                 clientIds.add(shareConsumerClientId);
                 shareConsumers.add(shareConsumerCreator.apply(shareConsumerProps));
             }
-            long startMs = System.currentTimeMillis();
-            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs, clientIds);
-            long endMs = System.currentTimeMillis();
+            long startMs = time.milliseconds();
+            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs, clientIds, time);
+            long endMs = time.milliseconds();
 
             List<Map<MetricName, ? extends Metric>> shareConsumersMetrics = new ArrayList<>();
             if (options.printMetrics()) {
@@ -126,7 +131,8 @@ public class ShareConsumerPerformance {
                                 AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
                                 long startMs,
-                                List<String> clientIds) throws ExecutionException, InterruptedException {
+                                List<String> clientIds,
+                                Time time) throws ExecutionException, InterruptedException {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -145,7 +151,7 @@ public class ShareConsumerPerformance {
             futures.add(executorService.submit(() -> {
                 try {
                     consumeRecordsForSingleShareConsumer(shareConsumers.get(index), recordsRead, bytesRead, options,
-                        shareConsumerConsumption, index + 1);
+                        shareConsumerConsumption, index + 1, time);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -166,7 +172,7 @@ public class ShareConsumerPerformance {
         }
 
         if (options.showShareConsumerStats()) {
-            long endMs = System.currentTimeMillis();
+            long endMs = time.milliseconds();
             for (int index = 0; index < shareConsumersConsumptionDetails.size(); index++) {
                 // Print stats for share consumer.
                 double elapsedSec = (endMs - startMs) / 1_000.0;
@@ -190,9 +196,10 @@ public class ShareConsumerPerformance {
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
                                                               ShareConsumerConsumption shareConsumerConsumption,
-                                                              int index) throws InterruptedException {
+                                                              int index,
+                                                              Time time) throws InterruptedException {
         SimpleDateFormat dateFormat = options.dateFormat();
-        long currentTimeMs = System.currentTimeMillis();
+        long currentTimeMs = time.milliseconds();
         long lastConsumedTimeMs = currentTimeMs;
         long lastReportTimeMs = currentTimeMs;
 
@@ -202,7 +209,7 @@ public class ShareConsumerPerformance {
         long bytesReadByConsumer = 0L;
         while (totalRecordsRead.get() < options.numRecords() && currentTimeMs - lastConsumedTimeMs <= options.recordFetchTimeoutMs()) {
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(100));
-            currentTimeMs = System.currentTimeMillis();
+            currentTimeMs = time.milliseconds();
             if (!records.isEmpty())
                 lastConsumedTimeMs = currentTimeMs;
             for (ConsumerRecord<byte[], byte[]> record : records) {
