@@ -252,8 +252,10 @@ public class ConfigCommand {
                 configResourceType = ConfigResource.Type.BROKER;
             } else if (GROUP_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.GROUP;
-            } else {
+            } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.CLUSTER_MIRROR;
+            } else {
+                throw new IllegalArgumentException("Invalid entity type: " + entityType);
             }
             try {
                 alterResourceConfig(adminClient, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);

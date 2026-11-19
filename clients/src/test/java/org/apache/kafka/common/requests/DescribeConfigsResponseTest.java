@@ -17,17 +17,18 @@
 package org.apache.kafka.common.requests;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DescribeConfigsResponseTest {
 
-    @Test
-    public void testConfigSourceIdsMatchDeclarationOrder() {
-        for (DescribeConfigsResponse.ConfigSource source : DescribeConfigsResponse.ConfigSource.values()) {
-            assertEquals(source.ordinal(), source.id(), source.name());
-            assertEquals(source, DescribeConfigsResponse.ConfigSource.forId(source.id()));
-        }
+    @ParameterizedTest
+    @EnumSource(DescribeConfigsResponse.ConfigSource.class)
+    public void testConfigSourceIdsMatchDeclarationOrder(DescribeConfigsResponse.ConfigSource source) {
+        assertEquals(source.ordinal(), source.id());
+        assertEquals(source, DescribeConfigsResponse.ConfigSource.forId(source.id()));
     }
 
     @Test
