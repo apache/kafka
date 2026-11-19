@@ -4064,9 +4064,11 @@ org.apache.kafka.common.internals.TopicTest:
 - shouldAcceptValidTopicNames
 - shouldRecognizeInvalidCharactersInTopicNames
 - shouldThrowOnInvalidTopicNames
+- testCoordinatorTopicsAreInternal
 - testTopicHasCollision
 - testTopicHasCollisionChars
 - testUnifyCollisionChars
+- testUserTopicsAreNotInternal
 org.apache.kafka.common.internals.UnsupportedProtocolFieldExceptionTest:
 - testFieldConstructorFormatsMessage
 - testIsUnsupportedVersionException
