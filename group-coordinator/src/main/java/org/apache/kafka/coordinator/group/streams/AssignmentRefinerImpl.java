@@ -254,8 +254,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * that no member holds as an active task, on a member that does not report its restore progress, see
      * {@link #unobservableStandbyToPromote}.
      *
-     * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
-     * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
+     * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never warmed up: its target owner never
+     * reports its restore progress, so no warm-up task could ever be seen to complete the migration. It is granted to
+     * the target owner at once, unless {@code keepActiveTasks} is set.
      *
      * <p>If {@code keepActiveTasks} is set, every active task stays with the member that holds it, and only tasks that
      * no member holds as an active task are placed.
@@ -330,10 +331,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // member reconciles to. Tasks that no member holds as an active task are placed below as usual.
             if (holder != null && keepActiveTasks) {
                 // A process can't hold a warm-up task next to the active task, so a move within it can't be warmed up.
+                // A target owner that never reports its restore progress could not be seen to finish warming up.
                 final boolean sameProcess = members.get(holder.memberId()).processId().equals(targetProcessId);
+                final boolean warmable = !sameProcess
+                    && WarmupSupport.of(heartbeatVersions.get(targetOwner)) != WarmupSupport.NOT_SUPPORTED;
                 stagedMigrations.add(stagedMigration(
                     currentAssignment, task, holder.memberId(), targetOwner,
-                    sameProcess ? Optional.empty() : Optional.of(targetProcessId)));
+                    warmable ? Optional.of(targetProcessId) : Optional.empty()));
                 continue;
             }
 

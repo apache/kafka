@@ -21098,6 +21098,20 @@ public class GroupMetadataManagerTest {
             .setWarmupTasks(List.of());
     }
 
+    private StreamsGroupHeartbeatRequestData heartbeatOfMemberA(String groupId, String memberA, int memberEpoch) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberA)
+            .setMemberEpoch(memberEpoch)
+            .setProcessId(DEFAULT_PROCESS_ID)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId("subtopology1")
+                .setPartitions(List.of(0, 1, 2))))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
+    }
+
     @Test
     public void testStreamsGroupStopsStagingOnceTheWarmupTaskIsCaughtUp() {
         String groupId = "fooup";
@@ -21262,20 +21276,6 @@ public class GroupMetadataManagerTest {
             .build();
     }
 
-    private StreamsGroupHeartbeatRequestData heartbeatOfMemberA(String groupId, String memberA, int memberEpoch) {
-        return new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberA)
-            .setMemberEpoch(memberEpoch)
-            .setProcessId(DEFAULT_PROCESS_ID)
-            .setRebalanceTimeoutMs(1500)
-            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
-                .setSubtopologyId("subtopology1")
-                .setPartitions(List.of(0, 1, 2))))
-            .setStandbyTasks(List.of())
-            .setWarmupTasks(List.of());
-    }
-
     /**
      * A heartbeat from a member that owns a warm-up task of the given task and reports how far it has restored it.
      */
@@ -21306,7 +21306,6 @@ public class GroupMetadataManagerTest {
                 .setPartition(2)
                 .setOffset(endOffset)));
     }
-
 
     /**
      * A streams group that is settled at epoch 10 -- every member reconciled to its target assignment -- which is the
