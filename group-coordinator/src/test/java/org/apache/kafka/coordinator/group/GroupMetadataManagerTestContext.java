@@ -1417,7 +1417,7 @@ public class GroupMetadataManagerTestContext {
     public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
         Set<String> statesFilterSet = new HashSet<>(statesFilter);
         Set<String> typesFilterSet = new HashSet<>(typesFilter);
-        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, lastCommittedOffset);
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, groupId -> true, lastCommittedOffset);
     }
 
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {

@@ -663,6 +663,8 @@ public class GroupMetadataManager {
      * @param typesFilter       The types of the groups we want to list.
      *                          If empty, all groups are returned with their type.
      *                          If invalid, no groups are returned.
+     * @param groupIdFilter     The predicate on the ids of the groups we want to list.
+     *                          It is applied after the states and types filters.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
@@ -670,6 +672,7 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         Set<String> statesFilter,
         Set<String> typesFilter,
+        Predicate<String> groupIdFilter,
         long committedOffset
     ) {
         // Converts each state filter string to lower case for a case-insensitive comparison.
@@ -687,7 +690,7 @@ public class GroupMetadataManager {
             boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
             boolean typeCheck = enumTypesFilter.isEmpty() || enumTypesFilter.contains(group.type());
 
-            return stateCheck && typeCheck;
+            return stateCheck && typeCheck && groupIdFilter.test(group.groupId());
         };
 
         Stream<Group> groupStream = groups.values(committedOffset).stream();

@@ -10106,12 +10106,14 @@ class KafkaApisTest extends Logging {
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) util.List.of("Stable", "Empty") else util.List.of)
       .setTypesFilter(if (version >= 5) util.List.of("classic", "consumer") else util.List.of)
+      .setRequireCommittedOffsets(version >= 6)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) util.List.of("Stable", "Empty") else util.List.of)
       .setTypesFilter(if (version >= 5) util.List.of("classic", "consumer") else util.List.of)
+      .setRequireCommittedOffsets(version >= 6)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(

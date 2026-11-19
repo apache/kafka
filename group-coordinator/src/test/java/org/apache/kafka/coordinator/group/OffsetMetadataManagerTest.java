@@ -339,6 +339,10 @@ public class OffsetMetadataManagerTest {
             return isOffsetsEmptyForGroup;
         }
 
+        public boolean hasCommittedOffsets(String groupId) {
+            return offsetMetadataManager.hasCommittedOffsets(groupId, lastCommittedOffset);
+        }
+
         public boolean groupHasNoOffsets(String groupId) {
             // Existing branch tests don't drive snapshot semantics — they replay records
             // directly, so reading at Long.MAX_VALUE is equivalent to "latest" and exercises
@@ -3284,6 +3288,71 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.commitOffset("group-id", "foo", 0, 100L, 0);
         assertFalse(context.groupHasNoOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        assertFalse(context.hasCommittedOffsets("unknown-group-id"));
+
+        context.commitOffset("group-id", "foo", 0, 100L, 1);
+        // The offset is not visible until the write is committed.
+        assertFalse(context.hasCommittedOffsets("group-id"));
+        context.commit();
+        assertTrue(context.hasCommittedOffsets("group-id"));
+
+        // Deleting the last offset removes the group once the deletion is committed.
+        context.replay(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 0));
+        assertTrue(context.hasCommittedOffsets("group-id"));
+        context.commit();
+        assertFalse(context.hasCommittedOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsetsWithCommittedAndPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        long producerId = 10L;
+        context.commitOffset("group-id", "foo", 0, 100L, 1);
+        context.commitOffset(producerId, "group-id", "foo", 1, 100L, 1, context.time.milliseconds());
+        context.commit();
+        assertTrue(context.hasCommittedOffsets("group-id"));
+    }
+
+    @Test
+    public void testHasCommittedOffsetsUntilExpiredOffsetsAreDeleted() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withOffsetsRetentionMinutes(1)
+            .build();
+        context.commitOffset("group-id", "foo", 0, 100L, 1);
+        context.commit();
+
+        // The offset is eligible for expiration but has not been deleted yet.
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+        assertTrue(context.hasCommittedOffsets("group-id"));
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        assertTrue(context.cleanupExpiredOffsets("group-id", records));
+        assertEquals(List.of(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 0)), records);
+        assertTrue(context.hasCommittedOffsets("group-id"));
+        context.commit();
+        assertFalse(context.hasCommittedOffsets("group-id"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(TransactionResult.class)
+    public void testHasCommittedOffsetsIgnoresPendingTransactionalOffsets(TransactionResult result) {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        long producerId = 10L;
+        context.commitOffset(producerId, "group-id", "foo", 0, 100L, 1, context.time.milliseconds());
+        context.commit();
+        // A pending transactional offset does not count as a committed offset.
+        assertFalse(context.hasCommittedOffsets("group-id"));
+        assertFalse(context.groupHasNoOffsets("group-id"));
+
+        // The offset counts only if the transaction commits.
+        context.replayEndTransactionMarker(producerId, result);
+        context.commit();
+        assertEquals(result == TransactionResult.COMMIT, context.hasCommittedOffsets("group-id"));
     }
 
     private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
