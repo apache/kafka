@@ -1368,7 +1368,9 @@ public class ConfigCommandTest {
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, "mirror");
         KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
-        future.complete(new Config(List.of(new ConfigEntry("a", "b"))));
+        future.complete(new Config(List.of(
+            new ConfigEntry("a", "b", ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG, false, false, List.of(), ConfigEntry.ConfigType.STRING, null),
+            new ConfigEntry("c", "d", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, List.of(), ConfigEntry.ConfigType.STRING, null))));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.values()).thenReturn(Map.of(resource, future));
 
@@ -1387,9 +1389,10 @@ public class ConfigCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        // UNKNOWN is a placeholder dynamic source for cluster mirrors
         assertTrue(output.contains("Dynamic configs for cluster-mirror mirror are:"), output);
         assertTrue(output.contains("a=b"), output);
+        // without --all, only dynamic cluster mirror configs are shown
+        assertFalse(output.contains("c=d"), output);
     }
 
     @Test

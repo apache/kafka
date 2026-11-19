@@ -660,8 +660,7 @@ public class ConfigCommand {
             dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG;
         } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.CLUSTER_MIRROR;
-            // TODO: ConfigEntry.ConfigSource has no dynamic source for cluster mirrors yet, so UNKNOWN is a placeholder
-            dynamicConfigSource = ConfigEntry.ConfigSource.UNKNOWN;
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG;
         } else {
             throw new IllegalArgumentException("Invalid entity type: " + entityType);
         }

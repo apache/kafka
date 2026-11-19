@@ -102,8 +102,17 @@ public class KafkaConfigSchemaTest {
             DescribeConfigsResponse.ConfigSource.CLIENT_METRICS_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG,
             DescribeConfigsResponse.ConfigSource.GROUP_CONFIG);
+        testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG,
+            DescribeConfigsResponse.ConfigSource.CLUSTER_MIRROR_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DEFAULT_CONFIG,
             DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG);
+    }
+
+    @Test
+    public void testEveryConfigSourceHasWireRepresentation() {
+        for (ConfigEntry.ConfigSource source : ConfigEntry.ConfigSource.values()) {
+            assertEquals(source, KafkaConfigSchema.translateConfigSource(source).source(), source.name());
+        }
     }
 
     private static void testTranslateConfigSource(ConfigEntry.ConfigSource a,
