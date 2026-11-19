@@ -528,7 +528,7 @@ public class ConfigCommand {
                         return;
                     }
                 } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
-                    // there is no API to list cluster mirrors yet, so let the describe request report a missing mirror
+                    // cluster mirrors cannot be listed until KAFKA-21530, so the existence check is skipped
                 } else {
                     throw new IllegalArgumentException("Invalid entity type: " + entityType);
                 }
