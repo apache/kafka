@@ -56,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -331,6 +332,12 @@ public class AuthorizerTest {
 
     @ParameterizedTest
     @CsvSource({
+        "'', LITERAL, '', PREFIXED, false",
+        "'', PREFIXED, '', PREFIXED, false",
+        "abc, LITERAL, '', PREFIXED, false",
+        "abc, PREFIXED, '', PREFIXED, false",
+        "'', LITERAL, a, PREFIXED, true",
+        "'', PREFIXED, a, PREFIXED, true",
         "abc, LITERAL, abc, LITERAL, false",
         "abc, PREFIXED, abc, LITERAL, true",
         "abc, LITERAL, abc, PREFIXED, false",
@@ -369,6 +376,27 @@ public class AuthorizerTest {
         assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
         Collections.reverse(bindings);
         assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 8, 63, 64, 65, 127, 128, 129, 512})
+    public void testAuthorizeByResourceTypeMultipleDenyPrefixLengths(int prefixLength) {
+        Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);
+        when(authorizer.authorize(any(), any())).thenReturn(List.of(AuthorizationResult.DENIED));
+        String prefix = "a".repeat(prefixLength);
+        for (PatternType allowType : List.of(LITERAL, PREFIXED)) {
+            List<AclBinding> bindings = new ArrayList<>(List.of(
+                new AclBinding(new ResourcePattern(GROUP, prefix + "b", allowType), allowReadAcl),
+                new AclBinding(new ResourcePattern(GROUP, "z", PREFIXED), denyReadAcl),
+                new AclBinding(new ResourcePattern(GROUP, prefix + "bc", PREFIXED), denyReadAcl)));
+            when(authorizer.acls(any())).thenReturn(bindings);
+            assertTrue(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+
+            bindings.add(new AclBinding(new ResourcePattern(GROUP, prefix, PREFIXED), denyReadAcl));
+            assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+            Collections.reverse(bindings);
+            assertFalse(authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+        }
     }
 
     @Test

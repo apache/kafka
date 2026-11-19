@@ -33,9 +33,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
-import org.apache.commons.collections4.trie.PatriciaTrie;
-
 import java.io.Closeable;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -206,7 +205,9 @@ public interface Authorizer extends Configurable, Closeable {
 
         Set<String> denyPatternsLiteral = new HashSet<>();
         Set<String> denyPatternsPrefixed = new HashSet<>();
-        PatriciaTrie<PatternType> allowPatterns = new PatriciaTrie<>();
+        BitSet denyPrefixLengths = new BitSet();
+        Set<String> allowPatternsLiteral = new HashSet<>();
+        Set<String> allowPatternsPrefixed = new HashSet<>();
 
         boolean hasWildCardAllow = false;
 
@@ -238,6 +239,7 @@ public interface Authorizer extends Configurable, Closeable {
                         break;
                     case PREFIXED:
                         denyPatternsPrefixed.add(binding.pattern().name());
+                        denyPrefixLengths.set(binding.pattern().name().length());
                         break;
                     default:
                 }
@@ -253,11 +255,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    // A prefixed allow also covers a literal allow with the same name.
-                    allowPatterns.putIfAbsent(resourceNameForTrie(binding.pattern().name()), PatternType.LITERAL);
+                    allowPatternsLiteral.add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allowPatterns.put(resourceNameForTrie(binding.pattern().name()), PatternType.PREFIXED);
+                    allowPatternsPrefixed.add(binding.pattern().name());
                     break;
                 default:
             }
@@ -267,37 +268,29 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        // A literal deny only dominates a literal allow, leaving prefixed allows intact.
-        for (String denyStr : denyPatternsLiteral) {
-            allowPatterns.remove(resourceNameForTrie(denyStr), PatternType.LITERAL);
+        // Literal denies cannot eliminate all names covered by a prefixed allow.
+        for (String allowStr : allowPatternsPrefixed) {
+            if (!isDeniedByPrefix(allowStr, denyPatternsPrefixed, denyPrefixLengths))
+                return AuthorizationResult.ALLOWED;
         }
 
-        // A prefixed deny dominates every literal or prefixed allow starting with it.
-        // Snapshot matching keys: prefixMap.clear() scans the entire trie, while its iterator.remove()
-        // can fail when removing the last entry in a subtree.
-        for (String denyStr : denyPatternsPrefixed) {
-            if (allowPatterns.isEmpty())
-                return AuthorizationResult.DENIED;
-            for (String allowName : allowPatterns.prefixMap(resourceNameForTrie(denyStr)).keySet().toArray(String[]::new)) {
-                allowPatterns.remove(allowName);
-            }
+        for (String allowStr : allowPatternsLiteral) {
+            if (!denyPatternsLiteral.contains(allowStr)
+                    && !isDeniedByPrefix(allowStr, denyPatternsPrefixed, denyPrefixLengths))
+                return AuthorizationResult.ALLOWED;
         }
-        return allowPatterns.isEmpty() ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
+        return AuthorizationResult.DENIED;
     }
 
-    private String resourceNameForTrie(String name) {
-        // PatriciaTrie treats trailing zero characters as padding. Escape zero characters
-        // and the escape character itself while preserving startsWith relationships.
-        if (name.indexOf('\0') < 0 && name.indexOf('\1') < 0)
-            return name;
-        StringBuilder escaped = new StringBuilder(name.length());
-        for (int i = 0; i < name.length(); i++) {
-            char ch = name.charAt(i);
-            if (ch <= '\1')
-                escaped.append('\1').append((char) (ch + 1));
-            else
-                escaped.append(ch);
+    private boolean isDeniedByPrefix(String name, Set<String> denyPatternsPrefixed, BitSet denyPrefixLengths) {
+        // Only construct prefixes at lengths present in the deny set. A full-length
+        // substring reuses the name, and an empty deny prefix matches every name.
+        for (int length = denyPrefixLengths.nextSetBit(0);
+                length >= 0 && length <= name.length();
+                length = denyPrefixLengths.nextSetBit(length + 1)) {
+            if (denyPatternsPrefixed.contains(name.substring(0, length)))
+                return true;
         }
-        return escaped.toString();
+        return false;
     }
 }
