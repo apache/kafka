@@ -1274,6 +1274,297 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(expectedResponse4, response4.data)
   }
 
+  private def ownedTopicPartitions(
+    partitions: (Uuid, Int)*
+  ): List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = {
+    partitions.groupBy(_._1).map { case (topicId, topicPartitions) =>
+      new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(topicPartitions.map(partition => Int.box(partition._2)).asJava)
+    }.toList
+  }
+
+  private def assignedTopicPartitions(
+    response: ConsumerGroupHeartbeatResponseData
+  ): Option[Set[(Uuid, Int)]] = {
+    Option(response.assignment).map(_.topicPartitions.asScala.flatMap { topicPartitions =>
+      topicPartitions.partitions.asScala.map(partition => (topicPartitions.topicId, partition.intValue))
+    }.toSet)
+  }
+
+  @ClusterTest
+  def testUnreportedPartitionIsFreedOnFullHeartbeat(): Unit = {
+    // This test reproduces the following sequence, in which two clients own the same partition:
+    // 1. M joins. The coordinator sends {foo-0, foo-1} at epoch 11.
+    // 2. M starts the reconciliation and calls onPartitionsAssigned([foo-0, foo-1]).
+    // 3. N joins and the target assignment moves to epoch 12, giving foo-1 to N.
+    // 4. A heartbeat of M fails (a request timeout, a coordinator move, any error). M's next
+    //    heartbeat resends all the fields, including the owned set {}. In that heartbeat, the
+    //    coordinator applies the new target, which takes foo-1 away from M, and checks the
+    //    revocation against the owned set M has just sent. That set doesn't contain foo-1, so
+    //    foo-1 counts as already revoked: M moves straight to epoch 12 with {foo-0}, and foo-1
+    //    is freed.
+    // 5. N gets foo-1 and starts consuming it.
+    // 6. M's callback returns, and M starts fetching foo-1 too. Two clients now own foo-1.
+    // 7. M then applies {foo-0}, revokes foo-1, and commits foo-1's offset at epoch 12. The
+    //    commit is accepted because the epoch matches, so it can overwrite N's progress.
+    //
+    // The epochs in the test differ from the ones above, and the assignor decides which of
+    // the two partitions moves to N.
+    createOffsetsTopic()
+
+    val groupId = "test-unreported-partition-grp"
+    val memberIdM = Uuid.randomUuid().toString
+    val memberIdN = Uuid.randomUuid().toString
+    val rebalanceTimeoutMs = 5 * 60 * 1000
+
+    val topicId = createTopic(topic = "foo", numPartitions = 2)
+    val foo0 = (topicId, 0)
+    val foo1 = (topicId, 1)
+
+    // M joins and is assigned {foo-0, foo-1}. M starts taking them, so its owned set
+    // is still {}.
+    var responseM: ConsumerGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      responseM = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberIdM,
+        memberEpoch = 0,
+        rebalanceTimeoutMs = rebalanceTimeoutMs,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = ownedTopicPartitions()
+      )
+      assignedTopicPartitions(responseM).contains(Set(foo0, foo1))
+    }, msg = s"M could not get {foo-0, foo-1}. Last response $responseM.")
+    val epochWithBoth = responseM.memberEpoch
+
+    // N joins. The new target assignment gives one of the partitions to N, so N waits
+    // until M no longer holds it.
+    var responseN = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberIdN,
+      memberEpoch = 0,
+      rebalanceTimeoutMs = rebalanceTimeoutMs,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = ownedTopicPartitions()
+    )
+    assertEquals(Some(Set.empty), assignedTopicPartitions(responseN))
+
+    // A heartbeat of M fails, so M's next heartbeat resends all the fields, with owned
+    // set {}. The partition given to N is missing from it, so the coordinator treats it
+    // as released: M moves to the new epoch with the other partition, without being
+    // asked to revoke anything, and the partition given to N is freed.
+    TestUtils.waitUntilTrue(() => {
+      responseM = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberIdM,
+        memberEpoch = epochWithBoth,
+        rebalanceTimeoutMs = rebalanceTimeoutMs,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = ownedTopicPartitions()
+      )
+      !assignedTopicPartitions(responseM).contains(Set(foo0, foo1))
+    }, msg = s"M's assignment did not change. Last response $responseM.")
+    assertTrue(responseM.memberEpoch > epochWithBoth,
+      s"Expected M to move past epoch $epochWithBoth. Last response $responseM.")
+    val newEpoch = responseM.memberEpoch
+    val partitionsOfM = assignedTopicPartitions(responseM).get
+    assertEquals(1, partitionsOfM.size)
+    val (_, movedPartition) = (Set(foo0, foo1) -- partitionsOfM).head
+
+    // N is assigned the freed partition.
+    TestUtils.waitUntilTrue(() => {
+      responseN = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberIdN,
+        memberEpoch = responseN.memberEpoch
+      )
+      assignedTopicPartitions(responseN).contains(Set((topicId, movedPartition)))
+    }, msg = s"N could not get foo-$movedPartition. Last response $responseN.")
+    assertEquals(newEpoch, responseN.memberEpoch)
+
+    // M's callback returns and M reports that it owns {foo-0, foo-1}. The coordinator
+    // accepts the report although the moved partition is assigned to N.
+    responseM = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = newEpoch,
+      topicPartitions = ownedTopicPartitions(foo0, foo1)
+    )
+    assertEquals(newEpoch, responseM.memberEpoch)
+
+    // N commits the moved partition's offset. M then revokes the moved partition and
+    // commits its offset at its current epoch. M's commit is accepted because the epoch
+    // matches, and it overwrites N's offset.
+    commitOffset(
+      groupId = groupId,
+      memberId = memberIdN,
+      memberEpoch = newEpoch,
+      topic = "foo",
+      topicId = topicId,
+      partition = movedPartition,
+      offset = 100L,
+      expectedError = Errors.NONE
+    )
+    commitOffset(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = newEpoch,
+      topic = "foo",
+      topicId = topicId,
+      partition = movedPartition,
+      offset = 50L,
+      expectedError = Errors.NONE
+    )
+    assertEquals(50L, fetchOffset(groupId, "foo", movedPartition))
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "5000")
+    )
+  )
+  def testCommitAcceptedForPartitionRevokedOnUnsubscribe(): Unit = {
+    // This test reproduces the following sequence, in which a member commits the offset of a
+    // partition that it no longer holds and the commit is accepted:
+    // 1. M is STABLE at epoch 10 with {foo-0, bar-0}. The group's last target assignment was
+    //    computed less than the assignment interval ago, so a new one can't be computed yet.
+    // 2. The app unsubscribes from bar. The heartbeat bumps the group epoch to 11, but the
+    //    target stays at epoch 10. The coordinator moves bar-0 to the revocation set. M stays
+    //    at epoch 10 in UNREVOKED_PARTITIONS, and the response carries {foo-0}.
+    // 3. M revokes bar-0, committing its offset at epoch 10 as part of the revocation, which is
+    //    correct. M reports {foo-0}. The target is still at epoch 10, so M stays at epoch 10,
+    //    STABLE with {foo-0}. bar-0 is freed.
+    // 4. N joins, subscribed to bar, which bumps the group epoch to 12. A later heartbeat
+    //    computes the target at epoch 12, which gives bar-0 to N. N gets bar-0 at epoch 12.
+    // 5. M is still at epoch 10 until its next heartbeat. If M commits bar-0's offset now, for
+    //    example with a late commitAsync or an explicit offset map, it sends epoch 10. That
+    //    matches M's epoch, so the commit validation accepts it without checking bar-0. The
+    //    commit is accepted and can overwrite N's progress. M isn't fenced.
+    //
+    // The epochs in the test differ from the ones above. The assignment interval is set to
+    // 5 seconds so that steps 2 and 3 happen before the next target assignment is computed.
+    createOffsetsTopic()
+
+    val groupId = "test-unsubscribe-commit-grp"
+    val memberIdM = Uuid.randomUuid().toString
+    val memberIdN = Uuid.randomUuid().toString
+    val rebalanceTimeoutMs = 5 * 60 * 1000
+
+    val fooTopicId = createTopic(topic = "foo", numPartitions = 1)
+    val barTopicId = createTopic(topic = "bar", numPartitions = 1)
+    val foo0 = (fooTopicId, 0)
+    val bar0 = (barTopicId, 0)
+
+    // M joins, subscribed to foo and bar, and is assigned {foo-0, bar-0}.
+    var responseM: ConsumerGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      responseM = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberIdM,
+        memberEpoch = 0,
+        rebalanceTimeoutMs = rebalanceTimeoutMs,
+        subscribedTopicNames = List("foo", "bar"),
+        topicPartitions = ownedTopicPartitions()
+      )
+      assignedTopicPartitions(responseM).contains(Set(foo0, bar0))
+    }, msg = s"M could not get {foo-0, bar-0}. Last response $responseM.")
+    val epochM = responseM.memberEpoch
+
+    // M reports that it owns {foo-0, bar-0}.
+    responseM = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = epochM,
+      topicPartitions = ownedTopicPartitions(foo0, bar0)
+    )
+    assertEquals(epochM, responseM.memberEpoch)
+
+    // M unsubscribes from bar. The target assignment can't be computed yet, so M stays at
+    // its epoch and is asked to revoke bar-0.
+    responseM = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = epochM,
+      subscribedTopicNames = List("foo")
+    )
+    assertEquals(epochM, responseM.memberEpoch)
+    assertEquals(Some(Set(foo0)), assignedTopicPartitions(responseM))
+
+    // M revokes bar-0, committing its offset as part of the revocation, and reports {foo-0}.
+    // The target assignment hasn't changed, so M stays at its epoch, and bar-0 is freed.
+    commitOffset(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = epochM,
+      topic = "bar",
+      topicId = barTopicId,
+      partition = 0,
+      offset = 10L,
+      expectedError = Errors.NONE
+    )
+    responseM = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = epochM,
+      topicPartitions = ownedTopicPartitions(foo0)
+    )
+    assertEquals(epochM, responseM.memberEpoch)
+
+    // N joins, subscribed to bar. Once the assignment interval has elapsed, a heartbeat of N
+    // computes the new target assignment, which gives bar-0 to N.
+    var responseN: ConsumerGroupHeartbeatResponseData = null
+    var epochN = 0
+    TestUtils.waitUntilTrue(() => {
+      responseN = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberIdN,
+        memberEpoch = epochN,
+        rebalanceTimeoutMs = rebalanceTimeoutMs,
+        subscribedTopicNames = List("bar"),
+        topicPartitions = ownedTopicPartitions()
+      )
+      epochN = responseN.memberEpoch
+      assignedTopicPartitions(responseN).contains(Set(bar0))
+    }, msg = s"N could not get bar-0. Last response $responseN.")
+    assertTrue(epochN > epochM, s"Expected N to be past epoch $epochM. Last response $responseN.")
+
+    // M hasn't sent a heartbeat since, so it is still at its epoch, with {foo-0}.
+    val memberM = consumerGroupDescribe(List(groupId)).head.members.asScala.find(_.memberId == memberIdM).get
+    assertEquals(epochM, memberM.memberEpoch)
+    assertEquals(
+      Set(foo0),
+      memberM.assignment.topicPartitions.asScala.flatMap { topicPartitions =>
+        topicPartitions.partitions.asScala.map(partition => (topicPartitions.topicId, partition.intValue))
+      }.toSet
+    )
+
+    // N commits bar-0's offset. M then commits bar-0's offset at its epoch. The epoch matches
+    // M's epoch, so the commit is accepted although M no longer holds bar-0, and it overwrites
+    // N's offset.
+    commitOffset(
+      groupId = groupId,
+      memberId = memberIdN,
+      memberEpoch = epochN,
+      topic = "bar",
+      topicId = barTopicId,
+      partition = 0,
+      offset = 100L,
+      expectedError = Errors.NONE
+    )
+    commitOffset(
+      groupId = groupId,
+      memberId = memberIdM,
+      memberEpoch = epochM,
+      topic = "bar",
+      topicId = barTopicId,
+      partition = 0,
+      offset = 50L,
+      expectedError = Errors.NONE
+    )
+    assertEquals(50L, fetchOffset(groupId, "bar", 0))
+  }
+
   @ClusterTest(
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
