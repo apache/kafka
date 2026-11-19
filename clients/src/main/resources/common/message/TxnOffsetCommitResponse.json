@@ -44,6 +44,7 @@
   // - TRANSACTIONAL_ID_AUTHORIZATION_FAILED (version 0+)
   // - INVALID_PRODUCER_ID_MAPPING (version 0+)
   // - INVALID_PRODUCER_EPOCH (version 0+)
+  // - INVALID_REQUEST (version 0+)
   // - PRODUCER_FENCED (version 0+)
   // - INVALID_TXN_STATE (version 0+)
   // - UNSUPPORTED_FOR_MESSAGE_FORMAT (version 0+)

@@ -45,6 +45,7 @@ import java.util.function.Function;
  *   - {@link Errors#UNKNOWN_MEMBER_ID}
  *   - {@link Errors#REBALANCE_IN_PROGRESS}
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
+ *   - {@link Errors#INVALID_REQUEST}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
  *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
