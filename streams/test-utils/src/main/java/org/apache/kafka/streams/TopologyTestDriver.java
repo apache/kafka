@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
@@ -376,8 +377,24 @@ public class TopologyTestDriver implements Closeable {
             logContext
         );
 
-        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        try {
+            setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
+            setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        } catch (final Throwable e) {
+            // the caller gets no driver to close
+            Utils.closeQuietly(this::closeDirty, "topology test driver");
+            throw e;
+        }
+    }
+
+    private void closeDirty() throws IOException {
+        if (task != null) {
+            task.suspend();
+            task.closeDirty();
+        }
+        if (globalStateManager != null) {
+            globalStateManager.close();
+        }
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {

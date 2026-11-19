@@ -35,6 +35,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -450,6 +451,53 @@ public abstract class TopologyTestDriverTest {
         assertTrue(mockProcessors.get(0).closed);
         // As testDriver is already closed, bypassing @AfterEach tearDown testDriver.close().
         testDriver = null;
+    }
+
+    @Test
+    public void shouldCloseStateStoreWhenProcessorFailsToInitialize() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", failingProcessorSupplier("store"), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
+            "processor");
+
+        assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertFalse(store.isOpen());
+    }
+
+    @Test
+    public void shouldCloseGlobalStateStoreWhenProcessorFailsToInitialize() {
+        final Topology topology = new Topology();
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("globalStore"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "source",
+            new StringDeserializer(),
+            new LongDeserializer(),
+            SOURCE_TOPIC_1,
+            "processor",
+            failingProcessorSupplier("globalStore"));
+
+        assertThrows(IllegalStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertFalse(store.isOpen());
+    }
+
+    // the processor keeps the store it is connected to, as its failure leaves the test without a driver to get it from
+    private ProcessorSupplier<String, Long, Void, Void> failingProcessorSupplier(final String storeName) {
+        return () -> new Processor<>() {
+            @Override
+            public void init(final ProcessorContext<Void, Void> context) {
+                store = context.getStateStore(storeName);
+                throw new IllegalStateException("failed to initialize");
+            }
+
+            @Override
+            public void process(final Record<String, Long> record) {
+            }
+        };
     }
 
     @Test
