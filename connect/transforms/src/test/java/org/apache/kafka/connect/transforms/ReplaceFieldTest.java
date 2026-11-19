@@ -180,6 +180,26 @@ public class ReplaceFieldTest {
     }
 
     @Test
+    public void usesRenameSourceFromCurrentSchemaWhenMappingsShareTarget() {
+        xform.configure(Map.of("renames", "a:target,b:target"));
+
+        final Schema schemaA = SchemaBuilder.struct().field("a", Schema.INT32_SCHEMA).build();
+        final Schema schemaB = SchemaBuilder.struct().field("b", Schema.INT32_SCHEMA).build();
+
+        assertTargetValue(new Struct(schemaA).put("a", 11), 11);
+        assertTargetValue(new Struct(schemaB).put("b", 22), 22);
+        assertTargetValue(new Struct(schemaA).put("a", 33), 33);
+    }
+
+    private void assertTargetValue(Struct input, int expectedValue) {
+        final SinkRecord record = new SinkRecord("test", 0, null, null, input.schema(), input, 0);
+        final Struct result = (Struct) xform.apply(record).value();
+
+        assertEquals(1, result.schema().fields().size());
+        assertEquals(Integer.valueOf(expectedValue), result.getInt32("target"));
+    }
+
+    @Test
     public void testReplaceFieldVersionRetrievedFromAppInfoParser() {
         assertEquals(AppInfoParser.getVersion(), xform.version());
     }
