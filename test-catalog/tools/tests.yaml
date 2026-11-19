@@ -506,6 +506,12 @@ org.apache.kafka.tools.MetadataQuorumCommandUnitTest:
 - testRemoveControllerFailsWithVoterNotFound
 - testRemoveControllerSucceedsButUnregisterFails
 - testRemoveControllerWithUnregisterSuccess
+org.apache.kafka.tools.NativeImageConfigTest:
+- testBrokerConfigDefaultsAreRegistered
+- testPluginImplementationsAreRegistered
+- testRegisteredKafkaClassesExist
+- testUnregisteredPluginConstructorIsDetected
+- testUnregisteredPluginIsDetected
 org.apache.kafka.tools.ProducerPerformanceTest:
 - testBootstrapServer
 - testClientIdOverride
