@@ -59,6 +59,7 @@ public class FileConfigProvider implements ConfigProvider {
      * @param path the file where the data resides
      * @return the configuration data
      */
+    @Override
     public ConfigData get(String path) {
         if (allowedPaths == null) {
             throw new IllegalStateException("The provider has not been configured yet.");
@@ -100,6 +101,7 @@ public class FileConfigProvider implements ConfigProvider {
      * @param keys the keys whose values will be retrieved
      * @return the configuration data
      */
+    @Override
     public ConfigData get(String path, Set<String> keys) {
         if (allowedPaths == null) {
             throw new IllegalStateException("The provider has not been configured yet.");

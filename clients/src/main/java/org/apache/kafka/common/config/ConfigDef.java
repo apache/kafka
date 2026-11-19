@@ -1015,6 +1015,7 @@ public class ConfigDef {
                 throw new ConfigException(name, o, "Value must be no more than " + max);
         }
 
+        @Override
         public String toString() {
             if (min == null && max == null)
                 return "[...]";
@@ -1093,6 +1094,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return !validString.validStrings.isEmpty() ? validString.toString() : "";
         }
@@ -1118,6 +1120,7 @@ public class ConfigDef {
 
         }
 
+        @Override
         public String toString() {
             return "[" + String.join(", ", validStrings) + "]";
         }
@@ -1145,6 +1148,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
@@ -1159,6 +1163,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "non-null string";
         }
@@ -1272,6 +1277,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "non-empty string without ISO control characters";
         }
