@@ -449,6 +449,7 @@ public class ConfigCommandTest {
         testExpectedEntityTypeNames(List.of("topics"), List.of("A"), connectOpts, "--topic", "A");
         testExpectedEntityTypeNames(List.of("ips"), List.of("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
         testExpectedEntityTypeNames(List.of("groups"), List.of("A"), connectOpts, "--group", "A");
+        testExpectedEntityTypeNames(List.of("cluster-mirrors"), List.of("A"), connectOpts, "--cluster-mirror", "A");
         testExpectedEntityTypeNames(List.of("clients", "users"), List.of("B", "A"), connectOpts, "--client", "B", "--user", "A");
         testExpectedEntityTypeNames(List.of("clients", "users"), List.of("B", ""), connectOpts, "--client", "B", "--user-defaults");
         testExpectedEntityTypeNames(List.of("clients", "users"), List.of("A"), connectOpts,
@@ -1389,6 +1390,7 @@ public class ConfigCommandTest {
                 throw new RuntimeException(e);
             }
         });
+        assertTrue(output.contains("WARNING: Cannot check whether the cluster-mirror 'mirror' exists, since cluster mirrors cannot be listed yet."), output);
         assertTrue(output.contains("Dynamic configs for cluster-mirror mirror are:"), output);
         assertTrue(output.contains("a=b"), output);
         // without --all, only dynamic cluster mirror configs are shown
@@ -1409,6 +1411,18 @@ public class ConfigCommandTest {
     public void shouldNotAlterClusterMirrorConfigWithoutEntityName() {
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "cluster-mirrors",
+            "--alter",
+            "--add-config", "a=b"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("An entity name must be specified with --alter of cluster-mirrors", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotAlterClusterMirrorConfigWithEntityDefault() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-default",
             "--alter",
             "--add-config", "a=b"));
 

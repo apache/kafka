@@ -90,7 +90,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups/cluster-mirrors dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
@@ -103,7 +103,7 @@ import joptsimple.OptionSpec;
  *     <li> ip: {@code --ip <ip>} OR {@code --entity-type ips --entity-name <ip>}
  *     <li> client-metrics: {@code --client-metrics <name>} OR {@code --entity-type client-metrics --entity-name <name>}
  *     <li> group: {@code --group <group>} OR {@code --entity-type groups --entity-name <group>}
- *     <li> cluster-mirror: {@code --entity-type cluster-mirrors --entity-name <mirror-name>}
+ *     <li> cluster-mirror: {@code --cluster-mirror <mirror-name>} OR {@code --entity-type cluster-mirrors --entity-name <mirror-name>}
  * </ul>
  * {@code --entity-type <users|clients|brokers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|ips> --entity-name <entityName>}
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -531,6 +531,7 @@ public class ConfigCommand {
                     }
                 } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
                     // cluster mirrors cannot be listed until KAFKA-21530, so the existence check is skipped
+                    System.out.println("WARNING: Cannot check whether the " + entityTypeSingular + " '" + name + "' exists, since cluster mirrors cannot be listed yet.");
                 } else {
                     throw new IllegalArgumentException("Invalid entity type: " + entityType);
                 }
@@ -830,6 +831,7 @@ public class ConfigCommand {
         private final OptionSpec<String> ip;
         private final OptionSpec<String> group;
         private final OptionSpec<String> clientMetrics;
+        private final OptionSpec<String> clusterMirror;
 
         private static String formatConfigNames(Collection<String> names) {
             String nl = System.lineSeparator();
@@ -912,6 +914,9 @@ public class ConfigCommand {
             clientMetrics = parser.accepts("client-metrics", "The client metrics config resource name.")
                     .withRequiredArg()
                     .ofType(String.class);
+            clusterMirror = parser.accepts("cluster-mirror", "The cluster mirror's name.")
+                    .withRequiredArg()
+                    .ofType(String.class);
 
             options = parser.parse(args);
         }
@@ -927,7 +932,8 @@ public class ConfigCommand {
                 new EntityFlag(brokerLogger, BROKER_LOGGER_CONFIG_TYPE),
                 new EntityFlag(ip, IP_TYPE),
                 new EntityFlag(clientMetrics, CLIENT_METRICS_TYPE),
-                new EntityFlag(group, GROUP_TYPE)
+                new EntityFlag(group, GROUP_TYPE),
+                new EntityFlag(clusterMirror, CLUSTER_MIRROR_TYPE)
             );
         }
 
