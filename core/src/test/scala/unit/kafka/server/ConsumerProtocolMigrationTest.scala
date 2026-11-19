@@ -903,8 +903,10 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
    * Tests the upgrade of a classic group at generation 0 when a new member joins with the consumer
    * protocol.
    *
-   * The classic group is rebalancing, so the upgraded group epoch is bumped to 1 before the new member
-   * bumps it to 2. No protocol has been selected yet, so the classic members take their subscriptions
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2 before the new member
+   * bumps it to 3. No protocol has been selected yet, so the classic members take their subscriptions
    * from their first protocol.
    *
    * @see testUpgradeFromClassicGroupAtGenerationZeroFromExistingStaticMember
@@ -960,24 +962,18 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    // TODO: KAFKA-21584: When assignor offload is enabled, the heartbeat incorrectly returns epoch 0,
-    // which is reserved for joining members. The member should get an epoch greater than 0.
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 0 else 2, response.memberEpoch)
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 3, response.memberEpoch)
 
     // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    // Member 2 is still at epoch 0, so it rejoins with its full subscription.
     if (isConsumerAssignorOffloadEnabled) {
       TestUtils.waitUntilTrue(() => {
         response = consumerGroupHeartbeat(
           groupId = groupId,
           memberId = memberId2,
           memberEpoch = response.memberEpoch,
-          rebalanceTimeoutMs = 5 * 60 * 1000,
-          subscribedTopicNames = List("foo"),
-          topicPartitions = List.empty,
           expectedError = Errors.NONE
         )
-        response.memberEpoch > 0
+        response.memberEpoch > 1
       }, msg = s"Did not receive initial assignment. Last response $response.")
     }
 
@@ -1012,10 +1008,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
    * Tests the upgrade of a classic group at generation 0 by a static member that restarts with the
    * consumer protocol.
    *
-   * The classic group is rebalancing, so the upgraded group epoch is bumped to 1. The static member
-   * replaces itself with the same subscription, so nothing else bumps the group epoch and the member
-   * gets epoch 1, not epoch 0, which is reserved for joining members. No protocol has been selected
-   * yet, so the classic members take their subscriptions from their first protocol.
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2. The static member
+   * replaces itself with the same subscription, so nothing else bumps the group epoch. No protocol
+   * has been selected yet, so the classic members take their subscriptions from their first protocol.
    *
    * @see testUpgradeFromClassicGroupAtGenerationZero
    * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromExistingStaticMember()
@@ -1066,12 +1063,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    // TODO: KAFKA-21584: When assignor offload is enabled, the heartbeat incorrectly returns epoch 0,
-    // which is reserved for joining members. The member should get an epoch greater than 0.
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 0 else 1, response.memberEpoch)
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
 
     // When assignor offload is enabled, the new assignment is available in a later heartbeat.
-    // Member 1 is still at epoch 0, so it rejoins with its full subscription.
     if (isConsumerAssignorOffloadEnabled) {
       TestUtils.waitUntilTrue(() => {
         response = consumerGroupHeartbeat(
@@ -1079,12 +1073,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           memberId = newMemberId1,
           memberEpoch = response.memberEpoch,
           instanceId = instanceId1,
-          rebalanceTimeoutMs = 5 * 60 * 1000,
-          subscribedTopicNames = List("foo"),
-          topicPartitions = List.empty,
           expectedError = Errors.NONE
         )
-        response.memberEpoch > 0
+        response.memberEpoch > 1
       }, msg = s"Did not receive new assignment. Last response $response.")
     }
 
@@ -1119,10 +1110,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
    * Tests the upgrade of a classic group at generation 0 by a new member that joins with a regex
    * that resolves to no topics.
    *
-   * The classic group is rebalancing, so the upgraded group epoch is bumped to 1. Neither the join nor
-   * the resolution of the regex bumps the group epoch and the member gets epoch 1, not epoch 0, which
-   * is reserved for joining members. No protocol has been selected yet, so the classic members take
-   * their subscriptions from their first protocol.
+   * No generation has completed, so like a new group, the upgraded group starts with an empty target
+   * assignment at epoch 1 and no member gets epoch 0, which is reserved for joining members. The
+   * classic group is rebalancing, so the upgraded group epoch is bumped to 2. Neither the join nor
+   * the resolution of the regex bumps the group epoch. No protocol has been selected yet, so the
+   * classic members take their subscriptions from their first protocol.
    *
    * @see testUpgradeFromClassicGroupAtGenerationZero
    * @see GroupMetadataManagerTest#testConsumerGroupHeartbeatWithClassicGroupAtGenerationZeroFromNewMemberWithEmptyResolvedRegex()
@@ -1177,24 +1169,18 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    // TODO: KAFKA-21584: When assignor offload is enabled, the heartbeat incorrectly returns epoch 0,
-    // which is reserved for joining members. The member should get an epoch greater than 0.
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 0 else 1, response.memberEpoch)
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
 
     // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    // Member 2 is still at epoch 0, so it rejoins with its full subscription.
     if (isConsumerAssignorOffloadEnabled) {
       TestUtils.waitUntilTrue(() => {
         response = consumerGroupHeartbeat(
           groupId = groupId,
           memberId = memberId2,
           memberEpoch = response.memberEpoch,
-          rebalanceTimeoutMs = 5 * 60 * 1000,
-          subscribedTopicRegex = "baz",
-          topicPartitions = List.empty,
           expectedError = Errors.NONE
         )
-        response.memberEpoch > 0
+        response.memberEpoch > 1
       }, msg = s"Did not receive initial assignment. Last response $response.")
     }
 
