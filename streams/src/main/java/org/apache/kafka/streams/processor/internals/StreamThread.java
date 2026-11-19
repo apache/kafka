@@ -526,8 +526,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             clientSupplier,
             processId,
             consumerConfigs,
-            taskManager::taskOffsetSumSnapshot,
-            taskManager::taskEndOffsetSumSnapshot
+            taskManager::taskOffsetSumsSnapshot
         );
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
@@ -571,8 +570,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
                                                        final Map<String, Object> consumerConfigs,
-                                                       final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
-                                                       final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
+                                                       final Supplier<StreamsRebalanceData.TaskOffsetSums> taskOffsetSums) {
         if (streamsProtocolEnabled(config)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
@@ -584,8 +582,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
                     parseRackId((String) config.originals().get(CommonClientConfigs.CLIENT_RACK_CONFIG)),
                     topologyMetadata,
-                    taskOffsetSum,
-                    taskEndOffsetSum
+                    taskOffsetSums
                 )
             );
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
@@ -711,8 +708,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
                                                                  final Optional<String> rackId,
                                                                  final TopologyMetadata topologyMetadata,
-                                                                 final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
-                                                                 final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
+                                                                 final Supplier<StreamsRebalanceData.TaskOffsetSums> taskOffsetSums) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = initBrokerTopology(config, internalTopologyBuilder);
@@ -723,8 +719,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             rackId,
             subtopologies,
             config.getClientTags(),
-            taskOffsetSum,
-            taskEndOffsetSum
+            taskOffsetSums
         );
 
         if (config.getBoolean(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG)) {

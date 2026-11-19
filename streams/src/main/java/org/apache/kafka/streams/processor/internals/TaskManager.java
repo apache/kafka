@@ -111,9 +111,9 @@ public class TaskManager {
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
-    // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
-    // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
-    // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
+    // Written by the stream thread in maybeUpdateTaskOffsetSumSnapshot() and read lock-free by the streams-protocol
+    // heartbeat thread in taskOffsetSumsSnapshot(). Holds the offset sums of the tasks with state on disk, except the
+    // stream thread's running active tasks and the tasks the state updater holds.
     private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSumSnapshot = new AtomicReference<>(Map.of());
 
     private final ActiveTaskCreator activeTaskCreator;
@@ -1279,11 +1279,26 @@ public class TaskManager {
     }
 
     /**
-     * Returns the per-task changelog offset-sum snapshot for the streams-protocol rebalance. Safe to invoke from any
-     * thread; the snapshot is refreshed by the stream thread via {@link #maybeUpdateTaskOffsetSumSnapshot()}.
+     * Returns the per-task changelog offset-sum and end-offset-sum snapshot for the streams-protocol rebalance: the
+     * state updater's {@link StateUpdater#taskOffsetSumsSnapshot()}, with the offset sums of
+     * {@link #maybeUpdateTaskOffsetSumSnapshot()} added. Safe to invoke from any thread.
      */
-    public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
-        return taskOffsetSumSnapshot.get();
+    public StreamsRebalanceData.TaskOffsetSums taskOffsetSumsSnapshot() {
+        final StreamsRebalanceData.TaskOffsetSums stateUpdaterSnapshot = stateUpdater.taskOffsetSumsSnapshot();
+        final Map<StreamsRebalanceData.TaskId, Long> streamThreadOffsetSums = taskOffsetSumSnapshot.get();
+        if (streamThreadOffsetSums.isEmpty()) {
+            return stateUpdaterSnapshot;
+        }
+        final Map<StreamsRebalanceData.TaskId, Long> stateUpdaterOffsetSums = stateUpdaterSnapshot.taskOffsetSum();
+        final Map<StreamsRebalanceData.TaskId, Long> offsetSums;
+        if (stateUpdaterOffsetSums.isEmpty()) {
+            offsetSums = streamThreadOffsetSums;
+        } else {
+            final Map<StreamsRebalanceData.TaskId, Long> mergedOffsetSums = new HashMap<>(streamThreadOffsetSums);
+            mergedOffsetSums.putAll(stateUpdaterOffsetSums);
+            offsetSums = Collections.unmodifiableMap(mergedOffsetSums);
+        }
+        return new StreamsRebalanceData.TaskOffsetSums(offsetSums, stateUpdaterSnapshot.taskEndOffsetSum());
     }
 
     /**
@@ -1291,8 +1306,11 @@ public class TaskManager {
      * cover every task with state on disk, including tasks owned by a sibling stream thread and dormant ones.
      * We include these, because we could take over such a task re-using the local state on disk.
      * Running-active tasks are excluded: their assignment is not offset-driven and they are caught up by definition.
-     * For all other assigned tasks this thread owns, we overwrite the (potentially) state offset-sum from the
-     * state directory with the latest changelog offset information. This step also add offset-sums for in-memory
+     * Tasks the state updater holds are excluded too: {@link #taskOffsetSumsSnapshot()} takes their offset sums from
+     * the state updater's snapshot, which also holds their end-offset sums, while this snapshot is only as recent as
+     * the last iteration of the stream thread.
+     * For all other assigned tasks this thread owns, we overwrite the (potentially stale) offset-sum from the
+     * state directory with the latest changelog offset information. This step also adds offset-sums for in-memory
      * state stores.
      *
      * <p>No-op under the classic protocol, which reports offset sums through {@link #taskOffsetSums()} instead and
@@ -1304,7 +1322,10 @@ public class TaskManager {
         }
 
         final Map<TaskId, Long> offsetSums = new HashMap<>(stateDirectory.taskOffsetSums());
-        for (final Task task : allTasks().values()) {
+        for (final Task task : stateUpdater.tasks()) {
+            offsetSums.remove(task.id());
+        }
+        for (final Task task : tasks.allInitializedTasksPerId().values()) {
             if (task.isActive() && task.state() == State.RUNNING) {
                 offsetSums.remove(task.id());
             } else if (task.state() != State.CREATED && task.state() != State.CLOSED) {
@@ -1325,14 +1346,6 @@ public class TaskManager {
         }
 
         taskOffsetSumSnapshot.set(Collections.unmodifiableMap(snapshot));
-    }
-
-    /**
-     * Returns the per-task changelog end-offset-sum snapshot published by the state updater.
-     * Safe to invoke from any thread.
-     */
-    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
-        return stateUpdater.taskEndOffsetSumSnapshot();
     }
 
     /**

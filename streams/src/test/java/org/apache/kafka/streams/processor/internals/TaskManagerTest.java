@@ -2072,23 +2072,17 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReturnEmptyTaskOffsetSumSnapshotBeforeRefresh() {
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
-
-        assertTrue(taskManager.taskOffsetSumSnapshot().isEmpty());
-    }
-
-    @Test
     public void shouldNotPublishTaskOffsetSumSnapshotUnderClassicProtocol() {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(StreamsRebalanceData.TaskOffsetSums.EMPTY);
 
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
         // the classic protocol reports offset sums through taskOffsetSums() instead, so the state directory is
         // never consulted for the snapshot
-        assertTrue(taskManager.taskOffsetSumSnapshot().isEmpty());
+        assertTrue(taskManager.taskOffsetSumsSnapshot().taskOffsetSum().isEmpty());
         verify(stateDirectory, never()).taskOffsetSums();
     }
 
@@ -2096,7 +2090,6 @@ public class TaskManagerTest {
     public void shouldPublishTaskOffsetSumSnapshotFromStateDirectoryExcludingRunningActiveTasks() {
         final StreamTask runningActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions).inState(State.RUNNING).build();
         final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
-        when(restoringActiveTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p1changelog, 25L)));
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
@@ -2104,6 +2097,16 @@ public class TaskManagerTest {
         // running-active tasks are owned by the stream thread; restoring-active and standby tasks live in the state updater
         when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningActiveTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringActiveTask, standbyTask));
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(new StreamsRebalanceData.TaskOffsetSums(
+            Map.of(
+                new StreamsRebalanceData.TaskId("0", 1), 25L,
+                new StreamsRebalanceData.TaskId("0", 2), 35L
+            ),
+            Map.of(
+                new StreamsRebalanceData.TaskId("0", 1), 50L,
+                new StreamsRebalanceData.TaskId("0", 2), 60L
+            )
+        ));
         // StateDirectory holds sums for every stateful task with state on disk, including a dormant task (taskId03)
         // that is not currently assigned (not in allTasks()).
         when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(
@@ -2115,15 +2118,21 @@ public class TaskManagerTest {
 
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
-        // running-active taskId00 is omitted; restoring-active taskId01 reports its live sum (25L) rather than the
-        // stale 20L on disk; standby and dormant tasks are reported with their disk sums
+        // running-active taskId00 is omitted; the tasks in the state updater report the sums the state updater
+        // published rather than their sums on disk; the dormant task reports its sum on disk
         assertEquals(
-            Map.of(
-                new StreamsRebalanceData.TaskId("0", 1), 25L,
-                new StreamsRebalanceData.TaskId("0", 2), 30L,
-                new StreamsRebalanceData.TaskId("0", 3), 40L
+            new StreamsRebalanceData.TaskOffsetSums(
+                Map.of(
+                    new StreamsRebalanceData.TaskId("0", 1), 25L,
+                    new StreamsRebalanceData.TaskId("0", 2), 35L,
+                    new StreamsRebalanceData.TaskId("0", 3), 40L
+                ),
+                Map.of(
+                    new StreamsRebalanceData.TaskId("0", 1), 50L,
+                    new StreamsRebalanceData.TaskId("0", 2), 60L
+                )
             ),
-            taskManager.taskOffsetSumSnapshot());
+            taskManager.taskOffsetSumsSnapshot());
 
         // once restoration completes, taskId01 moves from the state updater to the stream thread, just like taskId00
         when(restoringActiveTask.state()).thenReturn(State.RUNNING);
@@ -2132,32 +2141,60 @@ public class TaskManagerTest {
             mkEntry(taskId01, restoringActiveTask)
         ));
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask));
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(new StreamsRebalanceData.TaskOffsetSums(
+            Map.of(new StreamsRebalanceData.TaskId("0", 2), 35L),
+            Map.of(new StreamsRebalanceData.TaskId("0", 2), 60L)
+        ));
 
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
         // taskId01 is now dropped entirely, not merely left unrefreshed at its last restoring sum
         assertEquals(
-            Map.of(
-                new StreamsRebalanceData.TaskId("0", 2), 30L,
-                new StreamsRebalanceData.TaskId("0", 3), 40L
+            new StreamsRebalanceData.TaskOffsetSums(
+                Map.of(
+                    new StreamsRebalanceData.TaskId("0", 2), 35L,
+                    new StreamsRebalanceData.TaskId("0", 3), 40L
+                ),
+                Map.of(new StreamsRebalanceData.TaskId("0", 2), 60L)
             ),
-            taskManager.taskOffsetSumSnapshot());
+            taskManager.taskOffsetSumsSnapshot());
     }
 
     @Test
-    public void shouldPublishLiveOffsetsForOwnTasksInTaskOffsetSumSnapshot() {
-        final StandbyTask ownStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
-        when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+    public void shouldDropTheOffsetSumOfATaskTheStateUpdaterNoLongerReportsWithoutWaitingForTheStreamThread() {
+        final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, true);
         when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
-        when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
+        when(stateUpdater.tasks()).thenReturn(Set.of(restoringActiveTask));
+        when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(mkEntry(taskId01, 20L)));
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // The state updater finished restoring the task and published a snapshot without it, while the stream thread
+        // has not refreshed its own snapshot since.
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(StreamsRebalanceData.TaskOffsetSums.EMPTY);
+
+        assertEquals(Map.of(), taskManager.taskOffsetSumsSnapshot().taskOffsetSum(),
+            "the offset sum of a task the state updater no longer reports must not come from the stream thread's snapshot");
+    }
+
+    @Test
+    public void shouldPublishLiveOffsetsForOwnTasksInTaskOffsetSumSnapshot() {
+        final StreamTask ownSuspendedTask = statefulTask(taskId02, taskId02ChangelogPartitions).inState(State.SUSPENDED).build();
+        when(ownSuspendedTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, true);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId02, ownSuspendedTask)));
+        when(stateUpdater.tasks()).thenReturn(Set.of());
         // the shared sums only cover what is recoverable from disk, so they can trail an open task's in-memory stores
         when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(
             mkEntry(taskId02, 30L),
             mkEntry(taskId03, 40L)
         ));
+
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(StreamsRebalanceData.TaskOffsetSums.EMPTY);
 
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
@@ -2167,7 +2204,34 @@ public class TaskManagerTest {
                 new StreamsRebalanceData.TaskId("0", 2), 90L,
                 new StreamsRebalanceData.TaskId("0", 3), 40L
             ),
-            taskManager.taskOffsetSumSnapshot());
+            taskManager.taskOffsetSumsSnapshot().taskOffsetSum());
+    }
+
+    @Test
+    public void shouldTakeTheOffsetSumsAndTheEndOffsetSumsFromOneStateUpdaterSnapshot() {
+        final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, true);
+        when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
+        when(stateUpdater.tasks()).thenReturn(Set.of(restoringActiveTask));
+        when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(mkEntry(taskId03, 40L)));
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // The state updater publishes a snapshot while restoring the task, and the next one after it restored the task.
+        final StreamsRebalanceData.TaskId restoringTaskId = new StreamsRebalanceData.TaskId("0", 1);
+        when(stateUpdater.taskOffsetSumsSnapshot()).thenReturn(
+            new StreamsRebalanceData.TaskOffsetSums(Map.of(restoringTaskId, 20L), Map.of(restoringTaskId, 100L)),
+            StreamsRebalanceData.TaskOffsetSums.EMPTY
+        );
+
+        assertEquals(
+            new StreamsRebalanceData.TaskOffsetSums(
+                Map.of(restoringTaskId, 20L, new StreamsRebalanceData.TaskId("0", 3), 40L),
+                Map.of(restoringTaskId, 100L)
+            ),
+            taskManager.taskOffsetSumsSnapshot(),
+            "the offset sums and the end-offset sums must come from the same state updater snapshot");
     }
 
     @Test

@@ -45,6 +45,7 @@ import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -77,10 +78,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -104,8 +108,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Covers the warm-up task lifecycle under the streams group protocol (KIP-1071) end to end, with real Kafka Streams
  * clients against the broker-side {@link AssignmentRefinerImpl}: the warm-up budget, a warm-up task given up because
  * the target assignment no longer wants it, the offset reporting that drives promotion, the promotion gate on
- * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task with nothing to restore, a warm-up task
- * surviving a coordinator failover, a lagging warm-up task taking over when the active owner leaves, and members with
+ * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task with nothing to restore, the migration
+ * of an active task whose owner finished restoring it while its stream thread is busy, a warm-up task surviving a
+ * coordinator failover, a lagging warm-up task taking over when the active owner leaves, and members with
  * several stream threads. The scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
  *
  * <p>All stores are in memory, so a task that is closed rather than recycled has to restore its changelog from
@@ -161,6 +166,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     public void tearDown() {
         for (final Instance instance : instances) {
             instance.gate.open();
+            instance.stall.release();
             instance.streams.close(Duration.ofSeconds(30));
         }
         instances.clear();
@@ -375,6 +381,43 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         );
         assertEquals(StandbyUpdateListener.SuspendReason.PROMOTED, b.standbySuspensionsByTask.get(movedTask),
             "b should have turned its warm-up task " + movedTask + " into the active task in place");
+    }
+
+    @Test
+    public void shouldWarmUpATaskWhoseOwnerFinishedRestoringItWhileItsStreamThreadIsBusy(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2);
+        // Only task 1 has state. The task assignor keeps task 0 on its owner and moves task 1 to a joining member.
+        final int runningTask = 0;
+        final int restoringTask = 1;
+        fillChangelog(restoringTask);
+
+        final Instance a = startInstance("a", RESTORE_BUDGET);
+        waitForGroup("the broker to learn that a is restoring " + restoringTask + " behind its gate", group ->
+            isBehind(member(group, a), restoringTask));
+
+        // a runs task 0, which has nothing to restore. A record of task 0 blocks a's stream thread in the store, as a
+        // record that takes long to process would.
+        a.stall.arm(runningTask);
+        produceToPartition(runningTask, RECORDS_PER_PARTITION);
+        a.stall.awaitStalled();
+
+        a.gate.open();
+        awaitRestoreEnd(a, restoringTask, 1);
+        waitForGroup("the broker to learn that a's restore of " + restoringTask + " is no longer behind", group ->
+            !isBehind(member(group, a), restoringTask));
+
+        // a has restored task 1 completely, so its migration to b has to be warmed up on b.
+        final Instance b = startInstance("b");
+        waitForGroup("the refiner to move " + restoringTask + " to b", group -> member(group, b) != null
+            && (warmupTasks(group, b).contains(restoringTask) || !activeTasks(group, a).contains(restoringTask)));
+        a.stall.release();
+
+        waitForGroup("b to take over " + restoringTask, group -> isStable(group, 2)
+            && activeTasks(group, a).equals(Set.of(runningTask))
+            && activeTasks(group, b).equals(Set.of(restoringTask))
+            && totalWarmupTasks(group) == 0);
+        assertEquals(1, b.standbyUpdateStarts(restoringTask),
+            "b should have warmed up " + restoringTask + ", which a had restored, before taking it over");
     }
 
     @Test
@@ -643,6 +686,47 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     /**
+     * Fills the changelog of the task, and no other, through an instance that owns all tasks and is closed afterwards.
+     */
+    private void fillChangelog(final int task) throws Exception {
+        final Instance filler = startInstance("filler");
+        waitForGroup("filler to own all tasks", group -> isStable(group, 1) && activeTasks(group, filler).size() == numPartitions);
+        produceToPartition(task, RECORDS_PER_PARTITION);
+        TestUtils.waitForCondition(
+            () -> changelogSizes().get(task) == RECORDS_PER_PARTITION,
+            WAIT_MS,
+            () -> "The changelog of " + task + " never filled up"
+        );
+        instances.remove(filler);
+        filler.streams.close(Duration.ofSeconds(30));
+    }
+
+    private void produceToPartition(final int partition, final int numRecords) {
+        final List<KeyValueTimestamp<String, String>> records = IntStream.range(0, numRecords)
+            .mapToObj(i -> new KeyValueTimestamp<>(partition + "-" + i, "value" + i, CLUSTER.time.milliseconds()))
+            .collect(Collectors.toList());
+        IntegrationTestUtils.produceSynchronously(
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            false,
+            inputTopic,
+            Optional.of(partition),
+            records
+        );
+    }
+
+    /**
+     * Whether the broker takes the member to be restoring the task with a known lag above zero.
+     */
+    private static boolean isBehind(final StreamsGroupMemberDescription member, final int task) {
+        if (member == null) {
+            return false;
+        }
+        final long offset = reportedOffset(member.taskOffsets(), task);
+        final long endOffset = reportedOffset(member.taskEndOffsets(), task);
+        return offset != -1L && endOffset != -1L && endOffset != Long.MAX_VALUE && endOffset > offset;
+    }
+
+    /**
      * The number of records in each partition of the changelog, by task.
      */
     private Map<Integer, Long> changelogSizes() throws Exception {
@@ -796,6 +880,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         private final String name;
         private final KafkaStreams streams;
         private final RestoreGate gate;
+        private final ProcessingStall stall = new ProcessingStall();
         // The total an active task's restore ended with, by task. A task's changelog partition is the task's partition.
         private final Map<Integer, Long> totalRestoredByTask = new ConcurrentHashMap<>();
         // The offset the latest restore of an active task started from, by task.
@@ -927,6 +1012,12 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
                 }
 
                 @Override
+                public void put(final Bytes key, final byte[] value) {
+                    instance.stall.maybeBlock(task);
+                    super.put(key, value);
+                }
+
+                @Override
                 public void close() {
                     super.close();
                     if (task != -1) {
@@ -939,6 +1030,41 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         @Override
         public String metricsScope() {
             return "in-memory";
+        }
+    }
+
+    /**
+     * Blocks the stream thread that writes a record of the armed task to its store, until released. A restore writes
+     * to the store without {@code put()}, so it never blocks.
+     */
+    private static final class ProcessingStall {
+        private final AtomicInteger task = new AtomicInteger(-1);
+        private final CountDownLatch stalled = new CountDownLatch(1);
+        private final CountDownLatch released = new CountDownLatch(1);
+
+        private void arm(final int task) {
+            this.task.set(task);
+        }
+
+        private void maybeBlock(final int task) {
+            if (this.task.get() != task) {
+                return;
+            }
+            stalled.countDown();
+            try {
+                released.await();
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }
+
+        private void awaitStalled() throws InterruptedException {
+            assertTrue(stalled.await(WAIT_MS, TimeUnit.MILLISECONDS), "the stream thread never wrote a record of task " + task.get());
+        }
+
+        private void release() {
+            released.countDown();
         }
     }
 

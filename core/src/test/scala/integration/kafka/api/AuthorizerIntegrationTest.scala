@@ -3953,8 +3953,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           util.Set.of()
         )),
       Map.empty[String, String].asJava,
-      () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long](),
-      () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long]()
+      () => StreamsRebalanceData.TaskOffsetSums.EMPTY
     ))
     consumer.subscribe(
       if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
