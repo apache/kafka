@@ -34395,7 +34395,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testConsumerGroupAsyncTargetAssignmentCancelledOnRollbackAfterHeartbeatEpochBump() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -34406,18 +34407,39 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+            .build();
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
             .build();
 
-        // Member joins the group and gets no assignment yet.
+        // Member 2 joins the group and gets no assignment yet.
         context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setServerAssignor("range")
@@ -34430,12 +34452,12 @@ public class GroupMetadataManagerTest {
         // Simulate a failed write to the log.
         context.rollback();
 
-        // The member rejoins, re-bumping the group epoch to the same value.
+        // Member 2 rejoins, re-bumping the group epoch to the same value.
         // The stale assignor run is cancelled and replaced.
         context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setServerAssignor("range")
