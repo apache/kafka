@@ -34,8 +34,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -44,6 +46,7 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -54,6 +57,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
@@ -483,6 +487,56 @@ public abstract class TopologyTestDriverTest {
         assertThrows(IllegalStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
+    }
+
+    @Test
+    public void shouldWipeTaskDirectoryWhenTaskIsCorruptedWithTransactionalStateStores() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(corruptedStoreSupplier("store"), Serdes.String(), Serdes.Long()),
+            "processor");
+        config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+
+        assertThrows(TaskCorruptedException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        final File applicationDir = new File(
+            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
+            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
+        assertFalse(new File(applicationDir, "0_0").exists());
+    }
+
+    private static KeyValueBytesStoreSupplier corruptedStoreSupplier(final String name) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return new InMemoryKeyValueStore(name) {
+                    @Override
+                    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                        super.init(stateStoreContext, root);
+                        throw new TaskCorruptedException(Set.of(new TaskId(0, 0)));
+                    }
+
+                    // only a task with a persistent store has a directory
+                    @Override
+                    public boolean persistent() {
+                        return true;
+                    }
+                };
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory";
+            }
+        };
     }
 
     // the processor keeps the store it is connected to, as its failure leaves the test without a driver to get it from

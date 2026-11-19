@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -382,14 +383,18 @@ public class TopologyTestDriver implements Closeable {
             setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
         } catch (final Throwable e) {
             // the caller gets no driver to close
-            Utils.closeQuietly(this::closeDirty, "topology test driver");
+            Utils.closeQuietly(() -> closeDirty(e instanceof TaskCorruptedException), "topology test driver");
             throw e;
         }
     }
 
-    private void closeDirty() throws IOException {
+    private void closeDirty(final boolean corrupted) throws IOException {
         if (task != null) {
             task.suspend();
+            if (corrupted) {
+                // as for a corrupted task in Kafka Streams, so that its state is wiped with transactional state stores too
+                task.markChangelogAsCorrupted(task.changelogPartitions());
+            }
             task.closeDirty();
         }
         if (globalStateManager != null) {
