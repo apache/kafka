@@ -4595,14 +4595,24 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and metadata image.
      *
-     * @param group                The StreamsGroup.
-     * @param groupEpoch           The group epoch.
-     * @param updatedMembersAndTargetAssignment The group's members and target assignment, with the unwritten
-     *                                          membership change applied.
-     * @param records              The list to accumulate any new records.
-     * @param returnedStatus       A mutable collection of status to be returned in the response.
-     * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
-     *                             instead of re-running the assignor.
+     * @param group
+     *        The StreamsGroup.
+     * @param groupEpoch
+     *        The group epoch.
+     * @param updatedMembersAndTargetAssignment
+     *        The group's members and target assignment, with the unwritten membership change applied.
+     * @param configuredTopology
+     *        The configured topology.
+     * @param records
+     *        The list to accumulate any new records.
+     * @param returnedStatus
+     *        A mutable collection of status to be returned in the response.
+     * @param assignmentConfigs
+     *        The assignment configs to compute the target assignment with.
+     * @param refineOnly
+     *        If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
+     *        instead of re-running the assignor.
+     *
      * @return The target assignment epoch and the full per-member target assignment.
      */
     private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
