@@ -791,13 +791,13 @@ public class ConnectorsResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = Message.class))
         ),
         @ApiResponse(
-            responseCode = "404",
-            description = "Connector not found",
+            responseCode = "400",
+            description = "Connector is not in the STOPPED state",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
-            responseCode = "400",
-            description = "Connector is not in the STOPPED state",
+            responseCode = "404",
+            description = "Connector not found",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(

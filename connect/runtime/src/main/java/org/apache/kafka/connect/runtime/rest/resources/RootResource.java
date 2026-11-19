@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
+import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.WorkerStatus;
 import org.apache.kafka.connect.util.FutureCallback;
@@ -81,13 +82,16 @@ public class RootResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkerStatus.class))
         ),
         @ApiResponse(
-            responseCode = "503",
-            description = "Worker is still starting up",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkerStatus.class))
-        ),
-        @ApiResponse(
             responseCode = "500",
             description = "Worker was unable to handle this request and may be unable to handle other requests",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(oneOf = {WorkerStatus.class, ErrorMessage.class})
+            )
+        ),
+        @ApiResponse(
+            responseCode = "503",
+            description = "Worker is still starting up",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkerStatus.class))
         )
     })
