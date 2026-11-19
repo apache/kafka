@@ -270,6 +270,8 @@ org.apache.kafka.clients.admin.KafkaAdminClientConsumerGroupTest:
 - testListGroupsEmptyProtocol
 - testListGroupsMetadataFailure
 - testListGroupsWithProtocolTypes
+- testListGroupsWithRequireCommittedOffsetsMixedBrokerVersions
+- testListGroupsWithRequireCommittedOffsetsOlderBrokerVersion
 - testListGroupsWithTypes
 - testListGroupsWithTypesOlderBrokerVersion
 - testOffsetCommitNumRetries
@@ -494,6 +496,7 @@ org.apache.kafka.clients.admin.ListGroupsOptionsTest:
 - testForStreamsGroups
 - testGroupStates
 - testProtocolTypes
+- testRequireCommittedOffsets
 - testTypes
 org.apache.kafka.clients.admin.ListTransactionsResultTest:
 - testAllFuturesFailIfLookupFails
@@ -5043,6 +5046,8 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testKip219BoundariesHaveThrottleTimeField
 - testListConfigResourcesRequestV0FailsWithConfigResourceTypeOtherThanClientMetrics
 - testListGroupRequestV3FailsWithStates
+- testListGroupRequestV4FailsWithRequireCommittedOffsetsAndDowngradableTypes
+- testListGroupRequestV5FailsWithRequireCommittedOffsets
 - testProduceRequestPartitionSize
 - testResponseHeader
 - testSaslAuthenticateRequestResponseToStringMasksSensitiveData

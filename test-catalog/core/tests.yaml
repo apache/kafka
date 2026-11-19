@@ -131,6 +131,7 @@ kafka.api.AuthorizerIntegrationTest:
 - testInitializeShareGroupStateWithOperationAll
 - testInitializeShareGroupStateWithoutClusterAcl
 - testListGroupApiWithAndWithoutListGroupAcls
+- testListGroupApiWithRequireCommittedOffsets
 - testListOffsetsWithNoTopicAccess
 - testListOffsetsWithTopicDescribe
 - testListTransactionsAuthorization
@@ -357,6 +358,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testListConsumerGroupOffsets
 - testListConsumerGroups
 - testListGroups
+- testListGroupsWithRequireCommittedOffsets
 - testListReassignmentsDoesNotShowDeletedPartitions
 - testListReassignmentsDoesNotShowNonReassigningPartitions
 - testListShareGroupOffsets
@@ -1951,6 +1953,8 @@ kafka.server.LeaveGroupRequestTest:
 kafka.server.ListGroupsRequestTest:
 - testListGroupsWithNewConsumerGroupProtocol
 - testListGroupsWithOldConsumerGroupProtocol
+- testListGroupsWithRequireCommittedOffsets
+- testListGroupsWithRequireCommittedOffsetsForStreamsAndShareGroups
 kafka.server.ListOffsetsRequestTest:
 - testCurrentEpochValidation
 - testListOffsetsErrorCodes

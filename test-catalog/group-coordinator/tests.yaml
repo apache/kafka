@@ -352,6 +352,8 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testInitiateDeleteShareGroupOffsetsNonEmptyShareGroup
 - testInitiateDeleteShareGroupOffsetsSuccess
 - testInitiateDeleteShareGroupOffsetsSuccessWithErrorTopics
+- testListGroupsWithRequireCommittedOffsets
+- testListGroupsWithRequireCommittedOffsetsAndStatesAndTypesFilters
 - testListStreamsGroupsNeedingTopologyCleanupFiltersByAllPredicates
 - testListStreamsGroupsNeedingTopologyCleanupIncludesUncertainEpoch
 - testListStreamsGroupsNeedingTopologyCleanupSwallowsPerGroupError
@@ -598,6 +600,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testLeavingMemberBumpsGroupEpoch
 - testLeavingStaticMemberBumpsGroupEpoch
 - testListGroups
+- testListGroupsAppliesGroupIdFilterAfterStatesAndTypesFilters
 - testMarkUncertainBatchReturnsOnlyEligibleSubset
 - testMarkUncertainIdempotentWhenAlreadyUncertain
 - testMarkUncertainMarksNonEmptyGroupForPushCallers
@@ -996,6 +999,10 @@ org.apache.kafka.coordinator.group.OffsetMetadataManagerTest:
 - testGroupHasNoOffsetsReturnsFalseWhenCommittedOffsetExists
 - testGroupHasNoOffsetsReturnsFalseWhenOpenTxnPending
 - testGroupHasNoOffsetsReturnsTrueWhenGroupAbsentAndNoOpenTxn
+- testHasCommittedOffsets
+- testHasCommittedOffsetsIgnoresPendingTransactionalOffsets
+- testHasCommittedOffsetsUntilExpiredOffsetsAreDeleted
+- testHasCommittedOffsetsWithCommittedAndPendingTransactionalOffsets
 - testOffsetCommitWithUnknownGroup
 - testOffsetCommitsNumberMetricWithTransactionalOffsets
 - testOffsetCommitsSensor
