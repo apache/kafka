@@ -1572,6 +1572,16 @@ class ShareGroupDLQStateManagerTest {
         assertTrue(request.data().topicData().isEmpty());
     }
 
+    @ParameterizedTest
+    @ValueSource(shorts = {2, 3})
+    public void testCoalesceProduceRequestsBuildsTopicIdVersionForRequestHeaderVersion(short requestHeaderVersion) {
+        ProduceRequest.Builder builder = (ProduceRequest.Builder)
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(), requestHeaderVersion).request();
+
+        assertEquals(ProduceRequest.MINIMUM_VERSION_WITH_TOPIC_IDS, builder.oldestAllowedVersion());
+        assertProduceRequestVersion(builder.build(), requestHeaderVersion);
+    }
+
     @Test
     public void testCoalesceProduceRequestsWithSingleHandlerProducesOneTopicOnePartition() throws Exception {
         stateManager = builder().build();
