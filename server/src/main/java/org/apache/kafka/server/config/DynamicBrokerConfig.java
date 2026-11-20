@@ -29,7 +29,6 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServer;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.DynamicThreadPool;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.storage.internals.log.LogCleaner;
 
@@ -265,19 +264,6 @@ public class DynamicBrokerConfig {
 
                 // Network threads
                 SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
-    }
-
-    public static class DynamicRemoteLogConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
-                RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
-                RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
     public static class DynamicQuotaConfig {
