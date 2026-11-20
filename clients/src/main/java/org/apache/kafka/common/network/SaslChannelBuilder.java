@@ -44,7 +44,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslCli
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler;
 import org.apache.kafka.common.security.plain.internals.PlainSaslServer;
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -325,13 +324,22 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             else if (mechanism.equals(PlainSaslServer.PLAIN_MECHANISM))
                 callbackHandler = new PlainServerCallbackHandler();
             else if (ScramMechanism.isScram(mechanism))
-                callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
+                callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism), tokenCache);
             else if (mechanism.equals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM))
-                callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
+                callbackHandler = unsecuredOAuthBearerValidatorCallbackHandler(prefix);
             else
                 callbackHandler = new SaslServerCallbackHandler();
             saslCallbackHandlers.put(mechanism, callbackHandler);
         }
+    }
+
+    private AuthenticateCallbackHandler unsecuredOAuthBearerValidatorCallbackHandler(String mechanismPrefix) {
+        String listenerPrefix = listenerName == null ? "" : listenerName.configPrefix();
+        log.warn("Using the unsecured OAUTHBEARER validator, which accepts unsigned tokens and must not be used in production, " +
+            "because {} is not set. Set it to a secure validator such as " +
+            "org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler.",
+            listenerPrefix + mechanismPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG);
+        return new OAuthBearerUnsecuredValidatorCallbackHandler();
     }
 
     private void createConnectionsMaxReauthMsMap(Map<String, ?> configs) {

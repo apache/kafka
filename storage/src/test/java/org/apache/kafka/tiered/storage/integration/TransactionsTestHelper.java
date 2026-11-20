@@ -18,6 +18,7 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.server.BrokerServer;
 
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -462,7 +463,7 @@ public class TransactionsTestHelper {
     public static void testInitTransactionsTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, false, Producer::initTransactions);
     }
@@ -471,7 +472,7 @@ public class TransactionsTestHelper {
     public static void testSendOffsetsToTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, producer ->
                 producer.sendOffsetsToTransaction(
@@ -482,7 +483,7 @@ public class TransactionsTestHelper {
     public static void testCommitTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, Producer::commitTransaction);
     }
@@ -490,7 +491,7 @@ public class TransactionsTestHelper {
     public static void testAbortTransactionTimeout(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
         testTimeout(clusterInstance, true, Producer::abortTransaction);
     }
@@ -779,7 +780,7 @@ public class TransactionsTestHelper {
             var testTopic = "test-topic";
             clusterInstance.createTopic(testTopic, NUM_PARTITIONS, (short) 1);
             var testTp = new TopicPartition(testTopic, 0);
-            var partitionLeader = clusterInstance.getLeaderBrokerId(testTp);
+            var partitionLeader = currentLeader(clusterInstance, testTp);
 
             producer.initTransactions();
 
@@ -856,7 +857,7 @@ public class TransactionsTestHelper {
             var testTopic = "test-topic";
             clusterInstance.createTopic(testTopic, NUM_PARTITIONS, (short) 1);
             var testTp = new TopicPartition(testTopic, 0);
-            var partitionLeader = clusterInstance.getLeaderBrokerId(testTp);
+            var partitionLeader = currentLeader(clusterInstance, testTp);
 
             producer.initTransactions();
 
@@ -981,7 +982,7 @@ public class TransactionsTestHelper {
     public static void testEmptyAbortAfterCommit(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws Exception {
+    ) {
         createTopicsWithConfig(clusterInstance, topicConfig);
 
         try (var producer = createTransactionalProducer(clusterInstance, "transactional-producer")) {
@@ -1184,9 +1185,15 @@ public class TransactionsTestHelper {
     public static void createTopicsWithConfig(
             ClusterInstance clusterInstance,
             Map<String, String> topicConfig
-    ) throws InterruptedException {
+    ) {
         clusterInstance.createTopic(TOPIC1, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
         clusterInstance.createTopic(TOPIC2, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
+    }
+
+    private static int currentLeader(ClusterInstance clusterInstance, TopicPartition topicPartition) throws ExecutionException, InterruptedException {
+        try (var admin = clusterInstance.admin()) {
+            return AdminClientTestUtils.currentLeader(admin, topicPartition).orElseThrow();
+        }
     }
 
     public static void restartDeadBrokers(ClusterInstance clusterInstance) {

@@ -66,6 +66,18 @@ class MirrorPartitionStateTest {
 
     @ParameterizedTest
     @EnumSource(MirrorPartitionState.class)
+    void testNameOf(MirrorPartitionState state) {
+        assertEquals(state.name(), MirrorPartitionState.nameOf(state.value()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(bytes = {Byte.MIN_VALUE, -2, 9, 100, Byte.MAX_VALUE})
+    void testNameOfUnrecognizedValue(byte value) {
+        assertEquals(String.valueOf(value), MirrorPartitionState.nameOf(value));
+    }
+
+    @ParameterizedTest
+    @EnumSource(MirrorPartitionState.class)
     void testRoundTrip(MirrorPartitionState state) {
         assertEquals(state, MirrorPartitionState.fromValue(state.value()));
     }

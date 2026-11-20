@@ -470,7 +470,8 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     /**
-     * @return true if underlying transport has bytes remaining to be read from any underlying intermediate buffers.
+     * @return true if underlying transport has bytes remaining to be read from any underlying intermediate buffers,
+     * or has received an end of stream that a later read reports, see {@link TransportLayer#hasBytesBuffered()}.
      */
     public boolean hasBytesBuffered() {
         return transportLayer.hasBytesBuffered();

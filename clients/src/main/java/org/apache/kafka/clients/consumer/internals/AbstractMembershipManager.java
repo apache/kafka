@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -109,7 +109,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
     protected final S subscriptions;
 
     /**
-     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     * Metadata that allows us to create the partitions needed for {@link RebalanceListener}.
      */
     private final Metadata metadata;
 
@@ -619,7 +619,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
      * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
      * This is expected to be invoked when the user calls the unsubscribe API or is closing the consumer.
      *
-     * @param runCallbacks {@code true} to insert the step to execute the {@link ConsumerRebalanceListener} callback,
+     * @param runCallbacks {@code true} to insert the step to execute the {@link RebalanceListener} callback,
      *                     {@code false} to skip
      *
      * @return Future that will complete when the callback execution completes and the heartbeat
@@ -675,6 +675,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
     private void clearAssignmentAndLeaveGroup() {
         subscriptions.unsubscribe();
         clearAssignment();
+        notifyAssignmentChange(Collections.emptySet());
 
         // Transition to ensure that a heartbeat request is sent out to effectively leave the
         // group (even in the case where the member had no assignment to release or when the
@@ -1464,6 +1465,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
      * @param currentTimeMs The current system time at which the method was called; useful for determining if
      *                      time-sensitive operations should be performed
      */
+    @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
@@ -1507,6 +1509,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
             this.partitions = topicIdPartitions.toTopicIdPartitionMap();
         }
 
+        @Override
         public String toString() {
             return "LocalAssignment{" +
                     "localEpoch=" + localEpoch +
@@ -1514,6 +1517,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
                     '}';
         }
 
+        @Override
         public boolean equals(final Object o) {
             if (this == o) {
                 return true;
@@ -1525,6 +1529,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
             return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
         }
 
+        @Override
         public int hashCode() {
             return Objects.hash(localEpoch, partitions);
         }

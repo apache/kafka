@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,11 +40,12 @@ public class ScramMessages {
         static final String VALUE_SAFE = "[\\x01-\\x7F&&[^=,]]+";
         static final String VALUE = "[\\x01-\\x7F&&[^,]]+";
         static final String PRINTABLE = "[\\x21-\\x7E&&[^,]]+";
-        static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)+";
+        static final String SASLNAME = "(?:[\\x01-\\x7F&&[^=,]]|=2C|=3D)++";
         static final String BASE64_CHAR = "[a-zA-Z0-9/+]";
         static final String BASE64 = String.format("(?:%s{4})*(?:%s{3}=|%s{2}==)?", BASE64_CHAR, BASE64_CHAR, BASE64_CHAR);
         static final String RESERVED = String.format("(m=%s,)?", VALUE);
-        static final String EXTENSIONS = String.format("(,%s=%s)*", ALPHA, VALUE);
+        static final String EXTENSIONS = String.format("(,%s=%s)*+", ALPHA, VALUE);
+        static final String EXTENSIONS_BEFORE_PROOF = String.format("(,%s=%s(?=,))*+", ALPHA, VALUE);
 
         abstract String toMessage();
 
@@ -175,7 +177,8 @@ public class ScramMessages {
             return iterations;
         }
         String toMessage() {
-            return String.format("r=%s,s=%s,i=%d", nonce, Base64.getEncoder().encodeToString(salt), iterations);
+            // Locale.ROOT: the iteration count must use ASCII digits regardless of the JVM's default locale
+            return String.format(Locale.ROOT, "r=%s,s=%s,i=%d", nonce, Base64.getEncoder().encodeToString(salt), iterations);
         }
     }
     /**
@@ -190,7 +193,7 @@ public class ScramMessages {
                 "c=(?<channel>%s),r=(?<nonce>%s)%s,p=(?<proof>%s)",
                 BASE64,
                 PRINTABLE,
-                EXTENSIONS,
+                EXTENSIONS_BEFORE_PROOF,
                 BASE64));
 
         private final byte[] channelBinding;

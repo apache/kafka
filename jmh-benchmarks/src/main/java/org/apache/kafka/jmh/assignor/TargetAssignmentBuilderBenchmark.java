@@ -82,9 +82,6 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
     private SubscriptionType subscriptionType;
 
-    @Param({"false", "true"})
-    private boolean assignorOffload;
-
     private static final Logger LOG = new LogContext().logger(TargetAssignmentBuilderBenchmark.class);
 
     private static final String GROUP_ID = "benchmark-group";
@@ -207,7 +204,6 @@ public class TargetAssignmentBuilderBenchmark {
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
             .withMetadataImage(metadataImage)
-            .withAssignorOffload(assignorOffload)
             .build();
     }
 
@@ -230,8 +226,6 @@ public class TargetAssignmentBuilderBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public List<CoordinatorRecord> buildAssignmentRecords() {
-        // Assignor offload does not affect this benchmark, since it only affects building the group
-        // spec.
         return new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
             .withTargetAssignmentMetadata(targetAssignmentResult.targetAssignmentMetadata())
             .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())

@@ -22,6 +22,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogManager;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -123,13 +124,16 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     }
 
     private void validateCordonedLogDirs(AbstractKafkaConfig newConfig) {
-        List<String> logDirs = newConfig.logDirs();
+        List<String> absoluteLogDirs = newConfig.absoluteLogDirs();
         List<String> cordonedLogDirs = newConfig.cordonedLogDirs();
-        cordonedLogDirs.forEach(dir -> {
-            if (!logDirs.contains(dir)) {
+        cordonedLogDirs.forEach(cordonedLogDir -> {
+            String absoluteCordonedLogDir = new File(cordonedLogDir).getAbsolutePath();
+            if (!absoluteLogDirs.contains(absoluteCordonedLogDir)) {
+                String invalidLogDir = cordonedLogDir.equals(absoluteCordonedLogDir)
+                    ? cordonedLogDir : cordonedLogDir + " (absolute path: " + absoluteCordonedLogDir + ")";
                 throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs,
-                    "Invalid entry in " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG + ": " + dir + ". " +
-                    "All cordoned log dirs must be entries of " + ServerLogConfigs.LOG_DIRS_CONFIG + " or " + ServerLogConfigs.LOG_DIR_CONFIG + ".");
+                    "Invalid entry in " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG + ": " + invalidLogDir + ". " +
+                    "All cordoned log dirs must match " + ServerLogConfigs.LOG_DIRS_CONFIG + " or " + ServerLogConfigs.LOG_DIR_CONFIG + " entries by absolute path.");
             }
         });
     }
@@ -154,10 +158,10 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults));
         updateLogsConfig(newBrokerDefaults);
 
-        List<String> cordonedLogDirs = newConfig.cordonedLogDirs();
-        logManager.updateCordonedLogDirs(Set.copyOf(cordonedLogDirs));
-        directoryEventHandler.handleCordoned(cordonedLogDirs.stream()
-            .flatMap(dir -> logManager.directoryId(dir).stream())
+        List<String> absoluteCordonedLogDirs = newConfig.absoluteCordonedLogDirs();
+        logManager.updateCordonedLogDirs(Set.copyOf(absoluteCordonedLogDirs));
+        directoryEventHandler.handleCordoned(absoluteCordonedLogDirs.stream()
+            .flatMap(absoluteCordonedLogDir -> logManager.directoryId(absoluteCordonedLogDir).stream())
             .collect(Collectors.toUnmodifiableSet()));
     }
 }

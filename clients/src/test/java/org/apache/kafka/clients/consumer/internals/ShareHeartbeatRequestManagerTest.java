@@ -185,7 +185,7 @@ public class ShareHeartbeatRequestManagerTest
         String topic = "topic1";
         Set<String> set = Set.of(topic);
         when(subscriptions.subscription()).thenReturn(set);
-        subscriptions.subscribeToShareGroup(set);
+        subscriptions.subscribe(set);
 
         // Create a ShareGroupHeartbeatRequest and verify the payload
         mockJoiningMemberData();
@@ -276,7 +276,7 @@ public class ShareHeartbeatRequestManagerTest
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
-        subscriptions.subscribeToShareGroup(Set.of(topic));
+        subscriptions.subscribe(Set.of(topic));
         when(subscriptions.subscription()).thenReturn(Set.of(topic));
         mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();

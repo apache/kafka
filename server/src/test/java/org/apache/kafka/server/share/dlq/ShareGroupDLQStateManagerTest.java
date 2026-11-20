@@ -76,9 +76,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -144,6 +146,7 @@ class ShareGroupDLQStateManagerTest {
         private ShareGroupDLQMetadataCacheHelper cacheHelper;
         private ShareGroupMetrics shareGroupMetrics;
         private LogReader logReader;
+        private Executor fetchExecutor;
 
         Builder withClient(KafkaClient client) {
             this.client = client;
@@ -175,6 +178,11 @@ class ShareGroupDLQStateManagerTest {
             return this;
         }
 
+        Builder withFetchExecutor(Executor fetchExecutor) {
+            this.fetchExecutor = fetchExecutor;
+            return this;
+        }
+
         ShareGroupDLQStateManager build() {
             // Default to the test-class mockMetrics field so tests can verify interactions
             // without having to thread a custom metrics mock through the builder.
@@ -184,7 +192,8 @@ class ShareGroupDLQStateManagerTest {
                 time,
                 timer != null ? timer : mockTimer,
                 shareGroupMetrics != null ? shareGroupMetrics : mockMetrics,
-                logReader == null ? MOCK_LOG_READER : logReader
+                logReader == null ? MOCK_LOG_READER : logReader,
+                fetchExecutor != null ? fetchExecutor : Runnable::run
             );
         }
     }
@@ -337,14 +346,14 @@ class ShareGroupDLQStateManagerTest {
     public void testConstructorRejectsNullClient() {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
     public void testConstructorRejectsNullCacheHelper() {
         KafkaClient client = mock(KafkaClient.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -352,7 +361,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -360,7 +369,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -368,7 +377,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -376,7 +385,15 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, null));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, null, Runnable::run));
+    }
+
+    @Test
+    public void testConstructorRejectsNullFetchExecutor() {
+        KafkaClient client = mock(KafkaClient.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, null));
     }
 
     // ---- Lifecycle tests ----
@@ -1914,6 +1931,78 @@ class ShareGroupDLQStateManagerTest {
         for (LogReadResult result : rest) {
             stub = stub.thenReturn(asyncReadMap(topicIdPartition, result));
         }
+    }
+
+    @Test
+    public void testSourceRecordsAreReadOnTheFetchExecutorNotTheCaller() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = prepareProduceCapturingClient(client);
+
+        ShareGroupDLQRecordParameter param = param();
+        LogReader logReader = mock(LogReader.class);
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8)),
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key3".getBytes(StandardCharsets.UTF_8), "value3".getBytes(StandardCharsets.UTF_8))), Errors.NONE));
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+
+        // Holds submitted tasks instead of running them, so nothing is read until the test says so.
+        List<Runnable> submitted = new ArrayList<>();
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper)
+            .withFetchExecutor(submitted::add).build();
+        stateManager.start();
+
+        CompletableFuture<Void> future = stateManager.dlq(param);
+
+        assertEquals(1, submitted.size());
+        assertFalse(future.isDone());
+        verify(logReader, never()).readAsync(any(), anySet(), any(), any(), anyBoolean());
+        assertTrue(capturedProduces.isEmpty());
+
+        submitted.get(0).run();
+
+        assertNull(future.get(10, TimeUnit.SECONDS));
+        verify(logReader).readAsync(any(), anySet(), any(), any(), anyBoolean());
+        assertEquals(1, capturedProduces.size());
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+    }
+
+    @Test
+    public void testSourceRecordsAreNotReadWhenCopyIsDisabled() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        prepareProduceCapturingClient(client);
+        LogReader logReader = mock(LogReader.class);
+        List<Runnable> submitted = new ArrayList<>();
+        stateManager = builder().withClient(client).withLogReader(logReader).withFetchExecutor(submitted::add).build();
+        stateManager.start();
+
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertTrue(submitted.isEmpty());
+        verify(logReader, never()).readAsync(any(), anySet(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    public void testRecordIsProducedWithHeadersOnlyWhenFetchExecutorRejects() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = prepareProduceCapturingClient(client);
+        LogReader logReader = mock(LogReader.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        Executor rejecting = task -> {
+            throw new RejectedExecutionException("executor is shut down");
+        };
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper)
+            .withFetchExecutor(rejecting).build();
+        stateManager.start();
+
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        verify(logReader, never()).readAsync(any(), anySet(), any(), any(), anyBoolean());
+        assertEquals(1, capturedProduces.size());
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
     }
 
     @Test

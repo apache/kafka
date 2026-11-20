@@ -47,8 +47,9 @@ public class InternalTopicManager {
 
 
     /**
-     * Configures the internal topics for the given topology. Given a topology and the metadata image, this method determines the number of
-     * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
+     * Configures the internal topics for the given topology. Given a topology and the metadata
+     * image, this method determines the number of partitions for all internal topics and returns a
+     * {@link ConfiguredTopology} object.
      *
      * @param log           The logger.
      * @param groupId       The group id.

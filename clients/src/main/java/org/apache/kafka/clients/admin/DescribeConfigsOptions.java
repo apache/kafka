@@ -36,6 +36,7 @@ public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptio
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DescribeConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

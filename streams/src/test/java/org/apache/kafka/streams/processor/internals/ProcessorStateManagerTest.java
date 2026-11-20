@@ -236,6 +236,48 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldReportLargestStoreUncommittedBytes() {
+        final MockKeyValueStore smallStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 100L;
+            }
+        };
+        final MockKeyValueStore largeStore = new MockKeyValueStore(persistentStoreTwoName, true) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 250L;
+            }
+        };
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Task.TaskType.ACTIVE,
+            false,
+            false,
+            logContext,
+            stateDirectory,
+            time,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName)
+            ),
+            Collections.emptySet());
+
+        stateMgr.registerStore(smallStore, smallStore.stateRestoreCallback, null);
+        stateMgr.registerStore(largeStore, largeStore.stateRestoreCallback, null);
+
+        assertEquals(250L, stateMgr.maxStoreUncommittedBytes());
+        assertEquals(350L, stateMgr.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportZeroMaxStoreUncommittedBytesWithoutStores() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+
+        assertEquals(0L, stateMgr.maxStoreUncommittedBytes());
+    }
+
+    @Test
     public void shouldRestoreStoreWithRestoreCallback() {
         final MockRestoreCallback restoreCallback = new MockRestoreCallback();
 

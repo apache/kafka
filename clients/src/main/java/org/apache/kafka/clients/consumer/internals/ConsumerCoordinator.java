@@ -154,7 +154,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
-    // Wraps the logic for invoking the ConsumerRebalanceListener methods
+    // Wraps the logic for invoking the RebalanceListener methods
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     // pending commit offset request in onJoinPrepare
     private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
@@ -1016,6 +1016,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
+    @Override
     public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();

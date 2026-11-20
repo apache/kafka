@@ -47,6 +47,7 @@ import org.mockito.ArgumentMatchers.{anySet, anyString}
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.{Optional, Properties, Map => JMap}
@@ -1228,6 +1229,32 @@ class DynamicBrokerConfigTest {
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(4)).handleCordoned(anySet)
+  }
+
+  @Test
+  def testDynamicLogConfigRelativeCordonedLogDir(): Unit = {
+    // createBrokerConfig uses a mix of relative and absolute log dirs when logDirCount is greater than one.
+    val origProps = TestUtils.createBrokerConfig(0, logDirCount = 2)
+    val ctx = new DynamicLogConfigContext(origProps)
+    val relativeLogDir = ctx.config.logDirs().asScala.find(dir => !new File(dir).isAbsolute).get
+    val absoluteLogDir = new File(relativeLogDir).getAbsolutePath
+    val directoryId = Uuid.randomUuid()
+    // Only the absolute path resolves to an ID, matching how LogManager keys its directory ID map.
+    Mockito.when(ctx.logManagerMock.directoryId(ArgumentMatchers.anyString())).thenAnswer(invocation =>
+      if (absoluteLogDir == invocation.getArgument[String](0)) Optional.of(directoryId) else Optional.empty())
+
+    val props = new Properties()
+    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals(util.List.of(relativeLogDir), ctx.config.cordonedLogDirs)
+    verify(ctx.logManagerMock).updateCordonedLogDirs(util.Set.of(absoluteLogDir))
+    verify(ctx.directoryEventHandler).handleCordoned(util.Set.of(directoryId))
+
+    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, absoluteLogDir)
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals(util.List.of(absoluteLogDir), ctx.config.cordonedLogDirs)
+    verify(ctx.logManagerMock, times(2)).updateCordonedLogDirs(util.Set.of(absoluteLogDir))
+    verify(ctx.directoryEventHandler, times(2)).handleCordoned(util.Set.of(directoryId))
   }
 
   @Test

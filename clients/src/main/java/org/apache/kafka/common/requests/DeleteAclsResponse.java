@@ -78,6 +78,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version), version);
     }
 
+    @Override
     public String toString() {
         return data.toString();
     }

@@ -80,6 +80,7 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
         Map<String, Integer> heartbeatVersions,
+        boolean keepActiveTasks,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag

@@ -89,7 +89,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
             testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
@@ -101,7 +101,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
             testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
@@ -133,7 +133,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.NONE);
             testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
@@ -145,7 +145,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.NONE);
             testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
@@ -256,10 +256,6 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
 
         return new KafkaConsumer<>(consumerConfig);
-    }
-
-    private void createTopic(String topic) {
-        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopic(topic, 1, (short) 1));
     }
 
     private void removeTopic(String topic) {

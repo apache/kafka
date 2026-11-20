@@ -22,19 +22,94 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
  * The assignment specification for a modern group.
  */
-public class GroupSpecImpl implements GroupSpec {
+public abstract class GroupSpecImpl implements GroupSpec {
+
+    /**
+     * The assignment specification for a consumer group.
+     */
+    public static class ConsumerGroupSpec extends GroupSpecImpl {
+        public ConsumerGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType
+        ) {
+            super(metadataImage, members, subscriptionType);
+        }
+
+        @Override
+        public String toString() {
+            return "ConsumerGroupSpec(" +
+                "members=" + members +
+                ", subscriptionType=" + subscriptionType +
+                ')';
+        }
+    }
+
+    /**
+     * The assignment specification for a share group.
+     */
+    public static class ShareGroupSpec extends GroupSpecImpl {
+        /**
+         * The initialized topic partitions, which are the only assignable partitions.
+         */
+        private final Map<Uuid, InitMapValue> initializedTopics;
+
+        public ShareGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType,
+            Map<Uuid, InitMapValue> initializedTopics
+        ) {
+            super(metadataImage, members, subscriptionType);
+            this.initializedTopics = Objects.requireNonNull(initializedTopics);
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public boolean isPartitionAssignable(Uuid topicId, int partitionId) {
+            InitMapValue initMapValue = initializedTopics.get(topicId);
+            if (initMapValue == null) {
+                return false;
+            }
+            return initMapValue.partitions().contains(partitionId);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o)) return false;
+            ShareGroupSpec groupSpec = (ShareGroupSpec) o;
+            return Objects.equals(initializedTopics, groupSpec.initializedTopics);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), initializedTopics);
+        }
+
+        @Override
+        public String toString() {
+            return "ShareGroupSpec(" +
+                "members=" + members +
+                ", subscriptionType=" + subscriptionType +
+                ", initializedTopics=" + initializedTopics +
+                ')';
+        }
+    }
+
     /**
      * The partitions of a topic which are currently assigned to a member.
      *
@@ -44,19 +119,19 @@ public class GroupSpecImpl implements GroupSpec {
     private record AssignedPartitions(BitSet partitions, int partitionCount) { }
 
     /**
-     * The metadata image, used to size the assigned partitions of each topic.
+     * The metadata image, used to look up the partition count of each topic.
      */
     private final CoordinatorMetadataImage metadataImage;
 
     /**
      * Member subscription metadata keyed by member Id.
      */
-    private final Map<String, MemberSubscriptionAndAssignmentImpl> members;
+    protected final Map<String, MemberSubscriptionAndAssignmentImpl> members;
 
     /**
      * The subscription type of the group.
      */
-    private final SubscriptionType subscriptionType;
+    protected final SubscriptionType subscriptionType;
 
     /**
      * The partitions which are currently assigned to a member,
@@ -64,31 +139,14 @@ public class GroupSpecImpl implements GroupSpec {
      */
     private Map<Uuid, AssignedPartitions> assignedTopicPartitions;
 
-    /**
-     * In case of share groups, this map will be queried to decide
-     * which partition is assignable. For non-share groups,
-     * this optional should be empty.
-     */
-    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
-
-    public GroupSpecImpl(
+    protected GroupSpecImpl(
         CoordinatorMetadataImage metadataImage,
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType
     ) {
-        this(metadataImage, members, subscriptionType, Optional.empty());
-    }
-
-    public GroupSpecImpl(
-        CoordinatorMetadataImage metadataImage,
-        Map<String, MemberSubscriptionAndAssignmentImpl> members,
-        SubscriptionType subscriptionType,
-        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
-    ) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
-        this.metadataImage = Objects.requireNonNull(metadataImage);
     }
 
     /**
@@ -118,7 +176,7 @@ public class GroupSpecImpl implements GroupSpec {
             assignedTopicPartitions = computeAssignedTopicPartitions();
         }
         AssignedPartitions assignedPartitions = assignedTopicPartitions.get(topicId);
-        return assignedPartitions != null && assignedPartitions.partitions().get(partitionId);
+        return assignedPartitions != null && partitionId >= 0 && assignedPartitions.partitions().get(partitionId);
     }
 
     private Map<Uuid, AssignedPartitions> computeAssignedTopicPartitions() {
@@ -135,7 +193,7 @@ public class GroupSpecImpl implements GroupSpec {
                     }
                 );
                 for (int partition : entry.getValue()) {
-                    if (partition >= assignedPartitions.partitionCount()) {
+                    if (partition < 0 || partition >= assignedPartitions.partitionCount()) {
                         // Drop partitions that do not exist.
                         continue;
                     }
@@ -153,7 +211,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssignable(Uuid topicId, int partitionId) {
-        return topicPartitionAllowedMap.map(allowedMap -> allowedMap.containsKey(topicId) && allowedMap.get(topicId).contains(partitionId)).orElse(true);
+        return true;
     }
 
     /**
@@ -183,23 +241,14 @@ public class GroupSpecImpl implements GroupSpec {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof GroupSpecImpl groupSpec)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
+        GroupSpecImpl groupSpec = (GroupSpecImpl) o;
         return Objects.equals(members, groupSpec.members) &&
-            subscriptionType == groupSpec.subscriptionType &&
-            Objects.equals(topicPartitionAllowedMap, groupSpec.topicPartitionAllowedMap);
+            subscriptionType == groupSpec.subscriptionType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType, topicPartitionAllowedMap);
-    }
-
-    @Override
-    public String toString() {
-        return "GroupSpecImpl(" +
-            "members=" + members +
-            ", subscriptionType=" + subscriptionType +
-            ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
-            ')';
+        return Objects.hash(members, subscriptionType);
     }
 }

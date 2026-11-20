@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * The various states that a member can be in. For their definition,
- * refer to the documentation of {{@link CurrentAssignmentBuilder}}.
+ * refer to the documentation of {@link CurrentAssignmentBuilder}.
  */
 public enum MemberState {
     /**

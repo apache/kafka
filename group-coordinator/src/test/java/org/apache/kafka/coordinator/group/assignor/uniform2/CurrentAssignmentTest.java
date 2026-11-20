@@ -29,8 +29,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.Map.entry;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -60,9 +58,9 @@ public class CurrentAssignmentTest {
     @Test
     public void testOwnersAndAssignments() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 3), mkTopicAssignment(T2, 1)))
-            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1)))
-            .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T2, 0, 2)))
+            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0, 3), T2, Set.of(1)))
+            .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(1)))
+            .withMember("C", Set.of(T1, T2), Map.of(T2, Set.of(0, 2)))
             .build();
         var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
@@ -82,7 +80,7 @@ public class CurrentAssignmentTest {
     @Test
     public void testTopicNobodyOwnsHasNoOwners() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1)))
+            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0, 1)))
             .withMember("B", Set.of(T1, T2))
             .build();
         var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
@@ -103,8 +101,8 @@ public class CurrentAssignmentTest {
     @Test
     public void testPartitionsOfATopicTheMemberDoesNotSubscribeToAreStale() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0)))
-            .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 0)))
+            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0)))
+            .withMember("B", Set.of(T1), Map.of(T1, Set.of(1), T2, Set.of(0)))
             .build();
         var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
@@ -123,8 +121,8 @@ public class CurrentAssignmentTest {
     @Test
     public void testPartitionsOfATopicThatNoLongerExistsAreStale() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(MISSING, 0)))
-            .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1)))
+            .withMember("A", Set.of(T1), Map.of(T1, Set.of(0), MISSING, Set.of(0)))
+            .withMember("B", Set.of(T1), Map.of(T1, Set.of(1)))
             .build();
         var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 

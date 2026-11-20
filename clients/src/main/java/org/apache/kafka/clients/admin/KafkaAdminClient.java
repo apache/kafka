@@ -3626,6 +3626,7 @@ public class KafkaAdminClient extends AdminClient {
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData()
                                 .setTypesFilter(groupTypes)
                                 .setStatesFilter(groupStates)
+                                .setRequireCommittedOffsets(options.requireCommittedOffsets())
                             );
                         }
 

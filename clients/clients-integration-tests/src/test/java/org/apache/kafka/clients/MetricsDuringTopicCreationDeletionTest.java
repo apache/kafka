@@ -31,7 +31,6 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -125,7 +124,7 @@ public class MetricsDuringTopicCreationDeletionTest {
                 + ", but got: " + underReplicatedPartitionsCount.get());
     }
 
-    private void createAndDeleteTopics() throws InterruptedException, ExecutionException {
+    private void createAndDeleteTopics() {
         for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
             for (String topic : topics) {
                 if (!running) return;

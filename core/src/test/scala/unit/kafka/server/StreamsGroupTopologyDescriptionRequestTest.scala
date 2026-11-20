@@ -236,7 +236,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
         topologyEpoch = 42,
         topologyDescription = createTopologyDescription(topicName)
       )
-      assertEquals(Errors.INVALID_REQUEST.code(), response.errorCode())
+      assertEquals(Errors.STREAMS_INVALID_TOPOLOGY_EPOCH.code(), response.errorCode())
       assertEquals(s"Topology epoch 42 does not match the group's current topology epoch $topologyEpoch.", response.errorMessage())
     } finally {
       admin.close()
