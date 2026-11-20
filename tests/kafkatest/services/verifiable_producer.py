@@ -19,6 +19,7 @@ import os
 import time
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
@@ -96,6 +97,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.not_acked_values = []
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
+        self._started_nodes_set = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
@@ -110,6 +112,26 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def java_class_name(self):
         return "VerifiableProducer"
+
+    def start(self, **kwargs):
+        super(VerifiableProducer, self).start(**kwargs)
+        timeout_sec = kwargs.get("timeout_sec", 120)
+        wait_until(
+            lambda: len(self.started_nodes()) == len(self.nodes) or self._propagate_exceptions(),
+            timeout_sec=timeout_sec,
+            err_msg="Verifiable producer didn't finish startup in %d seconds" % timeout_sec
+        )
+
+    def _handle_startup_complete(self, node):
+        """Called when a producer node emits the startup_complete event."""
+        with self.lock:
+            self._started_nodes_set.add(node)
+            self.logger.debug("Producer on %s sent startup_complete" % node.account.hostname)
+
+    def started_nodes(self):
+        """Returns the set of nodes that have sent the startup_complete event."""
+        with self.lock:
+            return set(self._started_nodes_set)
 
     def prop_file(self, node):
         idx = self.idx(node)
@@ -211,6 +233,9 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         if node in self.clean_shutdown_nodes:
                             raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
                         self.clean_shutdown_nodes.add(node)
+
+                    elif data["name"] == "startup_complete":
+                        self._handle_startup_complete(node)
 
     def _has_output(self, node):
         """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
