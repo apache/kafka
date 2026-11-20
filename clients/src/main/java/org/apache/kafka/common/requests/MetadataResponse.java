@@ -89,14 +89,14 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     /**
-     * Get a map of the topics which had metadata errors
+     * Get a map of the topics which had metadata errors. Topics without a name are skipped.
      * @return the map
      */
     public Map<String, Errors> errors() {
         Map<String, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
             if (metadata.name() == null) {
-                throw new IllegalStateException("Use errorsByTopicId() when managing topic using topic id");
+                continue;
             }
             if (metadata.errorCode() != Errors.NONE.code())
                 errors.put(metadata.name(), Errors.forCode(metadata.errorCode()));

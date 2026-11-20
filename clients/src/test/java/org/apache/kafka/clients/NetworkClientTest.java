@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -1010,6 +1011,46 @@ public class NetworkClientTest {
         int initialUpdateVersion = metadata.updateVersion();
         client.poll(0, time.milliseconds());
         assertEquals(initialUpdateVersion + 1, metadata.updateVersion());
+    }
+
+    @Test
+    public void testUnknownTopicIdWithoutNameCompletesMetadataUpdate() {
+        // A consumer subscribed with SubscriptionPattern requests metadata by the IDs of its assigned topics.
+        // When one of those topics is deleted, the broker answers its ID with UNKNOWN_TOPIC_ID and no name.
+        Uuid deletedTopicId = Uuid.randomUuid();
+        int refreshBackoffMs = 50;
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners()) {
+            @Override
+            protected MetadataRequest.Builder newMetadataRequestBuilder() {
+                return MetadataRequest.Builder.forTopicIds(Set.of(deletedTopicId));
+            }
+        };
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap()), false, time.milliseconds());
+        Node broker = metadata.fetch().nodes().get(0);
+
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata, true);
+        awaitReady(client, broker);
+
+        metadata.requestUpdate(true);
+        time.sleep(refreshBackoffMs);
+        client.poll(0, time.milliseconds());
+
+        ByteBuffer requestBuffer = selector.completedSendBuffers().get(0).buffer();
+        RequestHeader header = parseHeader(requestBuffer);
+        assertEquals(ApiKeys.METADATA, header.apiKey());
+
+        MetadataResponse response = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        response.data().topics().add(new MetadataResponseData.MetadataResponseTopic()
+            .setTopicId(deletedTopicId)
+            .setName(null)
+            .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()));
+        ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(response, header.apiVersion(), header.correlationId());
+        selector.delayedReceive(new DelayedReceive(broker.idString(), new NetworkReceive(broker.idString(), responseBuffer)));
+
+        int initialUpdateVersion = metadata.updateVersion();
+        client.poll(0, time.milliseconds());
+        assertEquals(initialUpdateVersion + 1, metadata.updateVersion());
+        assertTrue(metadata.updateRequested());
     }
 
     @Test
