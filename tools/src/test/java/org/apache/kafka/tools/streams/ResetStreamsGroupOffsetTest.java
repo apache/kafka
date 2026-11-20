@@ -18,8 +18,10 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -38,6 +40,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand;
 
 import org.junit.jupiter.api.Test;
 
@@ -133,6 +137,49 @@ public class ResetStreamsGroupOffsetTest {
             assertTrue(exited.get());
         } finally {
             Exit.resetExitProcedure();
+        }
+    }
+
+    @ClusterTest
+    public void testConsumerGroupCommandRejectsEmptyStreamsGroup(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        String otherTopic = generateRandomTopic();
+        TopicPartition partition = new TopicPartition(topic, 0);
+        var specs = Map.of(appId, new ListStreamsGroupOffsetsSpec().topicPartitions(List.of(partition)));
+
+        // Two topics, two partitions per topic, RECORD_TOTAL records per partition.
+        produceConsumeShutdown(cluster, appId, topic, otherTopic, RECORD_TOTAL * 4L);
+
+        try (Admin admin = cluster.admin()) {
+            TestUtils.waitForCondition(
+                    () -> admin.describeStreamsGroups(List.of(appId))
+                            .describedGroups().get(appId).get().groupState() == GroupState.EMPTY,
+                    "Expected the Streams group to be empty after shutdown"
+            );
+
+            long originalOffset = admin.listStreamsGroupOffsets(specs)
+                    .partitionsToOffsetAndMetadata(appId).get().get(partition).offset();
+            assertEquals(RECORD_TOTAL, originalOffset);
+
+            for (String mode : List.of("--execute", "--dry-run")) {
+                String[] args = {
+                    "--bootstrap-server", cluster.bootstrapServers(),
+                    "--group", appId,
+                    "--reset-offsets",
+                    "--topic", topic + ":0",
+                    "--to-offset", "5",
+                    mode
+                };
+
+                String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(args));
+
+                long currentOffset = admin.listStreamsGroupOffsets(specs)
+                        .partitionsToOffsetAndMetadata(appId).get().get(partition).offset();
+                assertEquals(originalOffset, currentOffset, mode + " changed the Streams group offset");
+                assertTrue(output.contains("Group '" + appId + "' is a streams group"), output);
+                assertTrue(output.contains("kafka-streams-groups.sh"), output);
+            }
         }
     }
 

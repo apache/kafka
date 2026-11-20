@@ -20,7 +20,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -28,6 +30,7 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberAssignment;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RangeAssignor;
@@ -37,6 +40,9 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import org.junit.jupiter.api.Test;
@@ -58,10 +64,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -245,6 +254,69 @@ public class ConsumerGroupServiceTest {
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(List.of(GROUP)), any());
         verify(admin, times(1)).describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any());
         verify(admin, times(1)).listOffsets(offsetsArgMatcher(), any());
+        verify(admin, never()).describeStreamsGroups(any(), any());
+        verify(admin, never()).listGroups(any());
+    }
+
+    @Test
+    public void testResetRejectsListedStreamsGroupWhenStreamsDescribeIsUnsupported() {
+        var service = resetServiceWithUnsupportedStreamsDescribe("--execute");
+        var listing = new GroupListing(
+                GROUP, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.EMPTY)
+        );
+        when(admin.listGroups(any())).thenReturn(AdminClientTestUtils.listGroupsResult(listing));
+
+        assertEquals(Map.of(GROUP, Map.of()), service.resetOffsets());
+
+        verify(admin).listGroups(ArgumentMatchers.argThat(options -> options.types().isEmpty()));
+        verify(admin, never()).alterConsumerGroupOffsets(any(), any(), any());
+    }
+
+    @Test
+    public void testResetPreparesOffsetsForMissingGroupWhenStreamsDescribeIsUnsupported() {
+        var service = resetServiceWithUnsupportedStreamsDescribe("--dry-run");
+        var olderBrokerListing = new GroupListing(
+                "other-group", Optional.empty(), "consumer", Optional.empty()
+        );
+        when(admin.listGroups(any())).thenReturn(AdminClientTestUtils.listGroupsResult(olderBrokerListing));
+        when(admin.describeTopics(anySet(), any())).thenReturn(describeTopicsResult());
+        when(admin.listOffsets(any(), any())).thenReturn(listOffsetsResult());
+
+        TopicPartition partition = new TopicPartition(TOPICS.get(0), 0);
+        assertEquals(Map.of(GROUP, Map.of(partition, new OffsetAndMetadata(100))), service.resetOffsets());
+
+        verify(admin).listGroups(ArgumentMatchers.argThat(options -> options.types().isEmpty()));
+    }
+
+    @Test
+    public void testResetDoesNotWriteWhenGroupListingFails() {
+        var service = resetServiceWithUnsupportedStreamsDescribe("--execute");
+        var timeout = new TimeoutException("ListGroups timed out");
+        when(admin.listGroups(any())).thenReturn(AdminClientTestUtils.listGroupsResult(timeout));
+
+        RuntimeException error = assertThrows(RuntimeException.class, service::resetOffsets);
+
+        assertSame(timeout, error.getCause());
+        verify(admin, never()).alterConsumerGroupOffsets(any(), any(), any());
+    }
+
+    private ConsumerGroupCommand.ConsumerGroupService resetServiceWithUnsupportedStreamsDescribe(String mode) {
+        var consumerFuture = new KafkaFutureImpl<ConsumerGroupDescription>();
+        consumerFuture.completeExceptionally(new GroupIdNotFoundException("Group not found"));
+        when(admin.describeConsumerGroups(ArgumentMatchers.eq(List.of(GROUP)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(GROUP, consumerFuture)));
+
+        var streamsFuture = new KafkaFutureImpl<StreamsGroupDescription>();
+        streamsFuture.completeExceptionally(new UnsupportedVersionException("StreamsGroupDescribe unsupported"));
+        when(admin.describeStreamsGroups(ArgumentMatchers.eq(List.of(GROUP)), any()))
+                .thenReturn(new DescribeStreamsGroupsResult(Map.of(GROUP, streamsFuture)));
+
+        return consumerGroupService(new String[] {
+            "--bootstrap-server", "localhost:9092",
+            "--reset-offsets", "--group", GROUP,
+            "--topic", TOPICS.get(0) + ":0",
+            "--to-latest", mode
+        });
     }
 
     private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
