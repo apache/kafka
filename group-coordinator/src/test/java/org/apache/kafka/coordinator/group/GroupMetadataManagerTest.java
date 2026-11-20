@@ -14022,6 +14022,14 @@ public class GroupMetadataManagerTest {
         );
 
         assertUnorderedRecordsEquals(expectedRecords, result.records());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId3)
+                .setMemberEpoch(groupEpoch + 1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
 
         // The classic members with pending requests are asked to rejoin.
         if (state == PREPARING_REBALANCE) {
@@ -15089,7 +15097,17 @@ public class GroupMetadataManagerTest {
         expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalMember1)));
 
         assertUnorderedRecordsEquals(expectedRecords, result.records());
-        assertEquals(groupEpoch, result.response().memberEpoch());
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(newMemberId1)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                        .setTopicId(fooTopicId)
+                        .setPartitions(state == STABLE ? List.of(0, 1) : List.of(0))))),
+            result.response()
+        );
 
         // The classic members with pending requests are asked to rejoin.
         if (state == PREPARING_REBALANCE) {
