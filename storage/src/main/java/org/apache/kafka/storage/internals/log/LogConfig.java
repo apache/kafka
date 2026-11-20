@@ -64,16 +64,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class LogConfig extends AbstractConfig {
 
-    private record RemoteLogConfig(
-            boolean remoteStorageEnable,
-            boolean remoteLogDeleteOnDisable,
-            boolean remoteLogCopyDisable,
-            long remoteCopyLagMs,
-            long remoteCopyLagBytes,
-            long localRetentionMs,
-            long localRetentionBytes) {
-    }
-
     // Visible for testing
     public static class LogConfigDef extends ConfigDef {
         public LogConfigDef() {
@@ -284,7 +274,13 @@ public class LogConfig extends AbstractConfig {
     public final List<String> leaderReplicationThrottledReplicas;
     public final List<String> followerReplicationThrottledReplicas;
 
-    private final RemoteLogConfig remoteLogConfig;
+    private final boolean remoteStorageEnable;
+    private final boolean remoteLogDeleteOnDisable;
+    private final boolean remoteLogCopyDisable;
+    private final long remoteCopyLagMs;
+    private final long remoteCopyLagBytes;
+    private final long localRetentionMs;
+    private final long localRetentionBytes;
     private final int maxMessageSize;
     private final int maxDecompressedMessageBytes;
 
@@ -335,14 +331,13 @@ public class LogConfig extends AbstractConfig {
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
-        this.remoteLogConfig = new RemoteLogConfig(
-                getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG),
-                getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG),
-                getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG),
-                getLong(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG),
-                getLong(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG),
-                getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
-                getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG));
+        this.remoteStorageEnable = getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        this.remoteLogDeleteOnDisable = getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
+        this.remoteLogCopyDisable = getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
+        this.remoteCopyLagMs = getLong(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
+        this.remoteCopyLagBytes = getLong(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
+        this.localRetentionMs = getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+        this.localRetentionBytes = getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
     }
 
     private Optional<Compression> getCompression() {
@@ -403,31 +398,31 @@ public class LogConfig extends AbstractConfig {
     }
 
     public boolean remoteStorageEnable() {
-        return remoteLogConfig.remoteStorageEnable();
+        return remoteStorageEnable;
     }
 
     public Boolean remoteLogDeleteOnDisable() {
-        return remoteLogConfig.remoteLogDeleteOnDisable();
+        return remoteLogDeleteOnDisable;
     }
 
     public Boolean remoteLogCopyDisable() {
-        return remoteLogConfig.remoteLogCopyDisable();
+        return remoteLogCopyDisable;
     }
 
     public long remoteCopyLagMs() {
-        return remoteLogConfig.remoteCopyLagMs() == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs();
+        return remoteCopyLagMs == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteCopyLagMs;
     }
 
     public long remoteCopyLagBytes() {
-        return remoteLogConfig.remoteCopyLagBytes() == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes();
+        return remoteCopyLagBytes == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteCopyLagBytes;
     }
 
     public long localRetentionMs() {
-        return remoteLogConfig.localRetentionMs() == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs();
+        return localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : localRetentionMs;
     }
 
     public long localRetentionBytes() {
-        return remoteLogConfig.localRetentionBytes() == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes();
+        return localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : localRetentionBytes;
     }
 
     public String overriddenConfigsAsLoggableString() {
@@ -702,7 +697,13 @@ public class LogConfig extends AbstractConfig {
                 ", messageTimestampType=" + messageTimestampType +
                 ", leaderReplicationThrottledReplicas=" + leaderReplicationThrottledReplicas +
                 ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
-                ", remoteLogConfig=" + remoteLogConfig +
+                ", remoteStorageEnable=" + remoteStorageEnable +
+                ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
+                ", remoteLogCopyDisable=" + remoteLogCopyDisable +
+                ", remoteCopyLagMs=" + remoteCopyLagMs +
+                ", remoteCopyLagBytes=" + remoteCopyLagBytes +
+                ", localRetentionMs=" + localRetentionMs +
+                ", localRetentionBytes=" + localRetentionBytes +
                 ", maxMessageSize=" + maxMessageSize +
                 ", errorsDeadletterqueueGroupEnable=" + errorsDeadletterqueueGroupEnable +
                 '}';
