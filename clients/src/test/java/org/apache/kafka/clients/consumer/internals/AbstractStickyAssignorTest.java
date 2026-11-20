@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -193,6 +194,24 @@ public abstract class AbstractStickyAssignorTest {
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
+    }
+
+    @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
+    @EnumSource(RackConfig.class)
+    public void testOnlyAssignsPartitionsFromSubscribedTopicsWhenEmptySubscriptionComesFirst(RackConfig rackConfig) {
+        initializeRacks(rackConfig);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, partitionInfos(topic, 4));
+        // The empty subscription must be the first one the assignor reads
+        subscriptions = new LinkedHashMap<>();
+        subscriptions.put(consumer1, subscription(Collections.emptyList(), 0));
+        subscriptions.put(consumer2, subscription(topics(topic), 1));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+        assertEquals(Collections.emptyList(), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2), tp(topic, 3)), assignment.get(consumer2));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
