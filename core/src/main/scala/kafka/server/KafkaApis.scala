@@ -67,7 +67,7 @@ import org.apache.kafka.network.Request
 import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, AuthHelper, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ForwardingManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.common.{GroupVersion, MirrorVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
@@ -142,6 +142,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     forwardingManager.forwardRequest(request, r => responseCallback(r))
+  }
+
+  def handleStopMirrorTopics(request: Request): Unit = {
+    if (!MirrorVersion.isEnabled(metadataCache.features.finalizedFeatures)) {
+      throw new UnsupportedVersionException("Cluster mirroring is disabled (mirror.version=0).")
+    }
+    forwardToController(request)
   }
 
   private def handleInvalidVersionsDuringForwarding(request: Request): Unit = {
@@ -226,6 +233,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => forwardToController(request)
+        case ApiKeys.STOP_MIRROR_TOPICS => handleStopMirrorTopics(request)
         case ApiKeys.UNREGISTER_CONTROLLER => forwardToController(request)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)

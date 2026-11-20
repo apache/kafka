@@ -30,7 +30,7 @@ import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, ClusterMirrorAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{FatalExitError, Plugin, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -43,7 +43,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, CLUSTER_MIRROR, GROUP, TOPIC, USER}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
@@ -56,7 +56,7 @@ import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, AuthHelper, EnvelopeUtils, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MirrorVersion, RequestLocal}
 import org.apache.kafka.server.logger.RuntimeLoggerManager
 import org.apache.kafka.server.quota.ControllerMutationQuota
 
@@ -128,6 +128,7 @@ class ControllerApis(
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
+        case ApiKeys.STOP_MIRROR_TOPICS => handleStopMirrorTopics(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
@@ -1078,6 +1079,17 @@ class ControllerApis(
           })
         }
       }
+  }
+
+  def handleStopMirrorTopics(request: Request): CompletableFuture[Unit] = {
+    if (!MirrorVersion.isEnabled(apiVersionManager.features.finalizedFeatures)) {
+      throw new UnsupportedVersionException("Cluster mirroring is disabled (mirror.version=0).")
+    }
+    val data = request.body(classOf[StopMirrorTopicsRequest]).data
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER_MIRROR, data.mirrorName)) {
+      throw new ClusterMirrorAuthorizationException(s"Not authorized to alter cluster mirror ${data.mirrorName}.")
+    }
+    throw new UnsupportedVersionException("StopMirrorTopics is not implemented yet.")
   }
 
   def handleUpdateFeatures(request: Request): CompletableFuture[Unit] = {
