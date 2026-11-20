@@ -291,8 +291,7 @@ public class DefaultRecord implements Record {
         // default here, and the config's upper bound), so this also stops an adversarial size from
         // reaching ByteBuffer.allocate and raising OutOfMemoryError.
         if (sizeOfBodyInBytes > maxRecordBodySize)
-            throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes +
-                " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
+            throw RecordSizeLimitExceededException.forSize(sizeOfBodyInBytes, maxRecordBodySize);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
         int bytesRead = Utils.readFully(input, recordBuffer);
         if (bytesRead != sizeOfBodyInBytes)
@@ -387,8 +386,7 @@ public class DefaultRecord implements Record {
         // maximum; as in readFrom, this doubles as the array-length allocation guard because
         // maxRecordBodySize never exceeds SOFT_MAX_ARRAY_LENGTH.
         if (sizeOfBodyInBytes > maxRecordBodySize)
-            throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes +
-                " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
+            throw RecordSizeLimitExceededException.forSize(sizeOfBodyInBytes, maxRecordBodySize);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
         return readPartiallyFrom(input, totalSizeInBytes, baseOffset, baseTimestamp,

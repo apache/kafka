@@ -17,8 +17,10 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
@@ -759,6 +761,62 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val data5 = res5.responseData(topicNames, ApiKeys.FETCH.latestVersion()).get(topicPartition)
     assertEquals(Errors.NONE.code, data5.errorCode)
     assertEquals(3, records(data5).size)
+  }
+
+  /**
+   * Down-conversion decompresses stored records on the broker, so it enforces max.decompressed.message.bytes. The
+   * oversized record is produced while the limit is at its default and the limit is lowered afterwards, mirroring
+   * data that was stored before an operator lowered it. When the oversized batch is converted eagerly (it is the
+   * first batch of the fetch), INVALID_RECORD is returned. When it is converted lazily (a later batch), the records
+   * before it are returned followed by an overflow batch, so the consumer re-fetches from the oversized batch.
+   * Fetches that do not need down-conversion are unaffected.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk","kraft"))
+  def testDownConversionOfRecordExceedingMaxDecompressedMessageBytes(quorum: String): Unit = {
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
+    val topicNames = getTopicIds().map(_.swap).asJava
+
+    // Produce a small and an oversized GZIP compressed batch (v2); the oversized one is tiny once compressed
+    val gzipProducer = TestUtils.createProducer(bootstrapServers(),
+      compressionType = CompressionType.GZIP.name,
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer)
+    gzipProducer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key0", "value0")).get
+    gzipProducer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key1", "x" * 4096)).get
+    gzipProducer.close()
+
+    val admin = createAdminClient()
+    admin.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.TOPIC, topicPartition.topic) ->
+      Seq(new AlterConfigOp(new ConfigEntry(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "512"),
+        AlterConfigOp.OpType.SET)).asJavaCollection).asJava).all().get()
+
+    // The topic-config change reaches the leader asynchronously; wait until the fetch path sees it.
+    val leader = brokers.find(_.config.brokerId == leaderId).get
+    TestUtils.waitUntilTrue(() => leader.replicaManager.getLogConfig(topicPartition).exists(_.maxDecompressedMessageBytes == 512),
+      s"max.decompressed.message.bytes was not applied on leader $leaderId")
+
+    def fetch(version: Short, offset: Long): FetchResponseData.PartitionData = {
+      val request = new FetchRequest.Builder(version, version, -1, -1, Int.MaxValue, 0,
+        createPartitionMap(Int.MaxValue, Seq(topicPartition), Map(topicPartition -> offset)))
+        .setMaxBytes(Int.MaxValue).build()
+      sendFetchRequest(leaderId, request).responseData(topicNames, version).get(topicPartition)
+    }
+
+    for (version <- Seq[Short](1, 3)) {
+      // The oversized batch is converted eagerly and rejected.
+      assertEquals(Errors.INVALID_RECORD.code, fetch(version, 1L).errorCode)
+
+      // The oversized batch is converted lazily: the first record is returned, followed by an overflow batch.
+      val data = fetch(version, 0L)
+      assertEquals(Errors.NONE.code, data.errorCode)
+      assertEquals(Seq(0L), records(data).map(_.offset))
+    }
+
+    // No down-conversion is needed for newer fetch versions, so both records are returned.
+    val latest = fetch(ApiKeys.FETCH.latestVersion(), 0L)
+    assertEquals(Errors.NONE.code, latest.errorCode)
+    assertEquals(2, records(latest).size)
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,

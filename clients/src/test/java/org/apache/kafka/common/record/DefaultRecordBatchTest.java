@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.ChunkedBytesStream;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -638,6 +640,19 @@ public class DefaultRecordBatchTest {
             assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
                 "expected the configured-maximum guard, got: " + ex.getMessage());
         }
+    }
+
+    // Down-conversion reports a record that exceeds the configured limit as RecordSizeLimitExceededException, but a
+    // corrupt record whose declared size can never be allocated keeps surfacing as a plain InvalidRecordException.
+    @Test
+    public void testDownConvertDistinguishesLimitViolationFromCorruption() throws IOException {
+        assertThrows(RecordSizeLimitExceededException.class, () -> RecordsUtil.downConvert(
+            Collections.singletonList(recordBatchWithValueSize(1000)), RecordBatch.MAGIC_VALUE_V1, 0L, Time.SYSTEM, 100));
+
+        DefaultRecordBatch poison = poisonedCompressedV2Batch(Compression.gzip().build(), Records.SOFT_MAX_ARRAY_LENGTH + 1);
+        InvalidRecordException e = assertThrows(InvalidRecordException.class, () -> RecordsUtil.downConvert(
+            Collections.singletonList(poison), RecordBatch.MAGIC_VALUE_V1, 0L, Time.SYSTEM, 100));
+        assertEquals(InvalidRecordException.class, e.getClass());
     }
 
     // offsetOfMaxTimestamp decompresses the batch on the broker when it resolves ListOffsets MAX_TIMESTAMP to an

@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultRecordTest {
@@ -558,6 +559,32 @@ public class DefaultRecordTest {
                 () -> DefaultRecord.readFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
             assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
                 "expected the configured-maximum guard, got: " + ex.getMessage());
+        }
+    }
+
+    // A body size that fits in an array but exceeds the configured limit is a policy violation by a well-formed
+    // record and is reported as RecordSizeLimitExceededException; a size above the array-length ceiling can never
+    // belong to a real record and remains a plain InvalidRecordException (corruption).
+    @Test
+    public void testOnlyAllocatableBodySizeExceedingConfiguredMaxIsReportedAsLimitViolation() throws IOException {
+        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(1000)))) {
+            assertThrows(RecordSizeLimitExceededException.class,
+                () -> DefaultRecord.readFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
+        }
+        // readPartiallyFrom is not used in the down-conversion path
+        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(1000)))) {
+            assertThrowsExactly(InvalidRecordException.class,
+                () -> DefaultRecord.readPartiallyFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
+        }
+        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(Records.SOFT_MAX_ARRAY_LENGTH + 1)))) {
+            InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> DefaultRecord.readFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, Records.SOFT_MAX_ARRAY_LENGTH));
+            assertEquals(InvalidRecordException.class, e.getClass());
+        }
+        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(-1)))) {
+            InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> DefaultRecord.readFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
+            assertEquals(InvalidRecordException.class, e.getClass());
         }
     }
 
