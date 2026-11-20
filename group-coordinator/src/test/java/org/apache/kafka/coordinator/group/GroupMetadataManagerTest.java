@@ -14794,12 +14794,14 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
+        // The new target assignment moves foo-1 from member 1 to member 2.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
             newMemberId1, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)
+                mkTopicAssignment(fooTopicId, 0)
             )),
             memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1),
                 mkTopicAssignment(barTopicId, 0)
             ))
         )));
@@ -15068,14 +15070,21 @@ public class GroupMetadataManagerTest {
         ));
 
         if (state != STABLE) {
-            // The classic group was rebalancing, so a new target assignment is computed. The assignment
-            // was already balanced, so it does not change.
+            // The classic group was rebalancing, so a new target assignment is computed.
+            expectedRecords.add(List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId1, assignor.targetPartitions(newMemberId1)),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, assignor.targetPartitions(memberId2))
+            ));
             expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, groupEpoch, context.time.milliseconds())));
         }
 
-        // The static member takes the assignment of the previous member.
+        // The static member takes the assignment of the previous member. When a new target assignment is
+        // computed, foo-1 is revoked immediately because the static member does not report it as owned.
         ConsumerGroupMember expectedFinalMember1 = new ConsumerGroupMember.Builder(expectedUpdatedMember1)
             .setMemberEpoch(groupEpoch)
+            .setAssignedPartitions(toAssignmentWithEpochs(state == STABLE ?
+                mkAssignment(mkTopicAssignment(fooTopicId, 0, 1)) :
+                mkAssignment(mkTopicAssignment(fooTopicId, 0)), generationId))
             .build();
         expectedRecords.add(List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalMember1)));
 
