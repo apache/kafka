@@ -678,7 +678,7 @@ public class StoreChangelogReader implements ChangelogReader {
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
             // standby never need to stop
             // changelogs of paused tasks, which are not in tasks, are skipped: they are not restored until resumed, so
-            // their limit offsets are not needed, and their tasks cannot have their task timeout started when the
+            // their limit offsets are not needed, and their tasks shouldn't have their task timeout started when the
             // lookup of committed offsets fails
             final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
                 .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
@@ -870,21 +870,13 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void clearTaskTimeout(final Set<Task> tasks) {
-        tasks.forEach(t -> {
-            if (t != null) {
-                t.clearTaskTimeout();
-            }
-        });
+        tasks.forEach(Task::clearTaskTimeout);
     }
 
     private void maybeInitTaskTimeoutOrThrow(final Set<Task> tasks,
                                              final Exception cause) {
         final long now = time.milliseconds();
-        tasks.forEach(t -> {
-            if (t != null) {
-                t.maybeInitTaskTimeoutOrThrow(now, cause);
-            }
-        });
+        tasks.forEach(t -> t.maybeInitTaskTimeoutOrThrow(now, cause));
     }
 
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
