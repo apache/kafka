@@ -109,7 +109,7 @@ class ApiSurfaceScannerTest {
 
         assertTrue(s.isDeprecated("org.apache.kafka.foo.OldBar"));
         assertTrue(s.directPublic().isEmpty(), "deprecated classes are out of scope on both validation sides");
-        assertTrue(s.effectivePublic().isEmpty());
+        assertTrue(s.effectivePublic().isEmpty(), "deprecated classes are excluded from the effective public API set");
         // isEffectivelyPublic answers the audience question only — deprecation is handled
         // separately by callers (CascadeValidator skips deprecated refs before this check).
         assertTrue(s.isEffectivelyPublic("org.apache.kafka.foo.OldBar"));
