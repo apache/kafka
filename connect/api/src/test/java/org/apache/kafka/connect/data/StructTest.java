@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -87,6 +88,75 @@ public class StructTest {
         assertEquals(ByteBuffer.wrap("foobar".getBytes()), ByteBuffer.wrap(struct.getBytes("bytes")));
 
         struct.validate();
+    }
+
+    @Test
+    public void testGetBytesPreservesByteBufferRemainingBytes() {
+        ByteBuffer bytes = ByteBuffer.wrap(new byte[] {1, 2, 3, 4});
+        bytes.position(1);
+        bytes.limit(3);
+
+        Struct struct = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", bytes);
+
+        assertArrayEquals(new byte[] {2, 3}, struct.getBytes("bytes"));
+    }
+
+    @Test
+    public void testGetBytesSupportsDirectByteBuffer() {
+        ByteBuffer bytes = ByteBuffer.allocateDirect(2);
+        bytes.put((byte) 1);
+        bytes.put((byte) 2);
+        bytes.flip();
+
+        Struct struct = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", bytes);
+
+        assertArrayEquals(new byte[] {1, 2}, struct.getBytes("bytes"));
+    }
+
+    @Test
+    public void testEqualsAndHashCodeWithEquivalentByteArrayAndByteBufferValues() {
+        Struct byteArrayStruct = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        Struct byteBufferStruct = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", ByteBuffer.wrap("foobar".getBytes()));
+
+        assertEquals(byteArrayStruct, byteBufferStruct);
+        assertEquals(byteArrayStruct.hashCode(), byteBufferStruct.hashCode());
     }
 
     @Test
