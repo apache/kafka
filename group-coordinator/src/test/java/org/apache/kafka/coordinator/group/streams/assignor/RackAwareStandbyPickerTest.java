@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class RackAwareStandbyPickerTest {
 
@@ -146,6 +147,43 @@ public class RackAwareStandbyPickerTest {
     }
 
     @Test
+    public void shouldPickFirstPreferredCandidateElseLeastLoaded() {
+        // W is in the cluster of H, so it is no candidate. X and Z are, and Z is the lighter one.
+        loads.put("X", 1.0);
+        picker(List.of("cluster"), Map.of(
+            "H", Map.of("cluster", "c1"),
+            "W", Map.of("cluster", "c1"),
+            "X", Map.of("cluster", "c2"),
+            "Z", Map.of("cluster", "c3")
+        ));
+
+        picker.startTask(List.of("H"));
+        assertEquals("X", picker.pick(List.of("W", "X"), true));
+
+        // With no preferred candidate, nothing is picked unless the least-loaded candidate may be.
+        picker.startTask(List.of("H"));
+        assertNull(picker.pick(List.of("W"), true));
+        assertEquals("Z", picker.pick(List.of("W"), false));
+    }
+
+    @Test
+    public void shouldCountPickedProcessAsHolder() {
+        picker(List.of("cluster"), Map.of(
+            "H", Map.of("cluster", "c1"),
+            "X", Map.of("cluster", "c2"),
+            "Y", Map.of("cluster", "c2"),
+            "Z", Map.of("cluster", "c3")
+        ));
+
+        // X comes first among the equally loaded candidates. Its cluster is used after the pick, which leaves Z, and
+        // then every cluster is used.
+        picker.startTask(List.of("H"));
+        assertEquals("X", picker.pick(List.of(), false));
+        assertEquals("Z", picker.pick(List.of(), false));
+        assertNull(picker.pick(List.of(), false));
+    }
+
+    @Test
     public void shouldMatchAScanOverAllProcesses() {
         // Random trees and holders, with loads and room that change in both directions between picks. Every query is
         // checked against a scan over all processes in their order.
@@ -206,7 +244,7 @@ public class RackAwareStandbyPickerTest {
 
     /** The candidate processes of a new pick, empty when nothing is picked. */
     private Set<String> candidates() {
-        pick = picker.pick();
+        pick = picker.nextPick();
         final Set<String> candidates = new HashSet<>();
         if (pick != null) {
             for (final String process : processes) {

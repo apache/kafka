@@ -32,11 +32,15 @@ import java.util.function.ToDoubleFunction;
 import java.util.stream.IntStream;
 
 /**
- * Picks the conditions for the next standby of one task: the tag keys in {@code rack.aware.assignment.tags} order, each
- * kept if a process with room meets it together with those kept so far. A process meets a tag key when it has a value
- * for it that no holder of the task has yet. A pick also returns the least-loaded process with room that meets the
- * conditions, and the picker can tell whether a process meets them. The caller reports every change to a load or room
- * with {@link #updated(Object)} or {@link #updatedAll()}.
+ * Picks the process for each standby of a task so that the task becomes as rack-diverse as possible. An assignor calls
+ * {@link #startTask(Collection)} with the holders of a task and then {@link #pick(Collection, boolean)} once per
+ * standby until it returns null. The picker keeps track of the holders itself. After placing the standby on the
+ * returned process, the assignor reports the change to its load and room with {@link #updated(Object)}, or with
+ * {@link #updatedAll()} when those of other processes changed too.
+ * <p>
+ * A pick first finds its conditions: the tag keys in {@code rack.aware.assignment.tags} order, each kept if a process
+ * with room meets it together with those kept so far. A process meets a tag key when it has a value for it that no
+ * holder of the task has yet. The candidates of the pick are the processes with room that meet the conditions.
  * <p>
  * The processes sit in a tree with one level per tag key, those with the same values sharing a leaf. Scanning every
  * leaf per standby is too slow once there are many, e.g. one per process for a host tag. Each node keeps its
@@ -215,10 +219,40 @@ final class RackAwareStandbyPicker<P> {
     }
 
     /**
+     * The process for the next standby of the task: the first candidate in {@code preferred}, else the least-loaded
+     * candidate. Null once no process with room can make the task more diverse, or with {@code preferredOnly} when no
+     * preferred process is a candidate. The returned process counts as a holder of the task from now on.
+     *
+     * @param preferred     The processes the assignor would rather use, most preferred first.
+     * @param preferredOnly Whether the standby may only go to a preferred process.
+     */
+    P pick(final Collection<P> preferred, final boolean preferredOnly) {
+        final Pick<P> pick = nextPick();
+        if (pick == null) {
+            return null;
+        }
+        P process = null;
+        for (final P preferredProcess : preferred) {
+            if (isCandidate(preferredProcess, pick.conditions())) {
+                process = preferredProcess;
+                break;
+            }
+        }
+        if (process == null) {
+            if (preferredOnly) {
+                return null;
+            }
+            process = pick.leastLoaded();
+        }
+        markUsed(process);
+        return process;
+    }
+
+    /**
      * The conditions for the next standby and the least-loaded candidate under them, or null once no process with
      * room can make the task more diverse.
      */
-    Pick<P> pick() {
+    Pick<P> nextPick() {
         // No process has room for the standby.
         if (root.leastLoaded == null) {
             return null;
