@@ -504,6 +504,11 @@ public class LogManager {
     }
 
     private void addLogToBeDeleted(UnifiedLog log) {
+        // UnifiedLog#delete does not remove the log gauges, so drop them here. The
+        // asyncDelete path has already removed them via removeLogAndMetrics; removing
+        // again is harmless. The startup path (a *-delete directory found in loadLog)
+        // only goes through this method, and would otherwise leak the gauges.
+        log.removeLogMetrics();
         this.logsToBeDeleted.add(Map.entry(log, time.milliseconds()));
     }
 
@@ -542,6 +547,8 @@ public class LogManager {
         if (logDir.getName().endsWith(UnifiedLog.DELETE_DIR_SUFFIX)) {
             addLogToBeDeleted(log);
         } else if (logDir.getName().endsWith(UnifiedLog.STRAY_DIR_SUFFIX)) {
+            // The log is not tracked anywhere, so nothing would ever remove its gauges.
+            log.removeLogMetrics();
             LOG.warn("Loaded stray log: {}", logDir);
         } else if (isStray.apply(log)) {
             // We are unable to prevent a topic from being recreated before every replica has been deleted.
@@ -549,6 +556,8 @@ public class LogManager {
             // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
             // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
             log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition()), false);
+            // The log is not tracked anywhere, so nothing would ever remove its gauges.
+            log.removeLogMetrics();
             LOG.warn("Log in {} marked stray and renamed to {}", logDir.getAbsolutePath(), log.dir().getAbsolutePath());
         } else {
             UnifiedLog previous = log.isFuture()

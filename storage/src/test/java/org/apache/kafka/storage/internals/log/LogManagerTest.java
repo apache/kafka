@@ -1591,4 +1591,63 @@ public class LogManagerTest {
         assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
         assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
     }
+
+    @Test
+    public void testLoadStrayDirDoesNotLeaveLogMetrics() throws IOException {
+        String testTopic = "test-stray-metrics-topic";
+        TopicPartition tp = new TopicPartition(testTopic, 0);
+        logManager.getOrCreateLog(tp, Optional.of(Uuid.randomUuid()));
+        assertFalse(logMetricsOfTopic(testTopic).isEmpty());
+
+        // Mark the replica stray at runtime: renamed to *-stray, metrics removed.
+        logManager.asyncDelete(tp, false, false, true);
+        assertTrue(logMetricsOfTopic(testTopic).isEmpty());
+
+        // Simulate a broker restart that finds the *-stray directory.
+        File strayDir = Arrays.stream(logDir.listFiles())
+                .filter(f -> f.getName().startsWith(testTopic) && f.getName().endsWith(UnifiedLog.STRAY_DIR_SUFFIX))
+                .findFirst().orElseThrow();
+        logManager.loadLog(strayDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertTrue(logMetricsOfTopic(testTopic).isEmpty(), "leaked: " + logMetricsOfTopic(testTopic));
+    }
+
+    @Test
+    public void testLoadStrayReplicaDoesNotLeaveLogMetrics() throws IOException {
+        String testTopic = "test-stray-replica-metrics-topic";
+        File replicaDir = new File(logDir, testTopic + "-0");
+        replicaDir.mkdirs();
+
+        // A replica the metadata image flags as stray is renamed and dropped, not tracked.
+        UnifiedLog loaded = logManager.loadLog(replicaDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> true);
+
+        assertTrue(loaded.dir().getName().endsWith(UnifiedLog.STRAY_DIR_SUFFIX), "expected rename to *-stray");
+        assertTrue(logMetricsOfTopic(testTopic).isEmpty(), "leaked: " + logMetricsOfTopic(testTopic));
+    }
+
+    @Test
+    public void testLoadDeleteDirDoesNotLeaveLogMetrics() throws IOException {
+        String testTopic = "test-delete-metrics-topic";
+        TopicPartition tp = new TopicPartition(testTopic, 0);
+        logManager.getOrCreateLog(tp, Optional.of(Uuid.randomUuid()));
+        assertFalse(logMetricsOfTopic(testTopic).isEmpty());
+
+        logManager.asyncDelete(tp, false, false, false);
+        assertTrue(logMetricsOfTopic(testTopic).isEmpty());
+
+        // Simulate a broker restart that finds the *-delete directory: the startup path
+        // queues it for deletion directly, without removeLogAndMetrics.
+        File deleteDir = Arrays.stream(logDir.listFiles())
+                .filter(f -> f.getName().startsWith(testTopic) && f.getName().endsWith(UnifiedLog.DELETE_DIR_SUFFIX))
+                .findFirst().orElseThrow();
+        logManager.loadLog(deleteDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertTrue(logMetricsOfTopic(testTopic).isEmpty(), "leaked: " + logMetricsOfTopic(testTopic));
+    }
+
+    private Set<com.yammer.metrics.core.MetricName> logMetricsOfTopic(String topic) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+                .filter(m -> m.getType().equals("Log") && m.getMBeanName().contains("topic=" + topic + ","))
+                .collect(Collectors.toSet());
+    }
 }
