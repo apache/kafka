@@ -20,10 +20,12 @@ import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Values;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -166,45 +168,49 @@ public class SimpleHeaderConverterTest {
     }
 
     @Test
-    public void shouldConvertMapWithStringKeysAndMixedValuesToMap() {
+    public void shouldConvertMapWithStringKeysAndMixedValuesToString() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("foo", "bar");
         map.put("baz", (short) 3456);
         SchemaAndValue result = roundTrip(null, map);
-        assertEquals(Schema.Type.MAP, result.schema().type());
-        assertEquals(Schema.Type.STRING, result.schema().keySchema().type());
-        assertNull(result.schema().valueSchema());
-        assertEquals(map, result.value());
+        assertEquals(Schema.STRING_SCHEMA, result.schema());
+        assertEquals(Values.convertToString(null, map), result.value());
     }
 
     @Test
-    public void shouldConvertListWithMixedValuesToListWithoutSchema() {
+    public void shouldConvertListWithMixedValuesToString() {
         List<Object> list = new ArrayList<>();
         list.add("foo");
         list.add((short) 13344);
         SchemaAndValue result = roundTrip(null, list);
-        assertEquals(Schema.Type.ARRAY, result.schema().type());
-        assertNull(result.schema().valueSchema());
-        assertEquals(list, result.value());
+        assertEquals(Schema.STRING_SCHEMA, result.schema());
+        assertEquals(Values.convertToString(null, list), result.value());
     }
 
     @Test
-    public void shouldConvertEmptyMapToMap() {
+    public void shouldReturnOriginalStringForHeaderWithIncompatibleContainerValues() {
+        String serialized = "[1, \"two\"]";
+
+        SchemaAndValue result = converter.toConnectHeader(TOPIC, HEADER, serialized.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(Schema.STRING_SCHEMA, result.schema());
+        assertEquals(serialized, result.value());
+    }
+
+    @Test
+    public void shouldConvertEmptyMapToString() {
         Map<Object, Object> map = new LinkedHashMap<>();
         SchemaAndValue result = roundTrip(null, map);
-        assertEquals(Schema.Type.MAP, result.schema().type());
-        assertNull(result.schema().keySchema());
-        assertNull(result.schema().valueSchema());
-        assertEquals(map, result.value());
+        assertEquals(Schema.STRING_SCHEMA, result.schema());
+        assertEquals(Values.convertToString(null, map), result.value());
     }
 
     @Test
-    public void shouldConvertEmptyListToList() {
+    public void shouldConvertEmptyListToString() {
         List<Object> list = new ArrayList<>();
         SchemaAndValue result = roundTrip(null, list);
-        assertEquals(Schema.Type.ARRAY, result.schema().type());
-        assertNull(result.schema().valueSchema());
-        assertEquals(list, result.value());
+        assertEquals(Schema.STRING_SCHEMA, result.schema());
+        assertEquals(Values.convertToString(null, list), result.value());
     }
 
     @Test
