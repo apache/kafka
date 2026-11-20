@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultRecordTest {
@@ -572,7 +573,7 @@ public class DefaultRecordTest {
         }
         // readPartiallyFrom is not used in the down-conversion path
         try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(1000)))) {
-            assertThrows(InvalidRecordException.class,
+            assertThrowsExactly(InvalidRecordException.class,
                 () -> DefaultRecord.readPartiallyFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
         }
         try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(recordWithForgedBodySize(Records.SOFT_MAX_ARRAY_LENGTH + 1)))) {
