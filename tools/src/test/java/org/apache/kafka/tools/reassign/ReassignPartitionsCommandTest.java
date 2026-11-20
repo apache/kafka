@@ -160,7 +160,7 @@ public class ReassignPartitionsCommandTest {
                     "version": 1
                 }
                 """;
-            var assignment = generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
+            var assignment = generateAssignment(admin, topicsToMoveJson, "1,2,3", false, false);
             Map<TopicPartition, List<Integer>> proposedAssignments = assignment.getKey();
             String assignmentJson = String.format("""
                 {
@@ -522,7 +522,7 @@ public class ReassignPartitionsCommandTest {
                     () -> clusterInstance.aliveBrokers().size() == 4,
                     "Waiting for broker to shutdown failed"
             );
-            generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
+            generateAssignment(admin, topicsToMoveJson, "1,2,3", false, false);
         }
     }
     
