@@ -18,10 +18,17 @@ package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.test.TestUtils;
 
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.Metric;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistryListener;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -33,7 +40,9 @@ import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
 import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +50,11 @@ public class ShareSessionCacheTest {
 
     @BeforeEach
     public void setUp() {
+        clearYammerMetrics();
+    }
+
+    @AfterEach
+    public void tearDown() {
         clearYammerMetrics();
     }
 
@@ -289,6 +303,196 @@ public class ShareSessionCacheTest {
         // Remove session should not throw any exceptions.
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         assertNull(cache.numMembers(groupId));
+    }
+
+    @Test
+    public void testCloseDeregistersMetrics() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+        assertInstanceOf(Meter.class, KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC)));
+
+        cache.close();
+
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+    @Test
+    public void testCloseClearsCacheState() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        String groupId = "grp";
+        String connectionId = "conn-1";
+        cache.maybeCreateSession(groupId, Uuid.randomUuid().toString(), mockedSharePartitionMap(1), connectionId);
+
+        assertEquals(1, cache.size());
+        assertEquals(1, cache.totalPartitions());
+        assertEquals(1, cache.numMembers(groupId));
+        assertNotNull(cache.connectionSessionKeyAndState(connectionId));
+
+        cache.close();
+
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertNull(cache.numMembers(groupId));
+        assertNull(cache.connectionSessionKeyAndState(connectionId));
+
+        cache.close();
+    }
+
+    @Test
+    public void testCloseEmptyCache() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+
+        cache.close();
+        cache.close();
+
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+    @Test
+    public void testCloseIsNoOpAfterNewCacheIsCreated() throws InterruptedException {
+        ShareSessionCache first = new ShareSessionCache(3);
+        first.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+        first.close();
+
+        ShareSessionCache second = new ShareSessionCache(3);
+        second.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-2");
+
+        first.close();
+
+        assertMetricsValues(1, 1, 0, second);
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertTrue(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+    @Test
+    public void testNewCacheAfterCloseUsesNewMetrics() throws InterruptedException {
+        ShareSessionCache first = new ShareSessionCache(3);
+        first.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+        Metric oldSessionsCount = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        Metric oldPartitionsCount = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        Metric oldEvictionsMeter = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+
+        first.close();
+
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+
+        ShareSessionCache second = new ShareSessionCache(3);
+        second.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-2");
+        second.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-3");
+        Metric newSessionsCount = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        Metric newPartitionsCount = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        Metric newEvictionsMeter = KafkaYammerMetrics.defaultRegistry().allMetrics()
+            .get(metricName(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+
+        assertNotSame(oldSessionsCount, newSessionsCount);
+        assertNotSame(oldPartitionsCount, newPartitionsCount);
+        assertNotSame(oldEvictionsMeter, newEvictionsMeter);
+        assertMetricsValues(2, 2, 0, second);
+    }
+
+    @Test
+    public void testCloseRemovesAllMetricsWhenRemovalListenerThrows() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+
+        MetricsRegistryListener failingListener = new MetricsRegistryListener() {
+            private boolean failed;
+
+            @Override
+            public void onMetricAdded(MetricName name, Metric metric) {
+            }
+
+            @Override
+            public void onMetricRemoved(MetricName name) {
+                if (!failed && name.getName().equals(ShareSessionCache.SHARE_SESSIONS_COUNT)) {
+                    failed = true;
+                    throw new RuntimeException("metric removal notification failed");
+                }
+            }
+        };
+
+        KafkaYammerMetrics.defaultRegistry().addListener(failingListener);
+        try {
+            cache.close();
+        } finally {
+            KafkaYammerMetrics.defaultRegistry().removeListener(failingListener);
+        }
+
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+    @Test
+    public void testDisconnectAfterCloseIsNoOp() {
+        ShareGroupListener listener = Mockito.mock(ShareGroupListener.class);
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(listener);
+        String groupId = "grp";
+        cache.maybeCreateSession(groupId, Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+
+        cache.close();
+        cache.connectionDisconnectListener().onDisconnect("conn-1");
+
+        Mockito.verify(listener, Mockito.never()).onMemberLeave(Mockito.anyString(), Mockito.anyString());
+        Mockito.verify(listener, Mockito.never()).onGroupEmpty(Mockito.anyString());
+    }
+
+    @Test
+    public void testMaybeCreateSessionAfterCloseReturnsNull() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.close();
+
+        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1"));
+        assertEquals(0, cache.size());
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_PARTITIONS_COUNT));
+        assertFalse(hasMetric(ShareSessionCache.SHARE_SESSION_EVICTIONS_PER_SEC));
+    }
+
+
+
+    @Test
+    public void testUpdateNumPartitionsAfterCloseIsNoOp() {
+        ShareSessionCache cache = new ShareSessionCache(3);
+        ShareSession session = Mockito.mock(ShareSession.class);
+        Mockito.when(session.updateCachedSize()).thenReturn(1);
+
+        cache.close();
+        cache.updateNumPartitions(session);
+
+        assertEquals(0, cache.totalPartitions());
+    }
+
+    private static MetricName metricName(String name) {
+        return KafkaYammerMetrics.getMetricName("kafka.server", "ShareSessionCache", name);
+    }
+
+    private static boolean hasMetric(String name) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().containsKey(metricName(name));
     }
 
     private ImplicitLinkedHashCollection<CachedSharePartition> mockedSharePartitionMap(int size) {
