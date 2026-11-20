@@ -43,6 +43,10 @@ import java.util.List;
  */
 public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashCollection.Element>
         extends ImplicitLinkedHashCollection<E> {
+    /**
+     * The maximum number of slots probed when adding an element. Elements with equal keys are not
+     * deduplicated, so they all end up in one probe run, and this bounds the cost of each add.
+     */
     static final int MAX_PROBE_LENGTH = 1000;
 
     public ImplicitLinkedHashMultiCollection() {
