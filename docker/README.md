@@ -21,10 +21,28 @@ Repository Setup
 
 Make sure the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets are added and made available to Github Actions in Github Repository settings. This is required for pushing the docker image.
 
+Automating Docker RC Creation (Recommended)
+--------------------------------------------
+
+- This is the **recommended and automated way** to create Docker Release Candidate images.
+- Go to `Automate Docker RC Creation` Github Actions Workflow.
+- Provide the `kafka_url` and `rc_version`. The workflow will automatically:
+  1. Build and test both JVM and Native images in parallel
+  2. If tests pass, build and push RC images to DockerHub for both image types
+  3. Verify that the images are available on DockerHub
+- Example:-
+```
+kafka_url: https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
+rc_version: 3.8.0-rc0
+```
+- This will create and verify:
+  - `apache/kafka:3.8.0-rc0`
+  - `apache/kafka-native:3.8.0-rc0`
+
 Building image and running tests using github actions
 ----------------------------------------------------
 
-- This is the recommended way to build, test and get a CVE report for the docker image.
+- This is the manual way to build, test and get a CVE report for individual docker images.
 - Just choose the image type and provide kafka url to `Docker Build Test` workflow. It will generate a test report and CVE report that can be shared with the community.
 
 - kafka-url - This is the url to download kafka tarball from. For example kafka tarball url from [Kafka archive](https://archive.apache.org/dist/kafka). For building RC image this will be an RC tarball url.
