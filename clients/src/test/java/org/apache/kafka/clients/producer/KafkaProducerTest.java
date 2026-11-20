@@ -2618,6 +2618,74 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testCloseWithTimeoutReturnsWhileCallbackIsBlocked() throws Exception {
+        assertCloseReturnsWhileCallbackIsBlocked(Duration.ofMillis(100));
+    }
+
+    @Test
+    public void testCloseWithZeroTimeoutReturnsWhileCallbackIsBlocked() throws Exception {
+        assertCloseReturnsWhileCallbackIsBlocked(Duration.ZERO);
+    }
+
+    private void assertCloseReturnsWhileCallbackIsBlocked(Duration closeTimeout) throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        // After a forced close, close() waits at most max.block.ms for the I/O thread to stop.
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500);
+        Time time = Time.SYSTEM;
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1)));
+        KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time);
+
+        CountDownLatch callbackStarted = new CountDownLatch(1);
+        CountDownLatch releaseCallback = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // No produce response is prepared, so the record is still pending when close() force closes the
+            // producer. The I/O thread then fails the record and runs this callback, which blocks.
+            producer.send(new ProducerRecord<>(topic, "key", "value"), (recordMetadata, exception) -> {
+                callbackStarted.countDown();
+                try {
+                    releaseCallback.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            Future<?> closeFuture = executor.submit(() -> producer.close(closeTimeout));
+            assertTrue(callbackStarted.await(10, TimeUnit.SECONDS), "The forced close did not run the callback");
+            // Without a bound on the forced-close wait, close() blocks for as long as the callback does.
+            closeFuture.get(10, TimeUnit.SECONDS);
+        } finally {
+            releaseCallback.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    public void testForcedCloseStillRunsCallbacksBeforeReturning() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Time time = Time.SYSTEM;
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1)));
+        KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time);
+
+        AtomicReference<Exception> callbackException = new AtomicReference<>();
+        producer.send(new ProducerRecord<>(topic, "key", "value"),
+            (recordMetadata, exception) -> callbackException.set(exception));
+        producer.close(Duration.ZERO);
+
+        // A forced close that is not blocked still waits for the I/O thread, so the record has already been
+        // failed and its callback has already run when close() returns.
+        assertNotNull(callbackException.get());
+    }
+
+    @Test
     public void testTransactionalMethodThrowsWhenSenderClosed() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
