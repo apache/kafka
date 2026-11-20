@@ -774,9 +774,10 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.isolated_kraft]
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum):
+    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, group_protocol=None):
         """
         Validates that source tasks run correctly and deliver messages exactly once
         when Kafka Connect workers undergo bounces, both clean and unclean.
@@ -789,7 +790,7 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.source = VerifiableSource(self.cc, topic=self.TOPIC, tasks=num_tasks, throughput=100, complete_records=True)
+        self.source = VerifiableSource(self.cc, topic=self.TOPIC, tasks=num_tasks, throughput=100, complete_records=True, consumer_group_protocol=group_protocol)
         self.source.start()
 
         for i in range(4):
@@ -831,7 +832,8 @@ class ConnectDistributedTest(Test):
         self.source.stop()
         self.cc.stop()
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=1000, isolation_level="read_committed")
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=1000, isolation_level="read_committed", consumer_properties=consumer_properties)
         consumer.run()
         src_messages = consumer.messages_consumed[1]
 
@@ -865,7 +867,7 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True, consumer_properties=consumer_properties)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
