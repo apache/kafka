@@ -248,7 +248,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
         if (type == STANDBY) {
-            when(storeMetadata.endOffset()).thenReturn(10L);
+            when(storeMetadata.lastChangelogOffset()).thenReturn(10L);
             when(stateManager.changelogAsSource(tp)).thenReturn(true);
             adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
         }
@@ -304,7 +304,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
         if (type == STANDBY) {
-            when(storeMetadata.endOffset()).thenReturn(10L);
+            when(storeMetadata.lastChangelogOffset()).thenReturn(10L);
             when(stateManager.changelogAsSource(tp)).thenReturn(true);
             adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
         }
@@ -364,7 +364,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.get(null)).thenReturn(mock(Task.class));
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(9L);
-        when(storeMetadata.endOffset()).thenReturn(10L);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(10L);
         when(stateManager.changelogAsSource(tp)).thenReturn(true);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
@@ -506,7 +506,7 @@ public class StoreChangelogReaderTest {
 
         when(storeMetadata.offset()).thenReturn(5L);
         if (type == STANDBY) {
-            when(storeMetadata.endOffset()).thenReturn(10L);
+            when(storeMetadata.lastChangelogOffset()).thenReturn(10L);
         }
         when(stateManager.taskId()).thenReturn(taskId);
 
@@ -580,7 +580,7 @@ public class StoreChangelogReaderTest {
 
         if (type == STANDBY && logContext.logger(StoreChangelogReader.class).isDebugEnabled()) {
             when(storeMetadata.offset()).thenReturn(null).thenReturn(null).thenReturn(9L);
-            when(storeMetadata.endOffset()).thenReturn(10L);
+            when(storeMetadata.lastChangelogOffset()).thenReturn(10L);
         } else {
             when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
         }
@@ -1184,7 +1184,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.get(null)).thenReturn(mock(Task.class));
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(3L);
-        when(storeMetadata.endOffset()).thenReturn(20L);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(20L);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
         changelogReader.register(tp, standbyStateManager);
@@ -1228,7 +1228,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.get(null)).thenReturn(mock(Task.class));
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(3L);
-        when(storeMetadata.endOffset()).thenReturn(20L);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(20L);
         when(standbyStateManager.changelogAsSource(tp)).thenReturn(false);
 
         final MockAdminClient adminClient = new MockAdminClient() {
@@ -1279,14 +1279,14 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
-        // Verifies the 3-step fallback chain in changelogEndOffsets():
-        //   1) ChangelogMetadata.restoreEndOffset (preferred)
-        //   2) StateStoreMetadata.endOffset + 1 (the store's end offset is the last offset, not the next one)
-        //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
-        // This test wires a standby with restoreEndOffset == null but
-        // storeMetadata.endOffset == 42L → fallback returns 43L.
+        // Verifies the fallback chain in logicalChangelogEndOffsets():
+        //   1) ChangelogMetadata.restoreEndOffset, if known
+        //   2) one past StateStoreMetadata.lastChangelogOffset, if known
+        //   3) null
+        // This test wires a standby with restoreEndOffset == null and
+        // lastChangelogOffset == 42L, so the fallback returns 43L.
         setupStandbyStateManager();
-        when(storeMetadata.endOffset()).thenReturn(42L);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(42L);
 
         changelogReader.register(tp, standbyStateManager);
 
@@ -1297,7 +1297,7 @@ public class StoreChangelogReaderTest {
     @Test
     public void logicalChangelogEndOffsetsShouldReturnNullWhenBothSourcesUnknown() {
         setupStandbyStateManager();
-        when(storeMetadata.endOffset()).thenReturn(null);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(null);
 
         changelogReader.register(tp, standbyStateManager);
 
@@ -1315,7 +1315,7 @@ public class StoreChangelogReaderTest {
         when(mockTasks.containsKey(null)).thenReturn(true);
         when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
         when(storeMetadata.offset()).thenReturn(3L);
-        when(storeMetadata.endOffset()).thenReturn(20L);
+        when(storeMetadata.lastChangelogOffset()).thenReturn(20L);
 
         final long now = time.milliseconds();
         final Properties properties = new Properties();
