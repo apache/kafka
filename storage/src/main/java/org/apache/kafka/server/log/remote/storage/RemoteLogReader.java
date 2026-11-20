@@ -53,6 +53,7 @@ public class RemoteLogReader implements Callable<Void> {
         this.callback = callback;
         this.brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchRequestRate().mark();
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
+        this.rlm.recordRemoteFetchClientRequest(fetchInfo.clientId());
         this.quotaManager = quotaManager;
         this.remoteReadTimer = remoteReadTimer;
     }
@@ -65,6 +66,7 @@ public class RemoteLogReader implements Callable<Void> {
             FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
             brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            rlm.recordRemoteFetchClientBytes(fetchInfo.clientId(), fetchDataInfo.records.sizeInBytes());
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));

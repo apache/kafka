@@ -175,6 +175,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final RLMQuotaManager rlmFetchQuotaManager;
     private final RLMQuotaMetrics fetchQuotaMetrics;
     private final RLMQuotaMetrics copyQuotaMetrics;
+    private final RemoteFetchClientMetrics remoteFetchClientMetrics;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -248,6 +249,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
         copyQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
+        remoteFetchClientMetrics = new RemoteFetchClientMetrics(metrics, INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
 
         indexCache = new RemoteIndexCache(
             rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(),
@@ -364,6 +366,18 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     public Sensor fetchThrottleTimeSensor() {
         return fetchQuotaMetrics.sensor();
+    }
+
+    public void recordRemoteFetchClientRequest(Optional<String> clientId) {
+        if (rlmConfig.remoteLogClientMetricsEnabled()) {
+            clientId.ifPresent(id -> remoteFetchClientMetrics.recordRequest(id, time.milliseconds()));
+        }
+    }
+
+    public void recordRemoteFetchClientBytes(Optional<String> clientId, long bytes) {
+        if (rlmConfig.remoteLogClientMetricsEnabled()) {
+            clientId.ifPresent(id -> remoteFetchClientMetrics.recordBytes(id, bytes, time.milliseconds()));
+        }
     }
 
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {

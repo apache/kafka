@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
@@ -42,13 +43,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogReaderTest {
     public static final String TOPIC = "test";
+    private static final Optional<String> CLIENT_ID = Optional.of("client-1");
     RemoteLogManager mockRLM = mock(RemoteLogManager.class);
     BrokerTopicStats brokerTopicStats = null;
     RLMQuotaManager mockQuotaManager = mock(RLMQuotaManager.class);
@@ -70,7 +74,7 @@ public class RemoteLogReaderTest {
         when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenReturn(fetchDataInfo);
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null, CLIENT_ID);
         RemoteLogReader remoteLogReader =
                 new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
@@ -96,6 +100,9 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteFetchRequestRate().count());
         assertEquals(100, brokerTopicStats.allTopicsStats().remoteFetchBytesRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().count());
+
+        verify(mockRLM, times(1)).recordRemoteFetchClientRequest(CLIENT_ID);
+        verify(mockRLM, times(1)).recordRemoteFetchClientBytes(CLIENT_ID, 100L);
     }
 
     @Test
@@ -103,7 +110,7 @@ public class RemoteLogReaderTest {
         when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(new RuntimeException("error"));
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null, CLIENT_ID);
         RemoteLogReader remoteLogReader =
                 new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
@@ -128,5 +135,8 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteFetchRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteFetchBytesRate().count());
         assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().count());
+
+        verify(mockRLM, times(1)).recordRemoteFetchClientRequest(CLIENT_ID);
+        verify(mockRLM, never()).recordRemoteFetchClientBytes(any(), anyLong());
     }
 }
