@@ -2276,7 +2276,8 @@ project(':clients') {
         'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
         'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
         'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
-        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorException.java'
     )
   }
 }
