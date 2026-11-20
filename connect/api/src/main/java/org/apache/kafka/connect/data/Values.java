@@ -515,7 +515,7 @@ public class Values {
                 if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
                     // Just get the number of days from this timestamp
                     long millis = ((java.util.Date) value).getTime();
-                    int days = (int) (millis / MILLIS_PER_DAY); // truncates
+                    int days = (int) Math.floorDiv(millis, MILLIS_PER_DAY); // rounds down, also before the epoch
                     return Date.toLogical(toSchema, days);
                 }
             } else {
