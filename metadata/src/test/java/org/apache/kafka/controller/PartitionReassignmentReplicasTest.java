@@ -81,6 +81,39 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
+    public void testOverrideKeepsReplicaStillBeingAddedInAdding() {
+        // In-progress reassignment [0, 1, 2] -> [0, 1, 3]: replicas [0, 1, 3, 2], adding [3].
+        // The new target keeps 3, which has not caught up yet, and adds 4.
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            partitionAssignment(List.of(0, 1, 3, 2)), List.of(3), partitionAssignment(List.of(0, 1, 3, 4)));
+        assertEquals(List.of(2), replicas.removing());
+        assertEquals(List.of(3, 4), replicas.adding());
+        assertEquals(List.of(0, 1, 3, 4, 2), replicas.replicas());
+    }
+
+    @Test
+    public void testOverrideWithSameTargetIsUnchanged() {
+        // Re-submitting the in-progress target must not turn the adding replica into a
+        // regular one.
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            partitionAssignment(List.of(0, 1, 3, 2)), List.of(3), partitionAssignment(List.of(0, 1, 3)));
+        assertEquals(List.of(2), replicas.removing());
+        assertEquals(List.of(3), replicas.adding());
+        assertEquals(List.of(0, 1, 3, 2), replicas.replicas());
+    }
+
+    @Test
+    public void testOverrideRemovesReplicaStillBeingAddedThatTargetDrops() {
+        // In-progress reassignment [0, 1] -> [2, 3]: replicas [2, 3, 0, 1], adding [2, 3].
+        // The new target [4, 5] drops both; they are removed like the original replicas.
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            partitionAssignment(List.of(2, 3, 0, 1)), List.of(2, 3), partitionAssignment(List.of(4, 5)));
+        assertEquals(List.of(0, 1, 2, 3), replicas.removing());
+        assertEquals(List.of(4, 5), replicas.adding());
+        assertEquals(List.of(4, 5, 0, 1, 2, 3), replicas.replicas());
+    }
+
+    @Test
     public void testDoesNotCompleteReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(3, 4, 5)));
