@@ -41,12 +41,10 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -383,22 +381,32 @@ public class TopologyTestDriver implements Closeable {
             setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
         } catch (final Throwable e) {
             // the caller gets no driver to close
-            Utils.closeQuietly(() -> closeDirty(e instanceof TaskCorruptedException), "topology test driver");
+            closeDirty(e);
             throw e;
         }
     }
 
-    private void closeDirty(final boolean corrupted) throws IOException {
+    private void closeDirty(final Throwable cause) {
         if (task != null) {
-            task.suspend();
-            if (corrupted) {
-                // as for a corrupted task in Kafka Streams, so that its state is wiped with transactional state stores too
-                task.markChangelogAsCorrupted(task.changelogPartitions());
-            }
-            task.closeDirty();
+            closeAndSuppress(task::suspend, cause);
+            closeAndSuppress(task::closeDirty, cause);
         }
         if (globalStateManager != null) {
-            globalStateManager.close();
+            closeAndSuppress(globalStateManager::close, cause);
+        }
+        // as close() does, so that no state is left behind, whatever made the construction fail
+        closeAndSuppress(stateDirectory::clean, cause);
+    }
+
+    // a step that fails does not keep the next ones from running
+    private static void closeAndSuppress(final AutoCloseable step, final Throwable cause) {
+        try {
+            step.close();
+        } catch (final Throwable e) {
+            // an exception cannot suppress itself
+            if (e != cause) {
+                cause.addSuppressed(e);
+            }
         }
     }
 
