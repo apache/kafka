@@ -430,8 +430,8 @@ public class StreamsGroupCommand {
 
         private void printOffsets(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
             Map<TopicPartition, OffsetsInfo> offsets = getOffsets(description);
-            if (isGroupStateValid(description.groupState(), description.members().size())) {
-                maybePrintEmptyGroupState(description.groupId(), description.groupState());
+            maybePrintEmptyGroupState(description.groupId(), description.groupState());
+            if (isGroupStateValid(description.groupState(), offsets.size())) {
                 final int groupLen = Math.max(15, description.groupId().length());
                 int maxTopicLen = 15;
                 for (TopicPartition topicPartition : offsets.keySet()) {
@@ -462,6 +462,14 @@ public class StreamsGroupCommand {
             for (StreamsGroupMemberDescription memberDescription : members) {
                 allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
             }
+            // Also include partitions that have committed offsets but are not assigned to any member,
+            // e.g., when the group is empty, so that their committed offsets are still shown.
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
+            committedOffsets.forEach((tp, offsetAndMetadata) -> {
+                if (offsetAndMetadata != null) {
+                    allTp.add(tp);
+                }
+            });
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
             Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
@@ -478,12 +486,12 @@ public class StreamsGroupCommand {
                 latest,
                 withTimeoutMs(new ListOffsetsOptions())
             ).all().get();
-            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
             Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
-                final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
+                final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp.getKey()));
+                final Optional<Long> currentOffset = committed.map(OffsetAndMetadata::offset);
+                final Optional<Integer> leaderEpoch = committed.flatMap(OffsetAndMetadata::leaderEpoch);
                 final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
                 output.put(tp.getKey(),
                     new OffsetsInfo(

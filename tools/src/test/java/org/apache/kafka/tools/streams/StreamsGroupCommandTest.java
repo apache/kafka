@@ -343,6 +343,66 @@ public class StreamsGroupCommandTest {
     }
 
     @Test
+    public void testDescribeEmptyStreamsGroupShowsCommittedOffsets() throws Exception {
+        String groupId = "group1";
+        TopicPartition tp = new TopicPartition("topic1", 0);
+
+        ListOffsetsResult startOffset = mock(ListOffsetsResult.class);
+        when(startOffset.all()).thenReturn(KafkaFuture.completedFuture(Map.of(tp, new ListOffsetsResult.ListOffsetsResultInfo(10, -1, Optional.empty()))));
+        ListOffsetsResult endOffset = mock(ListOffsetsResult.class);
+        when(endOffset.all()).thenReturn(KafkaFuture.completedFuture(Map.of(tp, new ListOffsetsResult.ListOffsetsResultInfo(30, -1, Optional.empty()))));
+        when(ADMIN_CLIENT.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(startOffset, endOffset, startOffset, endOffset);
+
+        ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
+        committedOffsetsMap.put(tp, new OffsetAndMetadata(12, Optional.of(0), ""));
+        when(ADMIN_CLIENT.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
+        when(result.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
+
+        // An empty group: no members, but the topology and the committed offsets are still there.
+        StreamsGroupDescription emptyGroup = new StreamsGroupDescription(
+            groupId,
+            0,
+            0,
+            0,
+            List.of(new StreamsGroupSubtopologyDescription("id", List.of("topic1"), List.of(), Map.of(), Map.of())),
+            List.of(),
+            GroupState.EMPTY,
+            new Node(0, "host", 0),
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty());
+        DescribeStreamsGroupsResult describeResult = mock(DescribeStreamsGroupsResult.class);
+        when(ADMIN_CLIENT.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class))).thenReturn(describeResult);
+        when(describeResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, emptyGroup)));
+
+        StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
+            new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", groupId, "--describe", "--offsets", "--verbose"});
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(streamsGroupCommandOptions, ADMIN_CLIENT);
+
+        Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> offsets = service.getOffsets(emptyGroup);
+        assertEquals(Map.of(tp, new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L)), offsets);
+
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            try {
+                service.describeGroups();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        assertTrue(output.contains("Streams group '" + groupId + "' has no active members."), output);
+        List<List<String>> rows = Arrays.stream(output.split("\n"))
+            .map(String::trim)
+            .filter(line -> line.startsWith(groupId))
+            .map(line -> Arrays.asList(line.split("\\s+")))
+            .toList();
+        assertEquals(List.of(List.of(groupId, "topic1", "0", "12", "0", "30", "18")), rows);
+
+        service.close();
+    }
+
+    @Test
     public void testPrintEmptyGroupState() {
         assertFalse(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.EMPTY, 0));
         assertFalse(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.DEAD, 0));
