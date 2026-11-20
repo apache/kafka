@@ -17,6 +17,7 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.server.ReplicaManager;
 import org.apache.kafka.server.util.ServerTestUtils;
 
 import com.yammer.metrics.core.MetricName;
@@ -40,24 +41,13 @@ public class BrokerMetricNamesTest {
 
     @ClusterTest
     public void testMetrics() {
-        Set<String> expected = Set.of(
-            "kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount",
-            "kafka.server:type=ReplicaManager,name=FailedIsrUpdatesPerSec",
-            "kafka.server:type=ReplicaManager,name=IsrExpandsPerSec",
-            "kafka.server:type=ReplicaManager,name=IsrShrinksPerSec",
-            "kafka.server:type=ReplicaManager,name=LeaderCount",
-            "kafka.server:type=ReplicaManager,name=OfflineReplicaCount",
-            "kafka.server:type=ReplicaManager,name=PartitionCount",
-            "kafka.server:type=ReplicaManager,name=PartitionsWithLateTransactionsCount",
-            "kafka.server:type=ReplicaManager,name=ProducerIdCount",
-            "kafka.server:type=ReplicaManager,name=ReassigningPartitions",
-            "kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount",
-            "kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        );
+        Set<String> expected = ReplicaManager.ALL_METRIC_NAMES.stream()
+            .map(name -> REPLICA_MANAGER_PREFIX + "name=" + name)
+            .collect(Collectors.toCollection(TreeSet::new));
         Set<String> actual = KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
             .map(MetricName::getMBeanName)
             .filter(name -> name.startsWith(REPLICA_MANAGER_PREFIX))
             .collect(Collectors.toCollection(TreeSet::new));
-        assertEquals(new TreeSet<>(expected), actual);
+        assertEquals(expected, actual);
     }
 }
