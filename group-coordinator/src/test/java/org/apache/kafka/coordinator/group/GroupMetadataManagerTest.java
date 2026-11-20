@@ -14533,7 +14533,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
-        assertEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(2)
@@ -15288,7 +15288,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
-        assertEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(newMemberId1)
                 .setMemberEpoch(1)
