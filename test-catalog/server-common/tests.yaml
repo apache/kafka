@@ -287,6 +287,28 @@ org.apache.kafka.server.mirror.MirrorPartitionStateTest:
 - testNameOfUnrecognizedValue
 - testRoundTrip
 - testValue
+org.apache.kafka.server.mirror.MirrorPartitionTest:
+- testAsCoordinatorKey
+- testConstruction
+- testCoordinatingPartitionDeterministic
+- testCoordinatingPartitionInRange
+- testCoordinatingPartitionStableMapping
+- testDifferentMirrorName
+- testDifferentPartition
+- testDifferentTopicId
+- testEqualInstances
+- testMirrorNameAccepted
+- testMirrorNameAtMaxLength
+- testMirrorNameRejected
+- testNegativePartition
+- testNullMirrorName
+- testNullTopicId
+- testParseInvalidMirrorName
+- testParseNegativePartition
+- testParseNullKey
+- testParseRejected
+- testParseRoundTrip
+- testToString
 org.apache.kafka.server.mutable.BoundedListTest:
 - testAddAll
 - testAddingToBoundedList
