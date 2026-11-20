@@ -1040,18 +1040,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         TopicPartition tp = topicPartitionFor(request.groupId());
 
-        // Usually the join completes in this first call and returns false. It returns true only
-        // for an empty streams group whose topology is still in the plugin. That group is about
-        // to become a classic group, so its topology must be deleted from the plugin first.
-        // Then the join runs again. With no plugin configured there is nothing to delete, so we
-        // pass topologyCleanupHandled = true and the group is converted right away.
+        // Usually the join completes in this first call and yields no step. Otherwise it yields
+        // the step the group reported via Group#stepBeforeClassicConversion, which must run
+        // before the join runs again and converts the group. Today the only such step is
+        // deleting an empty streams group's topology from the plugin. It needs the plugin, so
+        // with no plugin configured there is nothing to run and we pass
+        // preConversionStepDone = true. Note that this initial value skips every step, not only
+        // the streams one. If another group type adds a step, decide per step instead (e.g.
+        // treat DELETE_STREAMS_TOPOLOGY as a no-op when no plugin is configured).
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
-        ).thenCompose(needsCleanup -> {
-            if (!needsCleanup) {
-                return CompletableFuture.completedFuture(null);
+        ).thenCompose(step -> {
+            if (step.isEmpty()) {
+                return CompletableFuture.<Void>completedFuture(null);
             }
-            return cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
+            return switch (step.get()) {
+                case DELETE_STREAMS_TOPOLOGY -> cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
+            };
         }).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
@@ -1119,25 +1124,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * Runs the classic-group-join write operation. The returned future yields:
      * <ul>
-     *   <li>{@code false}: the join is done and {@code responseFuture} is completed, either
-     *       with a result or with an error.</li>
-     *   <li>{@code true}: the group is an empty streams group whose topology is still in the
-     *       plugin, and {@code topologyCleanupHandled} is {@code false}. Nothing is changed and
-     *       {@code responseFuture} stays open. The caller must delete the topology and call
-     *       this method again with {@code topologyCleanupHandled = true}.</li>
+     *   <li>empty: the join is done and {@code responseFuture} is completed, either with a
+     *       result or with an error.</li>
+     *   <li>a {@link ClassicGroupConversionStep}: the group reported a step that must run
+     *       before it is converted, and {@code preConversionStepDone} is {@code false}. Nothing
+     *       is changed and {@code responseFuture} stays open. The caller must run the step and
+     *       call this method again with {@code preConversionStepDone = true}.</li>
      * </ul>
      */
-    private CompletableFuture<Boolean> runClassicGroupJoin(
+    private CompletableFuture<Optional<ClassicGroupConversionStep>> runClassicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
         TopicPartition tp,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         return runtime.scheduleWriteOperation(
             "classic-group-join",
             tp,
-            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture, topologyCleanupHandled)
+            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture, preConversionStepDone)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
@@ -1148,7 +1153,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     log
                 ));
             }
-            return Boolean.FALSE;
+            return Optional.empty();
         });
     }
 
