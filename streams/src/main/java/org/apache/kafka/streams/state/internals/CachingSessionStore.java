@@ -60,6 +60,7 @@ public class CachingSessionStore
 
     private String cacheName;
     private InternalProcessorContext<?, ?> internalContext;
+    private boolean retainSourceRawRecord;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
@@ -153,6 +154,7 @@ public class CachingSessionStore
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         internalContext = asInternalProcessorContext(stateStoreContext);
+        retainSourceRawRecord = SourceRawRecordRetention.shouldRetain(stateStoreContext.appConfigs());
         cacheName = internalContext.taskId() + "-" + name();
         internalContext.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
@@ -222,8 +224,8 @@ public class CachingSessionStore
                 internalContext.recordContext().timestamp(),
                 internalContext.recordContext().partition(),
                 internalContext.recordContext().topic(),
-                internalContext.recordContext().sourceRawKey(),
-                internalContext.recordContext().sourceRawValue()
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawKey() : null,
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawValue() : null
             );
         internalContext.cache().put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
 

@@ -369,7 +369,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() {
-        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final long entrySize = dirtyEntrySize();
         final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5L, false);
         assertEquals(5, cache.size());
         // should evict byte[] {0}
@@ -380,7 +380,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCacheReverseRange() {
-        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final long entrySize = dirtyEntrySize();
         final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5L, true);
         assertEquals(5, cache.size());
         // should evict byte[] {4}
@@ -421,7 +421,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldReturnAllUnevictedValuesFromCache() {
-        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final long entrySize = dirtyEntrySize();
         final ThreadCache cache = setupThreadCache(0, 5, entrySize * 5L, false);
         assertEquals(5, cache.size());
         // should evict byte[] {0}
@@ -432,7 +432,7 @@ public class ThreadCacheTest {
 
     @Test
     public void shouldReturnAllUnevictedValuesFromCacheInReverseOrder() {
-        final long entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final long entrySize = dirtyEntrySize();
         final ThreadCache cache = setupThreadCache(4, 0, entrySize * 5L, true);
         assertEquals(5, cache.size());
         // should evict byte[] {4}
@@ -602,7 +602,7 @@ public class ThreadCacheTest {
     @Test
     public void shouldCalculateSizeInBytes() {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));
-        final NamedCache.LRUNode node = new NamedCache.LRUNode(Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[]{0}));
+        final NamedCache.LRUNode node = new NamedCache.LRUNode(Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
         cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
         assertEquals(cache.sizeBytes(), node.size());
     }
@@ -622,6 +622,10 @@ public class ThreadCacheTest {
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, new RecordHeaders(), true, -1, -1, -1, "", rawKey, rawValue);
+    }
+
+    private long dirtyEntrySize() {
+        return memoryCacheEntrySize(new byte[1], new byte[1], "") + rawKey.length + rawValue.length;
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

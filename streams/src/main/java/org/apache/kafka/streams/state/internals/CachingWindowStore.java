@@ -63,6 +63,7 @@ public class CachingWindowStore
     private String cacheName;
     private boolean sendOldValues;
     private InternalProcessorContext<?, ?> internalContext;
+    private boolean retainSourceRawRecord;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
@@ -81,6 +82,7 @@ public class CachingWindowStore
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final String changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
         internalContext = asInternalProcessorContext(stateStoreContext);
+        retainSourceRawRecord = SourceRawRecordRetention.shouldRetain(stateStoreContext.appConfigs());
         bytesSerdes = new StateSerdes<>(
             changelogTopic,
             Serdes.Bytes(),
@@ -165,8 +167,8 @@ public class CachingWindowStore
                 internalContext.recordContext().timestamp(),
                 internalContext.recordContext().partition(),
                 internalContext.recordContext().topic(),
-                internalContext.recordContext().sourceRawKey(),
-                internalContext.recordContext().sourceRawValue()
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawKey() : null,
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawValue() : null
             );
         internalContext.cache().put(cacheName, cacheFunction.cacheKey(keyBytes), entry);
 

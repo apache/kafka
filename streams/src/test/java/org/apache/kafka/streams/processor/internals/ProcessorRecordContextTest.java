@@ -47,6 +47,25 @@ public class ProcessorRecordContextTest {
     }
 
     @Test
+    public void shouldEstimateSourceRawRecordLengthUntilFreed() {
+        final ProcessorRecordContext context = new ProcessorRecordContext(
+            42L,
+            73L,
+            0,
+            null,
+            new RecordHeaders(),
+            new byte[3],
+            new byte[40_000]
+        );
+
+        assertEquals(MIN_SIZE + 3L + 40_000L, context.residentMemorySizeEstimate());
+
+        context.freeRawRecord();
+
+        assertEquals(MIN_SIZE, context.residentMemorySizeEstimate());
+    }
+
+    @Test
     public void shouldEstimateNullTopicAndEmptyHeadersAsZeroLength() {
         final ProcessorRecordContext context = new ProcessorRecordContext(
             42L,
