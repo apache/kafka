@@ -76,12 +76,15 @@ SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
 CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS = "group.consumer.assignment.interval.ms"
+CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE = "group.consumer.assignor.offload.enable"
 
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS = "group.share.assignment.interval.ms"
+SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE = "group.share.assignor.offload.enable"
 
 STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS = "group.streams.assignment.interval.ms"
+STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE = "group.streams.assignor.offload.enable"
 
 UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
 UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"
