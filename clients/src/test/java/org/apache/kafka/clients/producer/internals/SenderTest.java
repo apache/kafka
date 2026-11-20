@@ -773,7 +773,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -781,38 +782,111 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 0L);
 
         sender.runOnce(); // receive response 0
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
         assertTrue(request1.isDone());
         assertEquals(0, request1.get().offset());
         assertFalse(request2.isDone());
 
-        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 1L);
         sender.runOnce(); // receive response 1
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
         assertEquals(0, sender.inFlightBatches(tp0).size());
         assertTrue(request2.isDone());
         assertEquals(1, request2.get().offset());
     }
 
+
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NOT_LEADER_OR_FOLLOWER", "NOT_ENOUGH_REPLICAS", "REQUEST_TIMED_OUT"})
+    public void testNoNewBatchSentUntilFirstBatchIsAcknowledged(Errors error) throws Exception {
+        // KAFKA-14359: if a later batch were sent while the first batch is in flight, a retriable error on the first
+        // batch would let the broker, which has no state for the producer yet, accept the later batch as the first
+        // one. Every retry of the first batch would then fail with OUT_OF_ORDER_SEQUENCE_NUMBER.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce(); // send the first batch, sequence 0
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
+
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+        // The second batch waits: it has no sequence yet, and no request carries it.
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
+
+        sendIdempotentProducerResponse(0, tp0, error, -1L);
+        sender.runOnce(); // receive the error; the first batch goes back to the queue
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        time.sleep(RETRY_BACKOFF_MS);
+        sender.runOnce(); // retry the first batch alone
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
+
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.runOnce(); // receive the ack of sequence 0
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertTrue(request1.isDone());
+        assertEquals(0, request1.get().offset());
+
+        sender.runOnce(); // now the second batch gets sequence 1
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sender.runOnce();
+        assertTrue(request2.isDone());
+        assertEquals(1, request2.get().offset());
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+    }
+
+    @Test
+    public void testPartitionAwaitingFirstAckDoesNotBlockOtherPartitions() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        appendToAccumulator(tp0);
+        sender.runOnce(); // tp0, sequence 0
+        appendToAccumulator(tp0);
+        sender.runOnce(); // tp0's second batch waits for the first ack
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
+
+        // tp1 has the same leader. Its first batch must not wait for tp0.
+        Future<RecordMetadata> tp1Request = appendToAccumulator(tp1);
+        sender.runOnce();
+        sender.runOnce();
+        assertEquals(1, transactionManager.sequenceNumber(tp1));
+        assertTrue(transactionManager.hasInflightBatches(tp1));
+        assertFalse(tp1Request.isDone());
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
+    }
 
     @Test
     public void testIdempotenceWithMultipleInflightsRetriedInOrder() throws Exception {
@@ -823,7 +897,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -831,8 +906,8 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
@@ -843,41 +918,41 @@ public class SenderTest {
         sender.runOnce();
 
         assertEquals(3, client.inFlightRequestCount());
-        assertEquals(3, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(4, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
         assertFalse(request3.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        sendIdempotentProducerResponse(0, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
+        sendIdempotentProducerResponse(1, tp0, Errors.LEADER_NOT_AVAILABLE, -1L);
         sender.runOnce(); // receive response 0
 
         // Queue the fourth request, it shouldn't be sent until the first 3 complete.
         Future<RecordMetadata> request4 = appendToAccumulator(tp0);
 
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-
-        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
-        sender.runOnce(); // re send request 1, receive response 2
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // re send request 1, receive response 2
+
+        sendIdempotentProducerResponse(3, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
         sender.runOnce(); // receive response 3
 
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertEquals(1, client.inFlightRequestCount());
 
         sender.runOnce(); // Do nothing, we are reduced to one in flight request during retries.
 
-        assertEquals(3, transactionManager.sequenceNumber(tp0));  // the batch for request 4 shouldn't have been drained, and hence the sequence should not have been incremented.
+        assertEquals(4, transactionManager.sequenceNumber(tp0));  // the batch for request 4 shouldn't have been drained, and hence the sequence should not have been incremented.
         assertEquals(1, client.inFlightRequestCount());
 
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
-
-        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
-        sender.runOnce();  // receive response 1
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 0L);
+        sender.runOnce();  // receive response 1
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
         assertTrue(request1.isDone());
         assertEquals(0, request1.get().offset());
         assertFalse(client.hasInFlightRequests());
@@ -887,9 +962,9 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
-        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 1L);
         sender.runOnce();  // receive response 2
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertTrue(request2.isDone());
         assertEquals(1, request2.get().offset());
 
@@ -900,17 +975,17 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
-        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 2L);
+        sendIdempotentProducerResponse(3, tp0, Errors.NONE, 2L);
         sender.runOnce();  // receive response 3, send request 4 since we are out of 'retry' mode.
-        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(3), transactionManager.lastAckedSequence(tp0));
         assertTrue(request3.isDone());
         assertEquals(2, request3.get().offset());
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
-        sendIdempotentProducerResponse(3, tp0, Errors.NONE, 3L);
+        sendIdempotentProducerResponse(4, tp0, Errors.NONE, 3L);
         sender.runOnce();  // receive response 4
-        assertEquals(OptionalInt.of(3), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(4), transactionManager.lastAckedSequence(tp0));
         assertTrue(request4.isDone());
         assertEquals(3, request4.get().offset());
     }
@@ -923,7 +998,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -931,31 +1007,32 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        sendIdempotentProducerResponse(0, tp0, Errors.MESSAGE_TOO_LARGE, -1L);
+        sendIdempotentProducerResponse(1, tp0, Errors.MESSAGE_TOO_LARGE, -1L);
 
         sender.runOnce(); // receive response 0, should adjust sequences of future batches.
         assertFutureFailure(request1, RecordTooLargeException.class);
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
-        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
 
         sender.runOnce(); // receive response 1
 
+        // The epoch was bumped, so the partition's sequences start again at 0.
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
 
@@ -1255,7 +1332,8 @@ public class SenderTest {
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1263,15 +1341,15 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
@@ -1286,9 +1364,9 @@ public class SenderTest {
 
         // Make sure that we are queueing the second batch first.
         assertEquals(1, queuedBatches.size());
-        assertEquals(1, queuedBatches.peekFirst().baseSequence());
+        assertEquals(2, queuedBatches.peekFirst().baseSequence());
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, -1));
 
@@ -1296,9 +1374,9 @@ public class SenderTest {
 
         // Make sure we requeued both batches in the correct order.
         assertEquals(2, queuedBatches.size());
-        assertEquals(0, queuedBatches.peekFirst().baseSequence());
-        assertEquals(1, queuedBatches.peekLast().baseSequence());
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(1, queuedBatches.peekFirst().baseSequence());
+        assertEquals(2, queuedBatches.peekLast().baseSequence());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
@@ -1308,23 +1386,23 @@ public class SenderTest {
         sender.runOnce(); // don't do anything, only one inflight allowed once we are retrying.
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Make sure that the requests are sent in order, even though the previous responses were not in order.
-        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 0L);
         sender.runOnce();  // receive response 0
-        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
         assertTrue(request1.isDone());
         assertEquals(0, request1.get().offset());
 
         sender.runOnce(); // send request 1
         assertEquals(1, client.inFlightRequestCount());
-        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1L);
+        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 1L);
         sender.runOnce();  // receive response 1
 
         assertFalse(client.hasInFlightRequests());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertTrue(request2.isDone());
         assertEquals(1, request2.get().offset());
     }
@@ -1337,7 +1415,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1367,7 +1446,7 @@ public class SenderTest {
 
         assertEquals(0, queuedBatches.size());
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
 
         client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.REQUEST_TIMED_OUT, -1));
 
@@ -1375,21 +1454,21 @@ public class SenderTest {
 
         // Make sure we requeued both batches in the correct order.
         assertEquals(1, queuedBatches.size());
-        assertEquals(0, queuedBatches.peekFirst().baseSequence());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(1, queuedBatches.peekFirst().baseSequence());
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
 
         sender.runOnce(); // resend request 0
         assertEquals(1, client.inFlightRequestCount());
 
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
 
         // Make sure we handle the out of order successful responses correctly.
-        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 0L);
         sender.runOnce();  // receive response 0
         assertEquals(0, queuedBatches.size());
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertEquals(0, client.inFlightRequestCount());
 
         assertFalse(client.hasInFlightRequests());
@@ -1427,7 +1506,8 @@ public class SenderTest {
         setupWithTransactionState(transactionManager, false, null);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1441,7 +1521,7 @@ public class SenderTest {
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, sender.inFlightBatches(tp0).size());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.REQUEST_TIMED_OUT, -1);
+        sendIdempotentProducerResponse(1, tp0, Errors.REQUEST_TIMED_OUT, -1);
         sender.runOnce();  // receive first response
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
@@ -1463,7 +1543,7 @@ public class SenderTest {
         assertFalse(request2.isDone());
 
         sender.runOnce();  // send second request
-        sendIdempotentProducerResponse(1, tp0, Errors.NONE, 1);
+        sendIdempotentProducerResponse(2, tp0, Errors.NONE, 1);
         assertEquals(1, sender.inFlightBatches(tp0).size());
 
         sender.runOnce(); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
@@ -1475,7 +1555,7 @@ public class SenderTest {
         assertEquals(1, batches.size());
         assertFalse(batches.peekFirst().hasSequence());
         assertFalse(client.hasInFlightRequests());
-        assertEquals(2L, transactionManager.sequenceNumber(tp0));
+        assertEquals(3L, transactionManager.sequenceNumber(tp0));
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
 
         sender.runOnce();  // clear the unresolved state, send the pending request.
@@ -1494,7 +1574,8 @@ public class SenderTest {
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1506,7 +1587,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
+        sendIdempotentProducerResponse(1, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1523,7 +1604,7 @@ public class SenderTest {
         time.sleep(20);
         assertFalse(request2.isDone());
         sender.runOnce();  // send second request
-        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 1);
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 1);
         sender.runOnce(); // receive second response, the third request shouldn't be sent since we are in an unresolved state.
 
         Deque<ProducerBatch> batches = accumulator.getDeque(tp0);
@@ -1539,46 +1620,47 @@ public class SenderTest {
 
     @Test
     public void testEpochBumpWhenOutOfOrderBatchesRetriedAndFirstBatchExpires() throws Exception {
-        // KAFKA-15591: Tests the situation where a producer sends a sequence of requests to a newly created
-        // partition before the creation of the partition has entirely completed. The first request arrives
-        // before the partition is ready and fails with NOT_LEADER_OR_FOLLOWER without reaching the log.
-        // The next two requests arrive after the partition creation is complete, but the sequence numbers
-        // do not start at zero so the requests fail with OUT_OF_ORDER_SEQUENCE_NUMBER. The first request
-        // could still fill the sequence gap, but it expires before being retried. Once the first request
-        // expires, the producer bumps the epoch, renumbers the remaining requests from sequence 0 and
-        // sends them again.
+        // KAFKA-15591: Tests the situation where a request fails with NOT_LEADER_OR_FOLLOWER without reaching
+        // the log while the next two requests are in flight. The next two requests then fail with
+        // OUT_OF_ORDER_SEQUENCE_NUMBER, because their sequences do not follow the last one in the log. The first
+        // request could still fill the sequence gap, but it expires before being retried. Once the first request
+        // expires, the producer bumps the epoch, renumbers the remaining requests from sequence 0 and sends them
+        // again. KAFKA-15591 saw this with the first requests to a newly created partition; since KAFKA-14359 the
+        // producer sends no second batch before the first one of the epoch is acknowledged, so the test starts
+        // after one acknowledged batch.
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
-        // Send the first ProduceRequest with sequence 0. It is created 1000ms before the others so that it expires
+        // Send the first ProduceRequest with sequence 1. It is created 1000ms before the others so that it expires
         // first (deliveryTimeoutMs is 1500).
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
         sender.runOnce();
 
         time.sleep(1000L);
 
-        // Send the second and third ProduceRequests with sequences 1 and 2.
+        // Send the second and third ProduceRequests with sequences 2 and 3.
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         Future<RecordMetadata> request3 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(3, client.inFlightRequestCount());
 
-        // The first request fails because the partition completion has not completed on the leader broker yet.
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
-        sender.runOnce(); // receive response 0
-
-        // The partition creation completes afterwards, so the request with sequence 0 does not reach the partition
-        // and the broker rejects the in-flight second and third requests. They are retried without an epoch bump
-        // since the retry of the first request could still fill the gap in the expected sequence.
-        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        // The first request fails without reaching the log.
+        sendIdempotentProducerResponse(1, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
         sender.runOnce(); // receive response 1
+
+        // The request with sequence 1 did not reach the partition, so the broker rejects the in-flight second and
+        // third requests. They are retried without an epoch bump
+        // since the retry of the first request could still fill the gap in the expected sequence.
         sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
         sender.runOnce(); // receive response 2
+        sendIdempotentProducerResponse(3, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive response 3
 
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
         assertFalse(transactionManager.hasUnresolvedSequence(tp0));
@@ -1590,21 +1672,21 @@ public class SenderTest {
         // the retry is in-flight. Its sequence range will never be filled, so the partition has an unresolved
         // sequence.
         time.sleep(50L);
-        sender.runOnce(); // resend the first request (sequence 0)
+        sender.runOnce(); // resend the first request (sequence 1)
         time.sleep(450L);
-        sender.runOnce(); // resend the second request (sequence 1)
+        sender.runOnce(); // resend the second request (sequence 2)
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
 
         // The response for the first expired request arrives and is ignored.
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
+        sendIdempotentProducerResponse(1, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
         sender.runOnce();
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
 
         // The retry of the second request is rejected again. This causes the producer to realise that the gap
         // in the sequence will never be filled, so it bumps the epoch and renumbers the request sequences starting at 0.
-        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
         sender.runOnce(); // receive the rejection
         sender.runOnce(); // bump the epoch, renumber the remaining batches and resend
 
@@ -1639,6 +1721,7 @@ public class SenderTest {
         txnManager.maybeAddPartition(tp0);
         client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
+        sendAndAcknowledgeFirstBatch(tp0);
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1650,7 +1733,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
+        sendIdempotentProducerResponse(1, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1867,7 +1950,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        sendAndAcknowledgeFirstBatch(tp0);
+        assertEquals(1, transactionManager.sequenceNumber(tp0));
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0);
@@ -1875,15 +1959,15 @@ public class SenderTest {
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.parseInt(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = appendToAccumulator(tp0);
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
-        assertEquals(2, transactionManager.sequenceNumber(tp0));
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertFalse(request1.isDone());
         assertFalse(request2.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
@@ -1896,14 +1980,14 @@ public class SenderTest {
         sender.runOnce(); // receive response 1
 
         assertEquals(OptionalLong.of(1000), transactionManager.lastAckedOffset(tp0));
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
 
         client.respondToRequest(firstClientRequest, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
 
         sender.runOnce(); // receive response 0
 
         // Make sure that the last ack'd sequence doesn't change.
-        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.of(2), transactionManager.lastAckedSequence(tp0));
         assertEquals(OptionalLong.of(1000), transactionManager.lastAckedOffset(tp0));
         assertFalse(client.hasInFlightRequests());
 
@@ -2949,14 +3033,16 @@ public class SenderTest {
             // get sent before the transaction can be completed.
             appendToAccumulator(tp0);
             txnManager.beginCommit();
-            runUntil(sender, () -> client.requests().size() == 2);
+
+            // The second batch waits until the partition's first batch of the epoch is acknowledged (KAFKA-14359).
+            respondToProduce(tp0, Errors.NONE, 0L);
+            runUntil(sender, () -> client.requests().size() == 1);
 
             assertTrue(txnManager.isCompleting());
             assertFalse(txnManager.hasInFlightRequest());
             assertTrue(txnManager.hasInflightBatches(tp0));
 
-            // Now respond to the pending Produce requests.
-            respondToProduce(tp0, Errors.NONE, 0L);
+            // Now respond to the pending Produce request.
             respondToProduce(tp0, Errors.NONE, 1L);
             runUntil(sender, txnManager::hasInFlightRequest);
 
@@ -3822,6 +3908,20 @@ public class SenderTest {
             this(offset, error, Collections.emptyList());
         }
 
+    }
+
+    /**
+     * Sends one batch to the partition and acknowledges it with sequence 0. The producer sends no new batch to a
+     * partition while the partition's first batch of the producer epoch is unacknowledged (KAFKA-14359), so a test
+     * that needs several batches in flight starts with this one. The test's own batches then start at sequence 1.
+     */
+    private void sendAndAcknowledgeFirstBatch(TopicPartition tp) throws Exception {
+        Future<RecordMetadata> future = appendToAccumulator(tp);
+        sender.runOnce();
+        sendIdempotentProducerResponse(0, tp, Errors.NONE, 1000L);
+        sender.runOnce();
+        assertTrue(future.isDone());
+        assertEquals(1000L, future.get().offset());
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
