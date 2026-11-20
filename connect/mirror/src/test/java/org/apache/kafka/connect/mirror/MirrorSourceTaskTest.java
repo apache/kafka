@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -43,12 +44,16 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -265,6 +270,110 @@ public class MirrorSourceTaskTest {
                 .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
 
         verifyNoMoreInteractions(mockConsumer);
+    }
+
+    @Test
+    public void testSeekToBeginningWhenDataLossAndTopicResetDetectionEnabled() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
+        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
+        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
+        // No committed offset is returned for this partition (simulates a fresh start).
+        when(mockOffsetStorageReader.offset(anyMap())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TopicPartition newPartition = new TopicPartition("newTopicToReplicate", 0);
+        Set<TopicPartition> topicPartitions = Set.of(newPartition);
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
+                new DefaultReplicationPolicy(), null, true);
+        mirrorSourceTask.initialize(mockSourceTaskContext);
+
+        mirrorSourceTask.initializeConsumer(topicPartitions);
+
+        verify(mockConsumer, times(1)).assign(topicPartitions);
+        // With detection enabled, auto.offset.reset is "none", so we must seek to the beginning
+        // manually for partitions without a committed offset instead of relying on the consumer default.
+        verify(mockConsumer, times(1)).seekToBeginning(List.of(newPartition));
+        verifyNoMoreInteractions(mockConsumer);
+    }
+
+    @Test
+    public void testClassifyOffsetOutOfRangeAsDataLossWhenEarliestOffsetIsPositive() {
+        TopicPartition topicPartition = new TopicPartition("test-topic", 0);
+        long requestedOffset = 1000L;
+        long earliestAvailableOffset = 500L;
+        OffsetOutOfRangeException offsetOutOfRangeException =
+                new OffsetOutOfRangeException(Map.of(topicPartition, requestedOffset));
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.beginningOffsets(Set.of(topicPartition)))
+                .thenReturn(Map.of(topicPartition, earliestAvailableOffset));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        RuntimeException classified = mirrorSourceTask.classifyOffsetOutOfRange(offsetOutOfRangeException);
+
+        assertInstanceOf(DataLossException.class, classified);
+    }
+
+    @Test
+    public void testClassifyOffsetOutOfRangeAsTopicResetWhenEarliestOffsetIsZero() {
+        TopicPartition topicPartition = new TopicPartition("test-topic", 0);
+        long requestedOffset = 1000L;
+        OffsetOutOfRangeException offsetOutOfRangeException =
+                new OffsetOutOfRangeException(Map.of(topicPartition, requestedOffset));
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.beginningOffsets(Set.of(topicPartition)))
+                .thenReturn(Map.of(topicPartition, 0L));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        RuntimeException classified = mirrorSourceTask.classifyOffsetOutOfRange(offsetOutOfRangeException);
+
+        assertInstanceOf(TopicResetException.class, classified);
+    }
+
+    @Test
+    public void testPollPropagatesDataLossExceptionWhenDetectionEnabled() {
+        TopicPartition topicPartition = new TopicPartition("test-topic", 0);
+        OffsetOutOfRangeException offsetOutOfRangeException =
+                new OffsetOutOfRangeException(Map.of(topicPartition, 1000L));
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.poll(any())).thenThrow(offsetOutOfRangeException);
+        when(consumer.beginningOffsets(Set.of(topicPartition))).thenReturn(Map.of(topicPartition, 500L));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        assertThrows(DataLossException.class, mirrorSourceTask::poll);
+    }
+
+    @Test
+    public void testPollSwallowsOffsetOutOfRangeWhenDetectionDisabled() {
+        TopicPartition topicPartition = new TopicPartition("test-topic", 0);
+        OffsetOutOfRangeException offsetOutOfRangeException =
+                new OffsetOutOfRangeException(Map.of(topicPartition, 1000L));
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.poll(any())).thenThrow(offsetOutOfRangeException);
+
+        // Default (5-arg) constructor: data loss/topic reset detection is disabled,
+        // matching MirrorMaker 2's existing default behavior.
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null);
+
+        assertNull(mirrorSourceTask.poll());
+        verify(consumer, never()).beginningOffsets(any());
     }
 
     @Test
