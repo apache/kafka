@@ -40,7 +40,7 @@ def fetchBytes = { String url ->
         // Without this the failure surfaces as a bare FileNotFoundException or IOException holding just the URL.
         int code = -1
         try { code = conn.responseCode } catch (IOException ignored) { }
-        throw new GradleException("Failed to fetch $url${code > 0 ? " (HTTP $code)" : ""}$hint", e)
+        throw new GradleException("Failed to fetch $url${code > 0 ? " (HTTP $code)" : ""}", e)
     }
 }
 def fetchText = { String url -> new String(fetchBytes(url), "UTF-8").trim() }
