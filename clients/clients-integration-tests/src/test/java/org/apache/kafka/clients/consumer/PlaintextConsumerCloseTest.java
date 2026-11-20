@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -104,6 +106,54 @@ public class PlaintextConsumerCloseTest {
             closeMs <= DEFAULT_FETCH_MAX_WAIT_MS,
             "Closing a consumer with a timeout of " + timeoutMs + " ms should take less than " + DEFAULT_FETCH_MAX_WAIT_MS + " ms, but actually took " + closeMs + " ms"
         );
+    }
+
+    @ClusterTest
+    public void testClassicConsumerCloseWithRemainInGroup() throws Exception {
+        testCloseWithRemainInGroup(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerCloseWithRemainInGroup() throws Exception {
+        testCloseWithRemainInGroup(GroupProtocol.CONSUMER);
+    }
+
+    private void testCloseWithRemainInGroup(GroupProtocol groupProtocol) throws Exception {
+        var groupId = "group_test";
+        Map<String, Object> consumerConfig = Map.of(
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
+            KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
+            VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
+            AUTO_OFFSET_RESET_CONFIG, "earliest",
+            GROUP_ID_CONFIG, groupId,
+            BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()
+        );
+        var topicName = "close-with-remain-in-group";
+        var numRecords = 1;
+        cluster.createTopic(topicName, 2, (short) 2, Map.of());
+
+        sendRecords(cluster, new TopicPartition(topicName, 0), numRecords);
+
+        String memberId;
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+            consumer.subscribe(Set.of(topicName));
+            consumeRecords(consumer, numRecords);
+            memberId = consumer.groupMetadata().memberId();
+            consumer.close(CloseOptions.groupMembershipOperation(
+                CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+        }
+
+        try (Admin admin = cluster.admin()) {
+            var members = admin.describeConsumerGroups(List.of(groupId))
+                .describedGroups()
+                .get(groupId)
+                .get()
+                .members();
+            assertTrue(
+                members.stream().anyMatch(m -> memberId.equals(m.consumerId())),
+                "Expected member " + memberId + " to still be in " + groupId
+                    + " after close(REMAIN_IN_GROUP), but members were " + members);
+        }
     }
 
     private long calculateConsumerCloseDelay(GroupProtocol groupProtocol,
