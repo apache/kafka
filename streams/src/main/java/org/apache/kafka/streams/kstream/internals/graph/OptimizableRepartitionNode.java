@@ -50,10 +50,6 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         return keySerde;
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
     public String repartitionTopic() {
         return repartitionTopic;
     }
