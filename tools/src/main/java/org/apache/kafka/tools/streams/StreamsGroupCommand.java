@@ -328,8 +328,8 @@ public class StreamsGroupCommand {
             final int groupLen = Math.max(15, description.groupId().length());
             int maxMemberIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<StreamsGroupMemberDescription> members = description.members();
+            maybePrintEmptyGroupState(description.groupId(), description.groupState());
             if (isGroupStateValid(description.groupState(), description.members().size())) {
-                maybePrintEmptyGroupState(description.groupId(), description.groupState());
                 for (StreamsGroupMemberDescription member : members) {
                     maxMemberIdLen = Math.max(maxMemberIdLen, member.memberId().length());
                     maxHostLen = Math.max(maxHostLen, member.processId().length());
@@ -1072,7 +1072,7 @@ public class StreamsGroupCommand {
             if (state == GroupState.DEAD) {
                 printError("Streams group '" + group + "' does not exist.", Optional.empty());
             } else if (state == GroupState.EMPTY) {
-                printError("Streams group '" + group + "' has no active members.", Optional.empty());
+                System.err.println("\nStreams group '" + group + "' has no active members.");
             }
         }
 

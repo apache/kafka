@@ -86,6 +86,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -346,17 +347,19 @@ public class StreamsGroupCommandTest {
     public void testDescribeEmptyStreamsGroupShowsCommittedOffsets() throws Exception {
         String groupId = "group1";
         TopicPartition tp = new TopicPartition("topic1", 0);
+        // Use a dedicated admin mock so the listOffsets verification below only sees this test's calls.
+        Admin adminClient = mock(KafkaAdminClient.class);
 
         ListOffsetsResult startOffset = mock(ListOffsetsResult.class);
         when(startOffset.all()).thenReturn(KafkaFuture.completedFuture(Map.of(tp, new ListOffsetsResult.ListOffsetsResultInfo(10, -1, Optional.empty()))));
         ListOffsetsResult endOffset = mock(ListOffsetsResult.class);
         when(endOffset.all()).thenReturn(KafkaFuture.completedFuture(Map.of(tp, new ListOffsetsResult.ListOffsetsResultInfo(30, -1, Optional.empty()))));
-        when(ADMIN_CLIENT.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(startOffset, endOffset, startOffset, endOffset);
+        when(adminClient.listOffsets(anyMap(), any(ListOffsetsOptions.class))).thenReturn(startOffset, endOffset);
 
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
         committedOffsetsMap.put(tp, new OffsetAndMetadata(12, Optional.of(0), ""));
-        when(ADMIN_CLIENT.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
+        when(adminClient.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
         when(result.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
 
         // An empty group: no members, but the topology and the committed offsets are still there.
@@ -374,24 +377,27 @@ public class StreamsGroupCommandTest {
             StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
             Optional.empty());
         DescribeStreamsGroupsResult describeResult = mock(DescribeStreamsGroupsResult.class);
-        when(ADMIN_CLIENT.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class))).thenReturn(describeResult);
+        when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class))).thenReturn(describeResult);
         when(describeResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, emptyGroup)));
 
         StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", groupId, "--describe", "--offsets", "--verbose"});
-        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(streamsGroupCommandOptions, ADMIN_CLIENT);
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(streamsGroupCommandOptions, adminClient);
 
-        Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> offsets = service.getOffsets(emptyGroup);
-        assertEquals(Map.of(tp, new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L)), offsets);
-
-        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+        Map.Entry<String, String> outputAndError = ToolsTestUtils.grabConsoleOutputAndError(() -> {
             try {
                 service.describeGroups();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         });
-        assertTrue(output.contains("Streams group '" + groupId + "' has no active members."), output);
+        String output = outputAndError.getKey();
+        String error = outputAndError.getValue();
+
+        // The partition with a committed offset is looked up even though no member is assigned to it.
+        verify(adminClient, times(2)).listOffsets(argThat(specs -> specs.keySet().equals(Set.of(tp))), any(ListOffsetsOptions.class));
+        assertTrue(error.contains("Streams group '" + groupId + "' has no active members."), error);
+        assertFalse(output.contains("has no active members"), output);
         List<List<String>> rows = Arrays.stream(output.split("\n"))
             .map(String::trim)
             .filter(line -> line.startsWith(groupId))
