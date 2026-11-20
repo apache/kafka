@@ -740,4 +740,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
     </Match>
 
+
+    <Match>
+        <!-- Custom assignors may propagate undeclared checked exceptions.
+             Catch Exception to close all instantiated assignors before rethrowing. -->
+        <Class name="org.apache.kafka.coordinator.group.GroupCoordinatorConfig"/>
+        <Method name="streamsGroupAssignors"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
 </FindBugsFilter>
