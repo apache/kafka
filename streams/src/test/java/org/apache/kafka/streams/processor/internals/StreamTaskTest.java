@@ -1986,6 +1986,33 @@ public class StreamTaskTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "300000"})
+    public void shouldLogNormalIdlingAtDebugOnly(final String maxTaskIdleMs) {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(maxTaskIdleMs));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        task.updateLags();
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamTask.class)) {
+            appender.setClassLogger(StreamTask.class, Level.DEBUG);
+            assertFalse(task.isProcessable(0L));
+            assertFalse(task.isProcessable(119_999L));
+            assertTrue(appender.getMessages().isEmpty());
+            assertFalse(task.isProcessable(120_000L));
+            assertEquals(1, appender.getMessages(Level.DEBUG).size());
+            assertFalse(task.isProcessable(240_000L));
+            assertEquals(2, appender.getMessages(Level.DEBUG).size());
+            assertTrue(appender.getMessages(Level.INFO).isEmpty());
+            final String expectedMessage = maxTaskIdleMs.equals("0")
+                ? "No partitions were buffered locally"
+                : "Waiting for new data to be produced";
+            assertTrue(appender.getMessages(Level.DEBUG).stream().allMatch(message -> message.contains(expectedMessage)));
+        }
+    }
+
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         when(stateManager.taskId()).thenReturn(taskId);
@@ -2234,6 +2261,39 @@ public class StreamTaskTest {
         assertTrue(task.highWaterMark().containsKey(partition1), "Map did not contain the partition");
 
         verify(recordCollector).offsets();
+    }
+
+    @Test
+    public void shouldNeedCommitWhenInitializationWritesUncommittedBytes() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(stateManager.approximateNumUncommittedBytes()).thenReturn(2048L);
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), true, stateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertEquals(RUNNING, task.state());
+        assertTrue(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldNotNeedCommitAfterRestorationWithoutUncommittedBytes() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), true, stateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertEquals(RUNNING, task.state());
+        assertFalse(task.commitNeeded());
     }
 
     @SuppressWarnings("unchecked")

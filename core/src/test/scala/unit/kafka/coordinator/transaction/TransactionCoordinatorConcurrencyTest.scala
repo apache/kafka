@@ -181,24 +181,29 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val transactionalId = "stale-coordinator"
     val producerEpoch: Short = 5
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.COMPLETE_COMMIT, new util.HashSet[TopicPartition](), time.milliseconds(), time.milliseconds(),
       TransactionVersion.TV_2))
     val txnPartition = txnStateManager.partitionFor(transactionalId)
 
-    def commit(): Errors = {
+    def commit(epoch: Short): Errors = {
       var error: Errors = null
-      transactionCoordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT,
+      transactionCoordinator.handleEndTransaction(transactionalId, producerId, epoch, TransactionResult.COMMIT,
         TransactionVersion.TV_2, (e, _, _) => error = e)
+      // the test replica manager completes a write after a few attempts
+      TestUtils.waitUntilTrue(() => {
+        replicaManager.tryCompleteActions()
+        error != null
+      }, "EndTxn did not complete")
       error
     }
 
-    // committing at the current epoch with no new transaction is invalid
-    assertEquals(Errors.INVALID_TXN_STATE, commit())
+    // committing at the current epoch with no new transaction commits an empty transaction and bumps the epoch
+    assertEquals(Errors.NONE, commit(producerEpoch))
 
     // the replica became a follower but the partition has not been unloaded yet
     loseLeadership(txnPartition)
-    assertEquals(Errors.NOT_COORDINATOR, commit())
+    assertEquals(Errors.NOT_COORDINATOR, commit((producerEpoch + 1).toShort))
   }
 
   @Test
@@ -207,7 +212,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val producerEpoch: Short = 5
     val partition = new TopicPartition("topic", 0)
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
       time.milliseconds(), TransactionVersion.TV_0))
 
@@ -232,7 +237,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val producerEpoch: Short = 5
     val partition = new TopicPartition("topic", 0)
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
       time.milliseconds(), TransactionVersion.TV_1))
 
@@ -612,6 +617,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       (Short.MaxValue - 1).toShort,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       60000,
       TransactionState.EMPTY,

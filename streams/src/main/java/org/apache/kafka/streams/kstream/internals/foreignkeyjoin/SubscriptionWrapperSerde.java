@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -187,10 +188,15 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         @Override
         public SubscriptionWrapper<KLeft> deserialize(final String ignored, final Headers headers, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
+            if (data.length < 2) {
+                throw new SerializationException("Unable to deserialize SubscriptionWrapper: expected at least 2 bytes but got "
+                    + data.length);
+            }
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
             final byte version = (byte) (0x7F & versionAndIsHashNull);
             final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
+            validateVersionAndLength(version, isHashNull, data.length);
             final SubscriptionWrapper.Instruction inst = SubscriptionWrapper.Instruction.fromValue(buf.get());
 
             int lengthSum = 2; //The first 2 bytes
@@ -230,6 +236,17 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
             }
 
             return new SubscriptionWrapper<>(hash, inst, primaryKey, version, primaryPartition);
+        }
+
+        private static void validateVersionAndLength(final byte version, final boolean isHashNull, final int dataLength) {
+            if (version > SubscriptionWrapper.CURRENT_VERSION) {
+                throw new UnsupportedVersionException("SubscriptionWrapper does not support version " + version);
+            }
+            final int minLength = 2 + (isHashNull ? 0 : 2 * Long.BYTES) + (version > 0 ? Integer.BYTES : 0);
+            if (dataLength < minLength) {
+                throw new SerializationException("Unable to deserialize SubscriptionWrapper version " + version
+                    + ": expected at least " + minLength + " bytes but got " + dataLength);
+            }
         }
 
         @Override

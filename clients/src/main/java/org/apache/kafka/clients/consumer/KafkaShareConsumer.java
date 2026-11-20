@@ -20,7 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -482,7 +482,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                        final Deserializer<V> valueDeserializer,
                        final Time time,
                        final KafkaClient client,
-                       final SubscriptionState subscriptions,
+                       final ShareSubscriptionState subscriptions,
                        final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
                 logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
@@ -840,11 +840,6 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
-    }
-
-    // Functions below are for testing only
-    String clientId() {
-        return delegate.clientId();
     }
 
     Metrics metricsRegistry() {

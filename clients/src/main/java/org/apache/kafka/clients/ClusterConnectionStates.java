@@ -555,6 +555,7 @@ final class ClusterConnectionStates {
             addresses = Collections.emptyList();
         }
 
+        @Override
         public String toString() {
             return "NodeConnectionState(" +
                 "state=" + state + ", " +

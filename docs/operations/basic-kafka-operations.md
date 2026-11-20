@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-This section will review the most common operations you will perform on your Kafka cluster. All of the tools reviewed in this section are available under the `bin/` directory of the Kafka distribution and each tool will print details on all possible commandline options if it is run with no arguments. 
+This section will review the most common operations you will perform on your Kafka cluster. All of the tools reviewed in this section are available under the `bin/` directory of the Kafka distribution and each tool will print details on all possible command-line options if it is run with no arguments. 
 
 ## Adding and removing topics
 
@@ -112,6 +112,8 @@ controlled.shutdown.enable=true
 ```
 
 Note that controlled shutdown will only succeed if _all_ the partitions hosted on the broker have replicas (i.e. the replication factor is greater than 1 _and_ at least one of these replicas is alive). This is generally what you want since shutting down the last replica would make that topic partition unavailable. 
+
+Even when controlled shutdown succeeds, records produced with `acks=1` may be lost if the leader acknowledged them but had not yet replicated them to the new leader. The same applies to other planned leadership changes, such as preferred leader election and partition reassignment that removes the current leader. Producers that need these records to survive leadership changes should use `acks=all`.
 
 ## Balancing leadership
 

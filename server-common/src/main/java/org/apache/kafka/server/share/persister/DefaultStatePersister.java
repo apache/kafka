@@ -108,8 +108,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.partition(),
                         partitionData.stateEpoch(),
                         partitionData.startOffset(),
-                        future,
-                        null
+                        future
                     )
                 );
             });
@@ -166,7 +165,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.startOffset(),
                         partitionData.deliveryCompleteCount(),
                         partitionData.stateBatches(),
-                        future, null)
+                        future)
                 );
             });
         });
@@ -304,8 +303,7 @@ public class DefaultStatePersister implements Persister {
                         topicData.topicId(),
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
-                        future,
-                        null)
+                        future)
                 );
             });
         });
@@ -407,8 +405,7 @@ public class DefaultStatePersister implements Persister {
                         groupId,
                         topicData.topicId(),
                         partitionData.partition(),
-                        future,
-                        null
+                        future
                     )
                 );
             });
@@ -458,8 +455,7 @@ public class DefaultStatePersister implements Persister {
                         topicData.topicId(),
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
-                        future,
-                        null
+                        future
                     )
                 );
             });

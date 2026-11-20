@@ -127,7 +127,7 @@ public class ConsumerBounceTest {
     }
 
     @BeforeEach
-    void setUp() throws InterruptedException {
+    void setUp() {
         clusterInstance.createTopic(topic, numPartitions, numReplica);
     }
 
@@ -272,7 +272,7 @@ public class ConsumerBounceTest {
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
         // Schedule topic creation after 2 seconds
-        executor.schedule(() -> assertDoesNotThrow(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica)),
+        executor.schedule(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica),
                 2, TimeUnit.SECONDS);
 
         // Start first poller
@@ -406,10 +406,20 @@ public class ConsumerBounceTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {

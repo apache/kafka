@@ -31,7 +31,8 @@ import java.util.Set;
 
 /**
  * TopicIds is initialized with topic names (String) but exposes a Set of topic ids (Uuid) to the
- * user and performs the conversion lazily with a TopicResolver backed by a TopicsImage.
+ * user and performs the conversion lazily with a TopicResolver backed by a
+ * CoordinatorMetadataImage.
  */
 public class TopicIds implements Set<Uuid> {
     /**
@@ -39,7 +40,7 @@ public class TopicIds implements Set<Uuid> {
      */
     public interface TopicResolver {
         /**
-         * @return The TopicsImage used by the resolver.
+         * @return The metadata image used by the resolver.
          */
         CoordinatorMetadataImage image();
 

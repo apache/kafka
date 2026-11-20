@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -142,6 +143,7 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
@@ -190,6 +192,7 @@ public class MockConsumerTest {
     }
     
     @Test
+    @SuppressWarnings("removal")
     public void testRe2JPatternSubscription() {
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));
@@ -239,24 +242,141 @@ public class MockConsumerTest {
 
         List<TopicPartition> lost = new ArrayList<>();
         List<TopicPartition> revoked = new ArrayList<>();
-        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 revoked.addAll(partitions);
             }
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {}
             @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 lost.addAll(partitions);
             }
         });
+        consumer.subscribe(List.of("test"));
 
         consumer.rebalance(assigned);
         consumer.losePartitions(List.of(tp0));
 
         assertEquals(List.of(tp0), lost);
         assertTrue(revoked.isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSetRebalanceListenerNullRemovesListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        List<TopicPartition> assigned = new ArrayList<>();
+        List<TopicPartition> revoked = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revoked.addAll(partitions);
+            }
+        });
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(List.of(tp0, tp1), assigned);
+
+        consumer.setRebalanceListener(null);
+        consumer.rebalance(List.of(tp0));
+
+        // the narrowed assignment proves the rebalance ran, so the silence is the listener
+        // having been removed rather than nothing having happened
+        assertEquals(Set.of(tp0), consumer.assignment());
+        assertEquals(List.of(tp0, tp1), assigned);
+        assertTrue(revoked.isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSetRebalanceListenerOverridesListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        List<TopicPartition> deprecatedAssigned = new ArrayList<>();
+        List<TopicPartition> assigned = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                deprecatedAssigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+        });
+        consumer.rebalance(List.of(tp0));
+        assertEquals(List.of(tp0), deprecatedAssigned);
+
+        consumer.setRebalanceListener(new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                assigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+            }
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+            }
+        });
+        consumer.rebalance(List.of(tp1));
+
+        // both registration styles write the same listener slot, so the second one wins
+        assertEquals(List.of(tp1), assigned);
+        assertEquals(List.of(tp0), deprecatedAssigned);
+    }
+
+    @Test
+    public void testSetRebalanceListenerNullStopsCallbacks() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        List<TopicPartition> assigned = new ArrayList<>();
+        List<TopicPartition> revoked = new ArrayList<>();
+        List<TopicPartition> lost = new ArrayList<>();
+        consumer.setRebalanceListener(new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                assigned.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                revoked.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                lost.addAll(partitions);
+            }
+        });
+        consumer.subscribe(List.of("test"));
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(List.of(tp0, tp1), assigned);
+
+        consumer.setRebalanceListener(null);
+        // tp1 is revoked by the rebalance and tp0 is then lost
+        consumer.rebalance(List.of(tp0));
+        consumer.losePartitions(List.of(tp0));
+
+        // the assignment keeps changing, only the callbacks are gone
+        assertEquals(List.of(tp0, tp1), assigned);
+        assertTrue(revoked.isEmpty());
+        assertTrue(lost.isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSetRebalanceListenerNullWithoutPreviousListener() {
+        assertDoesNotThrow(() -> consumer.setRebalanceListener(null));
+
+        consumer.subscribe(List.of("test"));
+        assertDoesNotThrow(() -> consumer.rebalance(List.of(new TopicPartition("test", 0))));
     }
 
     @Test

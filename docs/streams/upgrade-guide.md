@@ -71,6 +71,8 @@ Processors returning the same `StoreBuilder` instance from `ConnectedStoreProvid
 
 Upgraded RocksDB dependency to version 10.10.1(from 10.1.3). RocksDB deleted `max_write_buffer_number_to_maintain` from its `ColumnFamilyOptions` in version 10.5.0. To preserve compatibility, Kafka Streams' `Options#setMaxWriteBufferNumberToMaintain` and `Options#maxWriteBufferNumberToMaintain` are now deprecated no-ops: the setter has no effect, and the getter always returns `0` regardless of what was previously configured. This change is primarily relevant to users implementing custom RocksDB configurations via `rocksdb.config.setter`. Users relying on `max_write_buffer_number_to_maintain` should remove that configuration, since it no longer has any effect. Consult the [RocksDB changelog](https://github.com/facebook/rocksdb/blob/main/HISTORY.md) between 10.1.3 and 10.10.1 for other changes.
 
+Transactional RocksDB stores now build their write batch at commit, not on each write. The commit of a store needs extra memory up to the size of the uncommitted data of that store. To stay within `statestore.uncommitted.max.bytes`, a thread now commits early when its uncommitted bytes plus the uncommitted bytes of its largest store exceed its share of the limit. Applications with more than one transactional RocksDB store can therefore buffer more data before an early commit than in 4.4. Applications with only in-memory stores commit early after less data than in 4.4.
+
 ## Streams API changes in 4.4.0
 
 Kafka Streams does not support the asynchronous bootstrap DNS resolution mode introduced by [KIP-909](https://cwiki.apache.org/confluence/x/MJtbDg) yet. For every client it creates internally, `bootstrap.resolve.timeout.ms` is forced to `0`, and a user-supplied positive value, through any prefix form, is ignored with a warning.
@@ -360,7 +362,7 @@ Stream-DSL users who want to keep the current behavior can prepend a .filter() o
         
         
 
-The `default.dsl.store` config was deprecated in favor of the new `dsl.store.suppliers.class` config to allow for custom state store implementations to be configured as the default. If you currently specify `default.dsl.store=ROCKS_DB` or `default.dsl.store=IN_MEMORY` replace those configurations with `dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class` and `dsl.stores.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class` respectively 
+The `default.dsl.store` config was deprecated in favor of the new `dsl.store.suppliers.class` config to allow for custom state store implementations to be configured as the default. If you currently specify `default.dsl.store=ROCKS_DB` or `default.dsl.store=IN_MEMORY` replace those configurations with `dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class` and `dsl.store.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class` respectively 
 
 A new configuration option `balance_subtopology` for `rack.aware.assignment.strategy` was introduced in 3.7 release. For more information, including how it can be enabled and further configured, see the [**Kafka Streams Developer Guide**](/{version}/streams/developer-guide/config-streams/#rackawareassignmentstrategy). 
 

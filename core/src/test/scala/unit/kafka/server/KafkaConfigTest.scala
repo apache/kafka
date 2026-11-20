@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.util
@@ -35,11 +36,11 @@ import org.apache.kafka.common.utils.LogCaptureAppender
 import org.apache.kafka.coordinator.group.{ConsumerGroupMigrationPolicy, GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
+import org.apache.kafka.coordinator.mirror.ClusterMirrorBrokerConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -979,17 +980,17 @@ class KafkaConfigTest {
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
         /** Cluster mirror configs */
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case ClusterMirrorConfigs.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorBrokerConfig.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
 
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1195,6 +1196,7 @@ class KafkaConfigTest {
         case GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG => // ignore string
         case GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
         case ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_CONFIG => //ignore string
+        case ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_FETCHER_THREAD_COUNT_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
         /** Streams groups configs */
         case GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1719,6 +1721,32 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
+  }
+
+  @Test
+  def testRelativeLogDirWithRelativeOrAbsoluteCordon(): Unit = {
+    val relativeLogDir = "relative/path/to/data/dir"
+
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, relativeLogDir)
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+
+    val config = KafkaConfig.fromProps(props)
+    val absoluteLogDir = new File(relativeLogDir).getAbsolutePath
+    assertEquals(util.List.of(relativeLogDir), config.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteLogDirs())
+    assertEquals(util.List.of(relativeLogDir), config.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteCordonedLogDirs())
+
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, absoluteLogDir)
+    val configWithAbsoluteCordon = KafkaConfig.fromProps(props)
+    assertEquals(util.List.of(relativeLogDir), configWithAbsoluteCordon.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.absoluteCordonedLogDirs())
   }
 
   @Test

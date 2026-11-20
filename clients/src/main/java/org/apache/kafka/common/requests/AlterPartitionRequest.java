@@ -66,12 +66,13 @@ public class AlterPartitionRequest extends AbstractRequest {
          * @param data The data to be sent. Note that because the version of the
          *             request is not known at this time, it is expected that all
          *             topics have a topic id and a topic name set.
+         * @param requestHeaderVersion the latest request header version which may be used
          */
-        public Builder(AlterPartitionRequestData data) {
+        public Builder(AlterPartitionRequestData data, short requestHeaderVersion) {
             super(
                 ApiKeys.ALTER_PARTITION,
                 ApiKeys.ALTER_PARTITION.oldestVersion(),
-                ApiKeys.ALTER_PARTITION.latestVersion()
+                ApiKeys.ALTER_PARTITION.latestVersionForRequestHeader(requestHeaderVersion)
             );
             this.data = data;
         }

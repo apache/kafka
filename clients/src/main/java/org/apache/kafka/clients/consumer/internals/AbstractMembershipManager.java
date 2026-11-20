@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -57,9 +57,10 @@ import static java.util.Collections.unmodifiableList;
  *   <li>Keeping assignment for the member</li>
  *   <li>Computing assignment for the group if the member is required to do so</li>
  * </ul>
- * The class variable R is the response for the specific group's heartbeat RPC.
+ * The class variable R is the response for the specific group's heartbeat RPC and the class variable
+ * S is the specific group's subscription state class.
  */
-public abstract class AbstractMembershipManager<R extends AbstractResponse> implements RequestManager {
+public abstract class AbstractMembershipManager<R extends AbstractResponse, S extends AbstractSubscriptionState> implements RequestManager {
 
     /**
      * TopicPartition comparator based on topic name and partition.
@@ -105,10 +106,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * Subscription state object holding the current assignment the member has for the topics it
      * subscribed to.
      */
-    protected final SubscriptionState subscriptions;
+    protected final S subscriptions;
 
     /**
-     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     * Metadata that allows us to create the partitions needed for {@link RebalanceListener}.
      */
     private final Metadata metadata;
 
@@ -205,7 +206,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
 
     AbstractMembershipManager(String groupId,
-                              SubscriptionState subscriptions,
+                              S subscriptions,
                               Metadata metadata,
                               Logger log,
                               Time time,
@@ -618,7 +619,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
      * This is expected to be invoked when the user calls the unsubscribe API or is closing the consumer.
      *
-     * @param runCallbacks {@code true} to insert the step to execute the {@link ConsumerRebalanceListener} callback,
+     * @param runCallbacks {@code true} to insert the step to execute the {@link RebalanceListener} callback,
      *                     {@code false} to skip
      *
      * @return Future that will complete when the callback execution completes and the heartbeat
@@ -674,6 +675,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private void clearAssignmentAndLeaveGroup() {
         subscriptions.unsubscribe();
         clearAssignment();
+        notifyAssignmentChange(Collections.emptySet());
 
         // Transition to ensure that a heartbeat request is sent out to effectively leave the
         // group (even in the case where the member had no assignment to release or when the
@@ -1463,6 +1465,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @param currentTimeMs The current system time at which the method was called; useful for determining if
      *                      time-sensitive operations should be performed
      */
+    @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
@@ -1506,6 +1509,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             this.partitions = topicIdPartitions.toTopicIdPartitionMap();
         }
 
+        @Override
         public String toString() {
             return "LocalAssignment{" +
                     "localEpoch=" + localEpoch +
@@ -1513,6 +1517,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                     '}';
         }
 
+        @Override
         public boolean equals(final Object o) {
             if (this == o) {
                 return true;
@@ -1524,6 +1529,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
         }
 
+        @Override
         public int hashCode() {
             return Objects.hash(localEpoch, partitions);
         }

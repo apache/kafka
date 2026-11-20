@@ -257,7 +257,7 @@ public final class Request implements BaseRequest {
 
     public Optional<JsonNode> responseNode(AbstractResponse response) {
         if (isRequestLoggingEnabled(context.header)) {
-            return Optional.of(RequestConvertToJson.response(response, context.apiVersion()));
+            return Optional.of(RequestConvertToJson.response(response, context.effectiveApiVersion()));
         }
         return Optional.empty();
     }

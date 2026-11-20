@@ -140,8 +140,14 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // New version for the Kafka 4.5.0 release.
-    IBP_4_5_IV0(34, "4.5", "IV0", false);
+    // Add support for request header v3 (KIP-1313)
+    IBP_4_5_IV0(34, "4.5", "IV0", false),
+
+    // Add the metadata record formats for Cluster Mirroring (KIP-1279).
+    // Later Cluster Mirroring record changes should reuse this version while it is unstable.
+    // The mirror.version feature controls whether Cluster Mirroring is enabled.
+    // - PartitionChangeRecord version 3 adds LeaderEpoch (KAFKA-21378).
+    IBP_4_5_IV1(35, "4.5", "IV1", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -220,6 +226,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
+    public boolean isClusterMirroringSupported() {
+        return this.isAtLeast(IBP_4_5_IV1);
+    }
+
     public boolean isCidrAclSupported() {
         return this.isAtLeast(IBP_4_4_IV1);
     }
@@ -264,8 +274,30 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
+    public short shareGroupStateRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short alterPartitionRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short assignReplicasToDirsRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short allocateProducerIdsRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
+    public short controllerRegistrationRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
     public short partitionChangeRecordVersion() {
-        if (isElrSupported()) {
+        if (isClusterMirroringSupported()) {
+            return (short) 3;
+        } else if (isElrSupported()) {
             return (short) 2;
         } else if (isDirectoryAssignmentSupported()) {
             return (short) 1;

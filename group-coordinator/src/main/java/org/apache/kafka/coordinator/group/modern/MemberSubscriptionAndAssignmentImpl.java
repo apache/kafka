@@ -38,6 +38,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
      * Constructs a new {@code MemberSubscriptionAndAssignmentImpl}.
      *
      * @param rackId                The rack Id.
+     * @param instanceId            The instance id.
      * @param subscribedTopicIds    The set of subscribed topic Ids.
      * @param memberAssignment      The current member assignment.
      */

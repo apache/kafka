@@ -130,6 +130,21 @@ public class IndexedGroupTest {
         assertEquals(List.of(List.of(0), List.of()), topicsOfCohorts(group));
     }
 
+    /**
+     * A subscribes to T1 and T2, of 2 and 5 partitions. T3, of 7 partitions, exists but nobody
+     * subscribes to it, so it does not count.
+     */
+    @Test
+    public void testMaxPartitionCount() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2))
+            .build();
+
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+
+        assertEquals(5, group.maxPartitionCount());
+    }
+
     // Cohorts.
 
     /**
@@ -148,6 +163,7 @@ public class IndexedGroupTest {
         assertEquals(List.of(), cohortsOfTopics(group));
         assertEquals(List.of(), subscriberCounts(group));
         assertEquals(List.of(), subscribedTopics(group));
+        assertEquals(0, group.maxPartitionCount());
     }
 
     /**
