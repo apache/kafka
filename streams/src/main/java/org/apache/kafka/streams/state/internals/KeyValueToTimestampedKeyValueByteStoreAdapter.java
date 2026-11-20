@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 import java.util.List;
@@ -252,6 +254,58 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
                 return null;
             }
             return KeyValue.pair(next.key, convertToTimestampedFormat(next.value));
+        }
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new ReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    private static final class ReadOnlyView implements ReadOnlyKeyValueStore<Bytes, byte[]> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            return convertToTimestampedFormat(underlying.get(key));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.range(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                            final Bytes to) {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.reverseRange(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseAll() {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.reverseAll());
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                        final PS prefixKeySerializer) {
+            return new KeyValueToTimestampedKeyValueIteratorAdapter<>(underlying.prefixScan(prefix, prefixKeySerializer));
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
         }
     }
 }

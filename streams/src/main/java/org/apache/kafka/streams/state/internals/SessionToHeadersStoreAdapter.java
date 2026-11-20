@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Map;
@@ -222,5 +224,81 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     @Override
     public Position getPosition() {
         return store.getPosition();
+    }
+
+    @Override
+    public ReadOnlySessionStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new SessionToHeadersReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    private static final class SessionToHeadersReadOnlyView implements ReadOnlySessionStore<Bytes, byte[]> {
+
+        private final ReadOnlySessionStore<Bytes, byte[]> underlying;
+
+        SessionToHeadersReadOnlyView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(
+                underlying.findSessions(key, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(
+                underlying.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
+                                                                      final Bytes keyTo,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(
+                underlying.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                              final Bytes keyTo,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(
+                underlying.backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public byte[] fetchSession(final Bytes key,
+                                   final long sessionStartTime,
+                                   final long sessionEndTime) {
+            return convertToHeaderFormat(underlying.fetchSession(key, sessionStartTime, sessionEndTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.fetch(key));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.backwardFetch(key));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.fetch(keyFrom, keyTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+            return MappingKeyValueIteratorAdapter.timestampedToHeaders(underlying.backwardFetch(keyFrom, keyTo));
+        }
     }
 }

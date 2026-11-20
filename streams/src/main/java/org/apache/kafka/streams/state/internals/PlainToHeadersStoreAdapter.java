@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
@@ -225,7 +227,59 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
     }
 
     @Override
+    public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new PlainToHeadersReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    @Override
     public long approximateNumEntries() {
         return store.approximateNumEntries();
+    }
+
+    private static final class PlainToHeadersReadOnlyView implements ReadOnlyKeyValueStore<Bytes, byte[]> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        PlainToHeadersReadOnlyView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            return convertFromPlainToHeaderFormat(underlying.get(key));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.range(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                            final Bytes to) {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.reverseRange(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseAll() {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.reverseAll());
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                        final PS prefixKeySerializer) {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.prefixScan(prefix, prefixKeySerializer));
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
+        }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -48,6 +50,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -58,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PlainToHeadersWindowStoreAdapterTest {
@@ -359,4 +364,77 @@ public class PlainToHeadersWindowStoreAdapterTest {
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(RETENTION_PERIOD, ((WithRetentionPeriod) store).retentionPeriod());
     }
+
+    @Test
+    public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> txnContext = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final RocksDBWindowStore txnStore = new RocksDBWindowStore(
+            new RocksDBSegmentedBytesStore("txn-plain-window-store", "test-metrics-scope",
+                RETENTION_PERIOD, SEGMENT_INTERVAL, new WindowKeySchema()),
+            false,
+            WINDOW_SIZE
+        );
+        final PlainToHeadersWindowStoreAdapter txnAdapter = new PlainToHeadersWindowStoreAdapter(txnStore);
+        txnAdapter.init(txnContext, txnAdapter);
+        try {
+            txnStore.put(KEY, PLAIN_VALUE, 1000L);
+
+            final ReadOnlyWindowStore<Bytes, byte[]> committedView =
+                txnAdapter.readOnly(IsolationLevel.READ_COMMITTED);
+            final ReadOnlyWindowStore<Bytes, byte[]> uncommittedView =
+                txnAdapter.readOnly(IsolationLevel.READ_UNCOMMITTED);
+
+            assertNotSame(txnAdapter, committedView);
+            assertNull(committedView.fetch(KEY, 1000L),
+                "READ_COMMITTED view must not see the staged write");
+            assertArrayEquals(convertFromPlainToHeaderFormat(PLAIN_VALUE), uncommittedView.fetch(KEY, 1000L),
+                "READ_UNCOMMITTED view must see the staged write, converted");
+
+            txnStore.commit(Map.of());
+            assertArrayEquals(convertFromPlainToHeaderFormat(PLAIN_VALUE), committedView.fetch(KEY, 1000L),
+                "READ_COMMITTED view must see the write after commit");
+        } finally {
+            txnAdapter.close();
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("readOnlyViewAccessors")
+    public void shouldConvertValueOnReadOnlyView(final WindowReadOnlyViewAccessor accessor) {
+        underlyingStore.put(KEY, PLAIN_VALUE, 1000L);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+        try (final KeyValueIterator<?, byte[]> iterator = accessor.apply(view)) {
+            assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+            assertArrayEquals(convertFromPlainToHeaderFormat(PLAIN_VALUE), iterator.next().value,
+                "Expected the read-only view to convert values like the adapter");
+        }
+    }
+
+    private static Stream<Arguments> readOnlyViewAccessors() {
+        return Stream.of(
+            Arguments.of(Named.of("fetch", (WindowReadOnlyViewAccessor) v -> v.fetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetch", (WindowReadOnlyViewAccessor) v -> v.backwardFetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("fetchAll", (WindowReadOnlyViewAccessor) v -> v.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetchAll", (WindowReadOnlyViewAccessor) v -> v.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeFetch", (WindowReadOnlyViewAccessor) v -> v.fetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeBackwardFetch", (WindowReadOnlyViewAccessor) v -> v.backwardFetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("all", (WindowReadOnlyViewAccessor) v -> v.all())),
+            Arguments.of(Named.of("backwardAll", (WindowReadOnlyViewAccessor) v -> v.backwardAll()))
+        );
+    }
+
+    @FunctionalInterface
+    private interface WindowReadOnlyViewAccessor {
+        KeyValueIterator<?, byte[]> apply(ReadOnlyWindowStore<Bytes, byte[]> view);
+    }
+
 }
