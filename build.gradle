@@ -163,6 +163,11 @@ allprojects {
           libs.nettyTransportNativeEpoll,
           // be explicit about the reload4j version instead of relying on the transitive versions
           libs.reload4j,
+          // ZooKeeper 3.8.5+ inherits slf4j-api 2.x via its parent POM, but Kafka ships the
+          // slf4j-reload4j 1.7.x binding which is incompatible with slf4j-api 2.x (NOP fallback).
+          // Force the slf4j stack to 1.7.x to keep broker logging functional.
+          libs.slf4jApi,
+          libs.slf4jReload4j,
           libs.commonsLang
         )
       }
