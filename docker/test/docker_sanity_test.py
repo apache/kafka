@@ -26,6 +26,7 @@ from common import detect_compose_command
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
+    IMAGE_TYPE="jvm"
     FIXTURES_DIR="."
     CONTAINER_RUNTIME="docker"
     COMPOSE_COMMAND=None
@@ -305,6 +306,40 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
         self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
+        # Run Streams inside the image to exercise its RocksDB native dependencies.
+        if self.IMAGE_TYPE == "jvm":
+            self.wordcount_with_rocksdb()
+
+    def wordcount_with_rocksdb(self):
+        input_topic = "streams-plaintext-input"
+        output_topic = "streams-wordcount-output"
+        bootstrap = ["--bootstrap-server", "localhost:9092"]
+        for topic in (input_topic, output_topic):
+            self.assertTrue(self.create_topic(topic, bootstrap))
+
+        exec_command = [self.CONTAINER_RUNTIME, "exec", constants.BROKER_CONTAINER]
+        try:
+            # Use the internal listener so Streams can reach every broker from inside the container.
+            subprocess.run([
+                self.CONTAINER_RUNTIME, "exec", "--detach", constants.BROKER_CONTAINER, "sh", "-c",
+                "printf '%s\\n' 'bootstrap.servers=broker1:29092' > /tmp/wordcount.properties && "
+                "exec /opt/kafka/bin/kafka-run-class.sh "
+                "org.apache.kafka.streams.examples.wordcount.WordCountDemo /tmp/wordcount.properties "
+                "> /tmp/wordcount.log 2>&1",
+            ], check=True, capture_output=True, text=True, timeout=60)
+            self.produce_message(input_topic, bootstrap, "key", "kafka")
+            output = self.consume_message(output_topic, bootstrap + [
+                "--key-deserializer", "org.apache.kafka.common.serialization.StringDeserializer",
+                "--value-deserializer", "org.apache.kafka.common.serialization.LongDeserializer",
+            ])
+            self.assertEqual(output, "kafka:1")
+        finally:
+            try:
+                logs = subprocess.run(exec_command + ["cat", "/tmp/wordcount.log"],
+                                      capture_output=True, text=True, timeout=30)
+                print(logs.stdout + logs.stderr)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                print(f"Failed to collect WordCount logs: {e}")
 
 class DockerSanityTestIsolatedMode(DockerSanityTest):
     def setUp(self) -> None:
@@ -316,6 +351,7 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
 
 def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
+    DockerSanityTest.IMAGE_TYPE = mode
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
     DockerSanityTest.COMPOSE_COMMAND = compose_command or detect_compose_command(container_runtime)

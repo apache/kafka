@@ -75,7 +75,7 @@ RUN mkdir opt/kafka; \
     set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache bash procps-ng; \
+    apk add --no-cache bash procps-ng libstdc++; \
     if [ -n "$kafka_url" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent; \
         wget -nv -O kafka.tgz "$kafka_url"; \
