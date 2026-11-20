@@ -34,6 +34,7 @@ public class ListConfigResourcesResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public ListConfigResourcesResponseData data() {
         return data;
     }

@@ -442,16 +442,19 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     private void changeCapacity(int newCapacity) {
         Element[] newElements = new Element[newCapacity];
         HeadElement newHead = new HeadElement();
-        int oldSize = size;
-        for (Iterator<E> iter = iterator(); iter.hasNext(); ) {
-            Element element = iter.next();
-            iter.remove();
+        // Copy the elements into the new array in insertion order. The old array
+        // is dropped afterwards, so the elements are not removed from it: each
+        // removal would reseat the rest of its probe run.
+        int index = head.next();
+        while (index != HEAD_INDEX) {
+            Element element = elements[index];
+            // Read the next index before addToListTail overwrites it.
+            index = element.next();
             int newSlot = addInternal(element, newElements);
             addToListTail(newHead, newElements, newSlot);
         }
         this.elements = newElements;
         this.head = newHead;
-        this.size = oldSize;
     }
 
     /**

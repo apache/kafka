@@ -10106,12 +10106,14 @@ class KafkaApisTest extends Logging {
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) util.List.of("Stable", "Empty") else util.List.of)
       .setTypesFilter(if (version >= 5) util.List.of("classic", "consumer") else util.List.of)
+      .setRequireCommittedOffsets(version >= 6)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) util.List.of("Stable", "Empty") else util.List.of)
       .setTypesFilter(if (version >= 5) util.List.of("classic", "consumer") else util.List.of)
+      .setRequireCommittedOffsets(version >= 6)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(
@@ -15014,7 +15016,7 @@ class KafkaApisTest extends Logging {
   def getReadShareGroupStateResponse(requestData: ReadShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                      verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                      readStateResult: util.List[ReadShareGroupStateResponseData.ReadStateResult]): ReadShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new ReadShareGroupStateRequest.Builder(requestData, 3.toShort).build())
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateRequest.Builder(requestData, ApiKeys.READ_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE.latestVersion)).build())
 
     val future = new CompletableFuture[ReadShareGroupStateResponseData]()
     when(shareCoordinator.readState(
@@ -15043,7 +15045,7 @@ class KafkaApisTest extends Logging {
   def getReadShareGroupStateSummaryResponse(requestData: ReadShareGroupStateSummaryRequestData, configOverrides: Map[String, String] = Map.empty,
                                             verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                             readStateSummaryResult: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult]): ReadShareGroupStateSummaryResponse = {
-    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData, 3.toShort).build())
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData, ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion)).build())
 
     val future = new CompletableFuture[ReadShareGroupStateSummaryResponseData]()
     when(shareCoordinator.readStateSummary(
@@ -15072,7 +15074,7 @@ class KafkaApisTest extends Logging {
   def getWriteShareGroupStateResponse(requestData: WriteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                       verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                       writeStateResult: util.List[WriteShareGroupStateResponseData.WriteStateResult]): WriteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData, 3.toShort).build())
+    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData, ApiKeys.WRITE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion)).build())
 
     val future = new CompletableFuture[WriteShareGroupStateResponseData]()
     when(shareCoordinator.writeState(
@@ -15101,7 +15103,7 @@ class KafkaApisTest extends Logging {
   def getDeleteShareGroupStateResponse(requestData: DeleteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                        verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                        deleteStateResult: util.List[DeleteShareGroupStateResponseData.DeleteStateResult]): DeleteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData, 3.toShort).build())
+    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData, ApiKeys.DELETE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.DELETE_SHARE_GROUP_STATE.latestVersion)).build())
 
     val future = new CompletableFuture[DeleteShareGroupStateResponseData]()
     when(shareCoordinator.deleteState(
@@ -15130,7 +15132,7 @@ class KafkaApisTest extends Logging {
   def getInitializeShareGroupStateResponse(requestData: InitializeShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                            verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                            initStateResult: util.List[InitializeShareGroupStateResponseData.InitializeStateResult]): InitializeShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new InitializeShareGroupStateRequest.Builder(requestData, 3.toShort).build())
+    val requestChannelRequest = buildRequest(new InitializeShareGroupStateRequest.Builder(requestData, ApiKeys.INITIALIZE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.INITIALIZE_SHARE_GROUP_STATE.latestVersion)).build())
 
     val future = new CompletableFuture[InitializeShareGroupStateResponseData]()
     when(shareCoordinator.initializeState(

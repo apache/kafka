@@ -820,6 +820,14 @@ public class GroupMetadataManagerTestContext {
         return results;
     }
 
+    public MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> processTask(String key) {
+        MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> result = executor.poll(key);
+        if (result != null && result.result().replayRecords()) {
+            result.result().records().forEach(this::replay);
+        }
+        return result;
+    }
+
     public void assertSessionTimeout(
         String groupId,
         String memberId,
@@ -1403,16 +1411,21 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        return groupMetadataManager.classicGroupHeartbeat(
+        CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.classicGroupHeartbeat(
             context,
             request
         );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
+        return result;
     }
 
     public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
         Set<String> statesFilterSet = new HashSet<>(statesFilter);
         Set<String> typesFilterSet = new HashSet<>(typesFilter);
-        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, lastCommittedOffset);
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, groupId -> true, lastCommittedOffset);
     }
 
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {

@@ -120,7 +120,11 @@ public final class GroupSpecFixture {
         built = true;
         var subscriptionType = sameSubscriptions ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS;
         // The metadata image is only used by isPartitionAssigned, which the uniform2 assignor never calls.
-        return new GroupSpecImpl(CoordinatorMetadataImage.EMPTY, members, subscriptionType);
+        return new GroupSpecImpl.ConsumerGroupSpec(
+            CoordinatorMetadataImage.EMPTY,
+            members,
+            subscriptionType
+        );
     }
 
     private void checkNotBuilt() {

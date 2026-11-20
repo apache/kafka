@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -120,6 +121,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
@@ -143,6 +147,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("ClassFanOutComplexity")
@@ -1570,6 +1575,7 @@ public class GroupCoordinatorShardTest {
         when(defaultStored.type()).thenReturn(Group.GroupType.STREAMS);
         when(defaultStored.isEmpty(committedOffset)).thenReturn(true);
         when(defaultStored.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(-1);
+        when(defaultStored.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("default-stored", committedOffset)).thenReturn(defaultStored);
 
         // unexpired-offsets: STREAMS, empty, storedEpoch=5, but offsets are not all expired
@@ -1577,6 +1583,7 @@ public class GroupCoordinatorShardTest {
         when(unexpired.type()).thenReturn(Group.GroupType.STREAMS);
         when(unexpired.isEmpty(committedOffset)).thenReturn(true);
         when(unexpired.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(5);
+        when(unexpired.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("unexpired-offsets", committedOffset)).thenReturn(unexpired);
         when(offsetMetadataManager.groupHasNoOffsets(eq("unexpired-offsets"), anyLong())).thenReturn(false);
 
@@ -1585,6 +1592,7 @@ public class GroupCoordinatorShardTest {
         when(eligible.type()).thenReturn(Group.GroupType.STREAMS);
         when(eligible.isEmpty(committedOffset)).thenReturn(true);
         when(eligible.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(7);
+        when(eligible.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("eligible", committedOffset)).thenReturn(eligible);
         when(offsetMetadataManager.groupHasNoOffsets(eq("eligible"), anyLong())).thenReturn(true);
 
@@ -1611,6 +1619,7 @@ public class GroupCoordinatorShardTest {
         when(uncertain.isEmpty(committedOffset)).thenReturn(true);
         when(uncertain.storedDescriptionTopologyEpoch(committedOffset))
             .thenReturn(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        when(uncertain.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("uncertain", committedOffset)).thenReturn(uncertain);
         when(offsetMetadataManager.groupHasNoOffsets(eq("uncertain"), anyLong())).thenReturn(true);
 
@@ -1653,6 +1662,7 @@ public class GroupCoordinatorShardTest {
         when(good.type()).thenReturn(Group.GroupType.STREAMS);
         when(good.isEmpty(committedOffset)).thenReturn(true);
         when(good.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(3);
+        when(good.mayHaveTopologyDescription(committedOffset)).thenCallRealMethod();
         when(groupMetadataManager.maybeGroup("good", committedOffset)).thenReturn(good);
         when(offsetMetadataManager.groupHasNoOffsets(eq("good"), anyLong())).thenReturn(true);
 
@@ -2817,5 +2827,94 @@ public class GroupCoordinatorShardTest {
         }
 
         assertEquals(result, coordinator.fetchOffsets(request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testListGroupsWithRequireCommittedOffsets() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        ArgumentCaptor<Predicate<String>> groupIdFilterCaptor = ArgumentCaptor.captor();
+        List<ListGroupsResponseData.ListedGroup> groups = List.of(new ListGroupsResponseData.ListedGroup().setGroupId("with-offsets"));
+        when(groupMetadataManager.listGroups(eq(Set.of()), eq(Set.of()), groupIdFilterCaptor.capture(), eq(100L))).thenReturn(groups);
+
+        // Without the filter, every group matches and the offsets are not read.
+        assertEquals(groups, coordinator.listGroups(List.of(), List.of(), false, 100L));
+        assertTrue(groupIdFilterCaptor.getValue().test("with-offsets"));
+        assertTrue(groupIdFilterCaptor.getValue().test("without-offsets"));
+        verifyNoInteractions(offsetMetadataManager);
+
+        // With the filter, the offsets are read at the same committed offset as the groups.
+        when(offsetMetadataManager.hasCommittedOffsets("with-offsets", 100L)).thenReturn(true);
+        when(offsetMetadataManager.hasCommittedOffsets("without-offsets", 100L)).thenReturn(false);
+        assertEquals(groups, coordinator.listGroups(List.of(), List.of(), true, 100L));
+        assertTrue(groupIdFilterCaptor.getValue().test("with-offsets"));
+        assertFalse(groupIdFilterCaptor.getValue().test("without-offsets"));
+    }
+
+    @Test
+    public void testListGroupsWithRequireCommittedOffsetsAndStatesAndTypesFilters() {
+        OffsetMetadataManagerTest.OffsetMetadataManagerTestContext context =
+            new OffsetMetadataManagerTest.OffsetMetadataManagerTestContext.Builder().build();
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            context.groupMetadataManager,
+            context.offsetMetadataManager,
+            context.time,
+            context.timer,
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        // All groups are empty. Committing an offset to an unknown group creates a simple classic group.
+        context.getOrMaybeCreateGroup(Group.GroupType.CLASSIC, "classic-without-offsets");
+        context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-with-offsets");
+        context.getOrMaybeCreateGroup(Group.GroupType.CONSUMER, "consumer-without-offsets");
+        context.getOrMaybeCreateGroup(Group.GroupType.STREAMS, "streams-with-offsets");
+        context.groupMetadataManager.getOrMaybeCreatePersistedShareGroup("share-group", true);
+        context.commitOffset("classic-with-offsets", "foo", 0, 100L, 1);
+        context.commitOffset("consumer-with-offsets", "foo", 0, 100L, 1);
+        context.commitOffset("streams-with-offsets", "foo", 0, 100L, 1);
+        context.commit();
+
+        // These writes are not committed yet, so a read at the committed offset does not see them.
+        context.commitOffset("consumer-without-offsets", "foo", 0, 100L, 1);
+        context.testOffsetDeleteWith("classic-with-offsets", "foo", 0, Errors.NONE);
+
+        BiFunction<List<String>, List<String>, Set<String>> listGroupIds = (statesFilter, typesFilter) ->
+            coordinator.listGroups(statesFilter, typesFilter, true, context.lastCommittedOffset).stream()
+                .map(ListGroupsResponseData.ListedGroup::groupId)
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets", "streams-with-offsets"), listGroupIds.apply(List.of(), List.of()));
+        assertEquals(Set.of("classic-with-offsets", "consumer-with-offsets", "streams-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of()));
+        assertEquals(Set.of(), listGroupIds.apply(List.of("Stable"), List.of()));
+        assertEquals(Set.of("consumer-with-offsets"), listGroupIds.apply(List.of(), List.of("consumer")));
+        assertEquals(Set.of("streams-with-offsets"), listGroupIds.apply(List.of(), List.of("streams")));
+        assertEquals(Set.of("classic-with-offsets"), listGroupIds.apply(List.of("Empty"), List.of("classic")));
+
+        // The share group exists but never has committed offsets.
+        assertEquals(
+            List.of("share-group"),
+            coordinator.listGroups(List.of(), List.of("share"), false, context.lastCommittedOffset).stream()
+                .map(ListGroupsResponseData.ListedGroup::groupId)
+                .toList()
+        );
+        assertEquals(Set.of(), listGroupIds.apply(List.of(), List.of("share")));
+
+        // Once committed, the new offset and the deletion are visible.
+        context.commit();
+        assertEquals(Set.of("consumer-with-offsets", "consumer-without-offsets", "streams-with-offsets"), listGroupIds.apply(List.of(), List.of()));
     }
 }

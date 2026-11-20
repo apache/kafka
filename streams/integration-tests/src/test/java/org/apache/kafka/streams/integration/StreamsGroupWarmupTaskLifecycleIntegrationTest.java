@@ -104,15 +104,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Covers the warm-up task lifecycle under the streams group protocol (KIP-1071) end to end, with real Kafka Streams
  * clients against the broker-side {@link AssignmentRefinerImpl}: the warm-up budget, a warm-up task given up because
  * the target assignment no longer wants it, the offset reporting that drives promotion, the promotion gate on
- * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task surviving a coordinator failover, a
- * lagging warm-up task taking over when the active owner leaves, and members with several stream threads. The
- * scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
+ * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task with nothing to restore, a warm-up task
+ * surviving a coordinator failover, a lagging warm-up task taking over when the active owner leaves, and members with
+ * several stream threads. The scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
  *
  * <p>All stores are in memory, so a task that is closed rather than recycled has to restore its changelog from
  * scratch, which the restore listeners record. Where a test has to hold a warm-up task behind, a {@link RestoreGate}
  * withholds the records of the instance's restore consumer. A gate that is closed from the start would leave the
- * warm-up task with nothing restored and hence no offset to report, so a gate lets a small budget of records through
- * first.
+ * warm-up task's end offset unknown: a standby task learns it from a restored batch, or once its restore consumer has
+ * reached the end of the changelog, and a closed gate prevents both. An unknown lag is never within
+ * {@code acceptable.recovery.lag}, whatever the threshold. So a gate first lets a small budget of records through, which
+ * gives the warm-up task a known lag.
  */
 @Timeout(600)
 @Tag("integration")
@@ -182,6 +184,36 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     @Test
+    public void shouldReportThatAnActiveTaskFinishedRestoringOnTheNextHeartbeat(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2);
+        final Instance a = startOwnerOfAllTasks();
+        instances.remove(a);
+        a.streams.close(Duration.ofSeconds(30));
+
+        // b takes over both tasks cold, and its gate holds both restores behind.
+        final Instance b = startInstance("b", RESTORE_BUDGET);
+        waitForGroup("the broker to learn that b is restoring an active task", group -> {
+            final StreamsGroupMemberDescription member = member(group, b);
+            if (member == null) {
+                return false;
+            }
+            final Set<Integer> reported = member.taskOffsets().stream()
+                .map(StreamsGroupMemberDescription.TaskOffset::partition)
+                .collect(Collectors.toSet());
+            reported.retainAll(partitions(member.assignment().activeTasks()));
+            return !reported.isEmpty();
+        });
+
+        // Far longer than the test waits, so the interval never elapses and cannot be what reports the finished
+        // restores. Only the client reporting a finished restore on the next heartbeat lets the broker learn of it.
+        CLUSTER.setGroupTaskOffsetInterval(appId, 300_000);
+        b.gate.open();
+        awaitRestoreEnd(b, 0, 1);
+        awaitRestoreEnd(b, 1, 1);
+        awaitNoActiveTaskReportedAsRestoring();
+    }
+
+    @Test
     public void shouldGateWarmupPromotionOnAcceptableRecoveryLag(final TestInfo testInfo) throws Exception {
         setUp(testInfo, 2);
         final long acceptableRecoveryLag = RESTORE_BUDGET / 4;
@@ -190,8 +222,9 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
 
         final Instance b = startInstance("b", RESTORE_BUDGET);
         final int task = awaitStagedMigration(a, b);
-        // The client reports Long.MAX_VALUE for an offset it does not know yet, which the broker treats as an unknown
-        // lag. The task would be withheld for that reason alone, so wait for both offsets to be real.
+        // A warm-up task reports its end offset as Long.MAX_VALUE until it has restored its first batch, and the broker
+        // treats that as an unknown lag. The task would be withheld for that reason alone, so wait until the reported
+        // offset covers the restore budget and the end offset is known.
         waitForGroup("the broker to learn how far behind the warm-up task " + task + " is", group -> {
             final StreamsGroupMemberDescription member = member(group, b);
             if (member == null) {
@@ -199,7 +232,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             }
             final long offset = reportedOffset(member.taskOffsets(), task);
             final long endOffset = reportedOffset(member.taskEndOffsets(), task);
-            return offset >= RESTORE_BUDGET && offset != Long.MAX_VALUE
+            return offset >= RESTORE_BUDGET
                 && endOffset != -1L && endOffset != Long.MAX_VALUE
                 && endOffset - offset > acceptableRecoveryLag;
         });
@@ -246,12 +279,11 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
                 && totalWarmupTasks(group) == 0;
         });
         assertTrue(maxWarmupTasksWhenStable.get() <= 1, "the group ran " + maxWarmupTasksWhenStable.get() + " warm-up tasks at once");
-        // Neither joiner restored an active task, so both took over a warmed-up task: the waiting migration was warmed
-        // up once the first one freed the budget, rather than moving cold. The group is stable as soon as the joiners
-        // own their tasks, before a cold restore would even begin, so wait for each restore to end before checking.
+        // Both joiners took over a warmed-up task: the waiting migration was warmed up once the first one freed the
+        // budget, rather than moving cold.
         final StreamsGroupDescription converged = describeGroup();
-        awaitNoActiveRestore(b, single(activeTasks(converged, b)));
-        awaitNoActiveRestore(c, single(activeTasks(converged, c)));
+        assertTookOverWarmedUpTask(b, single(activeTasks(converged, b)));
+        assertTookOverWarmedUpTask(c, single(activeTasks(converged, c)));
     }
 
     @Test
@@ -290,8 +322,6 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             && activeTasks(group, c).equals(tasksOfLeaver)
             && activeTasks(group, owner).equals(tasksOfOwner)
             && totalWarmupTasks(group) == 0);
-        // Observed through the standby update listener rather than the thread metadata, which a stream thread only
-        // refreshes once all its active tasks are restored -- and c's gate holds back the restore of its new tasks.
         TestUtils.waitForCondition(
             () -> c.standbySuspensionsByTask.containsKey(task),
             WAIT_MS,
@@ -323,6 +353,31 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     @Test
+    public void shouldPromoteAWarmupTaskThatHasNothingToRestore(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2);
+        final Instance a = startInstance("a");
+        waitForGroup("a to own all tasks", group -> isStable(group, 1) && activeTasks(group, a).size() == numPartitions);
+        awaitNoActiveTaskReportedAsRestoring();
+
+        // Nothing is produced, so the changelog is empty, and the warm-up task restores no batch to learn its end
+        // offset from. It is caught up once its restore consumer has reached the end of the empty changelog.
+        final Instance b = startInstance("b");
+        waitForGroup("b to take over a task", group -> isStable(group, 2)
+            && activeTasks(group, a).size() == 1
+            && activeTasks(group, b).size() == 1
+            && totalWarmupTasks(group) == 0);
+        final int movedTask = single(activeTasks(describeGroup(), b));
+        assertEquals(1, b.standbyUpdateStarts(movedTask), "b should have warmed up " + movedTask + " before taking it over");
+        TestUtils.waitForCondition(
+            () -> b.standbySuspensionsByTask.containsKey(movedTask),
+            WAIT_MS,
+            () -> "b's warm-up task " + movedTask + " was never suspended"
+        );
+        assertEquals(StandbyUpdateListener.SuspendReason.PROMOTED, b.standbySuspensionsByTask.get(movedTask),
+            "b should have turned its warm-up task " + movedTask + " into the active task in place");
+    }
+
+    @Test
     public void shouldKeepAWarmupTaskThroughACoordinatorFailover(final TestInfo testInfo) throws Exception {
         setUp(testInfo, 2, appIdWithCoordinatorOffTheControllers(testInfo));
         final Instance a = startOwnerOfAllTasks();
@@ -346,7 +401,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             && activeTasks(group, b).equals(Set.of(task))
             && !activeTasks(group, a).contains(task)
             && totalWarmupTasks(group) == 0);
-        awaitNoActiveRestore(b, task);
+        assertTookOverWarmedUpTask(b, task);
         assertEquals(1, b.standbyUpdateStarts(task), "b should have kept its warm-up task open across the failover");
     }
 
@@ -375,6 +430,8 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             WAIT_MS,
             () -> "b never started restoring " + task + " as an active task"
         );
+        assertEquals(StandbyUpdateListener.SuspendReason.PROMOTED, b.standbySuspensionsByTask.get(task),
+            "b should have turned its warm-up task " + task + " into the active task in place");
         b.gate.open();
         final Map<Integer, Long> changelogSizes = changelogSizes();
         // The active task continues from where the warm-up task stopped, rather than restoring from the start.
@@ -408,8 +465,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             && totalWarmupTasks(group) == 0);
         final Set<Integer> tasksOfB = activeTasks(describeGroup(), b);
         for (final int task : tasksOfB) {
-            awaitRestoreEnd(b, task, 1);
-            assertEquals(0L, b.totalRestoredByTask.get(task), "b should have taken over the warmed-up task " + task);
+            assertTookOverWarmedUpTask(b, task);
         }
 
         // The remaining thread takes over the removed thread's task. Its process ran the task, but the state lived
@@ -432,9 +488,8 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
 
     /**
      * Waits until the broker no longer takes any active task to be restoring. A client reports the changelog offsets of
-     * an active task while it restores it, but only reports that the restore has finished with its next offset report,
-     * which may be up to the task offset interval later. Until then the refiner sees no caught-up state on the owner to
-     * protect and moves the task without warming it up.
+     * an active task while it restores it, and reports that the restore has finished on its next heartbeat. Until then
+     * the refiner sees no caught-up state on the owner to protect and moves the task without warming it up.
      */
     private void awaitNoActiveTaskReportedAsRestoring() throws InterruptedException {
         waitForGroup("the broker to learn that all active tasks are running", group -> group.members().stream()
@@ -469,16 +524,13 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     /**
-     * Waits for the instance to finish restoring the active task, and asserts that it restored nothing, ie, that it
-     * took over the state of a warm-up task. Kafka Streams ends the restore of a recycled task with nothing to restore
-     * too, so the wait always ends.
+     * Asserts that the instance took over the active task from a warm-up task, ie, that its first restore of the task
+     * ended with nothing restored. The broker shows the instance owning the task before that restore ends, so this
+     * waits for the end first; Kafka Streams ends the restore of a recycled task with nothing to restore too, so the
+     * wait always ends.
      */
-    private static void awaitNoActiveRestore(final Instance instance, final int task) throws InterruptedException {
-        TestUtils.waitForCondition(
-            () -> instance.totalRestoredByTask.containsKey(task),
-            WAIT_MS,
-            () -> instance.name + " never finished restoring its active task " + task
-        );
+    private static void assertTookOverWarmedUpTask(final Instance instance, final int task) throws InterruptedException {
+        awaitRestoreEnd(instance, task, 1);
         assertEquals(0L, instance.totalRestoredByTask.get(task), instance.name + " should have taken over a warmed-up task " + task);
     }
 
@@ -522,8 +574,8 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         CLUSTER.createTopic(changelogTopic, numPartitions, NUM_BROKERS, Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT));
         // Refinement steps only advance on heartbeats, so short heartbeats keep the tests fast.
         CLUSTER.setGroupHeartbeatInterval(appId, HEARTBEAT_INTERVAL_MS);
-        // The shortest interval allowed, so that the broker learns quickly that a restore has finished (see
-        // awaitNoActiveTaskReportedAsRestoring).
+        // The shortest interval allowed, so that the broker learns quickly how far a restore that a gate holds behind
+        // has come, which only the periodic report delivers.
         CLUSTER.setGroupTaskOffsetInterval(appId, GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT);
         CLUSTER.setGroupStreamsInitialRebalanceDelay(appId, 0);
     }

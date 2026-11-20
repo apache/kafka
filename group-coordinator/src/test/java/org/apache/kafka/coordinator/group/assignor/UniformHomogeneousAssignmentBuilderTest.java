@@ -92,7 +92,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -125,7 +125,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -166,7 +166,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic1Uuid, 0, 1, 2)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -225,7 +225,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 1)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -264,7 +264,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             ));
         }
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -320,7 +320,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -378,7 +378,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -445,7 +445,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 0, 2)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -504,7 +504,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -560,7 +560,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ConsumerGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS
