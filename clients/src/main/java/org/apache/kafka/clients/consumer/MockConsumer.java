@@ -241,7 +241,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private synchronized void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        subscriptions.setRebalanceListenerFromSubscribe(listener, this);
+        if (listener != null || !topics.isEmpty())
+            subscriptions.setRebalanceListenerFromSubscribe(listener, this);
         subscriptions.subscribe(new HashSet<>(topics));
     }
 

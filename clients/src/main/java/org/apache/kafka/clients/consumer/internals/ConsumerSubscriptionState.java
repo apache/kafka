@@ -85,8 +85,7 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     }
 
     private enum ListenerSource {
-        SUBSCRIBE,              // registered via the deprecated subscribe(..., listener) methods
-        SET_REBALANCE_LISTENER  // registered via Consumer#setRebalanceListener
+        SUBSCRIBE, SET_REBALANCE_LISTENER
     }
 
     /* the type of subscription */

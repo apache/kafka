@@ -808,10 +808,6 @@ public class PlaintextConsumerCallbackTest {
         testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe(CONSUMER);
     }
 
-    /**
-     * subscribe(topics) removes the listener registered via the deprecated subscribe(topics, listener), so a
-     * following unsubscribe() must not invoke it.
-     */
     @SuppressWarnings("removal")
     private void testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe(GroupProtocol groupProtocol) throws InterruptedException {
         var topicName = "subscribe-without-listener";
@@ -822,7 +818,9 @@ public class PlaintextConsumerCallbackTest {
         var listener = new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                revokedCount.incrementAndGet();
+                if (partitions.contains(partition)) {
+                    revokedCount.incrementAndGet();
+                }
             }
 
             @Override
@@ -833,10 +831,14 @@ public class PlaintextConsumerCallbackTest {
         try (Consumer<byte[], byte[]> consumer = createConsumer(groupProtocol)) {
             consumer.subscribe(List.of(topicName), listener);
             ClientsTestUtils.awaitAssignment(consumer, Set.of(partition));
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get(), "unsubscribe() should invoke the listener while it is registered");
 
+            consumer.subscribe(List.of(topicName), listener);
+            ClientsTestUtils.awaitAssignment(consumer, Set.of(partition));
             consumer.subscribe(List.of(topicName));
             consumer.unsubscribe();
-            assertEquals(0, revokedCount.get(), "unsubscribe() should not invoke the listener removed by subscribe(topics)");
+            assertEquals(1, revokedCount.get(), "unsubscribe() should not invoke the listener removed by subscribe(topics)");
         }
     }
 

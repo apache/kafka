@@ -487,7 +487,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * <p>
      * @param topics The list of topics to subscribe to
      * @param listener listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics; null argument is ignored
+     *                 for the subscribed topics
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
@@ -574,7 +574,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * @param pattern Pattern to subscribe to
      * @param listener listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics. null argument is ignored
+     *                 for the subscribed topics
      * @throws IllegalArgumentException If pattern is null
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
