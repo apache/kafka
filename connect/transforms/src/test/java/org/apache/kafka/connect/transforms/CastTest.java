@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,7 +93,13 @@ public class CastTest {
 
     @Test
     public void testConfigInvalidMap() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int8:extra")));
+        ConfigException e = assertThrows(ConfigException.class,
+                () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int8:extra")));
+        // The error must point at the Cast "spec" config rather than ReplaceField's "renames" config.
+        assertTrue(e.getMessage().contains("configuration " + Cast.SPEC_CONFIG),
+                "Unexpected exception message: " + e.getMessage());
+        assertFalse(e.getMessage().contains("rename"),
+                "Exception message should not mention rename mappings: " + e.getMessage());
     }
 
     @Test
