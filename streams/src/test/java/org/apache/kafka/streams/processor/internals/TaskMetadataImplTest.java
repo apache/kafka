@@ -50,17 +50,24 @@ public class TaskMetadataImplTest {
     public void setUp() {
         taskMetadata = new TaskMetadataImpl(
             TASK_ID,
-            new HashSet<>(TOPIC_PARTITIONS),
-            new HashMap<>(COMMITTED_OFFSETS),
-            new HashMap<>(END_OFFSETS),
+            TOPIC_PARTITIONS,
+            COMMITTED_OFFSETS,
+            END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
     }
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertTrue(isUnmodifiable(taskMetadata.topicPartitions()));
-        assertTrue(isUnmodifiable(taskMetadata.committedOffsets()));
-        assertTrue(isUnmodifiable(taskMetadata.endOffsets()));
+        // Use mutable collections to ensure unmodifiable wrapping is verified
+        final TaskMetadata mutableInputTask = new TaskMetadataImpl(
+            TASK_ID,
+            new HashSet<>(TOPIC_PARTITIONS),
+            new HashMap<>(COMMITTED_OFFSETS),
+            new HashMap<>(END_OFFSETS),
+            TIME_CURRENT_IDLING_STARTED);
+        assertTrue(isUnmodifiable(mutableInputTask.topicPartitions()));
+        assertTrue(isUnmodifiable(mutableInputTask.committedOffsets()));
+        assertTrue(isUnmodifiable(mutableInputTask.endOffsets()));
     }
 
     @Test
