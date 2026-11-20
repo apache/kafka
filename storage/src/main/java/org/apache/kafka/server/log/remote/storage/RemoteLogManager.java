@@ -453,13 +453,13 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
         Map<TopicIdPartition, Boolean> remoteLogPartitions = new HashMap<>();
         for (TopicPartitionLog partition : partitions) {
-            Optional<UnifiedLog> unifiedLog = partition.unifiedLog();
-            if (unifiedLog.isPresent() && unifiedLog.get().remoteLogEnabled()) {
-                fetchTopicId.apply(partition.topicPartition().topic()).ifPresent(topicId ->
-                        remoteLogPartitions.put(
-                                new TopicIdPartition(topicId, partition.topicPartition()),
-                                unifiedLog.get().config().remoteLogCopyDisable()));
-            }
+            partition.unifiedLog().filter(UnifiedLog::remoteLogEnabled).ifPresent(unifiedLog -> {
+                TopicPartition tp = partition.topicPartition();
+                unifiedLog.topicId()
+                        .ifPresentOrElse(
+                                topicId -> remoteLogPartitions.put(new TopicIdPartition(topicId, tp), unifiedLog.config().remoteLogCopyDisable()),
+                                () -> LOGGER.warn("Skipping remote log partition {} because its topic ID is missing", tp));
+            });
         }
         return remoteLogPartitions;
     }
@@ -716,20 +716,18 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                                                           long timestamp,
                                                                           long startingOffset,
                                                                           LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException, IOException {
-        var topicIdOpt = fetchTopicId.apply(tp.topic());
-        if (topicIdOpt.isEmpty()) {
-            throw new KafkaException("Topic id does not exist for topic partition: " + tp);
-        }
         Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(tp);
         if (unifiedLogOptional.isEmpty()) {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
         UnifiedLog unifiedLog = unifiedLogOptional.get();
+        Uuid topicId = unifiedLog.topicId()
+                .orElseThrow(() -> new KafkaException("Topic id does not exist for topic partition: " + tp));
         int maxRecordBodySize = unifiedLog.config().maxDecompressedMessageBytes();
 
         // Get the respective epoch in which the starting-offset exists.
         OptionalInt maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
-        TopicIdPartition topicIdPartition = new TopicIdPartition(topicIdOpt.get(), tp);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
         NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
         long searchedThrough = startingOffset - 1;
         while (maybeEpoch.isPresent()) {

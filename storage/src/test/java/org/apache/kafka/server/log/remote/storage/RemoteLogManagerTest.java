@@ -262,6 +262,7 @@ public class RemoteLogManagerTest {
         };
         doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
         when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
+        when(mockLog.topicId()).thenReturn(Optional.of(leaderTopicIdPartition.topicId()));
     }
 
     private RemoteLogManagerConfig configs(Properties props) {
@@ -1839,7 +1840,7 @@ public class RemoteLogManagerTest {
     void testFetchOffsetByTimestampWithTieredStorageDoesNotFetchIndexWhenExistsLocally() throws Exception {
         TopicPartition tp = new TopicPartition("sample", 0);
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
-        topicIds.put(tp.topic(), tpId.topicId());
+        when(mockLog.topicId()).thenReturn(Optional.of(tpId.topicId()));
         List<EpochEntry> epochEntries = new ArrayList<>();
         epochEntries.add(new EpochEntry(0, 0L));
         epochEntries.add(new EpochEntry(1, 20L));
@@ -4484,6 +4485,7 @@ public class RemoteLogManagerTest {
         TopicPartitionLog partition = mock(TopicPartitionLog.class);
         UnifiedLog log = mock(UnifiedLog.class);
         when(partition.topicPartition()).thenReturn(tp);
+        when(log.topicId()).thenReturn(Optional.of(topicIdPartition.topicId()));
         when(log.remoteLogEnabled()).thenReturn(true);
         when(partition.unifiedLog()).thenReturn(Optional.of(log));
         when(log.config()).thenReturn(new LogConfig(new Properties()));
