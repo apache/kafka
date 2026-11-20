@@ -39,7 +39,7 @@ import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
-import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.SpreadTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -390,13 +390,13 @@ public class GroupCoordinatorConfigTest {
 
         // Test default config. The default is every built-in assignor, in declaration order, so that the
         // first entry -- the default assignor of groups that do not select one -- stays the sticky assignor.
-        assertEquals(List.of("sticky", "balanced"), GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_DEFAULT);
+        assertEquals(List.of("sticky", "spread"), GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_DEFAULT);
         config = createConfig(configs);
         assignors = config.streamsGroupAssignors();
         assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
-        assertInstanceOf(BalancedTaskAssignor.class, assignors.get(1));
-        assertEquals(List.of("sticky", "balanced"), config.streamsGroupAssignorNames());
+        assertInstanceOf(SpreadTaskAssignor.class, assignors.get(1));
+        assertEquals(List.of("sticky", "spread"), config.streamsGroupAssignorNames());
 
         // Test custom assignor.
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, CustomTaskAssignor.class.getName());

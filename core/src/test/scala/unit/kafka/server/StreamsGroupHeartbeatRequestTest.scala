@@ -985,7 +985,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
-  def testStreamsGroupSelectsBalancedAssignorWithoutBrokerConfig(): Unit = {
+  def testStreamsGroupSelectsSpreadAssignorWithoutBrokerConfig(): Unit = {
     val admin = cluster.admin()
     val groupId = "test-group"
     val topicName = "test-topic"
@@ -1008,15 +1008,15 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         admin.listTopics().names().get().contains(topicName)
       }, msg = s"Topic $topicName is not available to the group coordinator")
 
-      // Every built-in assignor is registered by default, so a group can select the balanced assignor without
+      // Every built-in assignor is registered by default, so a group can select the spread assignor without
       // any broker configuration.
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
-      val balancedAlterOp = new AlterConfigOp(
-        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "balanced"),
+      val spreadAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "spread"),
         AlterConfigOp.OpType.SET
       )
       admin.incrementalAlterConfigs(
-        Map(groupConfigResource -> List(balancedAlterOp).asJavaCollection).asJava
+        Map(groupConfigResource -> List(spreadAlterOp).asJavaCollection).asJava
       ).all().get()
 
       TestUtils.waitUntilTrue(() => {
@@ -1032,13 +1032,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // The described assignor is the one the coordinator resolves the group config to, which would be the
-      // default sticky assignor if "balanced" were not registered. Group config propagation is asynchronous,
+      // default sticky assignor if "spread" were not registered. Group config propagation is asynchronous,
       // so wait for it.
       var assignorName: Optional[String] = Optional.empty()
       TestUtils.waitUntilTrue(() => {
         assignorName = admin.describeStreamsGroups(List(groupId).asJava).all().get().get(groupId).assignorName()
-        assignorName == Optional.of("balanced")
-      }, s"Expected the group to report the balanced assignor, but it reported $assignorName.")
+        assignorName == Optional.of("spread")
+      }, s"Expected the group to report the spread assignor, but it reported $assignorName.")
     } finally {
       admin.close()
     }

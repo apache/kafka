@@ -49,8 +49,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * A task assignor that computes a <em>balanced</em> assignment: tasks of the same subtopology are spread over as
- * many processes as possible, and the per-member task load is evened out across processes.
+ * A task assignor that <em>spreads</em> the tasks of each subtopology over as many processes as possible, and
+ * evens out the per-member task load across processes.
  * <p>
  * The assignment follows the placement half of the "classic" protocol's {@code HighAvailabilityTaskAssignor},
  * translated to the streams rebalance protocol:
@@ -81,17 +81,17 @@ import java.util.stream.Collectors;
  * only tells the fan-out which member of a process holds a task's state), and rack-aware placement is tracked
  * separately.
  */
-public class BalancedTaskAssignor implements TaskAssignor {
+public class SpreadTaskAssignor implements TaskAssignor {
 
-    private static final String BALANCED_ASSIGNOR_NAME = "balanced";
-    private static final Logger log = LoggerFactory.getLogger(BalancedTaskAssignor.class);
+    private static final String SPREAD_ASSIGNOR_NAME = "spread";
+    private static final Logger log = LoggerFactory.getLogger(SpreadTaskAssignor.class);
 
     private static final Comparator<ProcessTasks> BY_ASSIGNED_LOAD =
         Comparator.comparingDouble(ProcessTasks::assignedTaskLoad).thenComparing(ProcessTasks::processId);
 
     @Override
     public String name() {
-        return BALANCED_ASSIGNOR_NAME;
+        return SPREAD_ASSIGNOR_NAME;
     }
 
     @Override

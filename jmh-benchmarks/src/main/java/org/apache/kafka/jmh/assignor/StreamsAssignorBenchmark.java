@@ -26,9 +26,9 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.SpreadTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -69,7 +69,7 @@ import java.util.concurrent.TimeUnit;
 public class StreamsAssignorBenchmark {
 
     public enum AssignorType {
-        STICKY, BALANCED
+        STICKY, SPREAD
     }
 
     /**
@@ -84,7 +84,7 @@ public class StreamsAssignorBenchmark {
      * Whether the members report offset sums for the state they hold on local disk. NONE is the behaviour of a
      * group whose clients do not report offsets, OWNED_AND_DORMANT also reports state left behind by earlier
      * assignments, so several members compete as candidates for the same task. Only the sticky assignor reads the
-     * offsets; the balanced assignor gives the same result for both values, so run it with
+     * offsets; the spread assignor gives the same result for both values, so run it with
      * {@code -p reportedOffsets=NONE}.
      */
     public enum ReportedOffsets {
@@ -123,7 +123,7 @@ public class StreamsAssignorBenchmark {
      */
     private static final int DORMANT_REPLICAS = 1;
 
-    @Param({"STICKY", "BALANCED"})
+    @Param({"STICKY", "SPREAD"})
     private AssignorType assignorType;
 
     @Param({"100", "1000"})
@@ -196,7 +196,7 @@ public class StreamsAssignorBenchmark {
     private TaskAssignor createAssignor() {
         return switch (assignorType) {
             case STICKY -> new StickyTaskAssignor();
-            case BALANCED -> new BalancedTaskAssignor();
+            case SPREAD -> new SpreadTaskAssignor();
         };
     }
 
