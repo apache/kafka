@@ -18,6 +18,8 @@
 package org.apache.kafka.image.node;
 
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.image.ClientQuotaImage;
+import org.apache.kafka.image.ClientQuotasImage;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -26,7 +28,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -66,8 +70,9 @@ public class ClientQuotasImageNodeTest {
 
     @Test
     public void defaultClientIdEntityRoundTrip() {
-        entityToStringRoundTrip(new ClientQuotaEntity(Map.of("client-id", "")),
-            "clientId()");
+        Map<String, String> entityMap = new HashMap<>();
+        entityMap.put("client-id", null);
+        entityToStringRoundTrip(new ClientQuotaEntity(entityMap), "clientId()");
     }
 
     @Test
@@ -78,8 +83,21 @@ public class ClientQuotasImageNodeTest {
 
     @Test
     public void defaultUserEntityRoundTrip() {
-        entityToStringRoundTrip(new ClientQuotaEntity(Map.of("user", "")),
-            "user()");
+        // A null entity name denotes the built-in default entity (see ClientQuotaEntity's
+        // javadoc); this is how default quotas are actually represented in the metadata image.
+        Map<String, String> entityMap = new HashMap<>();
+        entityMap.put("user", null);
+        entityToStringRoundTrip(new ClientQuotaEntity(entityMap), "user()");
+    }
+
+    @Test
+    public void defaultClientIdWithSpecificUserEntityRoundTrip() {
+        // Mixes a default (null) value with a specific value across two entity types, to
+        // exercise the has*/value split for each type independently of the others.
+        Map<String, String> entityMap = new HashMap<>();
+        entityMap.put("client-id", null);
+        entityMap.put("user", "bob");
+        entityToStringRoundTrip(new ClientQuotaEntity(entityMap), "clientId()_user(bob)");
     }
 
     @Test
@@ -99,8 +117,9 @@ public class ClientQuotasImageNodeTest {
 
     @Test
     public void defaultIpEntityRoundTrip() {
-        entityToStringRoundTrip(new ClientQuotaEntity(Map.of("ip", "")),
-            "ip()");
+        Map<String, String> entityMap = new HashMap<>();
+        entityMap.put("ip", null);
+        entityToStringRoundTrip(new ClientQuotaEntity(entityMap), "ip()");
     }
 
     @Test
@@ -129,5 +148,19 @@ public class ClientQuotasImageNodeTest {
             assertThrows(RuntimeException.class, () -> ClientQuotasImageNode.
                 clientQuotaEntityToString(new ClientQuotaEntity(Map.of("foobar", "baz")))).
                     getMessage());
+    }
+
+    @Test
+    public void testDefaultUserEntityIsListedAndReachable() {
+        Map<String, String> defaultUserEntries = new HashMap<>();
+        defaultUserEntries.put("user", null);
+        ClientQuotaEntity defaultUserEntity = new ClientQuotaEntity(defaultUserEntries);
+        ClientQuotasImageNode node = new ClientQuotasImageNode(new ClientQuotasImage(
+            Map.of(defaultUserEntity, new ClientQuotaImage(Map.of("consumer_byte_rate", 1000000.0)))));
+
+        assertTrue(node.childNames().contains("user()"),
+            "Expected the default user-principal quota to appear in the listing");
+        assertNotNull(node.child("user()"),
+            "Expected to be able to navigate into the default user-principal quota");
     }
 }
