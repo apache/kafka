@@ -455,14 +455,14 @@ public final class MetaPropertiesEnsemble {
     /**
      * Verify that the metadata properties ensemble is valid.
      *
-     * We verify that v1 meta.properties files always have cluster.id set. v0 files may or may not
+     * We verify that v1 meta.properties files always have cluster.id set. v0 or v2 files may or may not
      * have it set. If it is set, the cluster ID must be the same in all directories.
      *
-     * We verify that v1 meta.properties files always have node.id set. v0 files may or may not have
+     * We verify that v1 and v2 meta.properties files always have node.id set. v0 files may or may not have
      * it set. If it is set in v0, it will be called broker.id rather than node.id. Node ID must be
      * the same in call directories.
      *
-     * directory.id may or may not be set, in both v0 and v1. If it is set, it must not be the same
+     * directory.id may or may not be set. If it is set, it must not be the same
      * in multiple directories, and it must be safe.
      *
      * @param expectedClusterId     The cluster ID to expect, or the empty string if we don't know yet.
