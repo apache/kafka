@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a single
+ * A {@link ByteBufferOutputStream} backed by a linked list of chunks of up to {@code chunkSize} bytes instead of a single
  * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
  * additional chunks via {@link #addBuffers(List)}).
  * <p>
@@ -57,8 +57,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * {@link #deallocate()}).
      *
      * @param initialChunks pre-allocated chunks. Must be non-empty and each chunk's capacity must
-     *                      equal {@code chunkSize}
-     * @param chunkSize     the size of each chunk in bytes
+     *                      be positive and at most {@code chunkSize}
+     * @param chunkSize     the maximum size of each chunk in bytes
      * @param pool          the buffer pool used for deallocation
      */
     public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
@@ -71,8 +71,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Validates the chunk contract: {@code initialChunks} non-empty, each chunk's capacity equal to
-     * {@code chunkSize}.
+     * Validates the chunk contract: {@code initialChunks} non-empty, each chunk's capacity positive
+     * and at most {@code chunkSize}.
      */
     private static void validateInitialChunks(List<ByteBuffer> initialChunks, int chunkSize) {
         if (initialChunks == null || initialChunks.isEmpty())
@@ -81,13 +81,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Validates that every chunk's capacity equals {@code chunkSize}, which the stream's capacity
-     * bookkeeping relies on.
+     * Validates that every chunk's capacity is positive and at most {@code chunkSize}. Chunks are
+     * normally {@code chunkSize}, but the pool's remainder chunk is smaller when the buffer memory is
+     * not a multiple of the chunk size (see {@link BufferPool#allocateChunks}).
      */
     private static void validateChunkCapacities(List<ByteBuffer> chunks, int chunkSize) {
         for (ByteBuffer chunk : chunks) {
-            if (chunk.capacity() != chunkSize)
-                throw new IllegalArgumentException("each chunk must have capacity " + chunkSize
+            if (chunk.capacity() <= 0 || chunk.capacity() > chunkSize)
+                throw new IllegalArgumentException("each chunk must have a capacity between 1 and " + chunkSize
                     + ", but found a chunk of capacity " + chunk.capacity());
         }
     }
@@ -290,11 +291,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     /**
      * Total capacity across all attached chunks (written + free).
-     * Every chunk has the same size, so this equals {@code position() + remaining()} without walking the list.
      */
     int attachedCapacity() {
         ensureNotDeallocated();
-        return chunks.size() * chunkSize;
+        int total = 0;
+        for (ByteBuffer chunk : chunks) {
+            total += chunk.capacity();
+        }
+        return total;
     }
 
     /**
@@ -312,7 +316,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     @Override
     public int initialCapacity() {
         ensureNotDeallocated();
-        return chunkSize;
+        return chunks.get(0).capacity();
     }
 
     /**
