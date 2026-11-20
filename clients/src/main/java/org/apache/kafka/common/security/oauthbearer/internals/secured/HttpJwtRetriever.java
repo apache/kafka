@@ -48,6 +48,8 @@ import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
@@ -101,9 +103,9 @@ public class HttpJwtRetriever implements JwtRetriever {
 
     private long loginRetryBackoffMaxMs;
 
-    private Integer loginConnectTimeoutMs;
+    private int loginConnectTimeoutMs;
 
-    private Integer loginReadTimeoutMs;
+    private int loginReadTimeoutMs;
 
     public HttpJwtRetriever(HttpRequestFormatter requestFormatter) {
         this.requestFormatter = Objects.requireNonNull(requestFormatter);
@@ -121,8 +123,22 @@ public class HttpJwtRetriever implements JwtRetriever {
 
         this.loginRetryBackoffMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         this.loginRetryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
-        this.loginConnectTimeoutMs = cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false);
-        this.loginReadTimeoutMs = cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false);
+        // The timeouts are normally defaulted by the config definition, but the configs can also come from a plain
+        // map (for example in tools), so fall back to the documented defaults to never wait indefinitely.
+        Integer connectTimeoutMs = cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false);
+        this.loginConnectTimeoutMs = connectTimeoutMs != null ? connectTimeoutMs : DEFAULT_SASL_LOGIN_CONNECT_TIMEOUT_MS;
+        Integer readTimeoutMs = cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false);
+        this.loginReadTimeoutMs = readTimeoutMs != null ? readTimeoutMs : DEFAULT_SASL_LOGIN_READ_TIMEOUT_MS;
+    }
+
+    // visible for testing
+    int loginConnectTimeoutMs() {
+        return loginConnectTimeoutMs;
+    }
+
+    // visible for testing
+    int loginReadTimeoutMs() {
+        return loginReadTimeoutMs;
     }
 
     /**
