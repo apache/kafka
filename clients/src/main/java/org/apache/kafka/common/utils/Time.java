@@ -115,12 +115,15 @@ public interface Time {
         long deadlineNs
     ) throws TimeoutException, InterruptedException, ExecutionException  {
         TimeoutException timeoutException = null;
+        long startTimeNs = nanoseconds();
+        long timeoutNs = deadlineNs - startTimeNs;
         while (true) {
             long nowNs = nanoseconds();
-            if (deadlineNs <= nowNs) {
+            long elapsedNs = nowNs - startTimeNs;
+            if (elapsedNs >= timeoutNs) {
                 throw (timeoutException == null) ? new TimeoutException() : timeoutException;
             }
-            long deltaNs = deadlineNs - nowNs;
+            long deltaNs = timeoutNs - elapsedNs;
             try {
                 return future.get(deltaNs, TimeUnit.NANOSECONDS);
             } catch (TimeoutException t) {
