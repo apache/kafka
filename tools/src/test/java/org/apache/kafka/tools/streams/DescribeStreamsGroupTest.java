@@ -282,8 +282,8 @@ public class DescribeStreamsGroupTest {
             final Properties props = streamsProp(cluster, appId);
             props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
             final KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), props);
-            StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
             try {
+                StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
                 TestUtils.waitForCondition(() -> {
                     Map<TopicPartition, OffsetAndMetadata> committed = admin.listStreamsGroupOffsets(
                         Map.of(appId, new ListStreamsGroupOffsetsSpec())).partitionsToOffsetAndMetadata(appId).get();
@@ -318,6 +318,22 @@ public class DescribeStreamsGroupTest {
         assertEquals(Set.of(
             List.of(appId, inputTopic, "0", "1", "", "1", "0"),
             List.of(appId, inputTopic, "1", "1", "", "1", "0")), inputRows, output);
+
+        // --members: the notice goes to stderr and there are no member rows to print.
+        final Entry<String, String> membersOutputAndError = ToolsTestUtils.grabConsoleOutputAndError(() -> assertEquals(0, StreamsGroupCommand.execute(
+            new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", appId})));
+        assertTrue(membersOutputAndError.getValue().contains("Streams group '" + appId + "' has no active members."), membersOutputAndError.getValue());
+        assertEquals("", membersOutputAndError.getKey().trim());
+
+        // --state: the notice goes to stderr without the "Error:" prefix, and stdout only has the state table.
+        final Entry<String, String> stateOutputAndError = ToolsTestUtils.grabConsoleOutputAndError(() -> assertEquals(0, StreamsGroupCommand.execute(
+            new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--group", appId})));
+        assertEquals("Streams group '" + appId + "' has no active members.", stateOutputAndError.getValue().trim());
+        final String[] stateLines = stateOutputAndError.getKey().trim().split("\n");
+        assertEquals(2, stateLines.length, stateOutputAndError.getKey());
+        final List<String> stateRow = List.of(stateLines[1].trim().split("\\s+"));
+        assertEquals(appId, stateRow.get(0), stateOutputAndError.getKey());
+        assertEquals(List.of("Empty", "0"), stateRow.subList(stateRow.size() - 2, stateRow.size()), stateOutputAndError.getKey());
     }
 
     @ClusterTest
