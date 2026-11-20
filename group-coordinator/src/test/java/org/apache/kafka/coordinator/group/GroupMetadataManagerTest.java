@@ -13849,12 +13849,22 @@ public class GroupMetadataManagerTest {
         context.commit();
         group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
 
-        // Advance the group to the target state.
-        int targetAssignmentEpoch = 1;
-        // The group epoch of the upgraded group, before the new member joins and bumps it again.
-        int groupEpoch = 2;
+        // The expected generation of the classic group in the target state.
+        int generationId = switch (state) {
+            case PREPARING_REBALANCE -> 1;
+            case COMPLETING_REBALANCE -> 2; // The generation is bumped after all members rejoin, before they sync.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+        // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+        int groupEpoch = switch (state) {
+            case PREPARING_REBALANCE -> 2; // Bumped by the upgrade of a rebalancing group.
+            case COMPLETING_REBALANCE -> 3; // Bumped by the new generation, then by the upgrade of a rebalancing group.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
 
-        // The leader rejoins, triggering a rebalance.
+        // Advance the group to the target state. The leader rejoins, triggering a rebalance.
         GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(
             new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
@@ -13882,8 +13892,6 @@ public class GroupMetadataManagerTest {
             assertTrue(joinResult1.joinFuture.isDone());
             assertEquals(Errors.NONE.code(), joinResult1.joinFuture.get().errorCode());
             assertEquals(2, joinResult1.joinFuture.get().generationId());
-            targetAssignmentEpoch = 2;
-            groupEpoch = 3;
 
             // The follower syncs and waits for the leader's assignment.
             syncResult2 = context.sendClassicGroupSync(
@@ -13916,7 +13924,6 @@ public class GroupMetadataManagerTest {
             assertTrue(group.isInState(STABLE));
             assertTrue(syncResult2.syncFuture.isDone());
             assertEquals(Errors.NONE.code(), syncResult2.syncFuture.get().errorCode());
-            groupEpoch = 2;
         }
 
         // A new member 3 with new protocol joins the classic group, triggering the upgrade.
@@ -13930,8 +13937,8 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(List.of()));
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(targetAssignmentEpoch)
-            .setPreviousMemberEpoch(targetAssignmentEpoch)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
@@ -13942,12 +13949,12 @@ public class GroupMetadataManagerTest {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)), targetAssignmentEpoch))
+                mkTopicAssignment(fooTopicId, 0, 1)), generationId))
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(targetAssignmentEpoch)
-            .setPreviousMemberEpoch(targetAssignmentEpoch)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
@@ -13958,7 +13965,7 @@ public class GroupMetadataManagerTest {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)), targetAssignmentEpoch))
+                mkTopicAssignment(barTopicId, 0)), generationId))
             .build();
 
         ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(memberId3)
@@ -13990,7 +13997,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions()))
             ),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, targetAssignmentEpoch, 0)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0)),
             List.of(
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
@@ -14879,12 +14886,22 @@ public class GroupMetadataManagerTest {
         context.commit();
         group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
 
-        // Advance the group to the target state.
-        int targetAssignmentEpoch = 1;
-        // The group epoch of the upgraded group, before the static member replaces itself.
-        int groupEpoch = 2;
+        // The expected generation of the classic group in the target state.
+        int generationId = switch (state) {
+            case PREPARING_REBALANCE -> 1;
+            case COMPLETING_REBALANCE -> 2; // The generation is bumped after all members rejoin, before they sync.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
+        // The expected group epoch of the upgraded group, before the static member replaces itself.
+        int groupEpoch = switch (state) {
+            case PREPARING_REBALANCE -> 2; // Bumped by the upgrade of a rebalancing group.
+            case COMPLETING_REBALANCE -> 3; // Bumped by the new generation, then by the upgrade of a rebalancing group.
+            case STABLE -> 2;
+            default -> throw new IllegalArgumentException("Unexpected state " + state);
+        };
 
-        // The leader rejoins, triggering a rebalance.
+        // Advance the group to the target state. The leader rejoins, triggering a rebalance.
         GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(
             new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
@@ -14913,8 +14930,6 @@ public class GroupMetadataManagerTest {
             assertTrue(joinResult1.joinFuture.isDone());
             assertEquals(Errors.NONE.code(), joinResult1.joinFuture.get().errorCode());
             assertEquals(2, joinResult1.joinFuture.get().generationId());
-            targetAssignmentEpoch = 2;
-            groupEpoch = 3;
 
             // The follower syncs and waits for the leader's assignment.
             syncResult2 = context.sendClassicGroupSync(
@@ -14948,7 +14963,6 @@ public class GroupMetadataManagerTest {
             assertTrue(group.isInState(STABLE));
             assertTrue(syncResult2.syncFuture.isDone());
             assertEquals(Errors.NONE.code(), syncResult2.syncFuture.get().errorCode());
-            groupEpoch = 2;
         }
 
         // Static member 1 restarts with the new protocol and the same subscription, triggering the upgrade.
@@ -14963,8 +14977,8 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
             .setInstanceId(instanceId1)
-            .setMemberEpoch(targetAssignmentEpoch)
-            .setPreviousMemberEpoch(targetAssignmentEpoch)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
@@ -14975,12 +14989,12 @@ public class GroupMetadataManagerTest {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)), targetAssignmentEpoch))
+                mkTopicAssignment(fooTopicId, 0, 1)), generationId))
             .build();
 
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
-            .setMemberEpoch(targetAssignmentEpoch)
-            .setPreviousMemberEpoch(targetAssignmentEpoch)
+            .setMemberEpoch(generationId)
+            .setPreviousMemberEpoch(generationId)
             .setClientId("client-id")
             .setClientHost("client-host")
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
@@ -14991,7 +15005,7 @@ public class GroupMetadataManagerTest {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
             )
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)), targetAssignmentEpoch))
+                mkTopicAssignment(barTopicId, 0)), generationId))
             .build();
 
         ConsumerGroupMember expectedReplacingMember1 = new ConsumerGroupMember.Builder(expectedMember1, newMemberId1)
@@ -15022,7 +15036,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, toAssignmentWithoutEpochs(expectedMember1.assignedPartitions())),
                 GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, toAssignmentWithoutEpochs(expectedMember2.assignedPartitions()))
             ),
-            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, targetAssignmentEpoch, 0)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, generationId, 0)),
             List.of(
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1),
                 GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)

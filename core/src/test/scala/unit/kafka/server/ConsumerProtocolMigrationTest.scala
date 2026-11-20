@@ -2116,12 +2116,22 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
     assertEquals(1, generationId1)
 
-    // Advance the group to the target state.
-    var targetAssignmentEpoch = 1
-    // The group epoch of the upgraded group, before the new member joins and bumps it again.
-    var groupEpoch = 2
+    // The expected generation of the classic group in the target state.
+    val generationId = state match {
+      case ClassicGroupState.PREPARING_REBALANCE => 1
+      case ClassicGroupState.COMPLETING_REBALANCE => 2 // The generation is bumped after all members rejoin, before they sync.
+      case ClassicGroupState.STABLE => 2
+      case _ => throw new IllegalArgumentException(s"Unexpected state $state")
+    }
+    // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
+    val groupEpoch = state match {
+      case ClassicGroupState.PREPARING_REBALANCE => 2 // Bumped by the upgrade of a rebalancing group.
+      case ClassicGroupState.COMPLETING_REBALANCE => 3 // Bumped by the new generation, then by the upgrade of a rebalancing group.
+      case ClassicGroupState.STABLE => 2
+      case _ => throw new IllegalArgumentException(s"Unexpected state $state")
+    }
 
-    // Classic member 2 joins, triggering a rebalance.
+    // Advance the group to the target state. Classic member 2 joins, triggering a rebalance.
     val memberId2 = sendJoinRequest(
       groupId = groupId,
       metadata = metadata(List.empty)
@@ -2150,8 +2160,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       assertEquals(Errors.NONE.code, joinResponse1.errorCode)
       assertEquals(2, joinResponse1.generationId)
       assertEquals(Errors.NONE.code, Await.result(joinFuture2, Duration.Inf).errorCode)
-      targetAssignmentEpoch = 2
-      groupEpoch = 3
 
       // The follower syncs and waits for the leader's assignment.
       syncFuture2 = Future {
@@ -2180,7 +2188,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         expectedAssignment = assignment(List(0, 1, 2))
       )
       assertEquals(Errors.NONE.code, Await.result(syncFuture2, Duration.Inf).errorCode)
-      groupEpoch = 2
     }
 
     assertEquals(state.toString, describeGroups(groupIds = List(groupId)).head.groupState)
@@ -2195,7 +2202,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(if (isConsumerAssignorOffloadEnabled) targetAssignmentEpoch else groupEpoch + 1, response.memberEpoch)
+    assertEquals(if (isConsumerAssignorOffloadEnabled) generationId else groupEpoch + 1, response.memberEpoch)
 
     // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
     if (isConsumerAssignorOffloadEnabled) {
@@ -2206,7 +2213,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           memberEpoch = response.memberEpoch,
           expectedError = Errors.NONE
         )
-        response.memberEpoch > targetAssignmentEpoch
+        response.memberEpoch > generationId
       }, msg = s"Did not receive initial assignment. Last response $response.")
     }
 
