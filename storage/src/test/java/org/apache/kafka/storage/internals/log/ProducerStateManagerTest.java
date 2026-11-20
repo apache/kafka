@@ -424,6 +424,29 @@ public class ProducerStateManagerTest {
     }
 
     @Test
+    public void testLastStableOffsetDoesNotRegressWhenTransactionsCompleteOutOfOrder() {
+        appendClientEntry(stateManager, 1L, epoch, 0, 0L, true);
+        appendClientEntry(stateManager, 2L, epoch, 0, 10L, true);
+        appendClientEntry(stateManager, 3L, epoch, 0, 20L, true);
+
+        assertEquals(0L, completeAndGetLastStableOffset(2L, 15L));
+        assertEquals(20L, completeAndGetLastStableOffset(1L, 25L));
+        assertEquals(31L, completeAndGetLastStableOffset(3L, 30L));
+    }
+
+    private long completeAndGetLastStableOffset(long pid, long offset) {
+        ProducerAppendInfo appendInfo = stateManager.prepareUpdate(pid, AppendOrigin.COORDINATOR);
+        EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.ABORT, 0);
+        CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(
+                marker, epoch, offset, time.milliseconds(), (short) 0).orElseThrow();
+        stateManager.update(appendInfo);
+        long lastStableOffset = stateManager.lastStableOffset(completedTxn);
+        stateManager.completeTxn(completedTxn);
+        stateManager.updateMapEndOffset(offset + 1);
+        return lastStableOffset;
+    }
+
+    @Test
     public void testNonTransactionalAppendWithOngoingTransaction() {
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, true);
         assertThrows(InvalidTxnStateException.class,
