@@ -464,7 +464,7 @@ public class StreamsGroupCommand {
             }
             // Also include partitions that have committed offsets but are not assigned to any member,
             // e.g., when the group is empty, so that their committed offsets are still shown.
-            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description);
             committedOffsets.forEach((tp, offsetAndMetadata) -> {
                 if (offsetAndMetadata != null) {
                     allTp.add(tp);
@@ -505,10 +505,22 @@ public class StreamsGroupCommand {
 
         Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
-                var sourceTopics = adminClient.describeStreamsGroups(
+                return getCommittedOffsets(adminClient.describeStreamsGroups(
                     List.of(groupId),
                     withTimeoutMs(new DescribeStreamsGroupsOptions())
-                ).all().get().get(groupId).subtopologies().stream()
+                ).all().get().get(groupId));
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * Returns the group's committed offsets for the source and repartition source topics of its topology.
+         */
+        Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(StreamsGroupDescription description) {
+            try {
+                var groupId = description.groupId();
+                var sourceTopics = description.subtopologies().stream()
                     .flatMap(subtopology -> Stream.concat(
                         subtopology.sourceTopics().stream(),
                         subtopology.repartitionSourceTopics().keySet().stream()))
@@ -1061,7 +1073,7 @@ public class StreamsGroupCommand {
         }
 
         /**
-         * Prints an error message if the group state indicates that the group is either dead or empty.
+         * Prints an error message if the group is dead, or a notice on stderr if the group is empty.
          *
          * @param group The ID of the group being checked.
          * @param state The current state of the group, represented as a `GroupState` object.
