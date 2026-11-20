@@ -1142,6 +1142,8 @@ public class ReassignPartitionsCommand {
 
     /**
      * Modify the topic configurations that control inter-broker throttling.
+     * If a throttled replica list is too long to fit in a config value, the wildcard
+     * is used instead so that all replicas of the topic are throttled.
      *
      * @param adminClient         The adminClient object to use.
      * @param leaderThrottles     A map from topic names to leader throttle configurations.
@@ -1156,16 +1158,30 @@ public class ReassignPartitionsCommand {
         topicNames.forEach(topicName -> {
             List<AlterConfigOp> ops = new ArrayList<>();
             if (leaderThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+                    throttledReplicasOrWildcard(topicName, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, leaderThrottles.get(topicName))),
+                    AlterConfigOp.OpType.SET));
             }
             if (followerThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, followerThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+                    throttledReplicasOrWildcard(topicName, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, followerThrottles.get(topicName))),
+                    AlterConfigOp.OpType.SET));
             }
             if (!ops.isEmpty()) {
                 configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops);
             }
         });
         adminClient.incrementalAlterConfigs(configs).all().get();
+    }
+
+    private static String throttledReplicasOrWildcard(String topicName, String configName, String throttledReplicas) {
+        // A config value is serialized as a string, which cannot exceed Short.MAX_VALUE bytes
+        if (Utils.utf8Length(throttledReplicas) <= Short.MAX_VALUE) {
+            return throttledReplicas;
+        }
+        System.out.printf("Warning: The %s of topic %s is too long, so all replicas of the topic will be throttled.%n",
+            configName, topicName);
+        return "*";
     }
 
     private static void modifyReassignmentThrottle(
