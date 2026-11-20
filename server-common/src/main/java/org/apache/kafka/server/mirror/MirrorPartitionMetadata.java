@@ -29,7 +29,7 @@ import java.util.Objects;
  * @param lastMirror     The last mirror epoch and offset, or {@link #EMPTY_LAST_MIRROR} if not available.
  * @param errorMessage   The error message when in {@link MirrorPartitionState#FAILED} state, or null otherwise.
  * @param retryAttempt   The retry attempt count in {@link MirrorPartitionState#FAILED} state, 0 if not failed,
- *                       or -1 if non-retryable.
+ *                       or {@link #NON_RETRYABLE_ERROR} if non-retryable.
  * @param previousState  The mirror partition state before entering {@link MirrorPartitionState#FAILED},
  *                       or {@link MirrorPartitionState#UNKNOWN} if not recorded.
  */
@@ -42,6 +42,11 @@ public record MirrorPartitionMetadata(
     MirrorPartitionState previousState
 ) {
     /**
+     * The retry attempt of a partition which failed with a non-retryable error.
+     */
+    public static final short NON_RETRYABLE_ERROR = -1;
+
+    /**
      * The last mirror epoch and offset when they are not available.
      */
     public static final OffsetAndEpoch EMPTY_LAST_MIRROR = new OffsetAndEpoch(-1L, -1);
@@ -49,7 +54,8 @@ public record MirrorPartitionMetadata(
     /**
      * The metadata of a partition with no recorded state, with the default value of every field.
      */
-    public static final MirrorPartitionMetadata EMPTY = builder().build();
+    public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(
+        MirrorPartitionState.UNKNOWN, 0, EMPTY_LAST_MIRROR, null, (short) 0, MirrorPartitionState.UNKNOWN);
 
     public MirrorPartitionMetadata {
         Objects.requireNonNull(state);
@@ -57,44 +63,59 @@ public record MirrorPartitionMetadata(
         Objects.requireNonNull(previousState);
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
-
     public static class Builder {
-        private MirrorPartitionState state = MirrorPartitionState.UNKNOWN;
-        private int stateEpoch = 0;
-        private OffsetAndEpoch lastMirror = EMPTY_LAST_MIRROR;
-        private String errorMessage = null;
-        private short retryAttempt = 0;
-        private MirrorPartitionState previousState = MirrorPartitionState.UNKNOWN;
+        private MirrorPartitionState state;
+        private int stateEpoch;
+        private OffsetAndEpoch lastMirror;
+        private String errorMessage;
+        private short retryAttempt;
+        private MirrorPartitionState previousState;
 
-        public Builder setState(MirrorPartitionState state) {
+        /**
+         * Creates a builder with the default value of every field, as in {@link #EMPTY}.
+         */
+        public Builder() {
+            this(EMPTY);
+        }
+
+        /**
+         * Creates a builder with the fields of the given metadata, so that only the fields which change need to be set.
+         */
+        public Builder(MirrorPartitionMetadata metadata) {
+            this.state = metadata.state();
+            this.stateEpoch = metadata.stateEpoch();
+            this.lastMirror = metadata.lastMirror();
+            this.errorMessage = metadata.errorMessage();
+            this.retryAttempt = metadata.retryAttempt();
+            this.previousState = metadata.previousState();
+        }
+
+        public Builder withState(MirrorPartitionState state) {
             this.state = state;
             return this;
         }
 
-        public Builder setStateEpoch(int stateEpoch) {
+        public Builder withStateEpoch(int stateEpoch) {
             this.stateEpoch = stateEpoch;
             return this;
         }
 
-        public Builder setLastMirror(OffsetAndEpoch lastMirror) {
+        public Builder withLastMirror(OffsetAndEpoch lastMirror) {
             this.lastMirror = lastMirror;
             return this;
         }
 
-        public Builder setErrorMessage(String errorMessage) {
+        public Builder withErrorMessage(String errorMessage) {
             this.errorMessage = errorMessage;
             return this;
         }
 
-        public Builder setRetryAttempt(short retryAttempt) {
+        public Builder withRetryAttempt(short retryAttempt) {
             this.retryAttempt = retryAttempt;
             return this;
         }
 
-        public Builder setPreviousState(MirrorPartitionState previousState) {
+        public Builder withPreviousState(MirrorPartitionState previousState) {
             this.previousState = previousState;
             return this;
         }

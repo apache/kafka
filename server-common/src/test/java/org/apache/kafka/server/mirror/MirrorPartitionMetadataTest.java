@@ -28,13 +28,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class MirrorPartitionMetadataTest {
     @Test
     void testBuilder() {
-        MirrorPartitionMetadata metadata = MirrorPartitionMetadata.builder()
-            .setState(MirrorPartitionState.FAILED)
-            .setStateEpoch(7)
-            .setLastMirror(new OffsetAndEpoch(4_294_967_313L, 42))
-            .setErrorMessage("error")
-            .setRetryAttempt((short) 3)
-            .setPreviousState(MirrorPartitionState.MIRRORING)
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.FAILED)
+            .withStateEpoch(7)
+            .withLastMirror(new OffsetAndEpoch(4_294_967_313L, 42))
+            .withErrorMessage("error")
+            .withRetryAttempt((short) 3)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
             .build();
 
         assertEquals(MirrorPartitionState.FAILED, metadata.state());
@@ -56,36 +56,80 @@ class MirrorPartitionMetadataTest {
         assertNull(empty.errorMessage());
         assertEquals((short) 0, empty.retryAttempt());
         assertEquals(MirrorPartitionState.UNKNOWN, empty.previousState());
-        assertEquals(empty, MirrorPartitionMetadata.builder().build());
+        assertEquals(empty, new MirrorPartitionMetadata.Builder().build());
+    }
+
+    @Test
+    void testPartialBuilderKeepsDefaults() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.MIRRORING)
+            .withStateEpoch(3)
+            .build();
+
+        assertEquals(MirrorPartitionState.MIRRORING, metadata.state());
+        assertEquals(3, metadata.stateEpoch());
+        assertEquals(MirrorPartitionMetadata.EMPTY.lastMirror(), metadata.lastMirror());
+        assertNull(metadata.errorMessage());
+        assertEquals(MirrorPartitionMetadata.EMPTY.retryAttempt(), metadata.retryAttempt());
+        assertEquals(MirrorPartitionMetadata.EMPTY.previousState(), metadata.previousState());
+    }
+
+    @Test
+    void testCopyBuilderChangesOnlyTheSetFields() {
+        MirrorPartitionMetadata mirroring = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.MIRRORING)
+            .withStateEpoch(3)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .build();
+
+        MirrorPartitionMetadata failed = new MirrorPartitionMetadata.Builder(mirroring)
+            .withState(MirrorPartitionState.FAILED)
+            .withStateEpoch(4)
+            .withErrorMessage("error")
+            .withRetryAttempt((short) 1)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
+            .build();
+
+        assertEquals(new MirrorPartitionMetadata(MirrorPartitionState.FAILED, 4, new OffsetAndEpoch(100L, 10), "error",
+            (short) 1, MirrorPartitionState.MIRRORING), failed);
+        assertEquals(mirroring, new MirrorPartitionMetadata.Builder(mirroring).build());
+    }
+
+    @Test
+    void testNonRetryableError() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.FAILED)
+            .withErrorMessage("error")
+            .withRetryAttempt(MirrorPartitionMetadata.NON_RETRYABLE_ERROR)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
+            .build();
+
+        assertEquals((short) -1, metadata.retryAttempt());
+        assertEquals(MirrorPartitionMetadata.NON_RETRYABLE_ERROR, metadata.retryAttempt());
     }
 
     @Test
     void testNullFieldsAreRejected() {
-        assertThrows(NullPointerException.class, () -> MirrorPartitionMetadata.builder().setState(null).build());
-        assertThrows(NullPointerException.class, () -> MirrorPartitionMetadata.builder().setLastMirror(null).build());
-        assertThrows(NullPointerException.class, () -> MirrorPartitionMetadata.builder().setPreviousState(null).build());
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withState(null).build());
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withLastMirror(null).build());
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withPreviousState(null).build());
     }
 
     @Test
     void testEquality() {
-        MirrorPartitionMetadata metadata = MirrorPartitionMetadata.builder()
-            .setState(MirrorPartitionState.STOPPED)
-            .setStateEpoch(2)
-            .setLastMirror(new OffsetAndEpoch(100L, 10))
-            .setPreviousState(MirrorPartitionState.STOPPING)
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.STOPPED)
+            .withStateEpoch(2)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withPreviousState(MirrorPartitionState.STOPPING)
             .build();
 
-        assertEquals(metadata, MirrorPartitionMetadata.builder()
-            .setState(MirrorPartitionState.STOPPED)
-            .setStateEpoch(2)
-            .setLastMirror(new OffsetAndEpoch(100L, 10))
-            .setPreviousState(MirrorPartitionState.STOPPING)
+        assertEquals(metadata, new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.STOPPED)
+            .withStateEpoch(2)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withPreviousState(MirrorPartitionState.STOPPING)
             .build());
-        assertNotEquals(metadata, MirrorPartitionMetadata.builder()
-            .setState(MirrorPartitionState.STOPPED)
-            .setStateEpoch(3)
-            .setLastMirror(new OffsetAndEpoch(100L, 10))
-            .setPreviousState(MirrorPartitionState.STOPPING)
-            .build());
+        assertNotEquals(metadata, new MirrorPartitionMetadata.Builder(metadata).withStateEpoch(3).build());
     }
 }
