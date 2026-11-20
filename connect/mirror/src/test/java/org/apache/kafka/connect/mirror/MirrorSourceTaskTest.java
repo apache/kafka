@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -44,6 +45,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -264,6 +266,14 @@ public class MirrorSourceTaskTest {
         verify(mockConsumer, times(1))
                 .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
 
+        // for each uncommitted partition
+        verify(mockConsumer, times(1))
+                .seekToBeginning(Set.of(new TopicPartition("newTopicToReplicate1", 1)));
+        verify(mockConsumer, times(1))
+                .seekToBeginning(Set.of(new TopicPartition("newTopicToReplicate1", 4)));
+        verify(mockConsumer, times(1))
+                .seekToBeginning(Set.of(new TopicPartition("newTopicToReplicate2", 0)));
+
         verifyNoMoreInteractions(mockConsumer);
     }
 
@@ -351,5 +361,53 @@ public class MirrorSourceTaskTest {
             assertEquals(expectedHeader.value(), taskHeader.value(),
                     "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
+    }
+
+    @Test
+    public void testPollThrowsDataLossExceptionOnLogTruncation() {
+        TopicPartition tp = new TopicPartition("wal-topic", 0);
+        long truncatedFetchOffset = 1000L;
+        long logStartOffset = 5000L;
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+
+        OffsetOutOfRangeException oorException = new OffsetOutOfRangeException(
+                Map.of(tp, truncatedFetchOffset));
+
+        when(consumer.poll(any())).thenThrow(oorException);
+        when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, logStartOffset));
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        DataLossException thrown = assertThrows(DataLossException.class, task::poll);
+
+        assertTrue(thrown.getMessage().contains("wal-topic"));
+        assertTrue(thrown.getMessage().contains("partition=0"));
+        assertTrue(thrown.getMessage().contains("1000"));
+        assertTrue(thrown.getMessage().contains("5000"));
+        assertTrue(thrown.getMessage().contains("truncation"));
+    }
+
+    @Test
+    public void testPollRethrowsOffsetOutOfRangeWhenNotTruncation() {
+        TopicPartition tp = new TopicPartition("wal-topic", 0);
+        long fetchOffset = 5000L;
+        long logStartOffset = 0L;  // topic was reset, not truncated
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+
+        OffsetOutOfRangeException oorException = new OffsetOutOfRangeException(
+                Map.of(tp, fetchOffset));
+
+        when(consumer.poll(any())).thenThrow(oorException);
+        when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, logStartOffset));
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        assertThrows(OffsetOutOfRangeException.class, task::poll);
     }
 }

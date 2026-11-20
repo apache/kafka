@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -164,6 +166,9 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (OffsetOutOfRangeException e) {
+            handleOffsetOutOfRange(e);
+            throw e; // unreachable, satisfies compiler
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
@@ -221,6 +226,29 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     // visible for testing
+    void handleOffsetOutOfRange(OffsetOutOfRangeException e) {
+        for (Map.Entry<TopicPartition, Long> entry : e.offsetOutOfRangePartitions().entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long fetchOffset = entry.getValue();
+
+            Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(Collections.singleton(tp));
+            long logStartOffset = beginningOffsets.get(tp);
+
+            if (fetchOffset < logStartOffset) {
+                String message = String.format(
+                    "Log truncation detected on source cluster '%s': topic=%s, partition=%d, " +
+                    "fetch offset=%d is before log start offset=%d. " +
+                    "Unreplicated messages may have been lost due to retention policy.",
+                    sourceClusterAlias, tp.topic(), tp.partition(), fetchOffset, logStartOffset);
+                log.error(message);
+                throw new DataLossException(message, e);
+            }
+        }
+        // If OOR but NOT truncation (e.g. topic reset), re-throwing as of now.
+        throw e;
+    }
+
+    // visible for testing
     void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
         consumer.assign(topicPartitionOffsets.keySet());
@@ -228,9 +256,11 @@ public class MirrorSourceTask extends SourceTask {
                 .filter(this::isUncommitted).count());
 
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
-            // Do not call seek on partitions that don't have an existing offset committed.
+            // For partitions without a committed offset, start from the beginning of the log.
             if (isUncommitted(offset)) {
-                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                // Changing to "none" breaks new partitions that have no committed offset.
+                log.trace("Seeking to beginning for uncommitted topicPartition: {}", topicPartition);
+                consumer.seekToBeginning(Collections.singleton(topicPartition));
                 return;
             }
             long nextOffsetToCommittedOffset = offset + 1L;
