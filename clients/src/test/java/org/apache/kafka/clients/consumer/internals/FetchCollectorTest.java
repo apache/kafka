@@ -97,6 +97,7 @@ public class FetchCollectorTest {
 
     private ConsumerSubscriptionState subscriptions;
     private FetchConfig fetchConfig;
+    private Metrics metrics;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
     private FetchBuffer fetchBuffer;
@@ -728,6 +729,84 @@ public class FetchCollectorTest {
         assertEquals(new OffsetAndMetadata(startOffset + recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
+    /**
+     * A fetch that fails to initialize and still has data stays in the buffer and fails again on the next call.
+     * The metrics of its fetch response are recorded once.
+     */
+    @Test
+    public void testFetchMetricsAreRecordedOnceWhenAFailedFetchStaysBuffered() {
+        buildDependencies();
+        assign(topicAPartition0, topicAPartition1);
+        subscriptions.seek(topicAPartition0, 0);
+        subscriptions.seek(topicAPartition1, 0);
+
+        // Both partitions belong to the same fetch response.
+        FetchMetricsAggregator aggregator = new FetchMetricsAggregator(metricsManager,
+                partitions(topicAPartition0, topicAPartition1));
+
+        // The first partition has good records. The second has bytes but no complete batch, which fails to initialize.
+        fetchBuffer.add(new CompletedFetchBuilder().metricsAggregator(aggregator).build());
+        fetchBuffer.add(new CompletedFetchBuilder()
+                .partition(topicAPartition1)
+                .partitionData(new FetchResponseData.PartitionData()
+                        .setHighWatermark(1000)
+                        .setRecords(MemoryRecords.readableRecords(ByteBuffer.allocate(10))))
+                .metricsAggregator(aggregator)
+                .build());
+
+        // The failure is not thrown because the same call returns the records of the first partition.
+        assertEquals(DEFAULT_RECORD_COUNT, fetchCollector.collectFetch(fetchBuffer).numRecords());
+        assertFalse(fetchBuffer.isEmpty());
+        assertEquals(DEFAULT_RECORD_COUNT, recordsConsumedTotal());
+
+        // The failed fetch is read again and fails again.
+        assertThrows(KafkaException.class, () -> fetchCollector.collectFetch(fetchBuffer));
+        assertFalse(fetchBuffer.isEmpty());
+        assertEquals(DEFAULT_RECORD_COUNT, recordsConsumedTotal());
+
+        // The partition is no longer assigned, so the failed fetch is drained and removed.
+        assign(topicAPartition0);
+        fetchBuffer.retainAll(partitions(topicAPartition0));
+        assertTrue(fetchBuffer.isEmpty());
+        assertEquals(DEFAULT_RECORD_COUNT, recordsConsumedTotal());
+    }
+
+    /**
+     * A fetch that fails to initialize while the same call returns records of another partition stays in the
+     * buffer, and the next call removes it. The metrics of its fetch response are recorded once.
+     */
+    @Test
+    public void testFetchMetricsAreRecordedOnceWhenAFailedFetchIsRemovedByTheNextCall() {
+        buildDependencies();
+        assign(topicAPartition0, topicAPartition1);
+        subscriptions.seek(topicAPartition0, 0);
+        subscriptions.seek(topicAPartition1, 0);
+
+        FetchMetricsAggregator aggregator = new FetchMetricsAggregator(metricsManager,
+                partitions(topicAPartition0, topicAPartition1));
+        fetchBuffer.add(new CompletedFetchBuilder().metricsAggregator(aggregator).build());
+        fetchBuffer.add(new CompletedFetchBuilder()
+                .partition(topicAPartition1)
+                .recordCount(0)
+                .error(Errors.TOPIC_AUTHORIZATION_FAILED)
+                .metricsAggregator(aggregator)
+                .build());
+
+        // The failure is not thrown because the same call returns the records of the first partition.
+        assertEquals(DEFAULT_RECORD_COUNT, fetchCollector.collectFetch(fetchBuffer).numRecords());
+        assertFalse(fetchBuffer.isEmpty());
+        assertEquals(DEFAULT_RECORD_COUNT, recordsConsumedTotal());
+
+        // The failed fetch has no data, so this call removes it and throws.
+        assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collectFetch(fetchBuffer));
+        assertTrue(fetchBuffer.isEmpty());
+        assertEquals(DEFAULT_RECORD_COUNT, recordsConsumedTotal());
+    }
+
+    private double recordsConsumedTotal() {
+        return (double) metrics.metric(metrics.metricName("records-consumed-total", "consumer-fetch-manager-metrics")).metricValue();
+    }
+
     private List<FetchResponseData.AbortedTransaction> createAbortedTransaction(final long firstOffset) {
         FetchResponseData.AbortedTransaction abortedTransaction = new FetchResponseData.AbortedTransaction();
         abortedTransaction.setFirstOffset(firstOffset);
@@ -773,7 +852,7 @@ public class FetchCollectorTest {
 
         subscriptions = createSubscriptionState(config, logContext);
         fetchConfig = createFetchConfig(config, isolationLevel);
-        Metrics metrics = createMetrics(config, time);
+        metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
         deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics);
         metadata = new ConsumerMetadata(
@@ -901,6 +980,13 @@ public class FetchCollectorTest {
 
         private Errors error = null;
 
+        private FetchMetricsAggregator metricsAggregator = null;
+
+        private CompletedFetchBuilder metricsAggregator(FetchMetricsAggregator metricsAggregator) {
+            this.metricsAggregator = metricsAggregator;
+            return this;
+        }
+
         private CompletedFetchBuilder fetchOffset(long fetchOffset) {
             this.fetchOffset = fetchOffset;
             return this;
@@ -943,14 +1029,16 @@ public class FetchCollectorTest {
             if (error != null)
                 partitionData.setErrorCode(error.code());
 
-            FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
+            FetchMetricsAggregator aggregator = metricsAggregator != null
+                    ? metricsAggregator
+                    : new FetchMetricsAggregator(metricsManager, allPartitions);
             return new CompletedFetch(
                     logContext.logger(CompletedFetch.class),
                     subscriptions,
                     BufferSupplier.create(),
                     topicPartition,
                     partitionData,
-                    metricsAggregator,
+                    aggregator,
                     fetchOffset);
         }
     }
