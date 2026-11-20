@@ -44,7 +44,7 @@ To obtain a certificate that can be used with the private key that was just crea
 To generate certificate signing requests run the following command for all server keystores created so far. 
 
 ```bash
-$ keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
+$ keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
 ```
 
 This command assumes that you want to add hostname information to the certificate, if this is not the case, you can omit the extension parameter `-ext SAN=DNS:{FQDN},IP:{IPADDRESS1}`. Please see below for more information on this. 
@@ -74,7 +74,7 @@ Another advantage is that if the SAN field is used for hostname verification the
 To add a SAN field append the following argument ` -ext SAN=DNS:{FQDN},IP:{IPADDRESS}` to the keytool command: 
 
 ```bash
-$ keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
+$ keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
 ```
 
 ### Creating your own CA
@@ -340,6 +340,5 @@ Examples using console-producer and console-consumer:
 $ bin/kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --command-config client-ssl.properties
 $ bin/kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --command-config client-ssl.properties
 ```
-
 
 
