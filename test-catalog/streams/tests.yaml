@@ -3401,6 +3401,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldLockAllTasksOnCorruptionWithProcessingThreads
 - shouldLockCommittableTasksOnCorruptionWithProcessingThreads
 - shouldLockTasksOnClose
+- shouldLogErrorWhenRemovalWaitIsInterruptedOutsideOfShutdown
 - shouldMaybeCommitAllActiveTasksThatNeedCommit
 - shouldMoveReassignedSuspendedActiveTaskToStateUpdater
 - shouldNeverUpdateInputPartitionsOfStandbyTaskInStateUpdater
@@ -3419,6 +3420,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldNotFailOnTimeoutException
 - shouldNotForwardProcessingThreadsPausedWithoutProcessingThreads
 - shouldNotLockAnythingIfStateDirIsEmpty
+- shouldNotLogErrorWhenRemovalWaitIsInterruptedDuringShutdown
 - shouldNotPauseReadyTasksOnRebalanceComplete
 - shouldNotPublishTaskOffsetSumSnapshotUnderClassicProtocol
 - shouldNotRecreateActiveTasksThatAreAlreadyOwned
