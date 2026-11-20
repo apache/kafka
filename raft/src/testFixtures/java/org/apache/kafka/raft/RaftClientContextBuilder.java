@@ -35,6 +35,7 @@ import org.apache.kafka.snapshot.Snapshots;
 
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +64,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
 
     final MockMessageQueue messageQueue = new MockMessageQueue();
     final MockTime time = new MockTime();
-    final MockQuorumStateStore quorumStateStore = new MockQuorumStateStore();
+    final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
     private final MockableRandom random = new MockableRandom(1L);
     private final LogContext logContext = new LogContext();
     final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
@@ -156,7 +157,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
     }
 
     public RaftClientContextBuilder<T> appendToLog(int epoch, List<String> records) {
-        MemoryRecords batch = RaftClientTestContext.buildBatch(
+        MemoryRecords batch = SharedRaftClientContext.buildBatch(
             time.milliseconds(),
             log.endOffset().offset(),
             epoch,
@@ -241,7 +242,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
         Map<Integer, InetSocketAddress> staticVoterAddressMap = staticVoters
             .stream()
             .collect(
-                Collectors.toMap(Function.identity(), RaftClientTestContext::mockAddress)
+                Collectors.toMap(Function.identity(), SharedRaftClientContext::mockAddress)
             );
 
         return withStaticVoters(
@@ -313,7 +314,7 @@ public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
         return this;
     }
 
-    public T build() {
+    public T build() throws IOException {
         this.channel = new MockNetworkChannel();
         this.metrics = new Metrics(time);
         this.externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);

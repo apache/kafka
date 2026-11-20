@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -41,10 +42,14 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestCondition;
 
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -64,7 +69,7 @@ public abstract class SharedRaftClientContext {
 
     final int electionTimeoutMs;
 
-    final MockQuorumStateStore quorumStateStore;
+    final QuorumStateStore quorumStateStore;
     final String clusterId;
     final OptionalInt localId;
     final Uuid localDirectoryId;
@@ -96,6 +101,38 @@ public abstract class SharedRaftClientContext {
         this.fetchMaxBytes = builder.fetchMaxBytes;
         this.electionTimeoutMs = builder.electionTimeoutMs;
         this.client = builder.client;
+    }
+
+    MemoryRecords buildBatch(
+        long baseOffset,
+        int epoch,
+        List<String> records
+    ) {
+        return buildBatch(time.milliseconds(), baseOffset, epoch, records);
+    }
+
+    static MemoryRecords buildBatch(
+        long timestamp,
+        long baseOffset,
+        int epoch,
+        List<String> records
+    ) {
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        BatchBuilder<String> builder = new BatchBuilder<>(
+            buffer,
+            RaftClientContextBuilder.SERDE,
+            Compression.NONE,
+            baseOffset,
+            timestamp,
+            epoch,
+            512
+        );
+
+        for (String record : records) {
+            builder.appendRecord(record, null);
+        }
+
+        return builder.build();
     }
 
     public void unattachedToCandidate() throws Exception {
@@ -198,7 +235,7 @@ public abstract class SharedRaftClientContext {
         );
     }
 
-    public void pollUntilResponse() throws InterruptedException {
+    void pollUntilResponse() throws InterruptedException {
         pollUntil(() -> !sentResponses.isEmpty());
     }
 
@@ -234,7 +271,7 @@ public abstract class SharedRaftClientContext {
         return voteRequests;
     }
 
-    public void deliverRequest(ApiMessage request) {
+    void deliverRequest(ApiMessage request) {
         short version = raftRequestVersion(request);
         deliverRequest(request, version);
     }
@@ -288,6 +325,10 @@ public abstract class SharedRaftClientContext {
 
     List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         return new ArrayList<>(channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH)));
+    }
+
+    public static InetSocketAddress mockAddress(int id) {
+        return InetSocketAddress.createUnresolved("localhost", 9990 + id);
     }
 
     BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
@@ -385,7 +426,7 @@ public abstract class SharedRaftClientContext {
         );
     }
 
-    public FetchRequestData fetchRequest(
+    FetchRequestData fetchRequest(
         int epoch,
         ReplicaKey replicaKey,
         long fetchOffset,
@@ -454,7 +495,7 @@ public abstract class SharedRaftClientContext {
             );
     }
 
-    public DescribeQuorumRequestData describeQuorumRequest() {
+    DescribeQuorumRequestData describeQuorumRequest() {
         return RaftUtil.singletonDescribeQuorumRequest(metadataPartition);
     }
 
@@ -534,7 +575,7 @@ public abstract class SharedRaftClientContext {
      * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
      * cumulative. E.g. KIP_1186_PROTOCOL includes KIP_996_PROTOCOL, KIP_853_PROTOCOL, and KIP_595_PROTOCOL changes
      */
-    public enum RaftProtocol {
+    enum RaftProtocol {
         // kraft support
         KIP_595_PROTOCOL,
         // dynamic quorum reconfiguration support

@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
@@ -55,7 +54,6 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -99,8 +97,8 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
     final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = RaftClientContextBuilder.RETRY_BACKOFF_MS;
 
-    int requestTimeoutMs;
-    int appendLingerMs;
+    private final int requestTimeoutMs;
+    private final int appendLingerMs;
 
     final Metrics metrics;
     public final ExternalKRaftMetrics externalKRaftMetrics;
@@ -145,52 +143,6 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         return appendLingerMs;
     }
 
-    MemoryRecords buildBatch(
-        long baseOffset,
-        int epoch,
-        List<String> records
-    ) {
-        return buildBatch(time.milliseconds(), baseOffset, epoch, records);
-    }
-
-    static MemoryRecords buildBatch(
-        long timestamp,
-        long baseOffset,
-        int epoch,
-        List<String> records
-    ) {
-        ByteBuffer buffer = ByteBuffer.allocate(512);
-        BatchBuilder<String> builder = new BatchBuilder<>(
-            buffer,
-            RaftClientContextBuilder.SERDE,
-            Compression.NONE,
-            baseOffset,
-            timestamp,
-            epoch,
-            512
-        );
-
-        for (String record : records) {
-            builder.appendRecord(record, null);
-        }
-
-        return builder.build();
-    }
-
-    @Override
-    public void poll() {
-        super.poll();
-        assertNoAsyncExceptions();
-    }
-
-    private void assertNoAsyncExceptions() {
-        if (!uncaughtExceptions.isEmpty()) {
-            Throwable first = uncaughtExceptions.get(0);
-            uncaughtExceptions.clear();
-            throw new AssertionError("Uncaught exception in async callback", first);
-        }
-    }
-
     @Override
     void expectAndGrantVotes(int epoch) throws Exception {
         super.expectAndGrantVotes(epoch);
@@ -207,6 +159,31 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
         return raftProtocol.isReconfigSupported() ?
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
             ReplicaKey.of(localIdOrThrow(), ReplicaKey.NO_DIRECTORY_ID);
+    }
+
+    /**
+     * Asserts that no uncaught exceptions occurred in async callbacks (e.g., CompletionStage.whenComplete).
+     * This method is automatically called by the poll() wrapper method, but can also be called directly
+     * by tests to check for async exceptions at any point.
+     *
+     * @throws AssertionError if any uncaught exceptions were captured
+     */
+    public void assertNoAsyncExceptions() {
+        if (!uncaughtExceptions.isEmpty()) {
+            Throwable first = uncaughtExceptions.get(0);
+            uncaughtExceptions.clear();
+            throw new AssertionError("Uncaught exception in async callback", first);
+        }
+    }
+
+    /**
+     * Poll for new events and check for any uncaught exceptions in async callbacks.
+     * This is a wrapper around client.poll() that also calls assertNoAsyncExceptions().
+     */
+    @Override
+    public void poll() {
+        super.poll();
+        assertNoAsyncExceptions();
     }
 
     void assertVotedCandidate(int epoch, int candidateId) {
@@ -1005,10 +982,6 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
             assertEquals(localIdOrThrow(), partitionRequest.leaderId());
         }
         return requests;
-    }
-
-    public static InetSocketAddress mockAddress(int id) {
-        return InetSocketAddress.createUnresolved("localhost", 9990 + id);
     }
 
     EndQuorumEpochResponseData endEpochResponse(
