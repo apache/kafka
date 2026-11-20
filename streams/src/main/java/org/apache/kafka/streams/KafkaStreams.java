@@ -1542,6 +1542,8 @@ public class KafkaStreams implements AutoCloseable {
             log.debug("Initializing store offsets for existing local state");
             stateDirectory.initializeStartupStores(topologyMetadata, logContext, streamsMetrics);
 
+            logRepartitionTopics();
+
             log.debug("Starting Streams client");
 
             if (globalStreamThread != null) {
@@ -1572,6 +1574,18 @@ public class KafkaStreams implements AutoCloseable {
             }
         } else {
             throw new IllegalStateException("The client is either already started or already stopped, cannot re-start");
+        }
+    }
+
+    private void logRepartitionTopics() {
+        final String repartitionTopics = topologyMetadata.topologyToSubtopologyTopicsInfoMap().values().stream()
+            .flatMap(topologyInfo -> topologyInfo.values().stream())
+            .flatMap(topicsInfo -> topicsInfo.repartitionSourceTopics.keySet().stream())
+            .sorted()
+            .collect(Collectors.joining(", "));
+
+        if (!repartitionTopics.isEmpty()) {
+            log.info("Internal repartition topics detected: {}", repartitionTopics);
         }
     }
 
