@@ -19,7 +19,9 @@
   "name": "PartitionChangeRecord",
   // Version 1 adds Directories for KIP-858.
   // Version 2 implements Eligible Leader Replicas and LastKnownElr as described in KIP-966.
-  "validVersions": "0-2",
+  // Version 3 adds LeaderEpoch as described in KIP-1279, so the controller decides the new leader epoch
+  // instead of each replaying node.
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
@@ -51,6 +53,9 @@
       "about": "null if the ELR didn't change; the new eligible leader replicas otherwise." },
     { "name": "LastKnownElr", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 7,
-      "about": "null if the LastKnownElr didn't change; the last known eligible leader replicas otherwise." }
+      "about": "null if the LastKnownElr didn't change; the last known eligible leader replicas otherwise." },
+    { "name": "LeaderEpoch", "type": "int32", "default": "-1",
+      "versions": "3+", "taggedVersions": "3+", "tag": 9,
+      "about": "-1 if the leader epoch didn't change; the new leader epoch otherwise. Before version 3, the leader epoch is bumped by one whenever Leader is not -2." }
   ]
 }
