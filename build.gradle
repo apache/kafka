@@ -1677,6 +1677,13 @@ project(':group-coordinator') {
     enabled = false
   }
 
+  test {
+    // The heartbeat simulation tests read their parameters from the heartbeat.sim.* properties.
+    project.properties.findAll { it.key.startsWith("heartbeat.sim.") }.each { name, value ->
+      systemProperty(name, value)
+    }
+  }
+
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
   }
