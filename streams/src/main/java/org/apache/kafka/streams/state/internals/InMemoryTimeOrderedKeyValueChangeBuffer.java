@@ -48,14 +48,11 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangel
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -443,17 +440,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, Change<V>>> callback) {
-        final Iterator<Map.Entry<BufferKey, BufferValue>> iterator = sortedMap.entrySet().iterator();
-        // The callback may re-enter this buffer, so it must not run while we iterate over sortedMap. We therefore
-        // only deserialize and remove the entries (through the iterator) inside the loop, and invoke the callback
-        // afterwards. Deserializing before removing means an entry that fails to deserialize stays buffered.
-        // Once an entry is removed it stays removed, even if a callback throws; the exception then propagates and
-        // the remaining callbacks are not invoked (the task fails and the buffer is restored from the changelog).
-        final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
-
+        int evictions = 0;
         try {
-            Map.Entry<BufferKey, BufferValue> next = iterator.hasNext() ? iterator.next() : null;
-            while (next != null && predicate.get()) {
+            // No iterator is kept across the callback, because the callback may re-enter this buffer. Instead, each
+            // round peeks at the first entry, deserializes it (if that fails, the entry stays buffered), removes it,
+            // and only then invokes the callback, so entries not yet evicted are never held outside the buffer.
+            while (!sortedMap.isEmpty() && predicate.get()) {
+                final Map.Entry<BufferKey, BufferValue> next = sortedMap.firstEntry();
                 if (next.getKey().time() != minTimestamp) {
                     throw new IllegalStateException(
                         "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
@@ -462,28 +455,22 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 }
                 final Bytes serializedKey = next.getKey().key();
                 final BufferValue bufferValue = next.getValue();
-                evictions.add(toEviction(serializedKey, bufferValue));
+                final Eviction<K, Change<V>> eviction = toEviction(serializedKey, bufferValue);
 
+                sortedMap.pollFirstEntry();
+                index.remove(serializedKey);
                 if (loggingEnabled) {
                     dirtyKeys.add(serializedKey);
                 }
-
                 memBufferSize -= computeRecordSize(serializedKey, bufferValue);
+                minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
+                evictions++;
 
-                iterator.remove();
-                index.remove(serializedKey);
-
-                // peek at the next entry so the predicate (e.g. minTimestamp() or bufferSize()) sees the updated state
-                next = iterator.hasNext() ? iterator.next() : null;
-                minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time();
+                callback.accept(eviction);
             }
         } finally {
-            // also hand over what was already removed if a later entry failed, so no evicted record is lost
-            if (!evictions.isEmpty()) {
+            if (evictions > 0) {
                 updateBufferMetrics();
-            }
-            for (final Eviction<K, Change<V>> eviction : evictions) {
-                callback.accept(eviction);
             }
         }
     }

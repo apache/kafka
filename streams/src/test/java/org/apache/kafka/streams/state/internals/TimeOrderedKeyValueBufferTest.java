@@ -76,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String, Change<String>>> {
 
@@ -285,17 +286,30 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertEquals(82L, buffer.bufferSize());
         assertEquals(0L, buffer.minTimestamp());
 
-        // callbacks are deferred until all evicted entries were removed, so they observe the final state
+        // each entry is removed before its callback is invoked
         final AtomicInteger callbackCount = new AtomicInteger(0);
-        final List<String> evictedKeys = new ArrayList<>();
         buffer.evictWhile(() -> true, kv -> {
-            callbackCount.incrementAndGet();
-            evictedKeys.add(kv.key());
-            assertEquals(0, buffer.numRecords());
-            assertEquals(0L, buffer.bufferSize());
-            assertEquals(Long.MAX_VALUE, buffer.minTimestamp());
+            switch (callbackCount.incrementAndGet()) {
+                case 1: {
+                    assertEquals("asdf", kv.key());
+                    assertEquals(1, buffer.numRecords());
+                    assertEquals(42L, buffer.bufferSize());
+                    assertEquals(1L, buffer.minTimestamp());
+                    break;
+                }
+                case 2: {
+                    assertEquals("zxcv", kv.key());
+                    assertEquals(0, buffer.numRecords());
+                    assertEquals(0L, buffer.bufferSize());
+                    assertEquals(Long.MAX_VALUE, buffer.minTimestamp());
+                    break;
+                }
+                default: {
+                    fail("too many invocations");
+                    break;
+                }
+            }
         });
-        assertEquals(List.of("asdf", "zxcv"), evictedKeys);
         assertEquals(2, callbackCount.get());
         assertEquals(0, buffer.numRecords());
         assertEquals(0L, buffer.bufferSize());
@@ -1651,6 +1665,31 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertEquals(List.of("a", "b"), evictedKeys);
         assertEquals(1, buffer.numRecords());
         assertEquals(5L, buffer.minTimestamp());
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldNotEmitStaleValueWhenCallbackUpdatesNotYetEvictedKey(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        putRecord(buffer, context, 0L, 0L, "a", "1");
+        putRecord(buffer, context, 1L, 1L, "b", "1");
+
+        final List<String> emitted = new ArrayList<>();
+        buffer.evictWhile(() -> buffer.numRecords() > 0, kv -> {
+            emitted.add(kv.key() + "=" + kv.value().newValue);
+            if ("a".equals(kv.key())) {
+                // update a key that was not evicted yet
+                putRecord(buffer, context, 1L, 2L, "b", "99");
+            }
+        });
+
+        assertEquals(List.of("a=1", "b=99"), emitted);
+        assertEquals(0, buffer.numRecords());
         cleanup(context, buffer);
     }
 
