@@ -14774,7 +14774,9 @@ public class GroupMetadataManagerTest {
     /**
      * Tests the upgrade of a classic group at different stages of a rebalance by a static member that
      * restarts with the consumer protocol. The classic group is advanced from Stable at generation 1 to
-     * the given state, then the static member replaces itself with the same subscription.
+     * the given state, then the static member replaces itself with the same subscription. The static
+     * member restarts with a different rebalance timeout and a server assignor, which the replacing
+     * member picks up.
      *
      * @param state The state of the classic group when it is upgraded.
      * @see #testConsumerGroupHeartbeatWithClassicGroup(ClassicGroupState)
@@ -14971,7 +14973,10 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(newMemberId1)
                 .setInstanceId(instanceId1)
-                .setRebalanceTimeoutMs(10000)
+                // The rebalance timeout and server assignor differ from the classic member's, to check that the
+                // replacing member takes them from the request and not from the classic member.
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
                 .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))
                 .setTopicPartitions(List.of()));
 
@@ -15016,6 +15021,8 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember expectedUpdatedMember1 = new ConsumerGroupMember.Builder(expectedReplacingMember1)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(5000)
             .setClassicMemberMetadata(null)
             .build();
 
@@ -15091,7 +15098,8 @@ public class GroupMetadataManagerTest {
 
     /**
      * Tests the upgrade of a classic group at generation 0 by a static member that restarts with the
-     * consumer protocol.
+     * consumer protocol. The static member restarts with a different rebalance timeout and a server
+     * assignor, which the replacing member picks up.
      *
      * The classic group is rebalancing, so the upgraded group epoch is bumped to 1. The static member
      * replaces itself with the same subscription, so nothing else bumps the group epoch and the member
@@ -15169,7 +15177,10 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(newMemberId1)
                 .setInstanceId(instanceId1)
-                .setRebalanceTimeoutMs(10000)
+                // The rebalance timeout and server assignor differ from the classic member's, to check that the
+                // replacing member takes them from the request and not from the classic member.
+                .setRebalanceTimeoutMs(5000)
+                .setServerAssignor("range")
                 .setSubscribedTopicNames(List.of(fooTopicName))
                 .setTopicPartitions(List.of())
         );
@@ -15213,6 +15224,8 @@ public class GroupMetadataManagerTest {
         ConsumerGroupMember expectedUpdatedMember1 = new ConsumerGroupMember.Builder(expectedReplacingMember1)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(5000)
             .setClassicMemberMetadata(null)
             .build();
 
