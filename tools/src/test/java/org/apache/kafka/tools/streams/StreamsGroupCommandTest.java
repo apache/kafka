@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
@@ -59,6 +60,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -67,6 +69,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -753,6 +756,29 @@ public class StreamsGroupCommandTest {
             new GroupListing(groupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.DEAD))
         )));
         return listGroupsResult;
+    }
+
+    @Test
+    public void testDefaultApiTimeoutFromCommandConfigIsUsed() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--list", "--command-config", config.getAbsolutePath()};
+        Admin adminClient = mock(KafkaAdminClient.class);
+        ListGroupsResult result = mock(ListGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(List.of()));
+        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
+
+        try (StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(new StreamsGroupCommandOptions(args), Map.of()) {
+            @Override
+            protected Admin createAdminClient(Properties adminClientProps) {
+                return adminClient;
+            }
+        }) {
+            service.listStreamsGroups();
+        }
+
+        ArgumentCaptor<ListGroupsOptions> options = ArgumentCaptor.forClass(ListGroupsOptions.class);
+        verify(adminClient).listGroups(options.capture());
+        assertEquals(5000, options.getValue().timeoutMs());
     }
 
     StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args) {

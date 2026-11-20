@@ -40,9 +40,8 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final String DESCRIBE_DOC = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group.";
     private static final String ALL_GROUPS_DOC = "Apply to all consumer groups.";
     private static final String DELETE_DOC = "Delete topic partition offsets and ownership information for one or more consumer groups.";
-    private static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
-        "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
-        "or is going through some changes).";
+    private static final String TIMEOUT_MS_DOC = "The timeout in milliseconds for the Admin API calls made by the command. If not specified, " +
+        "default.api.timeout.ms from --command-config is used when set.";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client and Consumer.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of consumer group. Supports one consumer group at a time, and instances should be inactive" + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " + NL +
