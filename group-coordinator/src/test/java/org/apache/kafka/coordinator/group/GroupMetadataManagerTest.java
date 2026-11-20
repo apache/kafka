@@ -21210,6 +21210,37 @@ public class GroupMetadataManagerTest {
         );
     }
 
+    @Test
+    public void testStreamsGroupDoesNotWarmUpAVersion0MemberWhenDerivingAnEpochFromBeforeTheLoadAgain() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        // The group is in the middle of a refinement step when the coordinator loads it: memberA has already
+        // reconciled to epoch 12, which keeps 0_2 with it, while memberB, which runs an older client, has not.
+        GroupMetadataManagerTestContext context = streamsGroupContextMovingTask2ToMemberB(
+            groupId, 12, memberA, memberB, 11, TasksTupleWithEpochs.EMPTY);
+        context.groupMetadataManager.onLoaded();
+        context.commit();
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // Both members heartbeat, then the writes fail. The rollback drops the intermediate assignment of epoch 12, but
+        // the coordinator still remembers the heartbeat versions, so every member counts as heard from.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 12));
+        context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 11), (short) 0);
+        context.rollback();
+
+        // The coordinator derives the intermediate assignment of epoch 12 again. 0_2 stays with memberA, and memberB
+        // gets no warm-up task, since it never reports its restore progress.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 12));
+
+        assertEquals(12, group.groupEpoch());
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1, 2)),
+            group.refinedAssignment(12).get(memberA)
+        );
+        assertEquals(TasksTuple.EMPTY, group.refinedAssignment(12).get(memberB));
+    }
+
     /**
      * A streams group with one stateful subtopology of three tasks, handled by the real {@link AssignmentRefinerImpl},
      * whose target assignment moves 0_2 from memberA to memberB, on another process. memberA holds all three tasks as
