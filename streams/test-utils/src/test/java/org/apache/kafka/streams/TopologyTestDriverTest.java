@@ -471,11 +471,11 @@ public abstract class TopologyTestDriverTest {
         assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
-        assertFalse(applicationDirectory().exists());
+        assertFalse(stateDirectory().exists());
     }
 
     @Test
-    public void shouldCloseGlobalStateStoreWhenProcessorFailsToInitialize() {
+    public void shouldCloseGlobalStateStoreWhenProcessorFailsToInitializeOnRestore() {
         final Topology topology = new Topology();
         topology.addGlobalStore(
             Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("globalStore"), Serdes.String(), Serdes.Long())
@@ -490,18 +490,17 @@ public abstract class TopologyTestDriverTest {
         assertThrows(IllegalStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
-        assertFalse(applicationDirectory().exists());
+        assertFalse(stateDirectory().exists());
     }
 
     @Test
-    public void shouldWipeStateDirectoryWhenStateStoreFailsBeforeItRegisters() {
+    public void shouldWipeStateDirectoryWhenFirstStateStoreIsCorrupted() {
         final Topology topology = new Topology();
         topology.addSource("source", SOURCE_TOPIC_1);
-        // the store of the first processor is initialized first, so that no store is registered when it fails
         topology.addProcessor("corruptedProcessor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
-            // as a RocksDB store found corrupted when it is opened, the store fails before it registers itself
             Stores.keyValueStoreBuilder(
+                // fails as a RocksDB store that is found corrupted when it is opened, before any store is registered
                 storeSupplier(() -> new InMemoryKeyValueStore("corruptedStore") {
                     @Override
                     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
@@ -511,14 +510,14 @@ public abstract class TopologyTestDriverTest {
                 Serdes.String(),
                 Serdes.Long()),
             "corruptedProcessor");
-        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addProcessor("persistentProcessor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
-            "processor");
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("persistentStore"), Serdes.String(), Serdes.Long()),
+            "persistentProcessor");
 
         assertThrows(TaskCorruptedException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
-        assertFalse(applicationDirectory().exists());
+        assertFalse(stateDirectory().exists());
     }
 
     @Test
@@ -558,11 +557,10 @@ public abstract class TopologyTestDriverTest {
         assertEquals(1, exception.getSuppressed().length);
         assertInstanceOf(ProcessorStateException.class, exception.getSuppressed()[0]);
         assertFalse(store.isOpen());
-        assertFalse(applicationDirectory().exists());
+        assertFalse(stateDirectory().exists());
     }
 
-    // holds the directories of the task and of the global state
-    private File applicationDirectory() {
+    private File stateDirectory() {
         return new File(
             config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
