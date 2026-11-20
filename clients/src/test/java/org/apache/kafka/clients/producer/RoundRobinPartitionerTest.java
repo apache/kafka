@@ -22,10 +22,13 @@ import org.apache.kafka.common.PartitionInfo;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,5 +98,26 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
+    }
+
+    @Test
+    public void testPartitionersStartedTogetherDoNotPickTheSamePartitions() {
+        // With a random start, the chance that all 10 partitioners pick the same partition is (1/100)^9.
+        final String topic = "test";
+        final int numPartitions = 100;
+        List<PartitionInfo> partitions = new ArrayList<>();
+        for (int i = 0; i < numPartitions; i++) {
+            partitions.add(new PartitionInfo(topic, i, NODES[i % NODES.length], NODES, NODES));
+        }
+        Cluster cluster = new Cluster("clusterId", asList(NODES), partitions,
+            Collections.emptySet(), Collections.emptySet());
+
+        Set<Integer> firstPartitions = new HashSet<>();
+        for (int i = 0; i < 10; i++) {
+            Partitioner partitioner = new RoundRobinPartitioner();
+            firstPartitions.add(partitioner.partition(topic, null, null, null, null, cluster));
+        }
+        assertTrue(firstPartitions.size() > 1,
+            "Partitioners created at the same time should not all start from the same partition");
     }
 }
