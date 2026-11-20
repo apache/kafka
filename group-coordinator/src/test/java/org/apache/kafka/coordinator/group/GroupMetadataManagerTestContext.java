@@ -820,6 +820,14 @@ public class GroupMetadataManagerTestContext {
         return results;
     }
 
+    public MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> processTask(String key) {
+        MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> result = executor.poll(key);
+        if (result != null && result.result().replayRecords()) {
+            result.result().records().forEach(this::replay);
+        }
+        return result;
+    }
+
     public void assertSessionTimeout(
         String groupId,
         String memberId,
