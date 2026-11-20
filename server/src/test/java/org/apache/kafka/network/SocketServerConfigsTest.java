@@ -19,7 +19,9 @@ package org.apache.kafka.network;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.config.ReplicationConfigs;
 
 import org.junit.jupiter.api.Test;
 
@@ -97,5 +99,14 @@ public class SocketServerConfigsTest {
         assertEquals(List.of(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "example.com", 9093)),
                 SocketServerConfigs.listenerListToEndPoints(List.of("CONTROLLER://example.com:9093"),
                     Map.of(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT)));
+    }
+
+    @Test
+    public void testDefaultSocketBufferSizes() {
+        Map<String, Object> socketServerDefaults = SocketServerConfigs.CONFIG_DEF.defaultValues();
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, socketServerDefaults.get(SocketServerConfigs.SOCKET_SEND_BUFFER_BYTES_CONFIG));
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, socketServerDefaults.get(SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG));
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE,
+            ReplicationConfigs.CONFIG_DEF.defaultValues().get(ReplicationConfigs.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG));
     }
 }

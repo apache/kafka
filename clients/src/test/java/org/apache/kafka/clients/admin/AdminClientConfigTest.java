@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.Selectable;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,5 +45,12 @@ public class AdminClientConfigTest {
         configs.put(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
         ConfigException ce = assertThrows(ConfigException.class, () -> new AdminClientConfig(configs));
         assertTrue(ce.getMessage().contains(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void testDefaultSocketBufferSizes() {
+        final AdminClientConfig adminClientConfig = new AdminClientConfig(new HashMap<>());
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, adminClientConfig.getInt(AdminClientConfig.SEND_BUFFER_CONFIG));
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, adminClientConfig.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG));
     }
 }
