@@ -132,9 +132,8 @@ public class Topology {
      * @throws TopologyException
      *         if the provided source name is not unique,
      *         no topics are specified, or
-     *         a topic has already been registered by another source,
-     *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}, or
-     *         {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state store}
+     *         a topic has already been registered by another regular source or
+     *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}
      * @throws NullPointerException
      *         if {@code name} or {@code topics} is {@code null}, or
      *         {@code topics} contains a {@code null} topic
@@ -779,8 +778,7 @@ public class Topology {
      *         if the {@link StoreBuilder#name() state store} was already added, or
      *         if the source or processor names are not unique, or
      *         if the source topic has already been registered by another
-     *         {@link #addSink(String, String, String...) source}, read-only state store, or
-     *         {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state store}
+     *         {@link #addSource(String, String...) regular source} or read-only state store
      * @throws NullPointerException
      *         if {@code storeBuilder}, {@code sourceName}, {@code topic}, {@code processorName}, or
      *         {@code stateUpdateSupplier} is {@code null}
@@ -848,6 +846,8 @@ public class Topology {
      * {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state stores}
      * global state stores are "bootstrapped" on startup, and are maintained by a separate thread.
      * Thus, updates to a global store are not "stream-time synchronized" what may lead to non-deterministic results.
+     * The source topic may also be registered by a regular source or read-only state store.
+     * The regular and global sources consume independently, without ordering guarantees between their updates.
      * Like all other stores, global state stores can be accessed from "outside" using the Interactive Queries (IQ) API)
      * (cf. {@link KafkaStreams#store(StoreQueryParameters)} and {@link KafkaStreams#query(StateQueryRequest)}).
      *
@@ -892,10 +892,7 @@ public class Topology {
      * @throws TopologyException
      *         if the {@link StoreBuilder#name() state store} was already added, or
      *         if the source or processor names are not unique, or
-     *         if the source topic has already been registered by another
-     *         {@link #addSink(String, String, String...) source},
-     *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}, or
-     *         global state store
+     *         if the source topic has already been registered by another global state store
      * @throws NullPointerException
      *         if {@code storeBuilder}, {@code sourceName}, {@code topic}, {@code processorName}, or
      *         {@code stateUpdateSupplier} is {@code null}

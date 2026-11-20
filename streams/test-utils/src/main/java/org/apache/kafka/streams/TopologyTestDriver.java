@@ -252,6 +252,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
+    private final Map<TopicPartition, AtomicLong> globalOffsetsByTopicPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final StreamsConfigUtils.ProcessingMode processingMode;
@@ -439,7 +440,7 @@ public class TopologyTestDriver implements Closeable {
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
                 globalPartitionsByInputTopic.put(topicName, partition);
-                offsetsByTopicOrPatternPartition.put(partition, new AtomicLong());
+                globalOffsetsByTopicPartition.put(partition, new AtomicLong());
                 globalConsumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
                 globalConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
@@ -652,7 +653,7 @@ public class TopologyTestDriver implements Closeable {
         globalStateTask.update(new ConsumerRecord<>(
             globalInputTopicPartition.topic(),
             globalInputTopicPartition.partition(),
-            offsetsByTopicOrPatternPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
+            globalOffsetsByTopicPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
             key == null ? ConsumerRecord.NULL_SIZE : key.length,
