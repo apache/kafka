@@ -115,9 +115,34 @@ public abstract class SourceTask implements Task {
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
+     *
+     * Note: Exceptions thrown by this method will be logged and ignored, will not result in task failure.
+     *
      */
     public void commit() throws InterruptedException {
         // This space intentionally left blank.
+    }
+
+    /**
+     * This method is invoked periodically when offsets are committed for this source task. Note that the offsets
+     * being committed won't necessarily correspond to the latest offsets returned by this source task via
+     * {@link #poll()}. Also see {@link #commitRecord(SourceRecord, RecordMetadata)} which allows for a more
+     * fine-grained tracking of records that have been successfully delivered.
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * <p>
+     * Note: Exceptions thrown by this method will be logged and ignored, will not result in task failure.
+     *
+     * @param latestCommittedOffsets Latest committed source-offsets produced by this task. For each key ({SourceRecord.sourcePartition}),
+     *                               the associated value ({SourceRecord.sourceOffset}) represents the most recent committed source-offset.
+     *                               This ensures that all preceding sourceOffsets, as delivered by task.poll() for the same sourcePartition,
+     *                               have also been committed.
+     * @throws InterruptedException
+     */
+    public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) throws InterruptedException {
+        this.commit();
     }
 
     /**
@@ -145,6 +170,8 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * <p>
      * The default implementation is a nop. It is not necessary to implement the method.
+     *
+     * Note: Exceptions thrown by this method will be logged and ignored, will not result in task failure.
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer, filtered by a transformation, or dropped on producer exception
      * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered or if producer exceptions are ignored
