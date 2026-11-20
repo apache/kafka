@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -245,6 +246,7 @@ public class TransactionsWithTieredStoreTest {
         TransactionsTestHelper.testConsecutivelyRunInitTransactions(clusterInstance);
     }
 
+    @Flaky("KAFKA-21588")
     @ClusterTemplate("tieredStorageClusterConfig")
     public void testRecoveryFromEpochOverflow(ClusterInstance clusterInstance) throws Exception {
         TransactionsTestHelper.testRecoveryFromEpochOverflow(clusterInstance, topicConfig());
