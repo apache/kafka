@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Set;
+import java.util.SortedSet;
 
 /**
  * Listener for handling streams group rebalance events in Kafka Streams.
@@ -36,6 +39,14 @@ public interface StreamsRebalanceListener {
      * @param assignment The tasks assigned.
      */
     void onTasksAssigned(final StreamsRebalanceData.Assignment assignment);
+
+    /**
+     * Called when tasks are assigned from a stream thread.
+     *
+     * @param assignment The tasks assigned.
+     * @param assignedPartitions The partitions assigned.
+     */
+    void onTasksAssigned(final StreamsRebalanceData.Assignment assignment, final SortedSet<TopicPartition> assignedPartitions);
 
     /**
      * Called when a stream thread loses all assigned tasks

@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -423,10 +424,19 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
     public static class StreamsTargetAssignmentRecordsBuilder extends TargetAssignmentRecordsBuilder<TasksTuple> {
 
+        private Optional<GroupMetadataManager.TopologyMetadataSnapshot> snapshot = Optional.empty();
+        
         public StreamsTargetAssignmentRecordsBuilder(Logger log, String groupId) {
             super(log, groupId);
         }
 
+        public StreamsTargetAssignmentRecordsBuilder withTopologyMetadataSnapshot(
+            Optional<GroupMetadataManager.TopologyMetadataSnapshot> snapshot
+        ) {
+            this.snapshot = snapshot;
+            return this;
+        }
+        
         @Override
         protected TasksTuple emptyMemberAssignment() {
             return TasksTuple.EMPTY;
@@ -454,7 +464,8 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
             return StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
                 groupId,
                 assignmentEpoch,
-                assignmentTimestampMs
+                assignmentTimestampMs,
+                this.snapshot
             );
         }
     }
