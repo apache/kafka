@@ -20224,6 +20224,7 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(Uuid.randomUuid(), "foo", 1)
                 .buildCoordinatorMetadataImage())
