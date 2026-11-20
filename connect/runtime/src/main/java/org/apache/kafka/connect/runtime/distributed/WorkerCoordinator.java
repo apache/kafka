@@ -69,7 +69,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private volatile ConnectProtocolCompatibility currentConnectProtocol;
     private volatile int lastCompletedGenerationId;
     private final ConnectAssignor eagerAssignor;
-    private final ConnectAssignor incrementalAssignor;
+    private final IncrementalCooperativeAssignor incrementalAssignor;
     private final int coordinatorDiscoveryTimeoutMs;
 
     /**
@@ -148,6 +148,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                                 "avoid running tasks while not being a member the group", coordinatorDiscoveryTimeoutMs, localAssignmentSnapshot);
                         listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());
                         assignmentSnapshot = null;
+                        // So that if this worker is the next leader, it doesn't treat the revoked work as lost and delay reassigning it
+                        incrementalAssignor.reset();
                     }
                 }
                 now = time.milliseconds();
