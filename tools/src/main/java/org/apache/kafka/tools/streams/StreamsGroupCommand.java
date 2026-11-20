@@ -468,7 +468,7 @@ public class StreamsGroupCommand {
             // A member that stopped without leaving the group keeps its assignment until its session times out, so the
             // assignment can reference a topic or partition that has since been deleted. listOffsets would fail or retry
             // until the timeout for those, so only query partitions with a leader and report the rest as unknown.
-            List<TopicPartition> partitionsWithoutLeader = groupOffsetsResetter.filterNoneLeaderPartitions(allTp);
+            Set<TopicPartition> partitionsWithoutLeader = new HashSet<>(groupOffsetsResetter.filterNoneLeaderPartitions(allTp));
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
             Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
