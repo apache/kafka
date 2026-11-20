@@ -19,15 +19,19 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -584,6 +588,85 @@ public class KafkaMetricsCollectorTest {
         assertEquals(1, metric.dataPointsCount());
         assertEquals(1, metric.attributesCount());
         assertEquals(Collections.singletonMap("tag1", "value1"), metric.attributes());
+    }
+
+    @Test
+    public void testCollectMetricWithSensor() {
+        Sensor sensor = metrics.sensor("test", Sensor.RecordingLevel.DEBUG);
+        sensor.add(metricName, new WindowedCount());
+
+        sensor.record();
+        sensor.record();
+
+        time.sleep(2 * 1000L);
+
+        // Collect delta metrics.
+        testEmitter.onlyDeltaMetrics(true);
+        collector.collect(testEmitter);
+        List<SinglePointMetric> result1 = testEmitter.emittedMetrics();
+
+        assertFalse(result1.stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")));
+
+        // Dynamically modifying the config metric to DEBUG so it matched that of the metric level
+        testEmitter.reset();
+        MetricConfig config = metrics.config();
+        config.recordLevel(Sensor.RecordingLevel.DEBUG);
+
+        sensor.record();
+        sensor.record();
+
+        time.sleep(2 * 1000L);
+
+        collector.collect(testEmitter);
+        List<SinglePointMetric> result2 = testEmitter.emittedMetrics();
+
+        // the kafka metric should get added as the config record level is not less than that of the metric
+        assertTrue(result2.stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")));
+
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCollectMetricUsesSensorConfigWithStatOverride(boolean compoundStat) {
+        Sensor sensor = metrics.sensor("debug-sensor", Sensor.RecordingLevel.DEBUG);
+        MetricConfig statConfig = new MetricConfig().samples(5);
+        MetricName rateName = metrics.metricName("rate", "group1", tags);
+        if (compoundStat) {
+            sensor.add(new Meter(rateName, metricName), statConfig);
+        } else {
+            sensor.add(metricName, new CumulativeSum(), statConfig);
+        }
+
+        // The sensor records at DEBUG even though the statistic configuration defaults to INFO.
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        assertTrue(sensor.shouldRecord());
+        sensor.record(3.0);
+        collector.collect(testEmitter);
+        assertEquals(3.0, metricByName(testEmitter.emittedMetrics(), "test.domain.group1.name1").doubleValue(), 0.0);
+        if (compoundStat) {
+            assertTrue(testEmitter.emittedMetrics().stream().anyMatch(metric ->
+                    metric.key().name().equals("test.domain.group1.rate")));
+        }
+
+        // A higher statistic recording level must not enable a disabled sensor's metrics.
+        testEmitter.reset();
+        metrics.config().recordLevel(Sensor.RecordingLevel.INFO);
+        statConfig.recordLevel(Sensor.RecordingLevel.TRACE);
+        assertFalse(sensor.shouldRecord());
+        sensor.record(7.0);
+        collector.collect(testEmitter);
+        assertFalse(testEmitter.emittedMetrics().stream().anyMatch(metric ->
+                metric.key().name().equals("test.domain.group1.name1")
+                        || metric.key().name().equals("test.domain.group1.rate")));
+
+        // Re-enabling the sensor is reflected without registering the metrics again.
+        testEmitter.reset();
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        sensor.record(2.0);
+        collector.collect(testEmitter);
+        assertEquals(5.0, metricByName(testEmitter.emittedMetrics(), "test.domain.group1.name1").doubleValue(), 0.0);
     }
 
     private static SinglePointMetric metricByName(List<SinglePointMetric> metrics, String name) {
