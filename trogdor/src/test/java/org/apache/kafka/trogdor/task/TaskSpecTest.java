@@ -18,11 +18,16 @@
 package org.apache.kafka.trogdor.task;
 
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.fault.ProcessStopFaultSpec;
+import org.apache.kafka.trogdor.workload.ExternalCommandSpec;
 
 import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,5 +50,27 @@ public class TaskSpecTest {
         assertEquals("foo", spec.error());
         String outputJson = JsonUtil.toJsonString(spec);
         assertEquals(inputJson, outputJson);
+    }
+
+    @Test
+    public void testTaskSpecAcceptsBuiltInTypesFromEachSupportedPackage() throws Exception {
+        List<TaskSpec> specs = List.of(
+            new NoOpTaskSpec(0, 1),
+            new ProcessStopFaultSpec(0, 1, List.of("node"), "java"),
+            new ExternalCommandSpec(0, 1, "node", List.of("true"), null, Optional.empty())
+        );
+
+        for (TaskSpec spec : specs) {
+            TaskSpec deserialized = JsonUtil.JSON_SERDE.readValue(JsonUtil.toJsonString(spec), TaskSpec.class);
+            assertEquals(spec.getClass(), deserialized.getClass());
+        }
+    }
+
+    @Test
+    public void testTaskSpecRejectsTypesOutsideSupportedPackages() {
+        assertThrows(InvalidTypeIdException.class, () ->
+            JsonUtil.JSON_SERDE.readValue(
+                "{\"class\":\"org.apache.kafka.trogdor.test.ExternalTaskSpec\",\"startMs\":0,\"durationMs\":1}",
+                TaskSpec.class));
     }
 }
