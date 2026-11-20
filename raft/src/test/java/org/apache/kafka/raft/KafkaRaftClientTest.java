@@ -92,7 +92,7 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withKip853Rpc(withKip853Rpc)
             .build();
-        context.assertElectedLeader(1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(1);
         assertEquals(context.log.endOffset().offset(), context.client.logEndOffset());
     }
 
@@ -135,7 +135,7 @@ class KafkaRaftClientTest {
         assertEquals(initialEpoch + 1, context.log.lastFetchedEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.of(localId), initialEpoch + 1),
             context.currentLeaderAndEpoch());
-        context.assertElectedLeader(initialEpoch + 1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(initialEpoch + 1);
     }
 
     @ParameterizedTest
@@ -561,7 +561,7 @@ class KafkaRaftClientTest {
         context.client.shutdown(1000);
         context.poll();
         context.assertSentFetchPartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER, epoch, OptionalInt.of(localId));
-        context.assertResignedLeader(epoch, localId);
+        context.assertResignedLeaderWithLocalVotedKey(epoch);
 
         // shutting down finished
         context.time.sleep(1000);
@@ -591,7 +591,7 @@ class KafkaRaftClientTest {
         // Ensure we are still leader even after expiration of the election timeout.
         context.time.sleep(context.electionTimeoutMs() * 2L);
         context.poll();
-        context.assertElectedLeader(currentEpoch, localId);
+        context.assertElectedLeaderWithLocalVotedKey(currentEpoch);
     }
 
     @ParameterizedTest
@@ -759,7 +759,7 @@ class KafkaRaftClientTest {
 
         // The leadership should get resigned now
         assertTrue(context.client.quorum().isResigned());
-        context.assertResignedLeader(epoch, localId);
+        context.assertResignedLeaderWithLocalVotedKey(epoch);
     }
 
     @ParameterizedTest
@@ -968,7 +968,7 @@ class KafkaRaftClientTest {
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
-        context.assertElectedLeader(1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(1);
         long electionTimestamp = context.time.milliseconds();
 
         // Leader change record appended
@@ -1020,7 +1020,7 @@ class KafkaRaftClientTest {
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
-        context.assertElectedLeader(2, localId);
+        context.assertElectedLeaderWithLocalVotedKey(2);
         long electionTimestamp = context.time.milliseconds();
 
         // Leader change record appended
@@ -1052,7 +1052,7 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withKip853Rpc(withKip853Rpc)
             .build();
-        context.assertElectedLeader(1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(1);
         assertEquals(0L, context.log.endOffset().offset());
         assertTrue(context.client.quorum().isLeader());
     }
@@ -1064,7 +1064,7 @@ class KafkaRaftClientTest {
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId + 1)
             .build();
-        context.assertElectedLeader(3, localId);
+        context.assertElectedLeaderWithLocalVotedKey(3);
         assertEquals(0L, context.log.endOffset().offset());
         assertTrue(context.client.quorum().isLeader());
     }
@@ -1076,7 +1076,7 @@ class KafkaRaftClientTest {
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
-        context.assertElectedLeader(2, localId);
+        context.assertElectedLeaderWithLocalVotedKey(2);
         assertTrue(context.client.quorum().isLeader());
     }
 
@@ -1087,7 +1087,7 @@ class KafkaRaftClientTest {
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId)
             .build();
-        context.assertElectedLeader(3, localId);
+        context.assertElectedLeaderWithLocalVotedKey(3);
         assertTrue(context.client.quorum().isLeader());
     }
 
@@ -1240,7 +1240,7 @@ class KafkaRaftClientTest {
         // Replica should still be leader as long as fetch timeout has not expired
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.poll();
-        context.assertElectedLeader(epoch, localId);
+        context.assertElectedLeaderWithLocalVotedKey(epoch);
     }
 
     @ParameterizedTest
@@ -1559,7 +1559,7 @@ class KafkaRaftClientTest {
             context.voteResponse(true, OptionalInt.empty(), 1)
         );
         context.poll();
-        context.assertElectedLeader(epoch, localId);
+        context.assertElectedLeaderWithLocalVotedKey(epoch);
     }
 
     @ParameterizedTest
@@ -1742,7 +1742,7 @@ class KafkaRaftClientTest {
         context.poll();
 
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.of(localId), false);
-        context.assertElectedLeader(leaderEpoch, localId);
+        context.assertElectedLeaderWithLocalVotedKey(leaderEpoch);
     }
 
     @ParameterizedTest
@@ -3818,7 +3818,7 @@ class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.assertElectedLeader(1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(1);
         context.poll();
         assertEquals(0, context.channel.drainSendQueue().size());
         int shutdownTimeoutMs = 5000;
@@ -4005,7 +4005,7 @@ class KafkaRaftClientTest {
         long now = context.time.milliseconds();
 
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
-        context.assertElectedLeader(1, localId);
+        context.assertElectedLeaderWithLocalVotedKey(1);
 
         // We still write the leader change message
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
