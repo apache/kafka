@@ -99,7 +99,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 // max.decompressed.message.bytes. As above, we have already committed to the fetch size, so we send
                 // an overflow batch. The consumer will then fetch from the offset of the offending batch, at which
                 // point the eager conversion of the first batch fails and the INVALID_RECORD error is returned.
-                log.warn("Failed to down-convert records for partition {}, sending an overflow batch instead", topicPartition());
+                log.warn("Failed to down-convert records for partition {}, sending an overflow batch instead: {}", topicPartition(), e.getMessage());
                 convertedRecords = buildOverflowBatch(remaining);
                 conversionFailed = true;
             }

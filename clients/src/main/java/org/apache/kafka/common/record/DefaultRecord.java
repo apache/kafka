@@ -386,8 +386,7 @@ public class DefaultRecord implements Record {
         // maximum; as in readFrom, this doubles as the array-length allocation guard because
         // maxRecordBodySize never exceeds SOFT_MAX_ARRAY_LENGTH.
         if (sizeOfBodyInBytes > maxRecordBodySize)
-            throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes +
-                " exceeds the configured maximum record size of " + maxRecordBodySize + ".");
+            throw RecordSizeLimitExceededException.forSize(sizeOfBodyInBytes, maxRecordBodySize);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
         return readPartiallyFrom(input, totalSizeInBytes, baseOffset, baseTimestamp,

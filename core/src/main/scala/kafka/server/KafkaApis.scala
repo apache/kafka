@@ -883,9 +883,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
                   FetchResponse.partitionResponse(tp, Errors.UNSUPPORTED_COMPRESSION_TYPE)
-                case _: RecordSizeLimitExceededException =>
+                case e: RecordSizeLimitExceededException =>
                   warn(s"Failed to down-convert records from partition $tp to message format version $magic " +
-                    s"for fetch request from $clientId")
+                    s"for fetch request from $clientId: ${e.getMessage}")
                   FetchResponse.partitionResponse(tp, Errors.INVALID_RECORD)
               }
             }
