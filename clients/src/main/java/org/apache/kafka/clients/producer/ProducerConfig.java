@@ -303,7 +303,8 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " message reordering after a failed send due to retries (i.e., if retries are enabled); "
                                                                             + " if retries are disabled or if <code>enable.idempotence</code> is set to true, ordering will be preserved."
                                                                             + " Additionally, enabling idempotence requires the value of this configuration to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ","
-                                                                            + " because broker only retains at most 5 batches for each producer. If the value is more than 5, previous batches may be removed on broker side.";
+                                                                            + " because broker only retains at most " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + " batches for each producer."
+                                                                            + " If the value is more than " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ", previous batches may be removed on broker side.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -673,7 +674,7 @@ public class ProducerConfig extends AbstractConfig {
             final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
                 throw new ConfigException("To use the idempotent producer, " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
-                                          " must be set to at most 5. Current value is " + inFlightConnection + ".");
+                                          " must be set to at most " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ". Current value is " + inFlightConnection + ".");
             }
         }
 
