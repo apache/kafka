@@ -56,6 +56,21 @@ public class MirrorSourceConfigTest {
     }
 
     @Test
+    public void testDetectOffsetOutOfRangeDisabledByDefault() {
+        MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
+        assertFalse(config.detectOffsetOutOfRangeEnabled(),
+                "detect.offset.out.of.range.enabled should default to false to preserve MM2's default behavior");
+    }
+
+    @Test
+    public void testDetectOffsetOutOfRangeCanBeEnabled() {
+        MirrorSourceConfig config = new MirrorSourceConfig(
+                makeProps("detect.offset.out.of.range.enabled", "true"));
+        assertTrue(config.detectOffsetOutOfRangeEnabled(),
+                "detect.offset.out.of.range.enabled should be configurable to true");
+    }
+
+    @Test
     public void testConfigPropertyMatching() {
         MirrorSourceConfig config = new MirrorSourceConfig(
                 makeProps("config.properties.exclude", "prop2"));
