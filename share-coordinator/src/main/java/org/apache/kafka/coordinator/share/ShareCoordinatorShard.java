@@ -544,8 +544,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * If state already exists at the requested state epoch, it is preserved regardless of the
      * requested offset and no record is written. Resetting existing state requires a higher state epoch.
      * <p>
-     * This method as called by the ShareCoordinatorService will be provided with
-     * the request data for a single share partition (group, topicId and partition data).
+     * When called by ShareCoordinatorService, this method receives request data
+     * for a single share partition (group, topicId and partition data).
      *
      * @param groupId - String representing the group id.
      * @param topicId - Uuid representing the topic id.

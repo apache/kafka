@@ -1853,10 +1853,15 @@ class ShareCoordinatorShardTest {
         assertEquals(WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), writeResult.response());
         writeResult.records().forEach(record -> shard.replay(2L, 0L, (short) 0, record));
 
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> readBeforeRetryResult =
+            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest);
+        assertEquals(List.of(), readBeforeRetryResult.records());
         ReadShareGroupStateResponseData.PartitionResult stateBeforeRetry =
-            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest).response().results().get(0).partitions().get(0);
+            readBeforeRetryResult.response().results().get(0).partitions().get(0);
         assertEquals(20, stateBeforeRetry.startOffset());
         assertEquals(1, stateBeforeRetry.stateBatches().size());
+        int deliveryCompleteCountBeforeRetry = shard.getShareStateMapValue(SHARE_PARTITION_KEY).deliveryCompleteCount();
+        assertEquals(5, deliveryCompleteCountBeforeRetry);
 
         // A delayed retry from an overlapping initialization must preserve the state already consumed.
         CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> retryResult =
@@ -1864,11 +1869,16 @@ class ShareCoordinatorShardTest {
         assertEquals(InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION), retryResult.response());
         retryResult.records().forEach(record -> shard.replay(3L, 0L, (short) 0, record));
 
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> readAfterRetryResult =
+            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest);
+        assertEquals(List.of(), readAfterRetryResult.records());
         ReadShareGroupStateResponseData.PartitionResult stateAfterRetry =
-            shard.readStateAndMaybeUpdateLeaderEpoch(readRequest).response().results().get(0).partitions().get(0);
+            readAfterRetryResult.response().results().get(0).partitions().get(0);
         assertAll(
             () -> assertEquals(stateBeforeRetry.startOffset(), stateAfterRetry.startOffset(), "Start offset must not regress"),
-            () -> assertEquals(stateBeforeRetry.stateBatches(), stateAfterRetry.stateBatches(), "Persisted acknowledgements must be preserved")
+            () -> assertEquals(stateBeforeRetry.stateBatches(), stateAfterRetry.stateBatches(), "Persisted acknowledgements must be preserved"),
+            () -> assertEquals(deliveryCompleteCountBeforeRetry, shard.getShareStateMapValue(SHARE_PARTITION_KEY).deliveryCompleteCount(),
+                "Delivery complete count must be preserved")
         );
     }
 
