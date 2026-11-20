@@ -75,6 +75,11 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -82,6 +87,7 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -813,6 +819,148 @@ public abstract class TopologyTestDriverTest {
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         assertEquals(testRecord1.value(), globalStore.get(testRecord1.key()));
+    }
+
+    @Test
+    public void shouldNotPassLastGlobalRecordHeadersToStoreValueDeserializer() {
+        final List<Headers> deserializationHeaders = new ArrayList<>();
+        final StringDeserializer valueDeserializer = new StringDeserializer() {
+            @Override
+            public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                deserializationHeaders.add(new RecordHeaders(headers));
+                return super.deserialize(topic, data);
+            }
+        };
+        final Topology topology = new Topology();
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("globalStore"),
+                Serdes.String(),
+                Serdes.serdeFrom(new StringSerializer(), valueDeserializer))
+                .withLoggingDisabled(),
+            "globalSource",
+            new StringDeserializer(),
+            new StringDeserializer(),
+            SOURCE_TOPIC_1,
+            "globalProcessor",
+            () -> new Processor<String, String, Void, Void>() {
+                private KeyValueStore<String, String> store;
+
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    store = context.getStateStore("globalStore");
+                }
+
+                @Override
+                public void process(final Record<String, String> record) {
+                    store.put(record.key(), record.value());
+                }
+            });
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+        final TestInputTopic<String, String> input = testDriver.createInputTopic(
+            SOURCE_TOPIC_1, new StringSerializer(), new StringSerializer());
+        input.pipeInput(new TestRecord<>("first", "first-value",
+            new RecordHeaders().add("first-record", new byte[]{1})));
+        input.pipeInput(new TestRecord<>("last", "last-value",
+            new RecordHeaders().add("last-record", new byte[]{2})));
+
+        deserializationHeaders.clear();
+        final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
+        assertEquals("first-value", globalStore.get("first"));
+        assertEquals(Collections.singletonList(new RecordHeaders()), deserializationHeaders,
+            "A global store read must not receive the last processed global record's headers");
+    }
+
+    @Test
+    public void shouldNotPassActiveGlobalRecordHeadersToConcurrentStoreRead() throws Exception {
+        final Thread readerThread = Thread.currentThread();
+        final List<Headers> keySerializationHeaders = new ArrayList<>();
+        final List<Headers> valueDeserializationHeaders = new ArrayList<>();
+        final CountDownLatch processingRecord = new CountDownLatch(1);
+        final CountDownLatch finishProcessing = new CountDownLatch(1);
+        final StringSerializer keySerializer = new StringSerializer() {
+            @Override
+            public byte[] serialize(final String topic, final Headers headers, final String data) {
+                if (Thread.currentThread() == readerThread) {
+                    keySerializationHeaders.add(new RecordHeaders(headers));
+                }
+                return super.serialize(topic, data);
+            }
+        };
+        final StringDeserializer valueDeserializer = new StringDeserializer() {
+            @Override
+            public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                if (Thread.currentThread() == readerThread) {
+                    valueDeserializationHeaders.add(new RecordHeaders(headers));
+                }
+                return super.deserialize(topic, data);
+            }
+        };
+        final Topology topology = new Topology();
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("globalStore"),
+                Serdes.serdeFrom(keySerializer, new StringDeserializer()),
+                Serdes.serdeFrom(new StringSerializer(), valueDeserializer))
+                .withLoggingDisabled(),
+            "globalSource",
+            new StringDeserializer(),
+            new StringDeserializer(),
+            SOURCE_TOPIC_1,
+            "globalProcessor",
+            () -> new Processor<String, String, Void, Void>() {
+                private KeyValueStore<String, String> store;
+
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    store = context.getStateStore("globalStore");
+                }
+
+                @Override
+                public void process(final Record<String, String> record) {
+                    store.put(record.key(), record.value());
+                    if ("A".equals(record.key())) {
+                        processingRecord.countDown();
+                        try {
+                            assertTrue(finishProcessing.await(30, TimeUnit.SECONDS), "Timed out waiting for the store read");
+                        } catch (final InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(e);
+                        }
+                    }
+                }
+            });
+
+        final ExecutorService globalThread = Executors.newSingleThreadExecutor();
+        try {
+            // Construct the global context and process records on the same thread, as in GlobalStreamThread.
+            final KeyValueStore<String, String> globalStore = globalThread.submit(() -> {
+                testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+                testDriver.createInputTopic(SOURCE_TOPIC_1, new StringSerializer(), new StringSerializer())
+                    .pipeInput("B", "B-value");
+                return testDriver.<String, String>getKeyValueStore("globalStore");
+            }).get(30, TimeUnit.SECONDS);
+            final Future<?> update = globalThread.submit(() ->
+                testDriver.createInputTopic(SOURCE_TOPIC_1, new StringSerializer(), new StringSerializer())
+                    .pipeInput(new TestRecord<>("A", "A-value",
+                        new RecordHeaders().add("A-header", new byte[]{1}))));
+            try {
+                assertTrue(processingRecord.await(30, TimeUnit.SECONDS), "Global processing did not reach record A");
+                assertEquals("B-value", globalStore.get("B"));
+                assertAll(
+                    () -> assertEquals(Collections.singletonList(new RecordHeaders()), keySerializationHeaders,
+                        "B's key serializer must not receive A's headers"),
+                    () -> assertEquals(Collections.singletonList(new RecordHeaders()), valueDeserializationHeaders,
+                        "B's value deserializer must not receive A's headers"));
+            } finally {
+                finishProcessing.countDown();
+                update.get(30, TimeUnit.SECONDS);
+            }
+        } finally {
+            finishProcessing.countDown();
+            globalThread.shutdownNow();
+            assertTrue(globalThread.awaitTermination(30, TimeUnit.SECONDS), "Global processing thread did not stop");
+        }
     }
 
     @Test
