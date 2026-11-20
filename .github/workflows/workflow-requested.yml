@@ -47,23 +47,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_REPO: ${{ github.event.workflow_run.head_repository.owner.login }}
-        # Caution! This is a bit hacky. The GH documentation shows that the workflow_run event should include a list
-        # of referencing pull_requests. I think this might only be the case for pull requests originating from the
-        # base repository. To deal with fork PRs, we need to query the API for PRs for the owner's branch. This
-        # code assumes that the fork repo owner is the same as the organization for the "org:branch" syntax used
-        # in the query. Also, only the first matching PR from that org will be considered.
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        # workflow_run doesn't carry the PR number for fork PRs, and for pull_request_review events its
+        # head_repository is the base repository rather than the fork. So we find the PR by matching the
+        # run's head_sha against the open PRs, as pr-reviewers-trailer-on-review.yml does.
         run: |
           set +e
-          PR_NUMBER=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/$REPO/pulls?head=$HEAD_REPO:$HEAD_BRANCH \
-            --jq '.[0].number')
+          PR_NUMBER=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq ".[] | select(.head.sha==\"$HEAD_SHA\") | .number" | head -n 1)
           if [ -z "$PR_NUMBER" ]; then
-            echo "Could not find the PR that triggered this workflow request";
-            exit 1;
+            echo "No open PR found for head sha $HEAD_SHA; nothing to approve.";
+            exit 0;
           fi
           gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
           exitcode="$?"
