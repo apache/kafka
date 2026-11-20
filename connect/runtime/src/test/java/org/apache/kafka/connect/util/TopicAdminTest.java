@@ -260,7 +260,7 @@ public class TopicAdminTest {
                 // not relevant
                 e.printStackTrace();
             }
-            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
+            Mockito.verify(admin, Mockito.times(2)).createOrFindTopics(newTopic);
         }
     }
 
@@ -278,7 +278,7 @@ public class TopicAdminTest {
                 // not relevant
                 e.printStackTrace();
             }
-            Mockito.verify(admin, Mockito.times(2)).createTopics(newTopic);
+            Mockito.verify(admin, Mockito.times(2)).createOrFindTopics(newTopic);
         }
     }
 

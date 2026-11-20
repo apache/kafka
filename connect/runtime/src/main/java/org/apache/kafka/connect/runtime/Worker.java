@@ -928,6 +928,7 @@ public final class Worker {
                 "for source connectors' offset consumers when exactly-once source support is enabled",
                 false
         );
+        disableOffsetsTopicAutoCreation(result);
         return result;
     }
 
@@ -945,7 +946,17 @@ public final class Worker {
         result.putIfAbsent(
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                 IsolationLevel.READ_COMMITTED.toString());
+        disableOffsetsTopicAutoCreation(result);
         return result;
+    }
+
+    private static void disableOffsetsTopicAutoCreation(Map<String, Object> consumerProps) {
+        // An offsets topic auto-created by the broker would not be compacted, so it must be created by the worker
+        ConnectUtils.ensureProperty(
+                consumerProps, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false",
+                "for source connectors' offset consumers, so that the broker cannot auto-create the offsets topic with its default configs",
+                false
+        );
     }
 
     static Map<String, Object> baseConsumerConfigs(String connName,

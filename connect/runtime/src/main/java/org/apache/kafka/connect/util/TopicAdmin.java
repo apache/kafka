@@ -323,14 +323,14 @@ public class TopicAdmin implements AutoCloseable {
      * @param timeoutMs        Timeout in milliseconds
      * @param backOffMs        Time for delay after initial failed attempt in milliseconds
      * @param time             {@link Time} instance
-     * @return the names of the topics that were created by this operation; never null but possibly empty,
-     * the same as {@link TopicAdmin#createTopics(NewTopic...)}
+     * @return the {@link TopicCreationResponse} with the names of the newly created and existing topics;
+     * never null but possibly empty, the same as {@link TopicAdmin#createOrFindTopics(NewTopic...)}
      */
-    public Set<String> createTopicsWithRetry(NewTopic topicDescription, long timeoutMs, long backOffMs, Time time) {
+    public TopicCreationResponse createTopicsWithRetry(NewTopic topicDescription, long timeoutMs, long backOffMs, Time time) {
         Timer timer = time.timer(timeoutMs);
         do {
             try {
-                return createTopics(topicDescription);
+                return createOrFindTopics(topicDescription);
             } catch (ConnectException e) {
                 if (timer.notExpired() && retryableTopicCreationException(e)) {
                     log.info("'{}' topic creation failed due to '{}', retrying, {}ms remaining",

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -33,7 +34,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -44,11 +44,7 @@ public abstract class KafkaTopicBasedBackingStore {
         return admin -> {
             if (config.internalTopicsCreationEnabled()) {
                 log.debug("Creating Connect internal topic for {}", getTopicPurpose());
-                // Create the topic if it doesn't exist
-                Set<String> newTopics = createTopics(topicDescription, admin, config, time);
-                if (!newTopics.contains(topic)) {
-                    verifyTopicConfig(topic, admin);
-                }
+                createOrFindTopic(topic, topicDescription, admin, config, time);
             } else {
                 log.debug("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
                 Map<String, TopicDescription> existing = admin.describeTopics(topic);
@@ -71,12 +67,37 @@ public abstract class KafkaTopicBasedBackingStore {
         admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
     }
 
-    private Set<String> createTopics(NewTopic topicDescription, TopicAdmin admin, WorkerConfig config, Time time) {
+    private void createOrFindTopic(String topic, NewTopic topicDescription, TopicAdmin admin, WorkerConfig config, Time time) {
         // get the prefixless default api timeout and retry backoff for topic creation retry configs
         AdminClientConfig adminClientConfig = new AdminClientConfig(config.originals());
         long timeoutMs = adminClientConfig.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         long backOffMs = adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
-        return admin.createTopicsWithRetry(topicDescription, timeoutMs, backOffMs, time);
+        Timer timer = time.timer(timeoutMs);
+        while (true) {
+            TopicAdmin.TopicCreationResponse response =
+                    admin.createTopicsWithRetry(topicDescription, timer.remainingMs(), backOffMs, time);
+            if (response.isCreated(topic)) {
+                return;
+            }
+            // The topic already exists, or it could not be created (e.g. the worker is not authorized to create it),
+            // in which case check whether it exists
+            if (response.isExisting(topic) || !admin.describeTopics(topic).isEmpty()) {
+                verifyTopicConfig(topic, admin);
+                return;
+            }
+            // The topic is missing. Don't continue without it, since it could then be auto-created by the broker
+            // with the wrong configs. The reason it could not be created may be transient, so retry until timeout.
+            timer.update();
+            if (timer.isExpired()) {
+                String msg = String.format("Topic '%s' supplied via the '%s' property does not exist and could not be created." +
+                                " Either create the topic manually with '%s=%s', or allow the worker to create it.",
+                        topic, getTopicConfig(), TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+                throw new ConnectException(msg);
+            }
+            log.info("Topic '{}' supplied via the '{}' property does not exist and could not be created, retrying, {}ms remaining",
+                    topic, getTopicConfig(), timer.remainingMs());
+            timer.sleep(backOffMs);
+        }
     }
 
     // visible for testing
