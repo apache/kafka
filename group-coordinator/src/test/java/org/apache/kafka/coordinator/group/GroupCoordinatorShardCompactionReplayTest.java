@@ -104,6 +104,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(consumerAssignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
             .withStreamsGroupTaskAssignors(List.of(streamsAssignor))
             .withMetadataImage(metadataImage)
             .build();
@@ -578,6 +579,7 @@ public class GroupCoordinatorShardCompactionReplayTest {
             new GroupMetadataManagerTestContext.Builder()
                 .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString())
                 .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new MockPartitionAssignor("range")))
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
                 .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
                 .withMetadataImage(metadataImage)
                 .build();

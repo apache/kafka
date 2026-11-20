@@ -237,6 +237,7 @@ public class SaslClientAuthenticator implements Authenticator {
      * followed by N bytes representing the opaque payload.
      */
     @SuppressWarnings("fallthrough")
+    @Override
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
@@ -484,6 +485,7 @@ public class SaslClientAuthenticator implements Authenticator {
         return serverPacket;
     }
 
+    @Override
     public KafkaPrincipal principal() {
         return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipalName);
     }

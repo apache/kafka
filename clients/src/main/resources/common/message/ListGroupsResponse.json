@@ -27,7 +27,9 @@
   // Version 4 adds the GroupState field (KIP-518).
   //
   // Version 5 adds the GroupType field (KIP-848).
-  "validVersions": "0-5",
+  //
+  // Version 6 is the same as version 5 (KIP-1388).
+  "validVersions": "0-6",
   "flexibleVersions": "3+",
   "headerVersions": {
     "0-2": "0",

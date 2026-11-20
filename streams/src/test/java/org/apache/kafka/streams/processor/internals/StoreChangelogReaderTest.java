@@ -250,6 +250,7 @@ public class StoreChangelogReaderTest {
         if (type == STANDBY) {
             when(storeMetadata.endOffset()).thenReturn(10L);
             when(stateManager.changelogAsSource(tp)).thenReturn(true);
+            adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
         }
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
@@ -305,6 +306,7 @@ public class StoreChangelogReaderTest {
         if (type == STANDBY) {
             when(storeMetadata.endOffset()).thenReturn(10L);
             when(stateManager.changelogAsSource(tp)).thenReturn(true);
+            adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
         }
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
@@ -366,6 +368,7 @@ public class StoreChangelogReaderTest {
         when(stateManager.changelogAsSource(tp)).thenReturn(true);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
             new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
@@ -1065,16 +1068,14 @@ public class StoreChangelogReaderTest {
         changelogReader.register(tp, stateManager);
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
-        assertEquals(
-            type == ACTIVE ?
-                StoreChangelogReader.ChangelogState.REGISTERED :
-                StoreChangelogReader.ChangelogState.RESTORING,
-            changelogReader.changelogMetadata(tp).state()
-        );
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
         if (type == ACTIVE) {
             assertNull(changelogReader.changelogMetadata(tp).endOffset());
         } else {
             assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        }
+        if (type == STANDBY) {
+            assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
         }
         assertTrue(functionCalled.get());
         Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
@@ -1084,12 +1085,47 @@ public class StoreChangelogReaderTest {
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(type == ACTIVE ? 10L : 0L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(10L, changelogReader.logicalChangelogEndOffsets().get(tp));
         assertEquals(6L, consumer.position(tp));
+        // an active changelog also looks up its end offset, which clears the task timeout a second time
+        Mockito.verify(mockTask, times(type == ACTIVE ? 2 : 1)).clearTaskTimeout();
         if (type == ACTIVE) {
-            Mockito.verify(mockTask, times(2)).clearTaskTimeout();
             Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
         }
+    }
+
+    @Test
+    public void shouldKeepStandbyChangelogRegisteredIfCommittedOffsetIsMissing() {
+        setupStateManagerMock(STANDBY);
+        setupStoreMetadata();
+        setupStore();
+
+        final TaskId taskId = new TaskId(0, 0);
+        final Map<TaskId, Task> tasks = Collections.singletonMap(taskId, mock(Task.class));
+
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.taskId()).thenReturn(taskId);
+
+        // the admin client leaves out a partition with a partition-level error, such as UNSTABLE_OFFSET_COMMIT,
+        // and the lookup still succeeds; the mock admin client leaves out a partition without a committed offset
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+
+        changelogReader.register(tp, stateManager);
+        changelogReader.restore(tasks);
+
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+        assertEquals(Collections.emptySet(), consumer.assignment());
+
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
+        changelogReader.restore(tasks);
+
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(10L, changelogReader.logicalChangelogEndOffsets().get(tp));
+        assertEquals(6L, consumer.position(tp));
     }
 
     @ParameterizedTest
