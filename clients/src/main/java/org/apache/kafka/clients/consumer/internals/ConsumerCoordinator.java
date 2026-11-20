@@ -131,6 +131,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private Timer nextAutoCommitTimer;
+    private Timer closeTimer = null;
     private ConsumerGroupMetadata groupMetadata;
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -598,7 +599,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
-        if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE)))
+        Timer metadataTimer = closeTimer != null ? closeTimer : time.timer(Long.MAX_VALUE);
+        if (!client.ensureFreshMetadata(metadataTimer))
             throw new TimeoutException();
 
         maybeUpdateSubscriptionMetadata();
@@ -1018,6 +1020,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     @Override
     public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
+        closeTimer = timer;
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {

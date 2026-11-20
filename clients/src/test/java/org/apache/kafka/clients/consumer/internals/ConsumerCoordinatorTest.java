@@ -3588,6 +3588,44 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCloseDoesNotBlockOnMetadataWhenElectedLeaderWithAutoCommit() throws Exception {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty(), true)) {
+            coordinator.requestRejoin("test rebalance");
+            assertFalse(coordinator.poll(time.timer(0)));
+            if (client.requests().peek().apiKey() == ApiKeys.OFFSET_COMMIT) {
+                client.respond(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
+                assertFalse(coordinator.poll(time.timer(0)));
+            }
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(ApiKeys.JOIN_GROUP, client.requests().peek().apiKey());
+
+            // The JoinGroup response, electing this member leader of a group that needs fresh metadata, arrives
+            // but isn't read yet; then no broker can be reached. close() must still honor its timeout, whichever
+            // of its polls (the auto-commit's or the LeaveGroup's) reads the response.
+            Map<String, List<String>> memberSubscriptions = new HashMap<>();
+            memberSubscriptions.put(consumerId, singletonList(topic1));
+            memberSubscriptions.put(consumerId2, singletonList(topic2));
+            client.respond(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE));
+            client.backoff(node, 60 * 60 * 1000L);
+
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<?> future = executor.submit(
+                    () -> coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT));
+                try {
+                    future.get(5, TimeUnit.SECONDS);
+                } catch (TimeoutException e) {
+                    fail("close() with a zero timeout did not return: it is blocked waiting for a metadata update");
+                }
+            } finally {
+                client.backoff(node, 0);
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test
     public void testHeartbeatThreadClose() throws Exception {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, groupInstanceId, true)) {
             coordinator.ensureActiveGroup();
