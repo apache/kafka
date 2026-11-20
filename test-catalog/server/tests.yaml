@@ -6,6 +6,7 @@ org.apache.kafka.network.ProcessorTest:
 - testParseRequestHeaderWithDisabledApiVersion
 - testParseRequestHeaderWithUnsupportedApi
 - testParseRequestHeaderWithUnsupportedApiVersion
+- testParseRequestHeaderWithUnsupportedApiVersionsVersion
 org.apache.kafka.network.RequestConvertToJsonTest:
 - testAllApiVersionsResponseHandled
 - testAllRequestTypesHandled

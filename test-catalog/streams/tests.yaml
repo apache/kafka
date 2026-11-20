@@ -1798,6 +1798,14 @@ org.apache.kafka.streams.processor.internals.AbstractProcessorContextTest:
 - shouldThrowErrorIfSerdeDefaultNotSet
 - shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized
 - shouldThrowNullPointerOnRegisterIfStateStoreIsNull
+org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecoratorTest:
+- interface
+- shouldReturnUnknownStoreTypeUnwrapped
+- shouldThrowOnCommit
+org.apache.kafka.streams.processor.internals.AbstractReadWriteDecoratorTest:
+- interface
+- shouldReturnUnknownStoreTypeUnwrapped
+- shouldThrowOnCommit
 org.apache.kafka.streams.processor.internals.ActiveTaskCreatorTest:
 - shouldCloseIfEosDisabled
 - shouldCloseIfEosV2Enabled
@@ -2068,6 +2076,12 @@ org.apache.kafka.streams.processor.internals.GlobalStreamThreadTest:
 - shouldAllowResizingMaxUncommittedBytesBeforeStart
 - shouldAllowResizingMaxUncommittedBytesWhileRunning
 - shouldBeRunningAfterSuccessfulStart
+- shouldClearInterruptStatusBeforeClosingGlobalConsumer
+- shouldClearInterruptStatusBeforeClosingGlobalConsumerWhenInitializationFails
+- shouldClearInterruptStatusBeforeClosingGlobalConsumerWhenUncaughtExceptionHandlerThrows
+- shouldClearInterruptStatusBeforeInvokingUncaughtExceptionHandler
+- shouldClearInterruptStatusBeforeInvokingUncaughtExceptionHandlerOnInvalidOffsetException
+- shouldClearInterruptStatusSetByUncaughtExceptionHandlerDuringShutdown
 - shouldCloseStateStoresOnClose
 - shouldDieOnInvalidOffsetExceptionDuringStartup
 - shouldDieOnInvalidOffsetExceptionWhileRunning
@@ -7330,12 +7344,21 @@ org.apache.kafka.streams.state.internals.SessionStoreWithHeadersBuilderTest$Quer
 - shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores
 org.apache.kafka.streams.state.internals.SessionStoreWithHeadersSerializerSideEffectTest:
 - shouldPropagateSerializerHeaderSideEffectToChangelog
+org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterCompletenessTest:
+- everyNonSpecialMethodMustBeOverriddenByAdapter
+- everySessionStoreMethodMustBeClassified
 org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldAddExecutionInfoOnQuery
+- shouldConvertFetchSessionViaInstantOverload
 - shouldConvertValueOnWindowRangeQuery
+- shouldDelegateApproximateNumUncommittedBytes
 - shouldDelegateClose
+- shouldDelegateCommit
+- shouldDelegateCommittedOffset
+- shouldDelegateGetPosition
 - shouldDelegateInit
 - shouldDelegateIsOpen
+- shouldDelegateManagesOffsets
 - shouldDelegateName
 - shouldDelegateQueryToInnerStore
 - shouldDelegateRemove
@@ -7355,6 +7378,7 @@ org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldWrapFetchIterator
 - shouldWrapFetchWithKeyRangeIterator
 - shouldWrapFindSessionsIterator
+- shouldWrapFindSessionsViaInstantOverload
 - shouldWrapFindSessionsWithEndTimeRangeIterator
 - shouldWrapFindSessionsWithKeyRangeIterator
 org.apache.kafka.streams.state.internals.StagedMergeIteratorTest:
@@ -7747,6 +7771,29 @@ org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapterTest:
 - shouldWrapRangeIterator
 - shouldWrapReverseAllIterator
 - shouldWrapReverseRangeIterator
+org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterCompletenessTest:
+- everyNonSpecialMethodMustBeOverriddenByAdapter
+- everyWindowStoreMethodMustBeClassified
+org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterDelegationTest:
+- all
+- backwardAll
+- backwardFetch
+- backwardFetchAll
+- fetch
+- fetchAll
+- shouldConvertFetchByKeyAndTimestampToHeaderFormat
+- shouldDelegateApproximateNumUncommittedBytes
+- shouldDelegateClose
+- shouldDelegateCommit
+- shouldDelegateCommittedOffset
+- shouldDelegateGetPosition
+- shouldDelegateInit
+- shouldDelegateIsOpen
+- shouldDelegateManagesOffsets
+- shouldDelegateName
+- shouldReturnNullWhenFetchByKeyAndTimestampReturnsNull
+- shouldReturnPersistentTrue
+- shouldStripHeadersOnPut
 org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterTest:
 - all
 - backwardAll

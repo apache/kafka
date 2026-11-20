@@ -187,12 +187,14 @@ org.apache.kafka.controller.PartitionChangeBuilderTest:
 - testEligibleLeaderReplicas_NotEligibleLastKnownLeader
 - testEligibleLeaderReplicas_RemoveUncleanShutdownReplicasFromElr
 - testEligibleLeaderReplicas_lastKnownElrShouldBePopulatedWhenNoLeader
+- testHighTargetLeaderEpochWithLeaderChange
 - testIsrChangeAndLeaderChange
 - testIsrChangeDoesntBumpLeaderEpoch
 - testIsrEnlargementCompletesReassignment
 - testKeepsDirectoriesAfterReassignment
 - testLeaderEpochBumpOnIsrShrink
 - testLeaderEpochBumpOnNewReplicaSetDisjoint
+- testLowTargetLeaderEpochDoesNotPreventLeaderChangeBump
 - testNoChange
 - testNoLeaderEpochBumpIfNothingChanged
 - testNoLeaderEpochBumpOnEmptyTargetIsr
@@ -202,6 +204,9 @@ org.apache.kafka.controller.PartitionChangeBuilderTest:
 - testRemovingReplicaReassignment
 - testRevertReassignment
 - testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders
+- testTargetLeaderEpochBumpsLeaderEpoch
+- testTargetLeaderEpochNeverDecreasesLeaderEpoch
+- testTargetLeaderEpochRequiresClusterMirroring
 - testUncleanLeaderElection
 - testUncleanSetsLeaderRecoveringState
 - testUpdateDirectories
@@ -825,8 +830,12 @@ org.apache.kafka.metadata.PartitionRegistrationTest:
 - testConsistentEqualsAndHashCode
 - testDirectories
 - testElectionWasUnclean
+- testMergeDerivesLeaderEpochWhenRecordDoesNotSetIt
+- testMergeLeaderEpochChangeWithoutLeaderChange
 - testMergePartitionChangeRecordWithReassignmentData
+- testMergeUsesLeaderEpochFromRecord
 - testMigratingRecordDirectories
+- testPartitionChangeRecordLeaderEpochVersioning
 - testPartitionControlInfoMergeAndDiff
 - testPartitionRegistrationToRecord
 - testPartitionRegistrationToRecord_ElrShouldBeNullIfEmpty
