@@ -43,7 +43,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
@@ -135,15 +134,17 @@ public final class SnapshotFileReader implements AutoCloseable {
                 Record record = iterator.next();
                 try {
                     ControlRecordType type = ControlRecordType.parse(record.key());
-                    if (Objects.requireNonNull(type) == ControlRecordType.LEADER_CHANGE) {
-                        LeaderChangeMessage message = new LeaderChangeMessage();
-                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        listener.handleLeaderChange(new LeaderAndEpoch(
+                    switch (type) {
+                        case LEADER_CHANGE:
+                            LeaderChangeMessage message = new LeaderChangeMessage();
+                            message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                            listener.handleLeaderChange(new LeaderAndEpoch(
                                 OptionalInt.of(message.leaderId()),
                                 batch.partitionLeaderEpoch()
-                        ));
-                    } else {
-                        log.error("Ignoring control record with type {} at offset {}",
+                            ));
+                            break;
+                        default:
+                            log.error("Ignoring control record with type {} at offset {}",
                                 type, record.offset());
                     }
                 } catch (Throwable e) {
