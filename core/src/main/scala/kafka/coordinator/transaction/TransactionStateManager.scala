@@ -334,11 +334,17 @@ class TransactionStateManager(brokerId: Int,
     filterDurationMs: Long,
     filterTransactionalIdPattern: String
   ): ListTransactionsResponseData = {
-    inReadLock(stateLock, () => {
-      val response = new ListTransactionsResponseData()
-      if (loadingPartitions.nonEmpty) {
+    // Only the outer map needs the lock; the per-partition maps are ConcurrentHashMaps, so they can be iterated without it.
+    val cacheEntriesOpt = inReadLock(stateLock, () => {
+      if (loadingPartitions.nonEmpty) None
+      else Some(transactionMetadataCache.values.toList)
+    })
+
+    val response = new ListTransactionsResponseData()
+    cacheEntriesOpt match {
+      case None =>
         response.setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
-      } else {
+      case Some(cacheEntries) =>
         val filterStates = mutable.Set.empty[TransactionState]
         filterStateNames.foreach { stateName =>
           TransactionState.fromName(stateName).ifPresentOrElse(
@@ -377,7 +383,7 @@ class TransactionStateManager(brokerId: Int,
               throw new InvalidRegularExpression(String.format("Transaction ID pattern `%s` is not a valid regular expression: %s.", filterTransactionalIdPattern, e.getMessage))
           }
         } else null
-        transactionMetadataCache.foreachEntry { (_, cache) =>
+        cacheEntries.foreach { cache =>
           cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
             txnMetadata.inLock(() => {
               if (shouldInclude(txnMetadata, pattern)) {
@@ -392,8 +398,7 @@ class TransactionStateManager(brokerId: Int,
         }
         response.setErrorCode(Errors.NONE.code)
           .setTransactionStates(states)
-      }
-    })
+    }
   }
 
   /**
