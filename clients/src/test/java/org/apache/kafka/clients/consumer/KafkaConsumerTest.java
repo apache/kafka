@@ -756,6 +756,35 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("unchecked")
+    public void testRebalanceListenerRegisteredWithoutGroupId(GroupProtocol groupProtocol) {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, null, groupInstanceId, false);
+        MockRebalanceListener listener = new MockRebalanceListener();
+        consumer.setRebalanceListener(listener);
+
+        consumer.assign(Set.of(tp0));
+        consumer.seekToBeginning(Set.of(tp0));
+        client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
+        client.prepareResponse(fetchResponse(tp0, 50L, 5));
+
+        // Without a group.id the consumer can only use manual assignment, and it still fetches records.
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
+        assertEquals(5, records.count());
+        assertEquals(55L, consumer.position(tp0));
+
+        consumer.unsubscribe();
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.lostCount);
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testSubscription(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
