@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -360,13 +361,13 @@ public final class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.CLIENT_ID_DOC)
             .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
-                    128 * 1024,
+                    Selectable.USE_DEFAULT_BUFFER_SIZE,
                     atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
-                    32 * 1024,
+                    Selectable.USE_DEFAULT_BUFFER_SIZE,
                     atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -235,5 +236,16 @@ public class ProducerConfigTest {
                 fail("Invalid configuration key: " + key);
             }
         }
+    }
+
+    @Test
+    public void testDefaultSocketBufferSizes() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG));
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG));
     }
 }

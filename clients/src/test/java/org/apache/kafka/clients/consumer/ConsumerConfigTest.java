@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -290,5 +291,12 @@ public class ConsumerConfigTest {
                 fail("Invalid configuration key: " + key);
             }
         }
+    }
+
+    @Test
+    public void testDefaultSocketBufferSizes() {
+        final ConsumerConfig consumerConfig = new ConsumerConfig(properties);
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, consumerConfig.getInt(ConsumerConfig.SEND_BUFFER_CONFIG));
+        assertEquals(Selectable.USE_DEFAULT_BUFFER_SIZE, consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG));
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -61,8 +62,8 @@ public class ReplicationConfigs {
     public static final String REPLICA_SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms";
 
     public static final String REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "replica.socket.receive.buffer.bytes";
-    public static final int REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 64 * 1024;
-    public static final String REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the leader for replicating data";
+    public static final int REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = Selectable.USE_DEFAULT_BUFFER_SIZE;
+    public static final String REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the leader for replicating data. If the value is -1, the OS default will be used.";
 
     public static final String REPLICA_FETCH_MAX_BYTES_CONFIG = "replica.fetch.max.bytes";
     public static final int REPLICA_FETCH_MAX_BYTES_DEFAULT = 1024 * 1024;
