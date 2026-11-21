@@ -307,3 +307,127 @@ IMPORTANT: Note that there are still some substitutions that need to be made in 
   - Finally, validate all the links before shipping!
 Note that all substitutions are annotated with <> around them.
 """
+
+
+def release_blog_post(release_version, previous_version, release_date, author, num_commits, contributors):
+    """
+    Skeleton of the release announcement blog post (content/en/blog/releases/ak-X.Y.Z.md in kafka-site).
+    Anything the release manager has to write is marked with TODO.
+    """
+    is_patch_release = not release_version.endswith(".0")
+    body = _patch_release_blog_body if is_patch_release else _minor_release_blog_body
+    return _release_blog_header(release_version, release_date, author) + body(release_version, previous_version, num_commits, contributors)
+
+
+def _release_blog_header(release_version, release_date, author):
+    return f"""---
+date: {release_date:%Y-%m-%d}
+title: Apache Kafka {release_version} Release Announcement
+linkTitle: AK {release_version}
+author: {author}
+---
+
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+"""
+
+
+def _minor_release_blog_body(release_version, previous_version, num_commits, contributors):
+    major, minor, _ = release_version.split(".")
+    docs_slot = f"{major}{minor}"
+    upgrade_anchor = release_version.replace(".", "")
+    contributors_str = ", ".join(contributors)
+    num_contributors = len(contributors)
+    return f"""We are proud to announce the release of Apache Kafka® {release_version}. This release contains many new features and improvements. This blog post will highlight some of the more prominent ones. For a full list of changes, be sure to check the [release notes](https://archive.apache.org/dist/kafka/{release_version}/RELEASE_NOTES.html).
+
+With <!-- TODO: number of KIPs --> KIPs and {num_commits} commits since {previous_version}, this release introduces many new features, improvements and bug fixes to all the components.
+
+See the [Upgrading to {major}.{minor}](https://kafka.apache.org/{docs_slot}/getting-started/upgrade/#upgrading-to-{upgrade_anchor}) section in the documentation for the list of notable changes and detailed upgrade steps.
+
+## Deprecation Notices
+<!-- TODO: one bullet per KIP, formatted as: -->
+<!-- * [KIP-XXXX: Title](https://cwiki.apache.org/confluence/x/XXXX) -->
+<!--   One or two sentences describing the deprecation. -->
+
+## Kafka Broker, Controller, Producer, Consumer and Admin Client
+<!-- TODO -->
+
+## Kafka Streams
+<!-- TODO -->
+
+## Kafka Connect
+<!-- TODO -->
+
+## Summary
+
+Ready to get started with Apache Kafka {release_version}? Check out all the details in the [upgrade notes](https://kafka.apache.org/{docs_slot}/getting-started/upgrade/#upgrading-to-{upgrade_anchor}) and the [release notes](https://archive.apache.org/dist/kafka/{release_version}/RELEASE_NOTES.html), and [download](https://kafka.apache.org/downloads) Apache Kafka {release_version}.
+
+<!-- TODO: check the contributor list -->
+This was a community effort, so thank you to everyone who contributed to this release, including all our users and our {num_contributors} contributors: {contributors_str}
+"""
+
+
+def _patch_release_blog_body(release_version, previous_version, num_commits, contributors):
+    major, minor, _ = release_version.split(".")
+    docs_slot = f"{major}{minor}"
+    upgrade_anchor = release_version.replace(".", "")
+    contributors_str = ", ".join(contributors)
+    num_contributors = len(contributors)
+    return f"""We are proud to announce the release of Apache Kafka {release_version}. This is a bugfix release that fixes around <!-- TODO: number of issues --> issues since the {previous_version} release, most notably <!-- TODO: most notable fixes -->. For a full list of changes, be sure to check the [release notes](https://downloads.apache.org/kafka/{release_version}/RELEASE_NOTES.html).
+
+See the [Upgrading to {release_version}](https://kafka.apache.org/{docs_slot}/getting-started/upgrade/#upgrading-to-{upgrade_anchor}) section in the documentation for the list of notable changes and detailed upgrade steps.
+
+## Notable fixes
+<!-- TODO: optional, one bullet per notable fix, formatted as: -->
+<!-- * Fixed ... ([KAFKA-XXXXX](https://issues.apache.org/jira/browse/KAFKA-XXXXX)). -->
+
+## Summary
+
+<!-- TODO: check the contributor list -->
+This was a community effort, so thank you to everyone who contributed to this release, including all our users and our {num_contributors} contributors: {contributors_str}
+"""
+
+
+def downloads_section(release_version, previous_version, release_date):
+    """
+    The section of content/en/community/downloads.md in kafka-site describing a release.
+    """
+    major, minor, _ = release_version.split(".")
+    docs_slot = f"{major}{minor}"
+    closer = "https://www.apache.org/dyn/closer.lua/kafka"
+    dist = "https://downloads.apache.org/kafka"
+    release_notes = f"{closer}/{release_version}/RELEASE_NOTES.html?action=download"
+    src = f"kafka-{release_version}-src.tgz"
+    binary = f"kafka_2.13-{release_version}.tgz"
+    blog = f"https://kafka.apache.org/blog/{release_date:%Y/%m/%d}/apache-kafka-{release_version}-release-announcement/"
+    if release_version.endswith(".0"):
+        summary = f"{release_version} includes a significant number of new features and fixes."
+    else:
+        summary = f"{release_version} fixes around <!-- TODO: number of issues --> issues since the {previous_version} release."
+    return f"""### {release_version}
+
+* Released {release_date:%B} {release_date.day}, {release_date.year}
+* [Release Notes]({release_notes})
+* Docker image: [apache/kafka:{release_version}](https://hub.docker.com/layers/apache/kafka/{release_version}).
+* Docker Native image: [apache/kafka-native:{release_version}](https://hub.docker.com/layers/apache/kafka-native/{release_version}).
+* Source download: [{src}]({closer}/{release_version}/{src}?action=download) ([asc]({dist}/{release_version}/{src}.asc), [sha512]({dist}/{release_version}/{src}.sha512))
+* Binary download: [{binary}]({closer}/{release_version}/{binary}?action=download) ([asc]({dist}/{release_version}/{binary}.asc), [sha512]({dist}/{release_version}/{binary}.sha512))
+
+Kafka {summary} For more information, please read our [blog post]({blog}), the detailed [Upgrade Notes](https://kafka.apache.org/{docs_slot}/getting-started/upgrade/#upgrading-to-{release_version.replace(".", "")}) and the [Release Notes]({release_notes}).
+"""
+
