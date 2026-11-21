@@ -649,7 +649,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart() {
-        assertTrue(stateUpdater.taskEndOffsetSumSnapshot().isEmpty());
+        assertTrue(stateUpdater.taskOffsetSumsSnapshot().taskEndOffsetSum().isEmpty());
     }
 
     @Test
@@ -714,7 +714,7 @@ class DefaultStateUpdaterTest {
 
         waitForCondition(
             () -> {
-                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskEndOffsetSumSnapshot();
+                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskOffsetSumsSnapshot().taskEndOffsetSum();
                 return s.size() == 2
                     && Long.valueOf(100L).equals(s.get(new StreamsRebalanceData.TaskId("0", 0)))
                     && Long.valueOf(200L).equals(s.get(new StreamsRebalanceData.TaskId("1", 0)));
@@ -724,15 +724,67 @@ class DefaultStateUpdaterTest {
         );
     }
 
+    @Test
+    public void shouldPublishTheOffsetSumOfARestoringTaskWithItsEndOffsetSumAndDropBothOnceRestored() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 42L));
+        when(changelogReader.logicalChangelogEndOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 100L));
+        final AtomicBoolean restored = new AtomicBoolean(false);
+        final AtomicBoolean allChangelogsCompleted = new AtomicBoolean(false);
+        when(changelogReader.completedChangelogs()).thenAnswer(invocation -> {
+            allChangelogsCompleted.set(restored.get());
+            return restored.get() ? Set.of(TOPIC_PARTITION_A_0) : Set.of();
+        });
+        when(changelogReader.allChangelogsCompleted()).thenAnswer(invocation -> allChangelogsCompleted.get());
+        stateUpdater.add(task);
+        stateUpdater.start();
+
+        final StreamsRebalanceData.TaskId taskId = new StreamsRebalanceData.TaskId("0", 0);
+        final StreamsRebalanceData.TaskOffsetSums restoring =
+            new StreamsRebalanceData.TaskOffsetSums(Map.of(taskId, 42L), Map.of(taskId, 100L));
+        waitForCondition(
+            () -> stateUpdater.taskOffsetSumsSnapshot().equals(restoring),
+            VERIFICATION_TIMEOUT,
+            () -> "The snapshot did not publish the restoring task's offset sum with its end-offset sum; got "
+                + stateUpdater.taskOffsetSumsSnapshot()
+        );
+
+        restored.set(true);
+        verifyRestoredActiveTasks(task);
+        waitForCondition(
+            () -> stateUpdater.taskOffsetSumsSnapshot().equals(StreamsRebalanceData.TaskOffsetSums.EMPTY),
+            VERIFICATION_TIMEOUT,
+            () -> "The snapshot still reports the restored task; got " + stateUpdater.taskOffsetSumsSnapshot()
+        );
+    }
+
+    @Test
+    public void shouldPublishTheOffsetSumOfAPausedTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 42L));
+        when(topologyMetadata.isPaused(task.id().topologyName())).thenReturn(false).thenReturn(true);
+        stateUpdater.add(task);
+        stateUpdater.start();
+
+        verifyPausedTasks(task);
+        final StreamsRebalanceData.TaskOffsetSums paused =
+            new StreamsRebalanceData.TaskOffsetSums(Map.of(new StreamsRebalanceData.TaskId("0", 0), 42L), Map.of());
+        waitForCondition(
+            () -> stateUpdater.taskOffsetSumsSnapshot().equals(paused),
+            VERIFICATION_TIMEOUT,
+            () -> "The snapshot did not publish the paused task's offset sum; got " + stateUpdater.taskOffsetSumsSnapshot()
+        );
+    }
+
     private void assertEndOffsetSnapshotEntry(final TaskId taskId, final long expectedSum) throws Exception {
         final StreamsRebalanceData.TaskId key = new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition());
         waitForCondition(
             () -> {
-                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskEndOffsetSumSnapshot();
+                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskOffsetSumsSnapshot().taskEndOffsetSum();
                 return s.size() == 1 && Long.valueOf(expectedSum).equals(s.get(key));
             },
             VERIFICATION_TIMEOUT,
-            () -> "End-offset snapshot did not publish expected entry " + key + "=" + expectedSum + "; got " + stateUpdater.taskEndOffsetSumSnapshot()
+            () -> "End-offset snapshot did not publish expected entry " + key + "=" + expectedSum + "; got " + stateUpdater.taskOffsetSumsSnapshot().taskEndOffsetSum()
         );
     }
 

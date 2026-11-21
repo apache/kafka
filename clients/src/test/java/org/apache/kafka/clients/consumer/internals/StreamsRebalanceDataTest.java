@@ -376,8 +376,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertThrows(
@@ -410,8 +409,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 clientTags,
-                Map::of,
-                Map::of
+                () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
             )
         );
         assertEquals("Process ID cannot be null", exception.getMessage());
@@ -431,8 +429,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 clientTags,
-                Map::of,
-                Map::of
+                () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
             )
         );
         assertEquals("Endpoint cannot be null", exception.getMessage());
@@ -452,8 +449,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 null,
                 clientTags,
-                Map::of,
-                Map::of
+                () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
             )
         );
         assertEquals("Subtopologies cannot be null", exception.getMessage());
@@ -474,8 +470,7 @@ public class StreamsRebalanceDataTest {
                 null,
                 subtopologies,
                 clientTags,
-                Map::of,
-                Map::of
+                () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
             )
         );
         assertEquals("Rack ID cannot be null", exception.getMessage());
@@ -495,8 +490,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 null,
-                Map::of,
-                Map::of
+                () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
             )
         );
         assertEquals("Client tags cannot be null", exception.getMessage());
@@ -514,8 +508,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertEquals(StreamsRebalanceData.Assignment.EMPTY, streamsRebalanceData.reconciledAssignment());
@@ -533,8 +526,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertTrue(streamsRebalanceData.partitionsByHost().isEmpty());
@@ -552,8 +544,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertFalse(streamsRebalanceData.shutdownRequested());
@@ -571,8 +562,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertTrue(streamsRebalanceData.statuses().isEmpty());
@@ -592,8 +582,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
@@ -613,8 +602,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         streamsRebalanceData.setHeartbeatIntervalMs(1000);
@@ -629,8 +617,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             Map.of(),
             Map.of("clientTag1", "clientTagValue1"),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertNull(streamsRebalanceData.wireTopologyDescription());

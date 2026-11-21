@@ -658,7 +658,7 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
 
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), () -> StreamsRebalanceData.TaskOffsetSums.EMPTY);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -809,7 +809,7 @@ public class StreamThreadTest {
         });
 
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), () -> StreamsRebalanceData.TaskOffsetSums.EMPTY);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -2051,7 +2051,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), () -> StreamsRebalanceData.TaskOffsetSums.EMPTY);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -2084,7 +2084,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), () -> StreamsRebalanceData.TaskOffsetSums.EMPTY);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -3444,8 +3444,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         final StreamsMetricsImpl streamsMetrics =
@@ -4396,8 +4395,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -4459,8 +4457,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         final Properties props = configProps(false, false);
@@ -4615,8 +4612,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -4689,8 +4685,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -4755,8 +4750,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         final Properties props = configProps(false, false);
@@ -4819,8 +4813,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         final Properties props = configProps(false, false);
@@ -4893,8 +4886,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         final Properties props = configProps(false, false);
@@ -5034,8 +5026,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             topologyMetadata,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertNotNull(rebalanceData.wireTopologyDescription());
@@ -5058,8 +5049,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             topologyMetadata,
-            Map::of,
-            Map::of
+            () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
         );
 
         assertNull(rebalanceData.wireTopologyDescription());

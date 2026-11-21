@@ -169,6 +169,57 @@ public class StreamsRebalanceData {
         }
     }
 
+    /**
+     * The per-task changelog offset sums and end-offset sums of a member.
+     */
+    public static class TaskOffsetSums {
+
+        public static final TaskOffsetSums EMPTY = new TaskOffsetSums(Map.of(), Map.of());
+
+        private final Map<TaskId, Long> taskOffsetSum;
+        private final Map<TaskId, Long> taskEndOffsetSum;
+
+        public TaskOffsetSums(final Map<TaskId, Long> taskOffsetSum,
+                              final Map<TaskId, Long> taskEndOffsetSum) {
+            this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "Task offset sum cannot be null");
+            this.taskEndOffsetSum = Objects.requireNonNull(taskEndOffsetSum, "Task end offset sum cannot be null");
+        }
+
+        public Map<TaskId, Long> taskOffsetSum() {
+            return taskOffsetSum;
+        }
+
+        public Map<TaskId, Long> taskEndOffsetSum() {
+            return taskEndOffsetSum;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final TaskOffsetSums that = (TaskOffsetSums) o;
+            return taskOffsetSum.equals(that.taskOffsetSum)
+                && taskEndOffsetSum.equals(that.taskEndOffsetSum);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(taskOffsetSum, taskEndOffsetSum);
+        }
+
+        @Override
+        public String toString() {
+            return "TaskOffsetSums {"
+                + "taskOffsetSum=" + taskOffsetSum
+                + ", taskEndOffsetSum=" + taskEndOffsetSum
+                + '}';
+        }
+    }
+
     public static class Assignment {
 
         public static final Assignment EMPTY = new Assignment();
@@ -357,9 +408,7 @@ public class StreamsRebalanceData {
 
     private final Map<String, Subtopology> subtopologies;
 
-    private final Supplier<Map<TaskId, Long>> taskOffsetSum;
-
-    private final Supplier<Map<TaskId, Long>> taskEndOffsetSum;
+    private final Supplier<TaskOffsetSums> taskOffsetSums;
 
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
@@ -384,15 +433,13 @@ public class StreamsRebalanceData {
                                 final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
                                 final Map<String, String> clientTags,
-                                final Supplier<Map<TaskId, Long>> taskOffsetSum,
-                                final Supplier<Map<TaskId, Long>> taskEndOffsetSum) {
+                                final Supplier<TaskOffsetSums> taskOffsetSums) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
-        this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "Task offset sum supplier cannot be null");
-        this.taskEndOffsetSum = Objects.requireNonNull(taskEndOffsetSum, "Task end offset sum supplier cannot be null");
+        this.taskOffsetSums = Objects.requireNonNull(taskOffsetSums, "Task offset sums supplier cannot be null");
     }
 
     public UUID processId() {
@@ -415,12 +462,8 @@ public class StreamsRebalanceData {
         return subtopologies;
     }
 
-    public Map<TaskId, Long> taskOffsetSum() {
-        return taskOffsetSum.get();
-    }
-
-    public Map<TaskId, Long> taskEndOffsetSum() {
-        return taskEndOffsetSum.get();
+    public TaskOffsetSums taskOffsetSums() {
+        return taskOffsetSums.get();
     }
 
     public int topologyEpoch() {
