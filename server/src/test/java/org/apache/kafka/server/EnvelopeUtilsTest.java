@@ -33,6 +33,8 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.network.Request;
@@ -44,6 +46,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,7 +75,6 @@ public class EnvelopeUtilsTest {
     @Test
     public void testHandleEnvelopeRequestBuildsForwardedRequest() {
         Request envelope = buildEnvelopeRequest(createForwardableRequest());
-        envelope.requestDequeueTimeNanos(123L);
 
         AtomicReference<Request> handledRequest = new AtomicReference<>();
         EnvelopeUtils.handleEnvelopeRequest(envelope, mock(RequestChannelMetrics.class), handledRequest::set);
@@ -85,8 +87,28 @@ public class EnvelopeUtilsTest {
         assertEquals(InetAddress.getLoopbackAddress(), forwardedRequest.context().clientAddress);
         assertTrue(forwardedRequest.isForwarded());
         assertSame(envelope, forwardedRequest.envelope().orElseThrow());
-        assertEquals(envelope.requestDequeueTimeNanos(), forwardedRequest.requestDequeueTimeNanos());
         assertInstanceOf(CreateTopicsRequest.class, forwardedRequest.body());
+    }
+
+    @Test
+    public void testHandleEnvelopeRequestTimes() {
+        MockTime time = new MockTime();
+        Request envelope = buildEnvelopeRequest(createForwardableRequest(), time);
+        envelope.requestDequeueTimeNanos(time.nanoseconds());
+        time.sleep(1);
+
+        AtomicReference<Request> handledRequest = new AtomicReference<>();
+        EnvelopeUtils.handleEnvelopeRequest(envelope, mock(RequestChannelMetrics.class), request -> {
+            handledRequest.set(request);
+            time.sleep(2);
+        });
+        time.sleep(4); // excluded from the local time of the forwarded request
+
+        Request forwardedRequest = handledRequest.get();
+        assertEquals(envelope.requestDequeueTimeNanos(), forwardedRequest.requestDequeueTimeNanos());
+        // The local time of the forwarded request starts when the envelope is dequeued and ends when the handler
+        // returns.
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(3), forwardedRequest.localTimeNanos());
     }
 
     @Test
@@ -105,7 +127,8 @@ public class EnvelopeUtilsTest {
         Request envelope = buildEnvelopeRequest(
             createForwardableRequest(),
             Optional.of(PRINCIPAL_SERDE),
-            new byte[] {1, 2, 3}
+            new byte[] {1, 2, 3},
+            Time.SYSTEM
         );
 
         InvalidRequestException exception = assertThrows(
@@ -120,7 +143,8 @@ public class EnvelopeUtilsTest {
         Request envelope = buildEnvelopeRequest(
             createForwardableRequest(),
             Optional.empty(),
-            InetAddress.getLoopbackAddress().getAddress()
+            InetAddress.getLoopbackAddress().getAddress(),
+            Time.SYSTEM
         );
 
         PrincipalDeserializationException exception = assertThrows(
@@ -149,7 +173,8 @@ public class EnvelopeUtilsTest {
         Request envelope = buildEnvelopeRequest(
             createForwardableRequest(),
             Optional.of(failingSerde),
-            InetAddress.getLoopbackAddress().getAddress()
+            InetAddress.getLoopbackAddress().getAddress(),
+            Time.SYSTEM
         );
 
         PrincipalDeserializationException exception = assertThrows(
@@ -174,17 +199,23 @@ public class EnvelopeUtilsTest {
     }
 
     private static Request buildEnvelopeRequest(AbstractRequest forwardedRequest) {
+        return buildEnvelopeRequest(forwardedRequest, Time.SYSTEM);
+    }
+
+    private static Request buildEnvelopeRequest(AbstractRequest forwardedRequest, Time time) {
         return buildEnvelopeRequest(
             forwardedRequest,
             Optional.of(PRINCIPAL_SERDE),
-            InetAddress.getLoopbackAddress().getAddress()
+            InetAddress.getLoopbackAddress().getAddress(),
+            time
         );
     }
 
     private static Request buildEnvelopeRequest(
         AbstractRequest forwardedRequest,
         Optional<KafkaPrincipalSerde> contextPrincipalSerde,
-        byte[] clientAddress
+        byte[] clientAddress,
+        Time time
     ) {
         RequestHeader forwardedRequestHeader = new RequestHeader(
             forwardedRequest.apiKey(),
@@ -225,6 +256,7 @@ public class EnvelopeUtilsTest {
         return new Request(
             1,
             envelopeContext,
+            time,
             0,
             MemoryPool.NONE,
             envelopeRequestBuffer,

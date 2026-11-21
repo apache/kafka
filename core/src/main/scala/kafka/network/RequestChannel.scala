@@ -27,7 +27,6 @@ import org.apache.kafka.network.{BaseRequest, CallbackRequest, CloseConnectionRe
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
-import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
 
 object RequestChannel extends Logging {
@@ -135,13 +134,9 @@ class RequestChannel(val queueSize: Int,
       // We should only send one of the following per request
       case _: SendResponse | _: NoOpResponse | _: CloseConnectionResponse =>
         val request = response.request
+        request.closeLocalTime()
         val timeNanos = time.nanoseconds()
         request.responseCompleteTimeNanos(timeNanos)
-        if (request.apiLocalCompleteTimeNanos == -1L)
-          request.apiLocalCompleteTimeNanos(timeNanos)
-        // If this callback was executed after KafkaApis returned we will need to adjust the callback completion time here.
-        if (request.callbackRequestDequeueTimeNanos.isPresent && request.callbackRequestCompleteTimeNanos.isEmpty)
-          request.callbackRequestCompleteTimeNanos(OptionalLong.of(time.nanoseconds()))
       // For a given request, these may happen in addition to one in the previous section, skip updating the metrics
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }

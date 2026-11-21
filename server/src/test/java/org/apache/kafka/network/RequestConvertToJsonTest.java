@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -221,7 +222,7 @@ public class RequestConvertToJsonTest {
     private static Request request(AbstractRequest req) {
         ByteBuffer buffer = req.serializeWithHeader(new RequestHeader(req.apiKey(), req.version(), "client-id", 1));
         RequestContext requestContext = newRequestContext(buffer);
-        return new Request(1, requestContext, 0, mock(MemoryPool.class), buffer, mock(RequestChannelMetrics.class));
+        return new Request(1, requestContext, Time.SYSTEM, 0, mock(MemoryPool.class), buffer, mock(RequestChannelMetrics.class));
     }
 
     private static RequestContext newRequestContext(ByteBuffer buffer) {
