@@ -41,6 +41,8 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
+import org.apache.kafka.image.loader.LoaderManifest
+import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, KRaftMetadataCache, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
@@ -76,6 +78,29 @@ import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
+
+private[server] class InitialDynamicBrokerConfigPublisher(config: KafkaConfig) extends MetadataPublisher {
+  val firstPublishFuture = new CompletableFuture[Void]
+
+  override def name(): String = s"InitialDynamicBrokerConfigPublisher id=${config.nodeId}"
+
+  override def onMetadataUpdate(
+    delta: MetadataDelta,
+    newImage: MetadataImage,
+    manifest: LoaderManifest
+  ): Unit = {
+    try {
+      config.dynamicConfig.initializeFromPersistentProps(
+        newImage.configs.configProperties(new ConfigResource(ConfigResource.Type.BROKER, "")),
+        newImage.configs.configProperties(new ConfigResource(ConfigResource.Type.BROKER, config.nodeId.toString))
+      )
+      firstPublishFuture.complete(null)
+    } catch {
+      case t: Throwable =>
+        firstPublishFuture.completeExceptionally(t)
+    }
+  }
+}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -212,8 +237,20 @@ class BrokerServer(
           warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
         }
       }
+      val initialDynamicConfigPublisher = new InitialDynamicBrokerConfigPublisher(config)
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+        "the initial dynamic broker configuration publisher to be installed",
+        sharedServer.loader.installPublishers(util.List.of(initialDynamicConfigPublisher)), startupDeadline, time)
+      try {
+        FutureUtils.waitWithLogging(logger.underlying, logIdent,
+          "the initial dynamic broker configuration to be loaded",
+          initialDynamicConfigPublisher.firstPublishFuture, startupDeadline, time)
+      } finally {
+        FutureUtils.waitWithLogging(logger.underlying, logIdent,
+          "the initial dynamic broker configuration publisher to be removed",
+          sharedServer.loader.removeAndClosePublisher(initialDynamicConfigPublisher), startupDeadline, time)
+      }
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
-      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
