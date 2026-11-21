@@ -376,8 +376,38 @@ public class TopologyTestDriver implements Closeable {
             logContext
         );
 
-        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        try {
+            setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
+            setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        } catch (final Throwable e) {
+            // the caller gets no driver to close
+            closeDirty(e);
+            throw e;
+        }
+    }
+
+    private void closeDirty(final Throwable cause) {
+        if (task != null) {
+            closeAndSuppress(task::suspend, cause);
+            closeAndSuppress(task::closeDirty, cause);
+        }
+        if (globalStateManager != null) {
+            closeAndSuppress(globalStateManager::close, cause);
+        }
+        // as close() does, so that no state is left behind, whatever made the construction fail
+        closeAndSuppress(stateDirectory::clean, cause);
+    }
+
+    // a step that fails does not keep the next ones from running
+    private static void closeAndSuppress(final AutoCloseable step, final Throwable cause) {
+        try {
+            step.close();
+        } catch (final Throwable e) {
+            // an exception cannot suppress itself
+            if (e != cause) {
+                cause.addSuppressed(e);
+            }
+        }
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
