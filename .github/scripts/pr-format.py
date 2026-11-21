@@ -94,6 +94,7 @@ if __name__ == "__main__":
     Body checks:
     * Is not empty
     * Has "Reviewers:" trailer if the PR is approved
+    * Every "Reviewers:" line is in the last paragraph, where git reads it as a trailer
 
     This script only reads the PR. It never edits the title or the body.
     """
@@ -131,10 +132,15 @@ if __name__ == "__main__":
     check("Committer Checklist" not in body, "Old PR template text not present", "Old PR template text should be removed")
 
     # Check for Reviewers
+    # git reads trailers only from the last paragraph. A "Reviewers:" line
+    # anywhere else is plain text, and the people on it get no credit.
+    reviewers_in_body = parse_trailers(title, body).get("Reviewers", [])
+    reviewers_lines = [line for line in body.splitlines() if line.startswith("Reviewers:")]
+    check(len(reviewers_lines) <= len(reviewers_in_body), "Every 'Reviewers:' line is a trailer",
+          "'Reviewers:' must be in the last paragraph. Move the text below it above it.")
+
     approved = has_approval(reviews)
     if approved:
-        trailers = parse_trailers(title, body)
-        reviewers_in_body = trailers.get("Reviewers", [])
         check(len(reviewers_in_body) > 0, "Found 'Reviewers' in commit body", "Pull Request is approved, but no 'Reviewers' found in commit body")
         if len(reviewers_in_body) > 0:
             for reviewer_in_body in reviewers_in_body:

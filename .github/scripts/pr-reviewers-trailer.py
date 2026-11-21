@@ -260,6 +260,12 @@ if __name__ == "__main__":
     body = gh_json["body"]
 
     existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
+    reviewers_lines = [line for line in body.splitlines() if line.startswith("Reviewers:")]
+    if len(reviewers_lines) > len(existing_reviewers):
+        # There is text below the Reviewers trailer, so git does not read it.
+        # Adding a second trailer would hide the problem. The PR linter reports it.
+        logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
+        exit(0)
     new_value = ", ".join(existing_reviewers)
     if already_exists(identity, existing_reviewers):
         logger.info(f"Reviewer {resolved} already present.")

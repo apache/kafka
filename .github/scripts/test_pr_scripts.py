@@ -145,6 +145,18 @@ class PrFormatTest(unittest.TestCase):
         present = FakeGh("Some body\n\nReviewers: A <a@example.com>\n", approved).run("pr-format.py")
         self.assertEqual(0, present.returncode, present.stderr)
 
+    def test_linter_reports_text_below_the_reviewers_trailer(self):
+        message = "'Reviewers:' must be in the last paragraph. Move the text below it above it."
+        for below in ("\nPlease backport to 4.2.\n",           # text after a blank line
+                      "Please backport to 4.2.\n",             # text on the next line
+                      "\nCo-Authored-By: Bot <b@example.com>\n"):  # trailer after a blank line
+            result = FakeGh("Some body\n\nReviewers: A <a@example.com>\n" + below).run("pr-format.py")
+            self.assertEqual(1, result.returncode, below)
+            self.assertIn(message, result.stdout)
+
+        next_line = "Some body\n\nReviewers: A <a@example.com>\nCo-Authored-By: Bot <b@example.com>\n"
+        self.assertEqual(0, FakeGh(next_line).run("pr-format.py").returncode)
+
 
 class ReviewersTrailerTest(unittest.TestCase):
 
@@ -216,6 +228,10 @@ class ReviewersTrailerTest(unittest.TestCase):
             "Reviewers: New Person <new@example.com>, Ada Lovelace <ada@example.com>,\n"
             " Alan Turing <alan@example.com>\n",
             edited)
+
+    def test_no_second_trailer_when_text_is_below_reviewers(self):
+        body = "Fix the thing.\n\nReviewers: A <a@example.com>\n\nPlease backport to 4.2.\n"
+        self.assertIsNone(add_reviewer(body).edited_body())
 
     def test_adding_the_same_reviewer_twice_changes_nothing(self):
         first = add_reviewer("Fix the thing.\n").edited_body()
