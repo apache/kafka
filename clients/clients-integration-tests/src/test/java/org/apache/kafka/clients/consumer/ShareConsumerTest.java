@@ -20,16 +20,20 @@ import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -1830,6 +1834,109 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         shutdownExecutorService(service);
 
         verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    /**
+     * After an unclean leader election the new leader has an empty log, so the records written after the
+     * election reuse offsets that the share group has already acknowledged. Those records must still be
+     * delivered, as they are for a regular consumer group.
+     */
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
+        }
+    )
+    @Timeout(180)
+    public void testRecordsWrittenAfterUncleanLeaderElectionAreDelivered() throws Exception {
+        String topic = "unclean";
+        String groupId = "group1";
+        TopicPartition partition = new TopicPartition(topic, 0);
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(1, 2))).configs(Map.of(
+                TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
+                TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")))).all().get();
+        }
+        cluster.waitTopicCreation(topic, 1);
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareIsolationLevel(groupId, "read_committed");
+
+        // Broker 2 leaves the ISR, so only broker 1 has offsets 0-49.
+        cluster.shutdownBroker(2);
+        waitForCondition(() -> isr(partition).equals(List.of(1)), "Broker 2 was not removed from the ISR");
+        produceRecords(topic, "old", 50);
+
+        try (ShareConsumer<byte[], byte[]> consumer1 = createShareConsumer(groupId);
+             ShareConsumer<byte[], byte[]> consumer2 = createShareConsumer(groupId)) {
+            List<ShareConsumer<byte[], byte[]>> consumers = List.of(consumer1, consumer2);
+            consumer1.subscribe(Set.of(topic));
+            consumer2.subscribe(Set.of(topic));
+
+            // The share group consumes and acknowledges offsets 0-49.
+            assertEquals(50, pollRecords(consumers, 50, 30000).size());
+
+            // Broker 1 goes away and broker 2 becomes the leader with an empty log.
+            cluster.shutdownBroker(1);
+            cluster.startBroker(2);
+            try (Admin admin = createAdminClient()) {
+                waitForCondition(() -> {
+                    try {
+                        admin.electLeaders(ElectionType.UNCLEAN, Set.of(partition)).all().get();
+                    } catch (ExecutionException e) {
+                        // Retry until broker 2 is eligible, or until it has already been elected.
+                    }
+                    return topicPartitionLeader(admin, topic, 0).equals(List.of(2));
+                }, 60000, "Broker 2 did not become the leader");
+            }
+
+            // The consumers keep polling while the new leader's log is still empty.
+            assertEquals(Set.of(), pollRecords(consumers, 1, 5000));
+
+            // The new records reuse offsets 0-69.
+            produceRecords(topic, "new", 70);
+
+            Set<String> expected = new HashSet<>();
+            for (int i = 0; i < 70; i++) {
+                expected.add("new" + i);
+            }
+            assertEquals(expected, pollRecords(consumers, 70, 30000));
+        }
+    }
+
+    private List<Integer> isr(TopicPartition partition) throws ExecutionException, InterruptedException {
+        try (Admin admin = createAdminClient()) {
+            return admin.describeTopics(List.of(partition.topic())).allTopicNames().get().get(partition.topic())
+                .partitions().get(partition.partition()).isr().stream().map(Node::id).toList();
+        }
+    }
+
+    private void produceRecords(String topic, String prefix, int count) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < count; i++) {
+                producer.send(new ProducerRecord<>(topic, 0, null, (prefix + i).getBytes()));
+            }
+            producer.flush();
+        }
+    }
+
+    /**
+     * Polls the consumers in turn, acknowledging what they receive, until they have received {@code count}
+     * records or {@code timeoutMs} has passed. Returns the record values.
+     */
+    private Set<String> pollRecords(List<ShareConsumer<byte[], byte[]>> consumers, int count, long timeoutMs) {
+        Set<String> values = new HashSet<>();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (values.size() < count && System.currentTimeMillis() < deadline) {
+            for (ShareConsumer<byte[], byte[]> consumer : consumers) {
+                consumer.poll(Duration.ofMillis(500)).forEach(r -> values.add(new String(r.value())));
+                consumer.commitSync();
+            }
+        }
+        return values;
     }
 
     @ClusterTest(
