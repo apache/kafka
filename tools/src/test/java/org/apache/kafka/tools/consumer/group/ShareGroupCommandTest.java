@@ -1160,8 +1160,7 @@ public class ShareGroupCommandTest {
             topic2, new TopicDescription(topic2, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
-        DescribeTopicsResult topicsResult = mock(DescribeTopicsResult.class);
-        when(topicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult topicsResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(topicsResult);
         when(adminClient.describeTopics(anyCollection())).thenReturn(topicsResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
@@ -1195,8 +1194,7 @@ public class ShareGroupCommandTest {
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
                 new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
@@ -1273,8 +1271,7 @@ public class ShareGroupCommandTest {
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()
             ))
         ));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
 
@@ -1320,8 +1317,7 @@ public class ShareGroupCommandTest {
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
                 new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of()))
             ));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
@@ -1378,8 +1374,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
 
@@ -1511,8 +1506,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
@@ -1555,8 +1549,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
             )));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
@@ -1609,8 +1602,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
             )));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
 
@@ -1680,8 +1672,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
             )));
-        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
-        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        DescribeTopicsResult describeTopicResult = AdminClientTestUtils.describeTopicsResult(descriptions);
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
 
