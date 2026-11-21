@@ -228,7 +228,7 @@ public class GroupSpecBuilderTest {
             .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(Map.of())
             .withMetadataImage(metadataImage)
-            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of(), Map.of()))
             .build();
 
         assertEquals(
@@ -327,7 +327,7 @@ public class GroupSpecBuilderTest {
             .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(Map.of())
             .withMetadataImage(metadataImage)
-            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of(), Map.of()))
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.

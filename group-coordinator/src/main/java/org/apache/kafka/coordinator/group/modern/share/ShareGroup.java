@@ -83,18 +83,38 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *                           keyed on the topic id, for the topics whose share group state is
      *                           initialized.
      * @param deletingTopics     Set of topic ids.
+     * @param initializingStartOffsets The start offsets sent to initialize the partitions which are not
+     *                           initialized yet, keyed on the topic id and the partition.
      */
     public record ShareGroupStatePartitionMetadataInfo(
         Map<Uuid, InitMapValue> initializingTopics,
         Map<Uuid, InitMapValue> initializedTopics,
-        Set<Uuid> deletingTopics
+        Set<Uuid> deletingTopics,
+        Map<Uuid, Map<Integer, Long>> initializingStartOffsets
     ) {
-        public static final ShareGroupStatePartitionMetadataInfo EMPTY = new ShareGroupStatePartitionMetadataInfo(Map.of(), Map.of(), Set.of());
+        public static final ShareGroupStatePartitionMetadataInfo EMPTY = new ShareGroupStatePartitionMetadataInfo(Map.of(), Map.of(), Set.of(), Map.of());
 
         public ShareGroupStatePartitionMetadataInfo {
             initializingTopics = Collections.unmodifiableMap(initializingTopics);
             initializedTopics = Collections.unmodifiableMap(initializedTopics);
             deletingTopics = Collections.unmodifiableSet(deletingTopics);
+            initializingStartOffsets = Collections.unmodifiableMap(initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializingTopics(Map<Uuid, InitMapValue> initializingTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializedTopics(Map<Uuid, InitMapValue> initializedTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withDeletingTopics(Set<Uuid> deletingTopics) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
+        }
+
+        public ShareGroupStatePartitionMetadataInfo withInitializingStartOffsets(Map<Uuid, Map<Integer, Long>> initializingStartOffsets) {
+            return new ShareGroupStatePartitionMetadataInfo(initializingTopics, initializedTopics, deletingTopics, initializingStartOffsets);
         }
     }
 
