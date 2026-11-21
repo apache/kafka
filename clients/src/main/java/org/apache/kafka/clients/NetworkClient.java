@@ -16,16 +16,10 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
@@ -50,10 +44,8 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.common.utils.internals.ThreadUtils;
 
 import org.slf4j.Logger;
 
@@ -72,13 +64,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -92,6 +78,13 @@ public class NetworkClient implements KafkaClient {
         ACTIVE,
         CLOSING,
         CLOSED
+    }
+
+    private enum ApiVersionsResponseOutcome {
+        MARK_READY,
+        RETRY,
+        DISCONNECT,
+        REBOOTSTRAP
     }
 
     private final Logger log;
@@ -135,17 +128,13 @@ public class NetworkClient implements KafkaClient {
 
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
 
-    /* Whether to send the cluster ID and node ID on ApiVersions RPC for checking by the broker */
-    private final boolean metadataClusterCheckEnable;
-
     private final Time time;
 
-    /**
-     * True if we should send an ApiVersionRequest when first connecting to a broker.
-     */
+    private final ApiVersions apiVersions;
+
     private final boolean discoverBrokerVersions;
 
-    private final ApiVersions apiVersions;
+    private final boolean metadataClusterCheckEnable;
 
     private final Map<String, ApiVersionsRequest.Builder> nodesNeedingApiVersionsFetch = new HashMap<>();
 
@@ -155,19 +144,9 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
-    private final BootstrapConfiguration bootstrapConfiguration;
+    private final BootstrapResolver bootstrapResolver;
 
-    private Timer bootstrapTimer;
-
-    private CompletableFuture<List<InetSocketAddress>> pendingBootstrapResolution;
-
-    private volatile long bootstrapResolutionRetryMs = -1L;
-
-    private BootstrapResolutionException bootstrapException = null;
-
-    private final ExecutorService bootstrapExecutor;
-
-    private final TelemetrySender telemetrySender;
+    private final NetworkClientTelemetrySender telemetrySender;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -365,14 +344,44 @@ public class NetworkClient implements KafkaClient {
                          MetadataRecoveryStrategy metadataRecoveryStrategy,
                          BootstrapConfiguration bootstrapConfiguration,
                          boolean metadataClusterCheckEnable) {
-        /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
-         * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
-         * super constructor is invoked.
-         */
+        this.log = logContext.logger(NetworkClient.class);
+        NetworkClientTransport transport = new NetworkClientTransport() {
+            @Override
+            public LeastLoadedNode leastLoadedNode(long now) {
+                return NetworkClient.this.leastLoadedNode(now);
+            }
+
+            @Override
+            public boolean canSendRequest(String node, long now) {
+                return NetworkClient.this.canSendRequest(node, now);
+            }
+
+            @Override
+            public boolean isAnyNodeConnecting() {
+                return NetworkClient.this.isAnyNodeConnecting();
+            }
+
+            @Override
+            public boolean canConnect(String node, long now) {
+                return connectionStates.canConnect(node, now);
+            }
+
+            @Override
+            public void initiateConnect(Node node, long now) {
+                NetworkClient.this.initiateConnect(node, now);
+            }
+
+            @Override
+            public void sendInternalRequest(AbstractRequest.Builder<?> request, String node, long now) {
+                NetworkClient.this.sendInternalRequest(request, node, now);
+            }
+        };
         if (metadataUpdater == null) {
             if (metadata == null)
                 throw new IllegalArgumentException("`metadata` must not be null");
-            this.metadataUpdater = new DefaultMetadataUpdater(metadata);
+            this.metadataUpdater = new DefaultMetadataUpdater(metadata, transport,
+                log, defaultRequestTimeoutMs,
+                reconnectBackoffMs, metadataRecoveryStrategy);
         } else {
             this.metadataUpdater = metadataUpdater;
         }
@@ -390,37 +399,17 @@ public class NetworkClient implements KafkaClient {
         this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
-        this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
-        this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
-        this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
+        this.telemetrySender = clientTelemetrySender == null ? null :
+            new NetworkClientTelemetrySender(clientTelemetrySender, transport, this.metadataUpdater,
+                log, defaultRequestTimeoutMs, reconnectBackoffMs);
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+        this.discoverBrokerVersions = discoverBrokerVersions;
         this.metadataClusterCheckEnable = metadataClusterCheckEnable;
-        this.bootstrapConfiguration = bootstrapConfiguration;
-        // Bootstrap timer is lazily initialized on the first poll so its budget represents
-        // "time we spend on bootstrap once polling begins" — an idle gap between construction
-        // and the first poll should not eat into that budget.
-        this.bootstrapTimer = null;
-        // Create executor for async DNS resolution if bootstrap is enabled
-        if (bootstrapConfiguration != BootstrapConfiguration.DISABLED) {
-            this.bootstrapExecutor = Executors.newSingleThreadExecutor(ThreadUtils.createThreadFactory("kafka-bootstrap-dns-resolver", true));
-            // Kick off the first DNS resolution eagerly so it overlaps with the caller finishing
-            // construction. We deliberately don't start the timer here (see field comment);
-            // poll() remains the driver — it starts the timer, observes the result, propagates
-            // errors, and drives retries.
-            this.pendingBootstrapResolution = CompletableFuture.supplyAsync(
-                () -> ClientUtils.parseAddresses(
-                    bootstrapConfiguration.bootstrapServers,
-                    bootstrapConfiguration.clientDnsLookup
-                ),
-                bootstrapExecutor
-            );
-        } else {
-            this.bootstrapExecutor = null;
-        }
+        this.bootstrapResolver = new BootstrapResolver(bootstrapConfiguration, time, log);
     }
 
     /**
@@ -619,6 +608,10 @@ public class NetworkClient implements KafkaClient {
 
     // package-private for testing
     void sendInternalMetadataRequest(MetadataRequest.Builder builder, String nodeConnectionId, long now) {
+        sendInternalRequest(builder, nodeConnectionId, now);
+    }
+
+    private void sendInternalRequest(AbstractRequest.Builder<?> builder, String nodeConnectionId, long now) {
         ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true);
         doSend(clientRequest, true, now);
     }
@@ -696,8 +689,7 @@ public class NetworkClient implements KafkaClient {
      * Do actual reads and writes to sockets.
      *
      * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
-     *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
-     *                metadata timeout
+     *                must be non-negative. The actual timeout also considers request, metadata, and telemetry timeouts.
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
@@ -723,7 +715,7 @@ public class NetworkClient implements KafkaClient {
             log.error("Unexpected error during I/O", e);
         }
 
-        // process completed actions
+        // Process completed actions in the established order.
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);
@@ -812,8 +804,7 @@ public class NetworkClient implements KafkaClient {
     public void close() {
         state.compareAndSet(State.ACTIVE, State.CLOSING);
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
-            cancelBootstrapResolution();
-            ThreadUtils.shutdownExecutorServiceQuietly(bootstrapExecutor, 1, TimeUnit.SECONDS);
+            bootstrapResolver.close();
             this.selector.close();
             this.metadataUpdater.close();
             if (telemetrySender != null)
@@ -821,14 +812,6 @@ public class NetworkClient implements KafkaClient {
         } else {
             log.warn("Attempting to close NetworkClient that has already been closed.");
         }
-    }
-
-    private void cancelBootstrapResolution() {
-        if (pendingBootstrapResolution != null) {
-            pendingBootstrapResolution.cancel(true);
-            pendingBootstrapResolution = null;
-        }
-        bootstrapResolutionRetryMs = -1L;
     }
 
     /**
@@ -916,7 +899,7 @@ public class NetworkClient implements KafkaClient {
      * so that the caller can continue polling while DNS resolution finishes.
      */
     private LeastLoadedNode handleEmptyNodeList() {
-        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped()) {
+        if (!bootstrapResolver.isEnabled() || metadataUpdater.isBootstrapped()) {
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
         }
 
@@ -1123,11 +1106,24 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
+    private static ApiVersionsResponseOutcome determineApiVersionsAction(short requestVersion,
+                                                                         ApiVersionsResponse response,
+                                                                         MetadataRecoveryStrategy recoveryStrategy) {
+        short errorCode = response.data().errorCode();
+        if (errorCode == Errors.NONE.code())
+            return ApiVersionsResponseOutcome.MARK_READY;
+        if (recoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && errorCode == Errors.REBOOTSTRAP_REQUIRED.code())
+            return ApiVersionsResponseOutcome.REBOOTSTRAP;
+        if (requestVersion == 0 || errorCode != Errors.UNSUPPORTED_VERSION.code())
+            return ApiVersionsResponseOutcome.DISCONNECT;
+        return ApiVersionsResponseOutcome.RETRY;
+    }
+
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
-            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && apiVersionsResponse.data().errorCode() == Errors.REBOOTSTRAP_REQUIRED.code()) {
+        switch (determineApiVersionsAction(req.request.version(), apiVersionsResponse, metadataRecoveryStrategy)) {
+            case REBOOTSTRAP:
                 log.info("Rebootstrap requested by server due to cluster metadata mismatch for cluster {} and node {}.", this.metadataUpdater.clusterId(), node);
                 this.metadataUpdater.fetchNodes().forEach(nodeToClose -> {
                     String nodeToCloseId = nodeToClose.idString();
@@ -1138,36 +1134,33 @@ public class NetworkClient implements KafkaClient {
                     }
                 });
                 metadataUpdater.rebootstrap(now);
-            } else if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
+                break;
+            case DISCONNECT:
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
-            } else {
+                break;
+            case MARK_READY:
+                apiVersions.update(node, new NodeApiVersions(
+                    apiVersionsResponse.data().apiKeys(),
+                    apiVersionsResponse.data().supportedFeatures(),
+                    apiVersionsResponse.data().finalizedFeatures(),
+                    apiVersionsResponse.data().finalizedFeaturesEpoch()));
+                this.connectionStates.ready(node);
+                log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
+                    node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
+                    apiVersionsResponse.data().supportedFeatures(), apiVersions.get(node));
+                break;
+            case RETRY:
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
                 // If not provided, the client falls back to version 0.
-                short maxApiVersion = 0;
-                if (!apiVersionsResponse.data().apiKeys().isEmpty()) {
-                    ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
-                    if (apiVersion != null) {
-                        maxApiVersion = apiVersion.maxVersion();
-                    }
-                }
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion));
-            }
-            return;
+                ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+                short fallbackVersion = apiVersion == null ? 0 : apiVersion.maxVersion();
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(fallbackVersion));
+                break;
         }
-        NodeApiVersions nodeVersionInfo = new NodeApiVersions(
-            apiVersionsResponse.data().apiKeys(),
-            apiVersionsResponse.data().supportedFeatures(),
-            apiVersionsResponse.data().finalizedFeatures(),
-            apiVersionsResponse.data().finalizedFeaturesEpoch());
-        apiVersions.update(node, nodeVersionInfo);
-        this.connectionStates.ready(node);
-        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
-                node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
-                apiVersionsResponse.data().supportedFeatures(), nodeVersionInfo);
     }
 
     /**
@@ -1209,32 +1202,35 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void handleInitiateApiVersionRequests(long now) {
-        Iterator<Map.Entry<String, ApiVersionsRequest.Builder>> iter = nodesNeedingApiVersionsFetch.entrySet().iterator();
-        while (iter.hasNext()) {
-            Map.Entry<String, ApiVersionsRequest.Builder> entry = iter.next();
+        Iterator<Map.Entry<String, ApiVersionsRequest.Builder>> iterator = nodesNeedingApiVersionsFetch.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, ApiVersionsRequest.Builder> entry = iterator.next();
             String node = entry.getKey();
-            if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
-                log.debug("Initiating API versions fetch from node {}.", node);
-                // We transition the connection to the CHECKING_API_VERSIONS state only when
-                // the ApiVersionsRequest is queued up to be sent out. Without this, the client
-                // could remain in the CHECKING_API_VERSIONS state forever if the channel does
-                // not before ready.
-                this.connectionStates.checkingApiVersions(node);
-                ApiVersionsRequest.Builder apiVersionRequestBuilder = entry.getValue();
-                // If we know the cluster ID and node ID we are connecting to, we can include
-                // those details in the ApiVersions request for checking in the broker,
-                // provided that the metadata recovery strategy is not NONE. (KIP-1242)
-                if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
-                    String clusterId = this.metadataUpdater.clusterId();
-                    int nodeId = Integer.parseInt(node);
-                    if (clusterId != null && nodeId >= 0) {
-                        apiVersionRequestBuilder.setClusterId(clusterId);
-                        apiVersionRequestBuilder.setNodeId(nodeId);
-                    }
-                }
-                ClientRequest clientRequest = newClientRequest(node, apiVersionRequestBuilder, now, true);
-                doSend(clientRequest, true, now);
-                iter.remove();
+            if (!selector.isChannelReady(node) || !inFlightRequests.canSendMore(node))
+                continue;
+
+            log.debug("Initiating API versions fetch from node {}.", node);
+            // We transition the connection to the CHECKING_API_VERSIONS state only when
+            // the ApiVersionsRequest is queued up to be sent out. Without this, the client
+            // could remain in the CHECKING_API_VERSIONS state forever if the channel does
+            // not before ready.
+            connectionStates.checkingApiVersions(node);
+            ApiVersionsRequest.Builder request = entry.getValue();
+            prepareApiVersionsRequest(node, request);
+            ClientRequest clientRequest = newClientRequest(node, request, now, true);
+            doSend(clientRequest, true, now);
+            iterator.remove();
+        }
+    }
+
+    private void prepareApiVersionsRequest(String node, ApiVersionsRequest.Builder request) {
+        // Include cluster and node identity for broker-side checks when enabled (KIP-1242).
+        if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
+            String clusterId = metadataUpdater.clusterId();
+            int nodeId = Integer.parseInt(node);
+            if (clusterId != null && nodeId >= 0) {
+                request.setClusterId(clusterId);
+                request.setNodeId(nodeId);
             }
         }
     }
@@ -1301,453 +1297,22 @@ public class NetworkClient implements KafkaClient {
      * This method is called from {@link #poll(long, long)} and uses a truly asynchronous approach
      * to avoid blocking on DNS resolution.
      *
-     * <p>DNS resolution is performed on a separate thread via {@link CompletableFuture}. This ensures
-     * the event loop remains responsive even if DNS lookups block or take a long time. The bootstrap
-     * timeout can interrupt a pending DNS resolution, unlike synchronous approaches.
-     *
-     * @param currentTimeMs The current time in milliseconds
-     * @throws BootstrapResolutionException if the bootstrap timeout expires before DNS resolution succeeds
-     */
-    void ensureBootstrapped(final long currentTimeMs) {
-        if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped())
-            return;
-
-        if (bootstrapException != null)
-            return;
-
-        if (Thread.interrupted()) {
-            cancelBootstrapResolution();
-            throw new InterruptException(new InterruptedException());
-        }
-
-        // Start the timer on the first poll so its budget represents "time we spend on
-        // bootstrap since polling began" — the caller may have created the client well before
-        // its first API call, and we don't want that idle gap to eat into the budget.
-        if (bootstrapTimer == null)
-            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-
-        // Check if a pending resolution completed before checking the timeout, so that a
-        // result arriving at the same time as the deadline is not incorrectly rejected.
-        if (maybeProcessBootstrapResolutionResult(currentTimeMs))
-            return;
-
-        // Record a timeout failure before possibly triggering a new resolution.
-        // maybeStartBootstrapResolution skips if bootstrapException is set, so we
-        // don't kick off a fresh resolution after the failure has been recorded.
-        bootstrapTimer.update(currentTimeMs);
-        checkBootstrapTimeout();
-        maybeStartBootstrapResolution(currentTimeMs);
-    }
-
-    /**
-     * Record a permanent bootstrap failure on the metadata if the timeout has expired.
      * The error is not thrown here; callers observe it through their metadata layer
      * (e.g. {@link Metadata#maybeThrowFatalException()} for Producer/Consumer, or
      * {@code AdminMetadataManager#bootstrapFatalException()} for AdminClient).
-     */
-    private void checkBootstrapTimeout() {
-        if (bootstrapTimer.isExpired() && bootstrapException == null) {
-            cancelBootstrapResolution();
-            bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
-                bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
-                "Please check your bootstrap.servers configuration and DNS settings.");
-            metadataUpdater.bootstrapFailed(bootstrapException);
-        }
-    }
-
-    /**
-     * Trigger a new async DNS resolution if none is in progress and the retry backoff has elapsed.
-     */
-    private void maybeStartBootstrapResolution(final long currentTimeMs) {
-        if (bootstrapException != null)
-            return;
-
-        if (pendingBootstrapResolution != null)
-            return;
-
-        if (bootstrapResolutionRetryMs >= 0 && currentTimeMs < bootstrapResolutionRetryMs)
-            return;
-
-        bootstrapResolutionRetryMs = -1L;
-        if (bootstrapTimer == null)
-            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-
-        pendingBootstrapResolution = CompletableFuture.supplyAsync(
-            () -> ClientUtils.parseAddresses(
-                bootstrapConfiguration.bootstrapServers,
-                bootstrapConfiguration.clientDnsLookup
-            ),
-            bootstrapExecutor
-        );
-    }
-
-    /**
-     * Check if a pending bootstrap DNS resolution has completed and process its result.
      *
-     * @return true if the client is now bootstrapped and the caller should early return.
+     * @param currentTimeMs The current time in milliseconds
      */
-    private boolean maybeProcessBootstrapResolutionResult(final long currentTimeMs) {
-        if (pendingBootstrapResolution == null || !pendingBootstrapResolution.isDone())
-            return false;
-
-        List<InetSocketAddress> servers = List.of();
-        try {
-            servers = pendingBootstrapResolution.getNow(List.of());
-        } catch (CompletionException e) {
-            log.debug("DNS resolution failed", e);
-        }
-
-        pendingBootstrapResolution = null;
-
-        if (!servers.isEmpty()) {
-            log.debug("Bootstrap DNS resolution succeeded, {} servers resolved", servers.size());
-            metadataUpdater.bootstrap(servers);
-            return true;
-        }
-
-        log.debug("Failed to resolve bootstrap servers, will retry after {}ms. Remaining time: {}ms",
-            bootstrapConfiguration.retryBackoffMs, bootstrapTimer.remainingMs());
-        bootstrapResolutionRetryMs = currentTimeMs + bootstrapConfiguration.retryBackoffMs;
-        return false;
-    }
-
-    class DefaultMetadataUpdater implements MetadataUpdater {
-
-        /* the current cluster metadata */
-        private final Metadata metadata;
-
-        // Defined if there is a request in progress, null otherwise
-        private InProgressData inProgress;
-
-        /*
-         * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
-         * metadata has not been requested. This is the start time based on which rebootstrap is
-         * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
-         * Set to Optional.of(0L) to force rebootstrap immediately.
-         */
-        private Optional<Long> metadataAttemptStartMs = Optional.empty();
-
-
-        DefaultMetadataUpdater(Metadata metadata) {
-            this.metadata = metadata;
-            this.inProgress = null;
-        }
-
-        @Override
-        public String clusterId() {
-            ClusterResource clusterResource = metadata.fetch().clusterResource();
-            if (clusterResource != null) {
-                return clusterResource.clusterId();
-            }
-            return null;
-        }
-
-        @Override
-        public List<Node> fetchNodes() {
-            return metadata.fetch().nodes();
-        }
-
-        @Override
-        public boolean isUpdateDue(long now) {
-            return !hasFetchInProgress() && this.metadata.timeToNextUpdate(now) == 0;
-        }
-
-        private boolean hasFetchInProgress() {
-            return inProgress != null;
-        }
-
-        @Override
-        public long maybeUpdate(long now) {
-            // should we update our metadata?
-            long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = hasFetchInProgress() ? defaultRequestTimeoutMs : 0;
-
-            long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
-            if (metadataTimeout > 0) {
-                return metadataTimeout;
-            }
-
-            if (metadataAttemptStartMs.isEmpty())
-                metadataAttemptStartMs = Optional.of(now);
-
-            // Beware that the behavior of this method and the computation of timeouts for poll() are
-            // highly dependent on the behavior of leastLoadedNode.
-            LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
-
-            // Rebootstrap if needed and configured.
-            // Only rebootstrap if we've already completed initial bootstrap - otherwise we're still
-            // in the initial DNS resolution phase and should let ensureBootstrapped() handle it.
-            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
-                    && isBootstrapped()
-                    && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
-                rebootstrap(now);
-
-                leastLoadedNode = leastLoadedNode(now);
-            }
-
-            if (leastLoadedNode.node() == null) {
-                log.debug("Give up sending metadata request since no node is available");
-                return reconnectBackoffMs;
-            }
-
-            return maybeUpdate(now, leastLoadedNode.node());
-        }
-
-        @Override
-        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
-            Cluster cluster = metadata.fetch();
-            // 'processDisconnection' generates warnings for misconfigured bootstrap server configuration
-            // resulting in 'Connection Refused' and misconfigured security resulting in authentication failures.
-            // The warning below handles the case where a connection to a broker was established, but was disconnected
-            // before metadata could be obtained.
-            if (cluster.isBootstrapConfigured()) {
-                int nodeId = Integer.parseInt(destinationId);
-                Node node = cluster.nodeById(nodeId);
-                if (node != null)
-                    log.warn("Bootstrap broker {} disconnected", node);
-            }
-
-            // If we have a disconnect while an update is due, we treat it as a failed update
-            // so that we can backoff properly
-            if (isUpdateDue(now))
-                handleFailedRequest(now, Optional.empty());
-
-            maybeFatalException.ifPresent(metadata::fatalError);
-
-            // The disconnect may be the result of stale metadata, so request an update
-            metadata.requestUpdate(false);
-        }
-
-        @Override
-        public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
-            maybeFatalException.ifPresent(metadata::fatalError);
-            metadata.failedUpdate(now);
-            inProgress = null;
-        }
-
-        @Override
-        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-            // If any partition has leader with missing listeners, log up to ten of these partitions
-            // for diagnosing broker configuration issues.
-            // This could be a transient issue if listeners were added dynamically to brokers.
-            List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
-                topicMetadata.partitionMetadata().stream()
-                    .filter(partitionMetadata -> partitionMetadata.error == Errors.LISTENER_NOT_FOUND)
-                    .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
-                .collect(Collectors.toList());
-            if (!missingListenerPartitions.isEmpty()) {
-                int count = missingListenerPartitions.size();
-                log.warn("{} partitions have leader brokers without a matching listener, including {}",
-                        count, missingListenerPartitions.subList(0, Math.min(10, count)));
-            }
-
-            // Check if any topic's metadata failed to get updated
-            Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
-                log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
-
-            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
-                log.info("Rebootstrap requested by server.");
-                initiateRebootstrap();
-            } else if (response.brokers().isEmpty()) {
-                // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
-                // we should retry later.
-                log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
-                this.metadata.failedUpdate(now);
-            } else {
-                this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
-                metadataAttemptStartMs = Optional.empty();
-            }
-
-            inProgress = null;
-        }
-
-        @Override
-        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
-            return metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent();
-        }
-
-        @Override
-        public void rebootstrap(long now) {
-            metadata.rebootstrap();
-            metadataAttemptStartMs = Optional.of(now);
-        }
-
-        @Override
-        public void bootstrapFailed(KafkaException exception) {
-            metadata.bootstrapFatalError(exception);
-        }
-
-        @Override
-        public boolean isBootstrapped() {
-            // We are bootstrapped if we have any nodes available (either from DNS resolution or metadata response)
-            return !metadata.fetch().nodes().isEmpty();
-        }
-
-        @Override
-        public void bootstrap(List<InetSocketAddress> addresses) {
-            metadata.bootstrap(addresses);
-        }
-
-        @Override
-        public void close() {
-            this.metadata.close();
-        }
-
-        private void initiateRebootstrap() {
-            metadataAttemptStartMs = Optional.of(0L); // to force rebootstrap
-        }
-
-        /**
-         * Add a metadata request to the list of sends if we can make one
-         */
-        private long maybeUpdate(long now, Node node) {
-            String nodeConnectionId = node.idString();
-
-            if (canSendRequest(nodeConnectionId, now)) {
-                Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
-                MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
-                log.debug("Sending metadata request {} to node {}", metadataRequest, node);
-                sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
-                inProgress = new InProgressData(requestAndVersion.requestVersion, requestAndVersion.isPartialUpdate);
-                return defaultRequestTimeoutMs;
-            }
-
-            // If there's any connection establishment underway, wait until it completes. This prevents
-            // the client from unnecessarily connecting to additional nodes while a previous connection
-            // attempt has not been completed.
-            if (isAnyNodeConnecting()) {
-                // Strictly the timeout we should return here is "connect timeout", but as we don't
-                // have such application level configuration, using reconnect backoff instead.
-                return reconnectBackoffMs;
-            }
-
-            if (connectionStates.canConnect(nodeConnectionId, now)) {
-                // We don't have a connection to this node right now, make one
-                log.debug("Initialize connection to node {} for sending metadata request", node);
-                initiateConnect(node, now);
-                return reconnectBackoffMs;
-            }
-
-            // connected, but can't send more OR connecting
-            // In either case, we just need to wait for a network event to let us know the selected
-            // connection might be usable again.
-            return Long.MAX_VALUE;
-        }
-
-        public class InProgressData {
-            public final int requestVersion;
-            public final boolean isPartialUpdate;
-
-            private InProgressData(int requestVersion, boolean isPartialUpdate) {
-                this.requestVersion = requestVersion;
-                this.isPartialUpdate = isPartialUpdate;
-            }
-        }
-
-    }
-
-    class TelemetrySender {
-
-        private final ClientTelemetrySender clientTelemetrySender;
-        private Node stickyNode;
-
-        public TelemetrySender(ClientTelemetrySender clientTelemetrySender) {
-            this.clientTelemetrySender = clientTelemetrySender;
-        }
-
-        public long maybeUpdate(long now) {
-            long timeToNextUpdate = clientTelemetrySender.timeToNextUpdate(defaultRequestTimeoutMs);
-            if (timeToNextUpdate > 0)
-                return timeToNextUpdate;
-
-            // The node connection params can change while having the same node id hence check if the cached
-            // sticky node has not changed, if changed then reset the sticky node.
-            if (stickyNode != null && isNodeChanged(stickyNode)) {
-                log.debug("Telemetry stickyNode {} either is no longer in metadata or changed, clearing it.", stickyNode);
-                stickyNode = null;
-            }
-
-            // Per KIP-714, let's continue to re-use the same broker for as long as possible.
-            if (stickyNode == null) {
-                stickyNode = leastLoadedNode(now).node();
-                if (stickyNode == null) {
-                    log.debug("Give up sending telemetry request since no node is available");
-                    return reconnectBackoffMs;
-                }
-            }
-
-            return maybeUpdate(now, stickyNode);
-        }
-
-        private long maybeUpdate(long now, Node node) {
-            String nodeConnectionId = node.idString();
-
-            if (canSendRequest(nodeConnectionId, now)) {
-                Optional<AbstractRequest.Builder<?>> requestOpt = clientTelemetrySender.createRequest();
-
-                if (requestOpt.isEmpty())
-                    return Long.MAX_VALUE;
-
-                AbstractRequest.Builder<?> request = requestOpt.get();
-                ClientRequest clientRequest = newClientRequest(nodeConnectionId, request, now, true);
-                doSend(clientRequest, true, now);
-                return defaultRequestTimeoutMs;
-            } else {
-                // Per KIP-714, if we can't issue a request to this broker node, let's clear it out
-                // and try another broker on the next loop.
-                stickyNode = null;
-            }
-
-            // If there's any connection establishment underway, wait until it completes. This prevents
-            // the client from unnecessarily connecting to additional nodes while a previous connection
-            // attempt has not been completed.
-            if (isAnyNodeConnecting())
-                return reconnectBackoffMs;
-
-            if (connectionStates.canConnect(nodeConnectionId, now)) {
-                // We don't have a connection to this node right now, make one
-                log.debug("Initialize connection to node {} for sending telemetry request", node);
-                initiateConnect(node, now);
-                return reconnectBackoffMs;
-            }
-
-            // In either case, we just need to wait for a network event to let us know the selected
-            // connection might be usable again.
-            return Long.MAX_VALUE;
-        }
-
-        private boolean isNodeChanged(Node node) {
-            Node newNode = metadataUpdater.fetchNodes().stream()
-                    .filter(n -> n.id() == node.id())
-                    .findFirst().orElse(null);
-            return newNode == null || !newNode.equals(node);
-        }
-
-        public void handleResponse(GetTelemetrySubscriptionsResponse response) {
-            clientTelemetrySender.handleResponse(response);
-        }
-
-        public void handleResponse(PushTelemetryResponse response) {
-            clientTelemetrySender.handleResponse(response);
-        }
-
-        public void handleFailedRequest(ApiKeys apiKey, KafkaException maybeFatalException) {
-            if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS)
-                clientTelemetrySender.handleFailedGetTelemetrySubscriptionsRequest(maybeFatalException);
-            else if (apiKey == ApiKeys.PUSH_TELEMETRY)
-                clientTelemetrySender.handleFailedPushTelemetryRequest(maybeFatalException);
+    void ensureBootstrapped(final long currentTimeMs) {
+        if (!bootstrapResolver.isEnabled() || metadataUpdater.isBootstrapped())
+            return;
+
+        bootstrapResolver.poll(currentTimeMs).ifPresent(result -> {
+            if (result.exception != null)
+                metadataUpdater.bootstrapFailed(result.exception);
             else
-                throw new IllegalStateException("Invalid api key for failed telemetry request");
-        }
-
-        public void close() {
-            try {
-                clientTelemetrySender.close();
-            } catch (Exception exception) {
-                log.error("Failed to close client telemetry sender", exception);
-            }
-        }
+                metadataUpdater.bootstrap(result.addresses);
+        });
     }
 
     @Override
@@ -1769,7 +1334,7 @@ public class NetworkClient implements KafkaClient {
 
     // visible for testing
     Node telemetryConnectedNode() {
-        return telemetrySender.stickyNode;
+        return telemetrySender.stickyNode();
     }
 
     @Override
