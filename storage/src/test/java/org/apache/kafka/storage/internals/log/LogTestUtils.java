@@ -542,6 +542,22 @@ public class LogTestUtils {
                                               Optional<BiFunction<TopicPartition, Optional<Uuid>, UnifiedLog>> logFn,
                                               boolean remoteStorageSystemEnable,
                                               long initialTaskDelayMs) throws IOException {
+        return createLogManager(logDirs, defaultConfig, configRepository, cleanerConfig, time, recoveryThreadsPerDataDir,
+                transactionVerificationEnabled, logFn, remoteStorageSystemEnable, initialTaskDelayMs,
+                new LogDirFailureChannel(logDirs.size()));
+    }
+
+    public static LogManager createLogManager(List<File> logDirs,
+                                              LogConfig defaultConfig,
+                                              ConfigRepository configRepository,
+                                              CleanerConfig cleanerConfig,
+                                              MockTime time,
+                                              int recoveryThreadsPerDataDir,
+                                              boolean transactionVerificationEnabled,
+                                              Optional<BiFunction<TopicPartition, Optional<Uuid>, UnifiedLog>> logFn,
+                                              boolean remoteStorageSystemEnable,
+                                              long initialTaskDelayMs,
+                                              LogDirFailureChannel logDirFailureChannel) throws IOException {
         LogManager logManager = new LogManager(logDirs.stream().map(File::getAbsoluteFile).toList(),
                 List.of(),
                 configRepository,
@@ -557,11 +573,11 @@ public class LogTestUtils {
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 time.scheduler,
                 new BrokerTopicStats(),
-                new LogDirFailureChannel(logDirs.size()),
+                logDirFailureChannel,
                 time,
                 remoteStorageSystemEnable,
                 initialTaskDelayMs,
-                (config, files, map, logDirFailureChannel, t) -> Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
+                (config, files, map, cleanerLogDirFailureChannel, t) -> Mockito.spy(new LogCleaner(cleanerConfig, files, map, cleanerLogDirFailureChannel, time))
         );
 
         if (logFn.isPresent()) {
