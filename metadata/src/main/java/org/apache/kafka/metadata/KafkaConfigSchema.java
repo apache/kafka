@@ -262,6 +262,10 @@ public class KafkaConfigSchema {
         }
         if (stringValue != null) {
             stringValue = converter.apply(stringValue);
+            if (!configKey.type.isSensitive()) {
+                stringValue = ConfigDef.convertToString(
+                    ConfigDef.parseType(configKey.name, stringValue, configKey.type), configKey.type);
+            }
         }
         return new ConfigEntry(
             configKey.name,
