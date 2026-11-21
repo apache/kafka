@@ -199,6 +199,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final ShareSubscriptionState subscriptions;
     private final ShareConsumerMetadata metadata;
     private final Metrics metrics;
+    private final long retryBackoffMs;
     private final int requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
@@ -254,6 +255,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.log = logContext.logger(getClass());
 
             log.debug("Initializing the Kafka share consumer");
+            this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
@@ -379,6 +381,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.currentFetch = ShareFetch.empty();
         this.subscriptions = subscriptions;
         this.metadata = metadata;
+        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.acknowledgementMode = initializeAcknowledgementMode(config);
@@ -470,6 +473,35 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final int defaultApiTimeoutMs,
                       final String groupId,
                       final String acknowledgementModeConfig) {
+        this(logContext, clientId, keyDeserializer, valueDeserializer, fetchBuffer, fetchCollector,
+                shareFetchMetricsManager, time, applicationEventHandler, acknowledgementEventQueue,
+                backgroundEventQueue, backgroundEventReaper, metrics, subscriptions, metadata,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS, requestTimeoutMs, defaultApiTimeoutMs,
+                groupId, acknowledgementModeConfig);
+    }
+
+    // Visible for testing
+    @SuppressWarnings("ParameterNumber")
+    ShareConsumerImpl(final LogContext logContext,
+                      final String clientId,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valueDeserializer,
+                      final ShareFetchBuffer fetchBuffer,
+                      final ShareFetchCollector<K, V> fetchCollector,
+                      final ShareFetchMetricsManager shareFetchMetricsManager,
+                      final Time time,
+                      final ApplicationEventHandler applicationEventHandler,
+                      final BlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
+                      final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                      final CompletableEventReaper backgroundEventReaper,
+                      final Metrics metrics,
+                      final ShareSubscriptionState subscriptions,
+                      final ShareConsumerMetadata metadata,
+                      final long retryBackoffMs,
+                      final int requestTimeoutMs,
+                      final int defaultApiTimeoutMs,
+                      final String groupId,
+                      final String acknowledgementModeConfig) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -485,6 +517,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.backgroundEventReaper = backgroundEventReaper;
         this.metrics = metrics;
         this.metadata = metadata;
+        this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.acknowledgementMode = ShareAcknowledgementMode.fromString(acknowledgementModeConfig);
@@ -708,6 +741,16 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         final ShareFetch<K, V> fetch = collect(acknowledgementsMap);
         if (!fetch.isEmpty()) {
             return fetch;
+        }
+
+        // Bound the wait when background progress may make fetching possible soon.
+        // Use the current application-thread state to avoid relying on stale state from the network thread.
+        if (pollTimeout > retryBackoffMs) {
+            if (subscriptions.numAssignedPartitions() == 0) {
+                // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
+                // group membership has not been established yet, or assignments have been revoked but not reassigned.
+                pollTimeout = retryBackoffMs;
+            }
         }
 
         // Wait a bit - this is where we will fetch records
