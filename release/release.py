@@ -262,6 +262,9 @@ def command_release_announcement_email():
 def command_release_blog():
     kafka_site_repo_path = kafka_site_repo_path_arg()
     release_version_num, previous_release_version_num = prompt_current_and_previous_release()
+    blog_path = os.path.join(kafka_site_repo_path, "content", "en", "blog", "releases", f"ak-{release_version_num}.md")
+    if os.path.exists(blog_path):
+        fail(f"The release blog post {blog_path} already exists. Remove it first to regenerate the skeleton.")
     author = preferences.get('blog_author', lambda: prompt("Enter your name as it should appear as the blog author: "))
     num_commits = git.commit_count(previous_release_version_num, release_version_num)
     contributors = git.contributors(previous_release_version_num, release_version_num)
@@ -288,7 +291,6 @@ def command_release_blog():
     downloads = downloads[:insert_at] + downloads_section + downloads[insert_at:]
 
     # write release blog
-    blog_path = os.path.join(kafka_site_repo_path, "content", "en", "blog", "releases", f"ak-{release_version_num}.md")
     textfiles.write(blog_path, templates.release_blog_post(release_version_num, previous_release_version_num, release_date, author, num_commits, contributors))
     print(f"Wrote the release announcement blog post skeleton to: {blog_path}")
 
