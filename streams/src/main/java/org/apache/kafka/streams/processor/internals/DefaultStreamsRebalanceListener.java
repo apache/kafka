@@ -96,6 +96,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         final StreamsRebalanceData.Assignment runningAssignment = deduplicateTasks(assignment);
         final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
             pairWithTopicPartitions(runningAssignment.activeTasks().stream());
+        activeTasksWithPartitions.values().forEach(partitions -> partitions.retainAll(assignment.assignedPartitions()));
         final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
             pairWithTopicPartitions(Stream.concat(
                 runningAssignment.standbyTasks().stream(),
@@ -158,6 +159,8 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
             assignment.activeTasks(),
             standbyTasks,
             warmupTasks,
+            assignment.assignedPartitions(),
+            assignment.localEpoch(),
             assignment.isGroupReady()
         );
     }

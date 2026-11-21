@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -121,6 +122,7 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksAssignedWithWakeupException() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
+
         WakeupException wakeupException = new WakeupException();
         doThrow(wakeupException).when(mockListener).onTasksAssigned(assignment);
 
@@ -262,8 +264,9 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> activeTasks = createMockTasks();
         Set<StreamsRebalanceData.TaskId> standbyTasks = Set.of();
         Set<StreamsRebalanceData.TaskId> warmupTasks = Set.of();
+        Set<TopicPartition> assignedPartitions = Set.of();
 
-        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, true);
+        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, 1L, true);
     }
 
     private Set<StreamsRebalanceData.TaskId> createMockTasks() {
