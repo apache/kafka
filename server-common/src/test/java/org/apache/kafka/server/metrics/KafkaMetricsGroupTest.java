@@ -23,8 +23,11 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import javax.management.ObjectName;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaMetricsGroupTest {
 
@@ -74,5 +77,16 @@ public class KafkaMetricsGroupTest {
         assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric,foo=bar,baz=raz.taz",
                 metricName.getMBeanName());
         assertEquals("baz.raz_taz.foo.bar", metricName.getScope());
+    }
+
+    @Test
+    public void testWindowsStyleTagNames() {
+        var path = "C:\\windows-path\\kafka-logs";
+        var tags = Map.of("dir", path);
+        var expectedMBeanName = "dir=" + ObjectName.quote(path);
+
+        // Changing the package or class name may cause incompatibility with existing code and metrics configuration.
+        var metric = new KafkaMetricsGroup("kafka.metrics", "MetricsTest").metricName("test-metric", tags);
+        assertTrue(metric.getMBeanName().endsWith(expectedMBeanName));
     }
 }

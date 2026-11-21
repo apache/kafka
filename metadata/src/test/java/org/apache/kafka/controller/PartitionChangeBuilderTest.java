@@ -54,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -71,14 +72,15 @@ public class PartitionChangeBuilderTest {
          * to update changeRecordIsNoOp to take into account the new schema or tagged fields.
          */
         // Check that the supported versions haven't changed
-        assertEquals(2, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION);
+        assertEquals(3, PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION);
         assertEquals(0, PartitionChangeRecord.LOWEST_SUPPORTED_VERSION);
         // For the latest version check that the number of tagged fields hasn't changed
-        TaggedFields taggedFields = (TaggedFields) PartitionChangeRecord.SCHEMA_0.get(2).def.type;
-        assertEquals(6, taggedFields.numFields());
+        TaggedFields taggedFields = (TaggedFields) PartitionChangeRecord.SCHEMAS[PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION].get(2).def.type;
+        assertEquals(10, taggedFields.numFields());
 
         assertTrue(changeRecordIsNoOp(new PartitionChangeRecord()));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().setLeader(1)));
+        assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().setLeaderEpoch(1)));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
             setIsr(List.of(1, 2, 3))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
@@ -123,8 +125,20 @@ public class PartitionChangeBuilderTest {
             case (short) 0 -> MetadataVersion.IBP_3_7_IV0;
             case (short) 1 -> MetadataVersion.IBP_3_7_IV2;
             case (short) 2 -> MetadataVersion.IBP_4_0_IV1;
+            case (short) 3 -> MetadataVersion.IBP_4_5_IV1;
             default -> throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
         };
+    }
+
+    /**
+     * Since version 3 the controller sets the new leader epoch whenever it sets the leader.
+     * All the partitions in this test start with leader epoch 100.
+     */
+    private static PartitionChangeRecord withBumpedLeaderEpoch(PartitionChangeRecord record, short version) {
+        if (version >= 3) {
+            record.setLeaderEpoch(101);
+        }
+        return record;
     }
 
     private static PartitionChangeBuilder createFooBuilder(MetadataVersion metadataVersion) {
@@ -429,13 +443,65 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testIsrChangeAndLeaderChange(short version) {
+        assertEquals(Optional.of(new ApiMessageAndVersion(withBumpedLeaderEpoch(new PartitionChangeRecord().
+                setTopicId(FOO_ID).
+                setPartitionId(0).
+                setIsr(List.of(2, 3)).
+                setLeader(2), version), version)),
+            createFooBuilder(version).setTargetIsrWithBrokerStates(AlterPartitionRequest.
+                newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 3))).build());
+    }
+
+    @Test
+    public void testTargetLeaderEpochBumpsLeaderEpoch() {
+        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+                setTopicId(FOO_ID).
+                setPartitionId(0).
+                setLeaderEpoch(150), (short) 3)),
+            createFooBuilder((short) 3).setTargetLeaderEpoch(150).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-10, 50, 100})
+    public void testTargetLeaderEpochNeverDecreasesLeaderEpoch(int targetLeaderEpoch) {
+        assertEquals(Optional.empty(),
+            createFooBuilder((short) 3).setTargetLeaderEpoch(targetLeaderEpoch).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-10, 50, 100})
+    public void testLowTargetLeaderEpochDoesNotPreventLeaderChangeBump(int targetLeaderEpoch) {
+        // Removing leader 1 from the ISR elects leader 2, which must bump the leader epoch to 101.
         assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
                 setIsr(List.of(2, 3)).
-                setLeader(2), version)),
-            createFooBuilder(version).setTargetIsrWithBrokerStates(AlterPartitionRequest.
-                newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 3))).build());
+                setLeader(2).
+                setLeaderEpoch(101), (short) 3)),
+            createFooBuilder((short) 3).
+                setTargetLeaderEpoch(targetLeaderEpoch).
+                setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 3))).
+                build());
+    }
+
+    @Test
+    public void testHighTargetLeaderEpochWithLeaderChange() {
+        assertEquals(Optional.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+                setTopicId(FOO_ID).
+                setPartitionId(0).
+                setIsr(List.of(2, 3)).
+                setLeader(2).
+                setLeaderEpoch(150), (short) 3)),
+            createFooBuilder((short) 3).
+                setTargetLeaderEpoch(150).
+                setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 3))).
+                build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 1, 2})
+    public void testTargetLeaderEpochRequiresClusterMirroring(short version) {
+        assertThrows(IllegalStateException.class, () -> createFooBuilder(version).setTargetLeaderEpoch(150));
     }
 
     @ParameterizedTest
@@ -468,6 +534,7 @@ public class PartitionChangeBuilderTest {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(List.of(dirs.get(2), dirs.get(3), dirs.get(4)));
         }
+        withBumpedLeaderEpoch(expectedRecord, version);
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createBarBuilder(version).setTargetIsrWithBrokerStates(AlterPartitionRequest.
                 newIsrToSimpleNewIsrWithBrokerEpochs(List.of(1, 2, 3, 4))).build());
@@ -490,6 +557,7 @@ public class PartitionChangeBuilderTest {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(List.of(dirs.get(1), dirs.get(2), dirs.get(3)));
         }
+        withBumpedLeaderEpoch(expectedRecord, version);
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createBarBuilder(version).
                 setTargetReplicas(revert.replicas()).
@@ -517,6 +585,7 @@ public class PartitionChangeBuilderTest {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
             expectedRecord.setDirectories(List.of(dirs.get(1), dirs.get(2)));
         }
+        withBumpedLeaderEpoch(expectedRecord, version);
         assertEquals(Optional.of(new ApiMessageAndVersion(expectedRecord, version)),
             createFooBuilder(version).
                 setTargetReplicas(replicas.replicas()).
@@ -552,12 +621,12 @@ public class PartitionChangeBuilderTest {
     @MethodSource("partitionChangeRecordVersions")
     public void testUncleanLeaderElection(short version) {
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
-            new PartitionChangeRecord()
+            withBumpedLeaderEpoch(new PartitionChangeRecord()
                 .setTopicId(FOO_ID)
                 .setPartitionId(0)
                 .setIsr(List.of(2))
                 .setLeader(2)
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()),
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()), version),
             version
         );
         assertEquals(
@@ -578,6 +647,7 @@ public class PartitionChangeBuilderTest {
             record.setEligibleLeaderReplicas(List.of())
                 .setLastKnownElr(List.of());
         }
+        withBumpedLeaderEpoch(record, version);
 
         expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(
@@ -1080,7 +1150,7 @@ public class PartitionChangeBuilderTest {
                                 DirectoryId.LOST,
                                 Uuid.fromString("pN1VKs9zRzK4APflpegAVg")
                         )),
-                (short) 2
+                MetadataVersion.latestTesting().partitionChangeRecordVersion()
         ));
         assertEquals(expected, built);
     }

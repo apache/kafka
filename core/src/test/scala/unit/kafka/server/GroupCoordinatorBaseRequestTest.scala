@@ -721,12 +721,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def listGroups(
     statesFilter: List[String],
     typesFilter: List[String],
+    requireCommittedOffsets: Boolean = false,
     version: Short = ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
         .setStatesFilter(statesFilter.asJava)
         .setTypesFilter(typesFilter.asJava)
+        .setRequireCommittedOffsets(requireCommittedOffsets)
     ).build(version)
 
     val response = connectAndReceive[ListGroupsResponse](request)

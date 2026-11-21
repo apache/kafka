@@ -34,10 +34,13 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -86,6 +89,23 @@ public class ProcessorTest {
                 () -> Processor.parseRequestHeader(apiVersionManager, requestHeader),
                 "FETCH v0 should throw UnsupportedVersionException exception");
         assertTrue(e.toString().contains("unsupported version"));
+    }
+
+    @Test
+    public void testParseRequestHeaderWithUnsupportedApiVersionsVersion() {
+        short apiVersion = (short) (ApiKeys.API_VERSIONS.latestVersion() + 1);
+        byte[] unknownHeaderBytes = new byte[16];
+        Arrays.fill(unknownHeaderBytes, (byte) 0xFF);
+        ByteBuffer requestHeader = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, apiVersion, 0,
+                "clientid", unknownHeaderBytes);
+        @SuppressWarnings("unchecked")
+        DefaultApiVersionManager apiVersionManager = new DefaultApiVersionManager(ApiMessageType.ListenerType.BROKER, mock(Supplier.class),
+                BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () -> KRaftVersion.LATEST_PRODUCTION), true, Optional.empty());
+        RequestHeader header = Processor.parseRequestHeader(apiVersionManager, requestHeader);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(apiVersion, header.apiVersion());
+        assertEquals("clientid", header.clientId());
+        assertFalse(header.isApiVersionSupported());
     }
 
     /**

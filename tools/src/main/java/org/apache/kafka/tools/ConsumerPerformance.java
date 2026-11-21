@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -118,15 +117,13 @@ public class ConsumerPerformance {
         long recordsRead = 0L;
         long lastBytesRead = 0L;
         long lastRecordsRead = 0L;
-        AtomicLong joinTimeMs = new AtomicLong(0);
-        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
 
-        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, startMs, joinTimeMsInSingleRound);
+        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(startMs);
         consumer.setRebalanceListener(listener);
         if (options.topic().isPresent()) {
             consumer.subscribe(options.topic().get());
@@ -153,8 +150,8 @@ public class ConsumerPerformance {
                 if (currentTimeMs - lastReportTimeMs >= reportingIntervalMs) {
                     if (showDetailedStats)
                         printConsumerProgress(0, bytesRead, lastBytesRead, recordsRead, lastRecordsRead,
-                            lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
-                    joinTimeMsInSingleRound.set(0);
+                            lastReportTimeMs, currentTimeMs, dateFormat, listener.joinTimeMsInSingleRound());
+                    listener.resetJoinTimeMsInSingleRound();
                     lastReportTimeMs = currentTimeMs;
                     lastRecordsRead = recordsRead;
                     lastBytesRead = bytesRead;
@@ -165,7 +162,7 @@ public class ConsumerPerformance {
         if (recordsRead < numRecords)
             System.out.printf("WARNING: Exiting before consuming the expected number of records: timeout (%d ms) exceeded. " +
                 "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
-        return new ConsumeStats(recordsRead, bytesRead, joinTimeMs.get());
+        return new ConsumeStats(recordsRead, bytesRead, listener.joinTimeMs());
     }
 
     private record ConsumeStats(long recordsRead, long bytesRead, long joinTimeMs) { }
@@ -218,16 +215,26 @@ public class ConsumerPerformance {
     }
 
     public static class ConsumerPerfRebListener implements RebalanceListener {
-        private final AtomicLong joinTimeMs;
-        private final AtomicLong joinTimeMsInSingleRound;
         private final Collection<TopicPartition> assignedPartitions;
+        private long joinTimeMs = 0L;
+        private long joinTimeMsInSingleRound = 0L;
         private long joinStartMs;
 
-        public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
-            this.joinTimeMs = joinTimeMs;
+        public ConsumerPerfRebListener(long joinStartMs) {
             this.joinStartMs = joinStartMs;
-            this.joinTimeMsInSingleRound = joinTimeMsInSingleRound;
             this.assignedPartitions = new HashSet<>();
+        }
+
+        public long joinTimeMs() {
+            return joinTimeMs;
+        }
+
+        public long joinTimeMsInSingleRound() {
+            return joinTimeMsInSingleRound;
+        }
+
+        public void resetJoinTimeMsInSingleRound() {
+            joinTimeMsInSingleRound = 0L;
         }
 
         @Override
@@ -242,8 +249,8 @@ public class ConsumerPerformance {
         public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             if (assignedPartitions.isEmpty()) {
                 long elapsedMs = System.currentTimeMillis() - joinStartMs;
-                joinTimeMs.addAndGet(elapsedMs);
-                joinTimeMsInSingleRound.addAndGet(elapsedMs);
+                joinTimeMs += elapsedMs;
+                joinTimeMsInSingleRound += elapsedMs;
             }
             assignedPartitions.addAll(partitions);
         }

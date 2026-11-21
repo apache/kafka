@@ -170,6 +170,7 @@ public class AssignmentRefinerBenchmark {
             targetAssignment,
             taskOffsets,
             heartbeatVersions,
+            false,
             subtopologyMap,
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

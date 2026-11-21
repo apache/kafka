@@ -54,6 +54,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
         Map<String, Integer> heartbeatVersions,
+        boolean keepActiveTasks,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -65,10 +66,23 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment =
             indexCurrentAssignment(members, taskOffsets, subtopologies, acceptableRecoveryLag);
         final Map<String, ProcessLoad> processLoad = indexProcessLoad(members, subtopologies);
-        final TaskDecisions decisions =
-            analyzeTasks(currentAssignment, targetAssignment, members, heartbeatVersions, subtopologies, processLoad);
-        final WarmupPlan warmupPlan =
-            planWarmups(decisions, currentAssignment, members, processLoad, numWarmupReplicas);
+        final TaskDecisions decisions = analyzeTasks(
+            currentAssignment,
+            targetAssignment,
+            members,
+            heartbeatVersions,
+            keepActiveTasks,
+            subtopologies,
+            processLoad
+        );
+        final WarmupPlan warmupPlan = planWarmups(
+            decisions,
+            currentAssignment,
+            members,
+            heartbeatVersions.keySet().containsAll(members.keySet()),
+            processLoad,
+            numWarmupReplicas
+        );
         final SortedMap<String, SortedSet<TaskId>> withheldStandbys =
             filterStandbys(targetAssignment, currentAssignment, decisions, warmupPlan, members, subtopologies);
 
@@ -243,6 +257,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
      *
+     * <p>If {@code keepActiveTasks} is set, every active task stays with the member that holds it, and only tasks that
+     * no member holds as an active task are placed.
+     *
      * @param currentAssignment
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param targetAssignment
@@ -251,6 +268,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        All members of the group, used to resolve which process a member runs in.
      * @param heartbeatVersions
      *        The version of the latest heartbeat of each member, which tells whether a member can be warmed up.
+     * @param keepActiveTasks
+     *        Whether every active task has to stay with the member that holds it, see {@link AssignmentRefiner#refine}.
      * @param subtopologies
      *        The resolved subtopologies, which tell whether a subtopology is stateful.
      * @param processLoad
@@ -264,6 +283,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, TasksTuple> targetAssignment,
         final Map<String, StreamsGroupMember> members,
         final Map<String, Integer> heartbeatVersions,
+        final boolean keepActiveTasks,
         final SortedMap<String, ConfiguredSubtopology> subtopologies,
         final Map<String, ProcessLoad> processLoad
     ) {
@@ -305,6 +325,18 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
 
             final String targetProcessId = targetMember.processId();
+
+            // A task that a member holds as an active task stays with it. Its move waits for the next epoch, which every
+            // member reconciles to. Tasks that no member holds as an active task are placed below as usual.
+            if (holder != null && keepActiveTasks) {
+                // A process can't hold a warm-up task next to the active task, so a move within it can't be warmed up.
+                final boolean sameProcess = members.get(holder.memberId()).processId().equals(targetProcessId);
+                stagedMigrations.add(stagedMigration(
+                    currentAssignment, task, holder.memberId(), targetOwner,
+                    sameProcess ? Optional.empty() : Optional.of(targetProcessId)));
+                continue;
+            }
+
             final Optional<String> currentProcessId = Optional.ofNullable(holder)
                 .map(activeHolder -> members.get(activeHolder.memberId()).processId());
 
@@ -437,8 +469,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     /**
      * Builds the staged migration that keeps the task on {@code currentOwner}. An empty {@code targetProcessId} means
-     * the migration can never be warmed up, which is the case when the target assignment names a member the group no
-     * longer has.
+     * the migration cannot be warmed up, which is the case when the target assignment names a member the group no
+     * longer has, or when the task moves between two members of one process.
      */
     private static StagedMigration stagedMigration(
         final CurrentAssignmentIndex currentAssignment,
@@ -513,6 +545,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param members
      *        All members of the group, used to resolve which process a task's current owner runs in.
+     * @param everyMemberHeardFrom
+     *        Whether every member has heartbeated since the coordinator loaded the group. If not, no new warm-up task
+     *        is funded.
      * @param processLoad
      *        The load of each process, from {@link #indexProcessLoad}.
      * @param numWarmupReplicas
@@ -524,6 +559,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final TaskDecisions decisions,
         final CurrentAssignmentIndex currentAssignment,
         final Map<String, StreamsGroupMember> members,
+        final boolean everyMemberHeardFrom,
         final Map<String, ProcessLoad> processLoad,
         final int numWarmupReplicas
     ) {
@@ -540,6 +576,12 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             loadAfterGrants(processLoad, currentAssignment, decisions, members);
         final List<FundingCandidate> candidates = new ArrayList<>();
 
+        // Fund no new warm-up task until every member has heartbeated after a coordinator failover. Before that, the
+        // members' restore progress is unknown, so we can't tell which target owner is best to warm up. We wait for all
+        // members, not only for the target owner, because a warm-up task stays once placed: otherwise the members that
+        // heartbeat first would get the warm-up tasks. Warm-up tasks that members already hold are kept. A sibling's
+        // standby task that would move onto the target owner is borrowed where it sits instead, which costs no warm-up
+        // slot.
         for (final StagedMigration migration : decisions.stagedMigrations()) {
             final Warming warming = warmingOf(migration);
             switch (warming) {
@@ -548,8 +590,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 // The rest all put a warm-up task on the target owner and all cost a warm-up slot, so they compete
                 // in one list -- a warm-up task kept from an earlier step included, because a kept one that cannot
                 // make progress gives way to a fresh plant that can (see fundingTier).
-                case KEEP, PLANT, SIBLING_MOVE ->
-                    candidates.add(fundingCandidate(migration, members, warming, restoringAnActive));
+                case KEEP -> candidates.add(fundingCandidate(migration, members, warming, restoringAnActive));
+                case PLANT, SIBLING_MOVE -> {
+                    if (everyMemberHeardFrom) {
+                        candidates.add(fundingCandidate(migration, members, warming, restoringAnActive));
+                    } else if (warming == Warming.SIBLING_MOVE) {
+                        borrowedMigrations.add(migration.task());
+                    } else {
+                        parkedMigrations.add(migration.task());
+                    }
+                }
             }
         }
 
