@@ -92,8 +92,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -111,6 +113,7 @@ public class SslTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     // The size of SslTransportLayer's file channel buffer
     private static final int TRANSFER_SIZE = 32 * 1024;
+    private static final int MAX_RECORD_PLAINTEXT_SIZE = 16384;
     private static final Time TIME = Time.SYSTEM;
 
     private static class Args {
@@ -1404,6 +1407,84 @@ public class SslTransportLayerTest {
     }
 
     /**
+     * The parts of a send, buffers and pieces of a file in turn like in a fetch response, are sent in their order,
+     * and small ones share one TLS record.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testWriteBatchWithFileParts(Args args) throws Exception {
+        String node = "0";
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        AtomicReference<SSLEngine> engine = new AtomicReference<>();
+        AtomicReference<SslTransportLayer> transportLayer = new AtomicReference<>();
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT) {
+            @Override
+            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) {
+                engine.set(spy(sslEngine));
+                TestSslTransportLayer layer = new TestSslTransportLayer(id, key, engine.get());
+                transportLayer.set(layer);
+                return layer;
+            }
+        };
+        channelBuilder.configure(args.sslClientConfigs);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        FileChannel fileChannel = fileChannelReadableUpTo(3 * TRANSFER_SIZE, () -> -1);
+
+        clearInvocations(engine.get());
+        assertEchoOfParts(transportLayer.get(), fileChannel, 3, 50, 100);
+        verify(engine.get(), times(1)).wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class));
+
+        // more than the file channel buffer holds, in parts that do not end where a TLS record ends
+        assertEchoOfParts(transportLayer.get(), fileChannel, 4, 50, 20000);
+    }
+
+    /**
+     * Writes parts to the transport layer in write batches, like a channel writes a send, and expects them back from
+     * the echo server. A part is a buffer filled with the number of the part and then the next fileSize bytes of the
+     * file. The first buffer starts with the size of all parts.
+     */
+    private void assertEchoOfParts(SslTransportLayer layer, FileChannel fileChannel, int parts, int bufferSize, int fileSize) throws IOException {
+        ByteBuffer expected = ByteBuffer.allocate(parts * (bufferSize + fileSize));
+        ByteBuffer[] buffers = new ByteBuffer[parts];
+        for (int i = 0; i < parts; i++) {
+            buffers[i] = ByteBuffer.allocate(bufferSize + (i == 0 ? 4 : 0));
+            if (i == 0)
+                buffers[i].putInt(expected.capacity());
+            while (buffers[i].hasRemaining()) {
+                buffers[i].put((byte) i);
+                expected.put((byte) i);
+            }
+            buffers[i].flip();
+            expected.put(fileContents((i + 1) * fileSize), i * fileSize, fileSize);
+        }
+
+        int part = 0;
+        int fileBytesSent = 0;
+        while (part < parts || layer.hasPendingWrites()) {
+            layer.startWriteBatch();
+            while (part < parts) {
+                layer.write(buffers[part]);
+                if (buffers[part].hasRemaining())
+                    break;
+                fileBytesSent += (int) layer.transferFrom(fileChannel, (long) part * fileSize + fileBytesSent, fileSize - fileBytesSent);
+                if (fileBytesSent < fileSize)
+                    break;
+                part++;
+                fileBytesSent = 0;
+            }
+            layer.endWriteBatch();
+        }
+
+        do {
+            selector.poll(100L);
+            assertEquals(0, selector.disconnected().size());
+        } while (selector.completedReceives().isEmpty());
+        assertArrayEquals(expected.array(), Utils.toArray(selector.completedReceives().iterator().next().payload()));
+    }
+
+    /**
      * Connects to an echo server and returns the client's transport layer, which from then on records what is
      * written to it instead of sending it.
      */
@@ -1948,17 +2029,35 @@ public class SslTransportLayerTest {
     @Test
     public void testGatheringWrite() throws IOException {
         SSLEngine sslEngine = mock(SSLEngine.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
         SelectionKey selectionKey = mock(SelectionKey.class);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        SSLSession sslSession = mock(SSLSession.class);
         SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
                 "test-channel",
                 selectionKey,
                 sslEngine,
                 mock(ChannelMetadataRegistry.class)
         ));
-        doReturn(false).when(sslTransportLayer).hasPendingWrites();
+        when(sslEngine.getSession()).thenReturn(sslSession);
+        when(sslSession.getPacketBufferSize()).thenReturn(1024);
+        sslTransportLayer.startHandshake(); // to initialize the buffers
+        doReturn(true).when(sslTransportLayer).ready();
 
+        when(sslEngine.wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer[] bufs = invocation.getArgument(0);
+            int offset = invocation.getArgument(1);
+            int length = invocation.getArgument(2);
+            ByteBuffer dst = invocation.getArgument(3);
+            int wrapped = 0;
+            for (int i = offset; i < offset + length; i++) {
+                wrapped += bufs[i].remaining();
+                dst.put(bufs[i]);
+            }
+            return new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, wrapped, wrapped);
+        });
         ByteBuffer mockSocket = ByteBuffer.allocate(1024);
-        when(sslTransportLayer.write(any(ByteBuffer.class))).then(invocation -> {
+        when(socketChannel.write(any(ByteBuffer.class))).then(invocation -> {
             ByteBuffer buf = invocation.getArgument(0);
             int written = buf.remaining();
             mockSocket.put(buf);
@@ -1972,11 +2071,121 @@ public class SslTransportLayerTest {
 
         byte[] expected = "World!".getBytes(StandardCharsets.UTF_8);
         assertEquals(expected.length, sslTransportLayer.write(srcs, 1, 2));
+        // both buffers go into one TLS record
+        verify(sslEngine).wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class));
 
         mockSocket.flip();
         byte[] actual = new byte[expected.length];
         mockSocket.get(actual);
         assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void testWriteBatch() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SslTransportLayer sslTransportLayer = readyTransportLayer(sslEngine, socketChannel);
+        ByteArrayOutputStream socket = new ByteArrayOutputStream();
+        when(socketChannel.write(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            byte[] bytes = new byte[buf.remaining()];
+            buf.get(bytes);
+            socket.write(bytes);
+            return bytes.length;
+        });
+        byte[] expected = fileContents(20100);
+
+        // small writes share one TLS record, which is written when the batch ends
+        sslTransportLayer.startWriteBatch();
+        assertEquals(40, sslTransportLayer.write(ByteBuffer.wrap(expected, 0, 40)));
+        assertEquals(60, sslTransportLayer.write(ByteBuffer.wrap(expected, 40, 60)));
+        assertFalse(sslTransportLayer.hasPendingWrites());
+        verify(sslEngine, times(0)).wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class));
+        sslTransportLayer.endWriteBatch();
+        verify(sslEngine, times(1)).wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class));
+        assertEquals(100, socket.size());
+
+        // a full TLS record is written at once, the rest when the batch ends
+        sslTransportLayer.startWriteBatch();
+        assertEquals(20000, sslTransportLayer.write(ByteBuffer.wrap(expected, 100, 20000)));
+        assertEquals(100 + MAX_RECORD_PLAINTEXT_SIZE, socket.size());
+        sslTransportLayer.endWriteBatch();
+        assertFalse(sslTransportLayer.hasPendingWrites());
+        verify(sslEngine, times(3)).wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class));
+        assertArrayEquals(expected, socket.toByteArray());
+    }
+
+    @Test
+    public void testWriteBatchWithFullSocket() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SslTransportLayer sslTransportLayer = readyTransportLayer(sslEngine, socketChannel);
+        when(socketChannel.write(any(ByteBuffer.class))).thenReturn(0);
+        byte[] expected = fileContents(30000);
+        ByteBuffer third = ByteBuffer.wrap(expected, 20000, 10000);
+
+        sslTransportLayer.startWriteBatch();
+        assertEquals(10000, sslTransportLayer.write(ByteBuffer.wrap(expected, 0, 10000)));
+        // fills a TLS record, which the socket does not take
+        assertEquals(10000, sslTransportLayer.write(ByteBuffer.wrap(expected, 10000, 10000)));
+        assertEquals(0, sslTransportLayer.write(third));
+        assertEquals(10000, third.remaining());
+        sslTransportLayer.endWriteBatch();
+        assertTrue(sslTransportLayer.hasPendingWrites());
+
+        ByteArrayOutputStream socket = new ByteArrayOutputStream();
+        when(socketChannel.write(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            byte[] bytes = new byte[buf.remaining()];
+            buf.get(bytes);
+            socket.write(bytes);
+            return bytes.length;
+        });
+
+        sslTransportLayer.startWriteBatch();
+        assertEquals(10000, sslTransportLayer.write(third));
+        sslTransportLayer.endWriteBatch();
+        assertFalse(sslTransportLayer.hasPendingWrites());
+        assertArrayEquals(expected, socket.toByteArray());
+    }
+
+    /**
+     * A transport layer that is ready to write. Like the engine of the JDK, its engine puts the bytes of the buffers
+     * into one TLS record until the record is full, and takes a record only with room for a whole packet.
+     */
+    private static SslTransportLayer readyTransportLayer(SSLEngine sslEngine, SocketChannel socketChannel) throws IOException {
+        int packetSize = MAX_RECORD_PLAINTEXT_SIZE + 325;
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        SSLSession sslSession = mock(SSLSession.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        when(sslEngine.getSession()).thenReturn(sslSession);
+        when(sslSession.getPacketBufferSize()).thenReturn(packetSize);
+        sslTransportLayer.startHandshake(); // to initialize the buffers
+        doReturn(true).when(sslTransportLayer).ready();
+
+        when(sslEngine.wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer[] bufs = invocation.getArgument(0);
+            int offset = invocation.getArgument(1);
+            int length = invocation.getArgument(2);
+            ByteBuffer dst = invocation.getArgument(3);
+            if (dst.remaining() < packetSize)
+                return new SSLEngineResult(SSLEngineResult.Status.BUFFER_OVERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+            int wrapped = 0;
+            for (int i = offset; i < offset + length; i++) {
+                while (bufs[i].hasRemaining() && wrapped < MAX_RECORD_PLAINTEXT_SIZE) {
+                    dst.put(bufs[i].get());
+                    wrapped++;
+                }
+            }
+            return new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, wrapped, wrapped);
+        });
+        return sslTransportLayer;
     }
 
     @Test

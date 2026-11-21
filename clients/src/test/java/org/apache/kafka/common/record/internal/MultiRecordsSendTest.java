@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MultiRecordsSendTest {
@@ -59,6 +60,44 @@ public class MultiRecordsSendTest {
         }
 
         assertEquals(0, send.numResidentSends());
+        assertTrue(send.completed());
+    }
+
+    @Test
+    public void testCompletesAfterPendingWrites() throws IOException {
+        int chunkSize = 32;
+        Queue<Send> sends = new LinkedList<>();
+        sends.add(new ByteBufferSend(ByteBuffer.wrap(TestUtils.randomBytes(chunkSize))));
+        sends.add(new ByteBufferSend(ByteBuffer.wrap(TestUtils.randomBytes(chunkSize))));
+        MultiRecordsSend send = new MultiRecordsSend(sends);
+
+        // Like a transport layer that holds the writes of a batch and needs one more call to flush them.
+        org.apache.kafka.common.requests.ByteBufferChannel out = new org.apache.kafka.common.requests.ByteBufferChannel(2 * chunkSize) {
+            private boolean batching;
+            private int endedBatches;
+
+            @Override
+            public void startWriteBatch() {
+                batching = true;
+            }
+
+            @Override
+            public void endWriteBatch() {
+                batching = false;
+                endedBatches++;
+            }
+
+            @Override
+            public boolean hasPendingWrites() {
+                return !batching && endedBatches < 2;
+            }
+        };
+
+        assertEquals(2 * chunkSize, send.writeTo(out));
+        assertEquals(0, send.numResidentSends());
+        assertFalse(send.completed());
+
+        assertEquals(0, send.writeTo(out));
         assertTrue(send.completed());
     }
 

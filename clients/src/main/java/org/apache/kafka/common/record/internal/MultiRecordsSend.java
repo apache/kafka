@@ -37,6 +37,7 @@ public class MultiRecordsSend implements Send {
 
     private long totalWritten = 0;
     private Send current;
+    private boolean pending = false;
 
     /**
      * Construct a MultiRecordsSend from a queue of Send objects. The queue will be consumed as the MultiRecordsSend
@@ -66,7 +67,7 @@ public class MultiRecordsSend implements Send {
 
     @Override
     public boolean completed() {
-        return current == null;
+        return current == null && !pending;
     }
 
     // Visible for testing
@@ -84,15 +85,17 @@ public class MultiRecordsSend implements Send {
             throw new KafkaException("This operation cannot be invoked on a complete request.");
 
         long totalWrittenPerCall = 0;
-        boolean sendComplete;
-        do {
-            long written = current.writeTo(channel);
-            totalWrittenPerCall += written;
-            sendComplete = current.completed();
-            if (sendComplete) {
-                current = sendQueue.poll();
-            }
-        } while (!completed() && sendComplete);
+        // The sends are written as one batch, so the channel can write small ones together. In a batch a send is
+        // complete when the channel has taken its bytes, and what the channel still holds after the batch is pending.
+        channel.startWriteBatch();
+        while (current != null) {
+            totalWrittenPerCall += current.writeTo(channel);
+            if (!current.completed())
+                break;
+            current = sendQueue.poll();
+        }
+        channel.endWriteBatch();
+        pending = channel.hasPendingWrites();
 
         totalWritten += totalWrittenPerCall;
 
