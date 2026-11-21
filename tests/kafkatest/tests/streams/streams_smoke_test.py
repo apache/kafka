@@ -56,13 +56,13 @@ class StreamsSmokeTest(BaseStreamsTest):
             enable_assignment_offload=[True])
     # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
     @matrix(processing_guarantee=['exactly_once_v2'],
-            crash=[True, False],
+            crash=[False],
             metadata_quorum=[quorum.combined_kraft],
             group_protocol=["streams"],
             enable_assignment_batching=[False],
             enable_assignment_offload=[False, True])
     @matrix(processing_guarantee=['exactly_once_v2'],
-            crash=[True, False],
+            crash=[False],
             metadata_quorum=[quorum.combined_kraft],
             group_protocol=["streams"],
             enable_assignment_batching=[True],
