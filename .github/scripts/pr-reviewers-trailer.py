@@ -181,13 +181,26 @@ def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
 def fold_reviewers(reviewers: str) -> str:
     """Build a Reviewers trailer with no line longer than 72 characters.
 
+    Lines are broken after a comma, so a name stays next to its email.
     Continuation lines start with a space, as RFC 822 folding requires, so
     git still reads them as one trailer. GitHub wraps longer lines when it
     builds the squash commit message and does not indent the continuation,
     which cuts the trailer short.
     """
-    return textwrap.fill(f"Reviewers: {reviewers}", width=72, subsequent_indent=" ",
-                         break_long_words=False, break_on_hyphens=False)
+    names = [name.strip() for name in reviewers.split(",") if name.strip()]
+    lines = []
+    line = "Reviewers:"
+    for i, name in enumerate(names):
+        piece = f" {name}," if i < len(names) - 1 else f" {name}"
+        if len(line) + len(piece) > 72 and line not in ("Reviewers:", ""):
+            lines.append(line)
+            line = ""
+        line += piece
+    lines.append(line)
+    # A single reviewer can still be too long for one line.
+    return "\n".join(textwrap.fill(line, width=72, subsequent_indent=" ",
+                                   break_long_words=False, break_on_hyphens=False)
+                     for line in lines)
 
 
 def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[str]:

@@ -179,8 +179,8 @@ class ReviewersTrailerTest(unittest.TestCase):
         self.assertEqual(
             "Fix the thing.\n\n"
             "Co-Authored-By: Some Bot <noreply@example.com>\n"
-            "Reviewers: Ken Huang <ken@example.com>, Federico Valeri\n"
-            " <fede@example.com>, New Person <new@example.com>\n",
+            "Reviewers: Ken Huang <ken@example.com>,\n"
+            " Federico Valeri <fede@example.com>, New Person <new@example.com>\n",
             edited)
         self.assertEqual(
             ["Co-Authored-By: Some Bot <noreply@example.com>",
@@ -210,6 +210,23 @@ class ReviewersTrailerTest(unittest.TestCase):
             ["Reviewers: Ada Lovelace <ada@example.com>, Alan Turing <alan@example.com>, "
              "Grace Hopper <grace@example.com>, New Person <new@example.com>"],
             parsed_trailers(edited))
+
+    def test_a_reviewer_name_stays_next_to_its_email(self):
+        body = ("Fix the thing.\n\n"
+                "Reviewers: Alice <alice@example.com>, Bob <bob@example.com>, Carol <carol@example.com>\n")
+        edited = add_reviewer(body).edited_body()
+        self.assertEqual(
+            "Fix the thing.\n\n"
+            "Reviewers: Alice <alice@example.com>, Bob <bob@example.com>,\n"
+            " Carol <carol@example.com>, New Person <new@example.com>\n",
+            edited)
+
+    def test_one_reviewer_longer_than_72_columns_is_still_folded(self):
+        long_one = "A Reviewer With A Very Long Display Name Indeed <a.very.long.address@example.com>"
+        edited = add_reviewer("Fix the thing.\n\nReviewers: " + long_one + "\n").edited_body()
+        trailer_lines = edited.split("\n\n")[-1].splitlines()
+        self.assertTrue(all(len(line) <= 72 for line in trailer_lines), trailer_lines)
+        self.assertEqual(["Reviewers: " + long_one + ", New Person <new@example.com>"], parsed_trailers(edited))
 
     def test_leading_indentation_is_kept(self):
         edited = add_reviewer("    indented first line\n\nmore text\n").edited_body()
