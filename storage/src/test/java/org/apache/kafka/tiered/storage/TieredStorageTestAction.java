@@ -24,7 +24,7 @@ public interface TieredStorageTestAction {
         try {
             doExecute(context);
             context.succeed(this);
-        } catch (Exception e) {
+        } catch (Exception | AssertionError e) {
             context.fail(this);
             throw e;
         }
