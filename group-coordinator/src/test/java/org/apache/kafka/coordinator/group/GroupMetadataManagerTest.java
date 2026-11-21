@@ -20843,7 +20843,7 @@ public class GroupMetadataManagerTest {
         // With warm-up tasks disabled the intermediate assignment is just the target assignment, which the caller has
         // anyway, so nothing is frozen for the group -- the group keeps no per-epoch state it would never read.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
-        assertNull(group.refinedAssignment(group.assignmentEpoch()));
+        assertNull(group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()));
     }
 
     @Test
@@ -20916,7 +20916,7 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(), result.response().data().activeTasks());
         assertEquals(
             mkTasksTuple(TaskRole.WARMUP, topic.tasks(2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberB)
         );
     }
 
@@ -21045,7 +21045,10 @@ public class GroupMetadataManagerTest {
             mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10, topic.tasks(0, 1, 2)),
             group.getMemberOrThrow(memberId).assignedTasks()
         );
-        assertEquals(Map.of(memberId, targetAssignment), group.refinedAssignment(group.assignmentEpoch()));
+        assertEquals(
+            Map.of(memberId, targetAssignment),
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment())
+        );
     }
 
     @Test
@@ -21074,11 +21077,11 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(), result.response().data().activeTasks());
         assertEquals(
             mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks("subtopology1", 2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberB)
         );
         assertEquals(
             mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1, 2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberA)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberA)
         );
     }
 
@@ -21101,11 +21104,11 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(), result.response().data().warmupTasks());
         assertEquals(
             mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberB)
         );
         assertEquals(
             mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0, 1)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberA)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberA)
         );
     }
 
@@ -21164,7 +21167,7 @@ public class GroupMetadataManagerTest {
                 memberA, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
                 memberB, mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks(subtopology1, 2))
             ),
-            group.refinedAssignment(group.assignmentEpoch())
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment())
         );
 
         // Once it reports the task restored to within `acceptable.recovery.lag`, nothing is held back any more: the
@@ -21178,7 +21181,7 @@ public class GroupMetadataManagerTest {
                 memberA, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
                 memberB, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 2))
             ),
-            group.refinedAssignment(group.assignmentEpoch())
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment())
         );
     }
 
@@ -21200,7 +21203,7 @@ public class GroupMetadataManagerTest {
         assertEquals(12, group.groupEpoch());
         assertEquals(
             mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 2)),
-            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+            group.refinedAssignment(group.assignmentEpoch(), group.targetAssignment()).get(memberB)
         );
     }
 
@@ -21235,7 +21238,7 @@ public class GroupMetadataManagerTest {
         );
         assertEquals(
             mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
-            group.refinedAssignment(12).get(memberA)
+            group.refinedAssignment(12, group.targetAssignment()).get(memberA)
         );
     }
 
