@@ -66,7 +66,7 @@ import javax.security.auth.login.LoginException;
  * <td>{@code sasl.login.refresh.min.period.seconds}</td>
  * </tr>
  * <tr>
- * <td>{@code sasl.login.refresh.min.buffer.seconds}</td>
+ * <td>{@code sasl.login.refresh.buffer.seconds}</td>
  * </tr>
  * </table>
  * 

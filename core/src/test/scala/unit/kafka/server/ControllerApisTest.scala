@@ -353,6 +353,12 @@ class ControllerApisTest {
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName("foo").
             setValue("bar")))),
+        new OldAlterConfigsResource().
+          setResourceName("mirror").
+          setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()).
+          setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
+            setName("foo").
+            setValue("bar")))),
         )))
     val request = buildRequest(new AlterConfigsRequest(requestData, 0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
@@ -375,6 +381,11 @@ class ControllerApisTest {
         setErrorMessage("Unknown resource type 123.").
         setResourceName("baz").
         setResourceType(123.toByte),
+      new OldAlterConfigsResourceResponse().
+        setErrorCode(UNSUPPORTED_VERSION.code()).
+        setErrorMessage("Cluster mirror configs are not supported yet.").
+        setResourceName("mirror").
+        setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()),
       new OldAlterConfigsResourceResponse().
         setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
         setErrorMessage("Cluster authorization failed.").
@@ -654,6 +665,13 @@ class ControllerApisTest {
             setValue("bar").
             setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
+          setResourceName("mirror").
+          setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("foo").
+            setValue("bar").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
+        new AlterConfigsResource().
           setResourceName("sub").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
@@ -727,6 +745,11 @@ class ControllerApisTest {
         setErrorMessage("Unknown resource type 124.").
         setResourceName("foo").
         setResourceType(124.toByte),
+      new AlterConfigsResourceResponse().
+        setErrorCode(UNSUPPORTED_VERSION.code()).
+        setErrorMessage("Cluster mirror configs are not supported yet.").
+        setResourceName("mirror").
+        setResourceType(ConfigResource.Type.CLUSTER_MIRROR.id()),
       new AlterConfigsResourceResponse().
         setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
         setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).

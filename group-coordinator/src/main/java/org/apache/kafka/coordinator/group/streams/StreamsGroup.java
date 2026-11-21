@@ -239,13 +239,21 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
-     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
-     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
-     * since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written in the heartbeat
-     * path, dropped when the member is removed and lost on coordinator failover. It is not persisted, so that it can
-     * never outlive the client that sent it.
+     * The version of the latest streams group heartbeat of each member, keyed by member ID. A member that is missing
+     * has not heartbeated since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written
+     * in the heartbeat path, dropped when the member is removed and lost on coordinator failover. It is not persisted,
+     * so that it can never outlive the client that sent it.
      */
     private final Map<String, Integer> heartbeatVersions = new HashMap<>();
+
+    /**
+     * The assignment epoch of the group when the coordinator loaded it, or -1 if the group was created after the load.
+     * The intermediate assignments of this epoch and of earlier ones were derived by a previous coordinator and are lost.
+     * Members may already have reconciled to such an epoch, and a member that has is not asked to release any task
+     * until the next epoch. So when the coordinator derives the intermediate assignment of such an epoch again, it must
+     * not move an active task from one member to another.
+     */
+    private int assignmentEpochAtLoad = -1;
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
@@ -641,6 +649,21 @@ public class StreamsGroup implements Group {
      */
     public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
         heartbeatVersions.put(memberId, heartbeatVersion);
+    }
+
+    /**
+     * Records the current assignment epoch as the one at which the coordinator loaded the group.
+     */
+    public void recordAssignmentEpochAtLoad() {
+        assignmentEpochAtLoad = assignmentEpoch();
+    }
+
+    /**
+     * @return Whether the intermediate assignment of the given assignment epoch was derived by a previous coordinator,
+     *         which is the case for any epoch up to the one at which the coordinator loaded the group.
+     */
+    public boolean isAssignmentEpochFromBeforeLoad(int assignmentEpoch) {
+        return assignmentEpoch <= assignmentEpochAtLoad;
     }
 
     /**
@@ -1604,7 +1627,8 @@ public class StreamsGroup implements Group {
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
      * @param maybeReplacedStaticMember The replaced static member. it can be null.
-     * @return The list of endpoint-to-partitions mappings for all members with endpoints.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints, or an empty list if the group's
+     *         topology is not configured or not ready, for example because source or internal topics are missing.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
@@ -1615,6 +1639,9 @@ public class StreamsGroup implements Group {
         if (updatedMember == null) {
             log.error("[GroupId {}] updatedMember is unexpectedly null in buildEndpointToPartitions. " +
                 "This is a bug, please file a JIRA ticket.", groupId);
+            return endpointToPartitionsList;
+        }
+        if (configuredTopology().filter(ConfiguredTopology::isReady).isEmpty()) {
             return endpointToPartitionsList;
         }
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {

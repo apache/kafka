@@ -66,6 +66,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -653,7 +654,7 @@ public class TaskManager {
         updateInputPartitions(futuresForUpdatingInputPartitions, newInputPartitions, failedTasks);
         addToActiveTasksToRecycle(futuresForActiveTasksToRecycle, standbyInputPartitions, tasksToRecycle, failedTasks);
         addToStandbyTasksToRecycle(futuresForStandbyTasksToRecycle, activeInputPartitions, tasksToRecycle, failedTasks);
-        addToTasksToClose(futuresForTasksToClose, tasksToCloseCleanFromStateUpdater, tasksToCloseDirtyFromStateUpdater);
+        addToTasksToClose(futuresForTasksToClose, tasksToCloseCleanFromStateUpdater, tasksToCloseDirtyFromStateUpdater, false);
     }
 
     private void updateInputPartitions(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
@@ -685,7 +686,7 @@ public class TaskManager {
     private Stream<Task> getNonFailedTasks(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                            final Map<TaskId, RuntimeException> failedTasks) {
         return futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue(), false))
             .filter(Objects::nonNull)
             .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
             .filter(Objects::nonNull);
@@ -694,9 +695,10 @@ public class TaskManager {
 
     private void addToTasksToClose(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                    final Set<Task> tasksToCloseCleanFromStateUpdater,
-                                   final Set<Task> tasksToCloseDirtyFromStateUpdater) {
+                                   final Set<Task> tasksToCloseDirtyFromStateUpdater,
+                                   final boolean interruptExpected) {
         futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue(), interruptExpected))
             .filter(Objects::nonNull)
             .forEach(removedTaskResult -> {
                 if (removedTaskResult.exception().isPresent()) {
@@ -718,8 +720,19 @@ public class TaskManager {
         return task;
     }
 
+    /**
+     * Waits for the removal of a task from the state updater.
+     *
+     * @param interruptExpected whether the caller handles an interrupt of the wait. If {@code false}, an
+     *                          interrupt is logged as an error that indicates a bug.
+     * @return the removal result, or {@code null} if the removal failed and the task was added to the
+     *         failed tasks of the state updater
+     * @throws IllegalStateException with an {@link InterruptedException} as cause if the wait is interrupted;
+     *                               the interrupt status is restored before throwing
+     */
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
-                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
+                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future,
+                                                         final boolean interruptExpected) {
         try {
             long minutesWaited = 0L;
             while (true) {
@@ -741,10 +754,14 @@ public class TaskManager {
                     "failed task in the state updater: ",
                 taskId, executionException);
             return null;
-        } catch (final InterruptedException shouldNotHappen) {
+        } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+            if (interruptExpected) {
+                throw new IllegalStateException("Interrupted while waiting for the removal of task " + taskId
+                    + " from the state updater.", interrupted);
+            }
+            log.error(INTERRUPTED_ERROR_MESSAGE, interrupted);
+            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, interrupted);
         }
     }
 
@@ -1261,7 +1278,7 @@ public class TaskManager {
             }
         }
 
-        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty, false);
         for (final Task task : tasksToCloseClean) {
             closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
         }
@@ -1474,57 +1491,85 @@ public class TaskManager {
     }
 
     void shutdown(final boolean clean) {
-        shutdownStateUpdater();
-        shutdownSchedulingTaskManager();
+        // An interrupt must not cut the shutdown short, and it must not stay set while the remaining
+        // steps run either: thread joins would give up immediately and closing the producer would fail.
+        // The interrupt status is left untouched during removal waits, since it is the only way to stop
+        // waiting for a removal that never completes. Once an interruption is observed, it is recorded
+        // and cleared so that the clean-up can continue, and it is restored when the shutdown exits,
+        // including when the clean-up throws.
+        final AtomicBoolean interrupted = new AtomicBoolean(false);
+        try {
+            shutdownStateUpdater(interrupted);
+            // also covers an interrupt that did not cut any wait short, e.g. one set before the shutdown started
+            clearInterruptStatus(interrupted);
+            shutdownSchedulingTaskManager();
 
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+            final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        final Set<StreamTask> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
-        activeTasks.addAll(tasks.activeInitializedTasks());
-        final Set<StandbyTask> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
-        standbyTasks.addAll(tasks.standbyInitializedTasks());
+            final Set<StreamTask> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
+            activeTasks.addAll(tasks.activeInitializedTasks());
+            final Set<StandbyTask> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+            standbyTasks.addAll(tasks.standbyInitializedTasks());
 
-        final Set<StreamTask> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
-        activeTasks.addAll(pendingActiveTasks);
-        tasks.addPendingTasksToClose(pendingActiveTasks);
-        final Set<StandbyTask> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
-        standbyTasks.addAll(pendingStandbyTasks);
-        tasks.addPendingTasksToClose(pendingStandbyTasks);
+            final Set<StreamTask> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
+            activeTasks.addAll(pendingActiveTasks);
+            tasks.addPendingTasksToClose(pendingActiveTasks);
+            final Set<StandbyTask> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
+            standbyTasks.addAll(pendingStandbyTasks);
+            tasks.addPendingTasksToClose(pendingStandbyTasks);
 
-        executeAndMaybeSwallow(
-            clean,
-            () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
-            e -> maybeSetFirstException(false, e, firstException),
-            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
-        );
+            executeAndMaybeSwallow(
+                clean,
+                () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
+                e -> maybeSetFirstException(false, e, firstException),
+                e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+            );
 
-        executeAndMaybeSwallow(
-            clean,
-            activeTaskCreator::close,
-            e -> maybeSetFirstException(false, e, firstException),
-            e -> log.warn("Ignoring an exception while closing thread producer.", e)
-        );
+            executeAndMaybeSwallow(
+                clean,
+                activeTaskCreator::close,
+                e -> maybeSetFirstException(false, e, firstException),
+                e -> log.warn("Ignoring an exception while closing thread producer.", e)
+            );
 
-        tasks.clear();
+            tasks.clear();
 
-        // this should be called after closing all tasks and clearing them from `tasks` to make sure we unlock the dir
-        // for any tasks that may have still been in CREATED at the time of shutdown, since Task#close will not do so
-        executeAndMaybeSwallow(
-            clean,
-            this::releaseLockedUnassignedTaskDirectories,
-            e -> maybeSetFirstException(false, e, firstException),
-            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
-        );
+            // this should be called after closing all tasks and clearing them from `tasks` to make sure we unlock the dir
+            // for any tasks that may have still been in CREATED at the time of shutdown, since Task#close will not do so
+            executeAndMaybeSwallow(
+                clean,
+                this::releaseLockedUnassignedTaskDirectories,
+                e -> maybeSetFirstException(false, e, firstException),
+                e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+            );
 
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw fatalException;
+            final RuntimeException fatalException = firstException.get();
+            if (fatalException != null) {
+                throw fatalException;
+            }
+
+            log.info("Shutdown complete");
+        } finally {
+            if (interrupted.get()) {
+                Thread.currentThread().interrupt();
+            }
         }
-
-        log.info("Shutdown complete");
     }
 
-    private void shutdownStateUpdater() {
+    /**
+     * Clears the interrupt status of the calling thread and records it in {@code interrupted} if it was set.
+     */
+    private static void clearInterruptStatus(final AtomicBoolean interrupted) {
+        if (Thread.interrupted()) {
+            interrupted.set(true);
+        }
+    }
+
+    /**
+     * @param interrupted set to {@code true} as soon as an interruption is observed and cleared, so that the
+     *                    caller can restore it even if this method throws afterwards
+     */
+    private void shutdownStateUpdater(final AtomicBoolean interrupted) {
         // If there are failed tasks handling them first
         for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
             final Task failedTask = exceptionAndTask.task();
@@ -1538,9 +1583,51 @@ public class TaskManager {
         }
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-        // at this point we removed all tasks, so the shutdown should not take a lot of time
+        try {
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty, true);
+        } catch (final IllegalStateException interruptedDuringRemoval) {
+            if (!(interruptedDuringRemoval.getCause() instanceof InterruptedException)) {
+                // waitForFuture throws this without a cause when a task is not found in the state
+                // updater, which is a bug and must not be swallowed
+                throw interruptedDuringRemoval;
+            }
+            // The wait for the removals was cut short by an interrupt. Returning here would skip
+            // the rest of the clean-up, so continue instead: the tasks the updater still owns are
+            // moved to its failed queue by failRemainingTasks() during shutdown() below, and are
+            // collected from there by drainQueuedTasks().
+            log.warn("Interrupted while removing tasks from the state updater during shutdown. "
+                + "Continuing to close the remaining tasks.", interruptedDuringRemoval);
+            // waitForFuture() restored the interrupt status; clear it until the shutdown is complete
+            clearInterruptStatus(interrupted);
+        }
+        // at this point all tasks have been removed, or the removals were interrupted and the
+        // tasks are recovered below, so the shutdown should not take a lot of time
         stateUpdater.shutdown(Duration.ofMinutes(1L));
+        // the state updater restores the interrupt status if it was interrupted while waiting for its thread
+        clearInterruptStatus(interrupted);
+
+        // The wait above can be cut short by an interrupt, leaving some removal futures
+        // unconsumed. A task whose removal completed after that point is no longer owned by
+        // the state updater, so neither failRemainingTasks() nor drainQueuedTasks() can
+        // recover it. Collect those results now that the updater thread has stopped.
+        for (final CompletableFuture<StateUpdater.RemovedTaskResult> future : futures.values()) {
+            if (!future.isDone() || future.isCompletedExceptionally()) {
+                continue;
+            }
+            final StateUpdater.RemovedTaskResult removedTaskResult = future.getNow(null);
+            if (removedTaskResult == null) {
+                continue;
+            }
+            final Task task = removedTaskResult.task();
+            if (tasksToCloseClean.contains(task) || tasksToCloseDirty.contains(task)) {
+                continue;
+            }
+            if (removedTaskResult.exception().isPresent()) {
+                tasksToCloseDirty.add(task);
+            } else {
+                tasksToCloseClean.add(task);
+            }
+        }
 
         for (final Task task : tasksToCloseClean) {
             tasks.addTask(task);
