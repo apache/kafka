@@ -32,10 +32,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -313,34 +311,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             @Override
             public void close() {}
         };
-    }
-
-    /**
-     * Retained for compatibility with {@link Iterable}.
-     *
-     * @deprecated Use {@link #streamingIterator(BufferSupplier)} and close the returned iterator
-     *             to avoid collecting compressed records into an intermediate list.
-     */
-    @Deprecated
-    @Override
-    public Iterator<Record> iterator() {
-        if (count() == 0)
-            return Collections.emptyIterator();
-
-        if (!isCompressed())
-            return uncompressedIterator();
-
-        // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
-        // so we decompress the full record set here. Use cases which call for a lower memory footprint
-        // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, false, Records.SOFT_MAX_ARRAY_LENGTH)) {
-            // Passing count() would only set the initial capacity, not create elements or control
-            // how many records are read. Removing this argument does not change which records are decoded or returned.
-            List<Record> records = new ArrayList<>();
-            while (iterator.hasNext())
-                records.add(iterator.next());
-            return records.iterator();
-        }
     }
 
     @Override
