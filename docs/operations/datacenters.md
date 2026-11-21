@@ -36,4 +36,4 @@ This is not the only possible deployment pattern. It is possible to read from or
 
 Kafka naturally batches data in both the producer and consumer so it can achieve high-throughput even over a high-latency connection. To allow this though it may be necessary to increase the TCP socket buffer sizes for the producer, consumer, and broker using the `socket.send.buffer.bytes` and `socket.receive.buffer.bytes` configurations. The appropriate way to set this is documented [here](https://en.wikipedia.org/wiki/Bandwidth-delay_product). 
 
-It is generally _not_ advisable to run a _single_ Kafka cluster that spans multiple datacenters over a high-latency link. This will incur very high replication latency for Kafka writes, and Kafka will remain available in all locations if the network between locations is unavailable. 
+It is generally _not_ advisable to run a _single_ Kafka cluster that spans multiple datacenters over a high-latency link. This will incur very high replication latency for Kafka writes, and Kafka will not remain available in all locations if the network between locations is unavailable. 

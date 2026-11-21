@@ -73,8 +73,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -129,12 +129,11 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformer =
             new KTableTransformValues<>(parent, new NullSupplier(), QUERYABLE_NAME);
 
-        try {
-            transformer.get();
-            fail("NPE expected");
-        } catch (final NullPointerException expected) {
-            // expected
-        }
+        assertThrows(
+            NullPointerException.class,
+            transformer::get,
+            "should not create a processor when the supplier returns null"
+        );
     }
 
     @Test
@@ -142,12 +141,11 @@ public class KTableTransformValuesTest {
         final KTableValueGetterSupplier<String, String> view =
             new KTableTransformValues<>(parent, new NullSupplier(), null).view();
 
-        try {
-            view.get();
-            fail("NPE expected");
-        } catch (final NullPointerException expected) {
-            // expected
-        }
+        assertThrows(
+            NullPointerException.class,
+            view::get,
+            "should not create a value getter when the supplier returns null"
+        );
     }
 
     @SuppressWarnings("unchecked")

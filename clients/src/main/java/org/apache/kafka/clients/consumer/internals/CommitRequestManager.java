@@ -75,7 +75,7 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRE
 
 public class CommitRequestManager implements RequestManager, MemberStateListener {
     private final Time time;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
@@ -109,7 +109,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public CommitRequestManager(
         final Time time,
         final LogContext logContext,
-        final SubscriptionState subscriptions,
+        final ConsumerSubscriptionState subscriptions,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
@@ -136,7 +136,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     CommitRequestManager(
         final Time time,
         final LogContext logContext,
-        final SubscriptionState subscriptions,
+        final ConsumerSubscriptionState subscriptions,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,

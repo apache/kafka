@@ -36,6 +36,7 @@ public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public CreateTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

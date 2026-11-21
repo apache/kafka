@@ -43,7 +43,7 @@ public abstract class RemoteLogMetadata {
     }
 
     /**
-     * @return Epoch time in milliseconds at which this event is occurred.
+     * @return Epoch time in milliseconds at which this event occurred.
      */
     public long eventTimestampMs() {
         return eventTimestampMs;

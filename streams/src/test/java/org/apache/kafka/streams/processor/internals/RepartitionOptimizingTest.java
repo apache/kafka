@@ -57,7 +57,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,8 +66,6 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
@@ -97,14 +94,10 @@ public class RepartitionOptimizingTest {
 
     private final List<String> processorValueCollector = new ArrayList<>();
 
-    private final List<KeyValue<String, Long>> expectedCountKeyValues =
-        Arrays.asList(KeyValue.pair("A", 3L), KeyValue.pair("B", 3L), KeyValue.pair("C", 3L));
-    private final List<KeyValue<String, Integer>> expectedAggKeyValues =
-        Arrays.asList(KeyValue.pair("A", 9), KeyValue.pair("B", 9), KeyValue.pair("C", 9));
-    private final List<KeyValue<String, String>> expectedReduceKeyValues =
-        Arrays.asList(KeyValue.pair("A", "foo:bar:baz"), KeyValue.pair("B", "foo:bar:baz"), KeyValue.pair("C", "foo:bar:baz"));
-    private final List<KeyValue<String, String>> expectedJoinKeyValues =
-        Arrays.asList(KeyValue.pair("A", "foo:3"), KeyValue.pair("A", "bar:3"), KeyValue.pair("A", "baz:3"));
+    private final Map<String, Long> expectedCountKeyValues = Map.of("A", 3L, "B", 3L, "C", 3L);
+    private final Map<String, Integer> expectedAggKeyValues = Map.of("A", 9, "B", 9, "C", 9);
+    private final Map<String, String> expectedReduceKeyValues = Map.of("A", "foo:bar:baz", "B", "foo:bar:baz", "C", "foo:bar:baz");
+    private final Map<String, String> expectedJoinKeyValues = Map.of("A", "baz:3");
     private final List<String> expectedCollectedProcessorValues =
         Arrays.asList("FOO", "BAR", "BAZ");
 
@@ -214,14 +207,14 @@ public class RepartitionOptimizingTest {
         assertEquals(expectedNumberRepartitionTopics, getCountOfRepartitionTopicsFound(topologyString));
 
         // Verify the values collected by the processor
-        assertThat(3, equalTo(processorValueCollector.size()));
-        assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
+        assertEquals(3, processorValueCollector.size());
+        assertEquals(expectedCollectedProcessorValues, processorValueCollector);
 
         // Verify the expected output
-        assertThat(countOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedCountKeyValues)));
-        assertThat(aggregationOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedAggKeyValues)));
-        assertThat(reduceOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedReduceKeyValues)));
-        assertThat(joinedOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedJoinKeyValues)));
+        assertEquals(expectedCountKeyValues, countOutputTopic.readKeyValuesToMap());
+        assertEquals(expectedAggKeyValues, aggregationOutputTopic.readKeyValuesToMap());
+        assertEquals(expectedReduceKeyValues, reduceOutputTopic.readKeyValuesToMap());
+        assertEquals(expectedJoinKeyValues, joinedOutputTopic.readKeyValuesToMap());
     }
 
     @Test
@@ -253,15 +246,7 @@ public class RepartitionOptimizingTest {
 
         inputTopic.pipeKeyValueList(getKeyValues());
 
-        assertThat(outputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedAggKeyValues)));
-    }
-
-    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
-        final Map<K, V> map = new HashMap<>();
-        for (final KeyValue<K, V> pair : keyValuePairs) {
-            map.put(pair.key, pair.value);
-        }
-        return map;
+        assertEquals(expectedAggKeyValues, outputTopic.readKeyValuesToMap());
     }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {

@@ -95,9 +95,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         this.apiKey = apiKey;
     }
 
-    /**
-     * Get the version of this AbstractRequest object.
-     */
     public short version() {
         return version;
     }

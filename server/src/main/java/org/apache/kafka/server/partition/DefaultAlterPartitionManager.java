@@ -56,6 +56,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     private final Scheduler scheduler;
     private final int brokerId;
     private final Supplier<Long> brokerEpochSupplier;
+    private final Supplier<Short> requestHeaderVersionSupplier;
 
     // Used to allow only one pending ISR update per partition (visible for testing)
     final ConcurrentHashMap<TopicIdPartition, AlterPartitionItem> unsentIsrUpdates = new ConcurrentHashMap<>();
@@ -63,11 +64,12 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     // Used to allow only one in-flight request at a time
     private final AtomicBoolean inflightRequest = new AtomicBoolean(false);
 
-    public DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier) {
+    public DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier, Supplier<Short> requestHeaderVersionSupplier) {
         this.controllerChannelManager = controllerChannelManager;
         this.scheduler = scheduler;
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
+        this.requestHeaderVersionSupplier = requestHeaderVersionSupplier;
     }
 
     public static DefaultAlterPartitionManager create(AbstractKafkaConfig config,
@@ -76,7 +78,8 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                                                       Time time,
                                                       Metrics metrics,
                                                       String threadNamePrefix,
-                                                      Supplier<Long> brokerEpochSupplier) {
+                                                      Supplier<Long> brokerEpochSupplier,
+                                                      Supplier<Short> requestHeaderVersionSupplier) {
         NodeToControllerChannelManager channelManager = new NodeToControllerChannelManagerImpl(
                 controllerNodeProvider,
                 time,
@@ -87,7 +90,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 Long.MAX_VALUE
         );
 
-        return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier);
+        return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier, requestHeaderVersionSupplier);
     }
 
     @Override
@@ -217,7 +220,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                     .setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value()));
         }
 
-        return new AlterPartitionRequest.Builder(message);
+        return new AlterPartitionRequest.Builder(message, requestHeaderVersionSupplier.get());
     }
 
     private Errors handleAlterPartitionResponse(AlterPartitionResponse alterPartitionResponse,

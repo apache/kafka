@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -42,6 +43,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapper;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -56,6 +58,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -65,7 +68,9 @@ import org.mockito.quality.Strictness;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -655,5 +660,25 @@ public class KTableImplTest {
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (String[]) null));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    public void shouldUseForeignKeyJoinResponsePartitionWhenValid(final int partition) {
+        final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
+        assertEquals(Optional.of(Set.of(partition)), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", partition), new RecordHeaders(), 3));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 3, Integer.MAX_VALUE, Integer.MIN_VALUE})
+    public void shouldUseDefaultPartitionerForInvalidForeignKeyJoinResponsePartition(final int partition) {
+        final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
+        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", partition), new RecordHeaders(), 3));
+    }
+
+    @Test
+    public void shouldUseDefaultPartitionerWhenForeignKeyJoinResponsePartitionIsNull() {
+        final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
+        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", null), new RecordHeaders(), 3));
     }
 }

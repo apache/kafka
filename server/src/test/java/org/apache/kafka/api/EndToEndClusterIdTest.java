@@ -83,7 +83,7 @@ public class EndToEndClusterIdTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
+    public void setup() {
         this.clusterInstance.createTopic(TOPIC, 2, (short) 1);
         clusterBrokerId = String.valueOf(clusterInstance.brokerIds().iterator().next());
         controllerId = String.valueOf(clusterInstance.controllerIds().iterator().next());

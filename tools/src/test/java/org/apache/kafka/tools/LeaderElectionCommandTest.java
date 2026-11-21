@@ -18,13 +18,11 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.CreateTopicsResult;
-import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -48,9 +46,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,9 +87,9 @@ public class LeaderElectionCommandTest {
 
         cluster.waitForReadyBrokers();
         try (Admin client = cluster.admin()) {
-            createTopic(client, topicPartitionTopic, Map.of(partition, assignment));
-            createTopic(client, jsonFileTopic, Map.of(partition, assignment));
-            createTopic(client, allTopicPartitionsTopic, Map.of(partition, assignment));
+            cluster.createTopicWithAssignment(topicPartitionTopic, Map.of(partition, assignment));
+            cluster.createTopicWithAssignment(jsonFileTopic, Map.of(partition, assignment));
+            cluster.createTopicWithAssignment(allTopicPartitionsTopic, Map.of(partition, assignment));
 
             for (TopicPartition partitionToCheck : topicPartitions) {
                 assertLeader(client, partitionToCheck, broker2);
@@ -215,7 +213,7 @@ public class LeaderElectionCommandTest {
             Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
             partitionAssignment.put(partition, assignment);
 
-            createTopic(client, topic, partitionAssignment);
+            cluster.createTopicWithAssignment(topic, partitionAssignment);
 
             TopicPartition topicPartition = new TopicPartition(topic, partition);
 
@@ -265,7 +263,7 @@ public class LeaderElectionCommandTest {
             partitionAssignment.put(partition0, assignment0);
             partitionAssignment.put(partition1, assignment1);
 
-            createTopic(client, topic, partitionAssignment);
+            cluster.createTopicWithAssignment(topic, partitionAssignment);
 
             topicPartition0 = new TopicPartition(topic, partition0);
             topicPartition1 = new TopicPartition(topic, partition1);
@@ -300,13 +298,6 @@ public class LeaderElectionCommandTest {
         String secondLine = electionResultOutputIter.next();
         assertTrue(secondLine.contains(String.format("Valid replica already elected for partitions %s", topicPartition1)),
             String.format("Unexpected output: %s", secondLine));
-    }
-
-    private void createTopic(Admin admin, String topic, Map<Integer, List<Integer>> replicaAssignment) throws ExecutionException, InterruptedException {
-        NewTopic newTopic = new NewTopic(topic, replicaAssignment);
-        List<NewTopic> newTopics = List.of(newTopic);
-        CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
-        createTopicResult.all().get();
     }
 
     private Path tempTopicPartitionFile(List<TopicPartition> partitions) throws Exception {
@@ -397,22 +388,16 @@ public class LeaderElectionCommandTest {
         );
     }
 
-    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
-        int leader = AdminUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000);
-        assertEquals(expectedLeader, leader);
+    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> AdminClientTestUtils.currentLeader(client, topicPartition).equals(Optional.of(expectedLeader)),
+                "Timed out waiting for leader " + expectedLeader + " of " + topicPartition
+        );
     }
 
     private void assertNoLeader(Admin client, TopicPartition topicPartition) throws InterruptedException {
         TestUtils.waitForCondition(
-                () -> {
-                    TopicDescription desc = client.describeTopics(List.of(topicPartition.topic()))
-                            .allTopicNames().get().get(topicPartition.topic());
-                    return desc.partitions().stream()
-                            .filter(p -> p.partition() == topicPartition.partition())
-                            .findFirst()
-                            .map(p -> p.leader() == null || p.leader().id() == Node.noNode().id())
-                            .orElse(false);
-                },
+                () -> AdminClientTestUtils.currentLeader(client, topicPartition).isEmpty(),
                 "Timed out waiting for no leader for " + topicPartition
         );
     }

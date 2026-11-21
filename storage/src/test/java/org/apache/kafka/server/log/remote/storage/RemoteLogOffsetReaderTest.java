@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -27,11 +26,11 @@ import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -56,22 +55,25 @@ class RemoteLogOffsetReaderTest {
 
     private final MockTime time = new MockTime();
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
+    @TempDir
+    private Path tempDir;
     private Path logDir;
     private LeaderEpochFileCache cache;
     private MockRemoteLogManager rlm;
 
     @BeforeEach
     void setUp() throws IOException {
-        logDir = Files.createTempDirectory("kafka-test");
-        LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
+        logDir = Files.createDirectory(tempDir.resolve("kafka-test"));
+        LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(
+                Files.createFile(tempDir.resolve("leader-epoch-checkpoint")).toFile(),
+                new LogDirFailureChannel(1));
         cache = new LeaderEpochFileCache(topicPartition, checkpoint, time.scheduler);
         rlm = new MockRemoteLogManager(2, 1, logDir.toString());
     }
 
     @AfterEach
-    void tearDown() throws IOException {
+    void tearDown() {
         rlm.close();
-        Utils.delete(logDir.toFile());
     }
 
     @Test
