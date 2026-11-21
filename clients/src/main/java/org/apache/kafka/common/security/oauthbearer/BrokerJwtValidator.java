@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableV
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
@@ -37,10 +38,10 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import javax.security.auth.login.AppConfigurationEntry;
@@ -99,7 +100,7 @@ public class BrokerJwtValidator implements JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
 
-    private final Optional<CloseableVerificationKeyResolver> verificationKeyResolverOpt;
+    private CloseableVerificationKeyResolver verificationKeyResolver;
 
     private JwtConsumer jwtConsumer;
 
@@ -111,14 +112,6 @@ public class BrokerJwtValidator implements JwtValidator {
      * A public, no-args constructor is necessary for instantiation via configuration.
      */
     public BrokerJwtValidator() {
-        this.verificationKeyResolverOpt = Optional.empty();
-    }
-
-    /*
-     * Package-visible for testing.
-     */
-    BrokerJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
-        this.verificationKeyResolverOpt = Optional.of(verificationKeyResolver);
     }
 
     @Override
@@ -154,9 +147,10 @@ public class BrokerJwtValidator implements JwtValidator {
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER));
         }
 
-        CloseableVerificationKeyResolver verificationKeyResolver = verificationKeyResolverOpt.orElseGet(
-            () -> VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries)
-        );
+        // This validator owns the resolver, so it configures the resolver here and releases it in close().
+        // Otherwise its resources (e.g. the background JWKS refresh thread) would leak.
+        this.verificationKeyResolver = createCloseableVerificationKeyResolver(configs, saslMechanism, jaasConfigEntries);
+        this.verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
@@ -192,6 +186,20 @@ public class BrokerJwtValidator implements JwtValidator {
             .build();
         this.scopeClaimName = scopeClaimName;
         this.subClaimName = subClaimName;
+    }
+
+    /*
+     * Package-visible so that DefaultJwtValidator and tests can supply a different resolver.
+     */
+    CloseableVerificationKeyResolver createCloseableVerificationKeyResolver(Map<String, ?> configs,
+                                                                           String saslMechanism,
+                                                                           List<AppConfigurationEntry> jaasConfigEntries) {
+        return VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries);
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.closeQuietly(verificationKeyResolver, "JWT validator verification key resolver");
     }
 
     /**
