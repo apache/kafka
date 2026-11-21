@@ -27,13 +27,13 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import java.util.Optional;
 
 /**
- * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
+ * Provides methods for parsing and encoding JSON with Jackson.
  */
 public final class Json {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
-     * Parse a JSON string into a JsonValue if possible. `Empty` is returned if `input` is not valid JSON.
+     * Parse a JSON string into a JsonValue if possible. {@link Optional#empty()} is returned if `input` is not valid JSON.
      */
     public static Optional<JsonValue> parseFull(String input) {
         try {
