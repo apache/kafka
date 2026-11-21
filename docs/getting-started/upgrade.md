@@ -88,7 +88,7 @@ Note: Apache Kafka 4.4 only supports KRaft mode - ZooKeeper mode has been remove
 ### Notable changes in 4.3.2
 
   * Includes a fix for a critical tiered storage bug in which size-based retention could delete data that was still within retention from both local and remote tiers after a leader election ([KAFKA-20732](https://issues.apache.org/jira/browse/KAFKA-20732)).
-  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
+  * Includes a fix for a Kafka Streams issue in which the state directory could be cleaned prematurely under [KIP-1035](https://cwiki.apache.org/confluence/x/aQviEQ), forcing a from-scratch restore ([KAFKA-20805](https://issues.apache.org/jira/browse/KAFKA-20805)).
   * Includes fixes for several critical Kafka Streams bugs that could cause a `StreamThread` to die after task corruption, task recycling, or state updater timeouts ([KAFKA-20808](https://issues.apache.org/jira/browse/KAFKA-20808), [KAFKA-20827](https://issues.apache.org/jira/browse/KAFKA-20827), [KAFKA-20721](https://issues.apache.org/jira/browse/KAFKA-20721)).
   * Includes a fix for a group coordinator bug in which a consumer group downgrade could leave the group in an invalid state when the classic group metadata is very large ([KAFKA-20845](https://issues.apache.org/jira/browse/KAFKA-20845)).
   * Includes a fix for a client telemetry bug in which metrics could be sent to a stale broker IP address after a broker address change ([KAFKA-20393](https://issues.apache.org/jira/browse/KAFKA-20393)).
@@ -99,7 +99,7 @@ Note: Apache Kafka 4.4 only supports KRaft mode - ZooKeeper mode has been remove
 
 ### Notable changes in 4.3.1
 
-  * Includes a fix for a critical Kafka Streams native memory leak caused by RocksDB column family handles and `ColumnFamilyOptions` not being released, notably for the offsets column family introduced for [KIP-1035](https://cwiki.apache.org/confluence/x/uYvOEg) ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616), [KAFKA-20688](https://issues.apache.org/jira/browse/KAFKA-20688)).
+  * Includes a fix for a critical Kafka Streams native memory leak caused by RocksDB column family handles and `ColumnFamilyOptions` not being released, notably for the offsets column family introduced for [KIP-1035](https://cwiki.apache.org/confluence/x/aQviEQ) ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616), [KAFKA-20688](https://issues.apache.org/jira/browse/KAFKA-20688)).
   * Includes a fix for a Kafka Streams stale-offset issue that could cause `OffsetOutOfRangeException` on restart ([KAFKA-20663](https://issues.apache.org/jira/browse/KAFKA-20663)).
   * Includes a fix for `Admin` partition-leader APIs hanging when a cached leader has left the cluster ([KAFKA-20673](https://issues.apache.org/jira/browse/KAFKA-20673)).
   * Includes fixes for spurious group coordinator errors logged after a partition leadership change ([KAFKA-20634](https://issues.apache.org/jira/browse/KAFKA-20634), [KAFKA-20635](https://issues.apache.org/jira/browse/KAFKA-20635)).
