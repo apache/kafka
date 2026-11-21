@@ -308,6 +308,157 @@ public class RecordAccumulatorTest {
         testAppendLarge(allocationStrategy, Compression.NONE);
     }
 
+    @Test
+    public void testOversizedRecordIsReadyWithoutWaitingForLinger() throws Exception {
+        int batchSize = 16 * 1024;
+        int lingerMs = 1000;
+
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            batchSize, 8 * 1024 * 1024, Compression.NONE, lingerMs);
+        try {
+            long now = time.milliseconds();
+            accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, now, cluster);
+
+            Deque<ProducerBatch> batches = accum.getDeque(tp1);
+            assertEquals(1, batches.size());
+            ProducerBatch batch = batches.peekFirst();
+            assertTrue(batch.estimatedSizeInBytes() > batchSize);
+            assertTrue(batch.estimatedSizeInBytes() < batch.initialCapacity());
+            // Unused allocation space must not make an oversized batch wait for linger.
+            assertEquals(Collections.singleton(node1), accum.ready(metadataCache, now).readyNodes);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("oversizedRecordCompressionTypes")
+    public void testCompressedOversizedRecordIsReadyWithoutWaitingForLinger(CompressionType compressionType) throws Exception {
+        int batchSize = 16 * 1024;
+        int lingerMs = 1000;
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            batchSize, 8 * 1024 * 1024, Compression.of(compressionType).build(), lingerMs);
+        try {
+            long now = time.milliseconds();
+            accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, now, cluster);
+
+            Deque<ProducerBatch> batches = accum.getDeque(tp1);
+            assertEquals(1, batches.size());
+            ProducerBatch batch = batches.peekFirst();
+            // Set only this builder's estimate to avoid changing the shared compression ratio estimator.
+            // 1024 * 1024 * 0.1 > 16*1024
+            batch.recordsBuilder.setEstimatedCompressionRatio(0.1f);
+            assertTrue(batch.estimatedSizeInBytes() > batchSize);
+            assertTrue(batch.estimatedSizeInBytes() < batch.initialCapacity());
+            assertEquals(Collections.singleton(node1), accum.ready(metadataCache, now).readyNodes);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("oversizedRecordCompressionTypes")
+    public void testCompressedOversizedRecordWaitsForLingerBelowBatchSize(CompressionType compressionType) throws Exception {
+        int batchSize = 16 * 1024;
+        int lingerMs = 1000;
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            batchSize, 8 * 1024 * 1024, Compression.of(compressionType).build(), lingerMs);
+        try {
+            accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> batches = accum.getDeque(tp1);
+            assertEquals(1, batches.size());
+            ProducerBatch batch = batches.peekFirst();
+            // The compressed size estimate determines readiness even when the uncompressed record is oversized.
+            // 1024 * 1024 * 0.01 ~< 16*1024
+            batch.recordsBuilder.setEstimatedCompressionRatio(0.01f);
+            assertTrue(batch.estimatedSizeInBytes() < batchSize);
+            assertTrue(accum.ready(metadataCache, time.milliseconds()).readyNodes.isEmpty());
+
+            time.sleep(lingerMs - 1);
+            assertTrue(accum.ready(metadataCache, time.milliseconds()).readyNodes.isEmpty());
+            time.sleep(1);
+            assertEquals(Collections.singleton(node1), accum.ready(metadataCache, time.milliseconds()).readyNodes);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
+    }
+
+    @Test
+    public void testOversizedRecordDoesNotBatchWithSmallRecord() throws Exception {
+        int batchSize = 16 * 1024;
+        int lingerMs = 1000;
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            batchSize, 8 * 1024 * 1024, Compression.NONE, lingerMs);
+        try {
+            long now = time.milliseconds();
+            accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, now, cluster);
+
+            Deque<ProducerBatch> batches = accum.getDeque(tp1);
+            assertEquals(1, batches.size());
+            ProducerBatch batch = batches.peekFirst();
+            assertTrue(batch.estimatedSizeInBytes() > batchSize);
+
+            byte[] smallValue = new byte[0];
+            int smallRecordSize = DefaultRecord.sizeInBytes(1, 0, -1, smallValue.length, Record.EMPTY_HEADERS);
+            int remainingCapacity = batch.initialCapacity() - batch.estimatedSizeInBytes();
+            assertTrue(smallRecordSize <= remainingCapacity,
+                "The second record must fit in the oversized batch's unused allocation space");
+
+            // The configured batch size must prevent another append even though the buffer has room.
+            accum.append(topic, partition1, 0L, null, smallValue,
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, now, cluster);
+            assertEquals(2, batches.size());
+            assertEquals(1, batches.peekFirst().recordCount);
+            assertEquals(1, batches.peekLast().recordCount);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
+    }
+
+    @Test
+    public void testLingerAfterOversizedRecord() throws Exception {
+        int batchSize = 16 * 1024;
+        int lingerMs = 1000;
+        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            batchSize, 8 * 1024 * 1024, Compression.NONE, lingerMs);
+        try {
+            accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+            time.sleep(lingerMs / 2);
+            accum.append(topic, partition1, 0L, null, new byte[100],
+                Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+            assertEquals(2, accum.getDeque(tp1).size());
+
+            List<ProducerBatch> drained = accum.drain(metadataCache, Collections.singleton(node1),
+                Integer.MAX_VALUE, time.milliseconds()).get(node1.id());
+            assertEquals(1, drained.size());
+            assertEquals(1, drained.get(0).recordCount);
+            assertTrue(drained.get(0).estimatedSizeInBytes() > batchSize);
+            assertEquals(1, accum.getDeque(tp1).size());
+            assertTrue(accum.ready(metadataCache, time.milliseconds()).readyNodes.isEmpty());
+
+            // The small batch's linger starts at its own creation, not the oversized batch's creation.
+            time.sleep(lingerMs / 2);
+            assertTrue(accum.ready(metadataCache, time.milliseconds()).readyNodes.isEmpty());
+            time.sleep(lingerMs / 2 - 1);
+            assertTrue(accum.ready(metadataCache, time.milliseconds()).readyNodes.isEmpty());
+            time.sleep(1);
+            assertEquals(Collections.singleton(node1), accum.ready(metadataCache, time.milliseconds()).readyNodes);
+        } finally {
+            accum.abortIncompleteBatches();
+            accum.close();
+        }
+    }
+
     private void testAppendLarge(String allocationStrategy, Compression compression) throws Exception {
         int batchSize = 512;
         byte[] value = new byte[2 * batchSize];
@@ -1282,6 +1433,8 @@ public class RecordAccumulatorTest {
         int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
         RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize, totalSize, Compression.NONE, 0);
 
+        boolean isFullStrategy = BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL.equals(allocationStrategy);
+
         // Set up callbacks so that we know what partition is chosen.
         final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
         RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
@@ -1308,35 +1461,31 @@ public class RecordAccumulatorTest {
         assertEquals(partition1, partition.get());
         assertEquals(1, mockRandom.get());
 
-        // Produce large record, we should exceed "sticky" limit, but produce to this partition
-        // as we try to switch after the "sticky" limit is exceeded.  The switch is disabled
-        // because of incomplete batch.
+        // The oversized record still uses the current partition, but fills its batch and exceeds
+        // the sticky limit, so the next partition is selected immediately after the append.
         byte[] largeValue = new byte[batchSize];
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition1, partition.get());
-        assertEquals(1, mockRandom.get());
+        assertEquals(isFullStrategy ? 2 : 1, mockRandom.get());
 
-        // Produce large record, we should switch to next partition as we complete
-        // previous batch and exceeded sticky limit.
+        // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition2, partition.get());
-        assertEquals(2, mockRandom.get());
+        assertEquals(isFullStrategy ? 3 : 2, mockRandom.get());
 
-        // Produce large record, we should switch to next partition as we complete
-        // previous batch and exceeded sticky limit.
+        // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition3, partition.get());
-        assertEquals(3, mockRandom.get());
+        assertEquals(isFullStrategy ? 4 : 3, mockRandom.get());
 
-        // Produce large record, we should switch to next partition as we complete
-        // previous batch and exceeded sticky limit.
+        // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition1, partition.get());
-        assertEquals(4, mockRandom.get());
+        assertEquals(isFullStrategy ? 5 : 4, mockRandom.get());
     }
 
     @ParameterizedTest
@@ -1733,6 +1882,10 @@ public class RecordAccumulatorTest {
             offsetDelta += 1;
             size += recordSize;
         }
+    }
+
+    private static Stream<CompressionType> oversizedRecordCompressionTypes() {
+        return Stream.of(CompressionType.GZIP, CompressionType.ZSTD);
     }
 
     private static Stream<String> allocationStrategies() {
