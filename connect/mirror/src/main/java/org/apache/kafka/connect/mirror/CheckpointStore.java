@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -58,6 +59,12 @@ public class CheckpointStore implements AutoCloseable {
 
     private volatile boolean loadSuccess = false;
     private volatile boolean isInitialized = false;
+    private volatile boolean initializationStopped = false;
+
+    // Guards cpConsumer, so that stopInitialization() cannot wake up a consumer which the thread
+    // reading the checkpoints topic is closing at the same time.
+    private final Object consumerLock = new Object();
+    private Consumer<byte[], byte[]> cpConsumer = null;
 
     public CheckpointStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
         this.config = config;
@@ -87,6 +94,25 @@ public class CheckpointStore implements AutoCloseable {
 
     public boolean isInitialized() {
         return isInitialized;
+    }
+
+    /**
+     * Stop an initialization which is in progress, and prevent one which has not begun from starting, so that
+     * {@link #close()} does not have to wait for the whole checkpoints topic to be read.
+     * <p>This is the only method of this class which may be called by a thread other than the one which calls
+     * {@link #start()}. {@link #close()} must not be called until that thread has returned from {@link #start()},
+     * because the consumer used to read the checkpoints topic is not safe for multi-threaded access.
+     */
+    void stopInitialization() {
+        synchronized (consumerLock) {
+            initializationStopped = true;
+            if (cpConsumer != null) {
+                // Consumer::wakeup is the only consumer method which is safe to call from a thread other than
+                // the one using the consumer. It makes the read performed by KafkaBasedLog::start give up with
+                // a WakeupException instead of running all the way to the end of the topic.
+                cpConsumer.wakeup();
+            }
+        }
     }
 
     public void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
@@ -119,6 +145,9 @@ public class CheckpointStore implements AutoCloseable {
     }
 
     private void releaseResources() {
+        synchronized (consumerLock) {
+            cpConsumer = null;
+        }
         Utils.closeQuietly(backingStore != null ? backingStore::stop : null, "backing store for previous Checkpoints");
         Utils.closeQuietly(cpAdmin, "admin client for previous Checkpoints");
         cpAdmin = null;
@@ -154,14 +183,24 @@ public class CheckpointStore implements AutoCloseable {
             }
         };
 
+        if (initializationStopped) {
+            log.debug("Not reading checkpoints topic {} because the task is shutting down", config.checkpointsTopic());
+            loadSuccess = false;
+            return checkpoints;
+        }
+
         try {
             long startTime = System.currentTimeMillis();
             readCheckpointsImpl(config, consumedCallback);
             log.debug("starting+stopping KafkaBasedLog took {}ms", System.currentTimeMillis() - startTime);
-            loadSuccess = true;
+            // a read which was stopped before it reached the end of the topic has not loaded all of the checkpoints
+            loadSuccess = !initializationStopped;
         } catch (Exception error) {
             loadSuccess = false;
-            if (error instanceof AuthorizationException) {
+            if (initializationStopped) {
+                log.debug("Stopped reading checkpoints topic {} because the task is shutting down",
+                        config.checkpointsTopic(), error);
+            } else if (error instanceof AuthorizationException) {
                 log.warn("Not authorized to access checkpoints topic {} - " +
                         "this may degrade offset translation as only checkpoints " +
                         "for offsets which were mirrored after the task started will be emitted",
@@ -183,9 +222,20 @@ public class CheckpointStore implements AutoCloseable {
                     config.targetAdminConfig("checkpoint-target-admin"),
                     config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin")));
 
+            Consumer<byte[], byte[]> consumer =
+                    MirrorUtils.newConsumer(config.targetConsumerConfig(CHECKPOINTS_TARGET_CONSUMER_ROLE));
+            synchronized (consumerLock) {
+                cpConsumer = consumer;
+                if (initializationStopped) {
+                    // A stop which arrived before the consumer existed could not wake it up, so wake it up here:
+                    // the first blocking call made by the backing store then gives up immediately.
+                    consumer.wakeup();
+                }
+            }
+
             backingStore = KafkaBasedLog.withExistingClients(
                     config.checkpointsTopic(),
-                    MirrorUtils.newConsumer(config.targetConsumerConfig(CHECKPOINTS_TARGET_CONSUMER_ROLE)),
+                    consumer,
                     null,
                     cpAdmin,
                     consumedCallback,
