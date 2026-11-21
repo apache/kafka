@@ -19,9 +19,7 @@ package org.apache.kafka.jmh.acl;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
-import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.metrics.Metrics;
@@ -33,17 +31,12 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
-import org.apache.kafka.server.authorizer.Action;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -65,11 +58,7 @@ import org.openjdk.jmh.runner.options.TimeValue;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -115,7 +104,7 @@ public class AuthorizeByResourceTypeBenchmark {
     @Param({"EXACT_DENY", "ANCESTOR_DENY", "MIXED_PATTERNS", "UNRELATED_DENY", "NO_DENIES"})
     public String scenario;
 
-    private BaselineAuthorizer authorizer;
+    private StandardAuthorizer authorizer;
     private Metrics metrics;
     private RequestContext context;
 
@@ -131,7 +120,7 @@ public class AuthorizeByResourceTypeBenchmark {
                 + "a unique resource identifier, and the scenario suffix");
         }
 
-        authorizer = new BaselineAuthorizer();
+        authorizer = new StandardAuthorizer();
         metrics = new Metrics();
         authorizer.configure(Map.of());
         authorizer.withPluginMetrics(new PluginMetricsImpl(metrics, Map.of()));
@@ -146,12 +135,6 @@ public class AuthorizeByResourceTypeBenchmark {
             setupIndependentPatterns(principal);
         }
         authorizer.completeInitialLoad();
-
-        AuthorizationResult expected = scenario.equals("EXACT_DENY") || scenario.equals("ANCESTOR_DENY")
-            ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED;
-       /* if (optimized() != expected || baseline() != expected) {
-            throw new IllegalStateException("Unexpected authorization result for " + scenario);
-        }*/
     }
 
     private void setupMixedPatterns(KafkaPrincipal principal) {
@@ -213,130 +196,8 @@ public class AuthorizeByResourceTypeBenchmark {
     public AuthorizationResult optimized() {
         return authorizer.authorizeByResourceType(context, AclOperation.READ, ResourceType.GROUP);
     }
-/*
-    @Benchmark
-    public AuthorizationResult baseline() {
-        return authorizer.authorizeByResourceTypeBaseline(context, AclOperation.READ, ResourceType.GROUP);
-    }*/
-
-    private static class BaselineAuthorizer extends StandardAuthorizer {
-        // Keep the original implementation here so both paths can be measured in the same JVM.
-        @SuppressWarnings({"checkstyle:CyclomaticComplexity", "checkstyle:NPathComplexity"})
-        private AuthorizationResult authorizeByResourceTypeBaseline(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
-            SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
-
-            // Check a hard-coded name to ensure that super users are granted
-            // access regardless of DENY ACLs.
-            if (authorize(requestContext, Collections.singletonList(new Action(
-                    op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
-                    0, true, false)))
-                    .get(0) == AuthorizationResult.ALLOWED) {
-                return AuthorizationResult.ALLOWED;
-            }
-
-            // Filter out all the resource pattern corresponding to the RequestContext,
-            // AclOperation, and ResourceType
-            ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
-                resourceType, null, PatternType.ANY);
-            AclBindingFilter aclFilter = new AclBindingFilter(
-                resourceTypeFilter, AccessControlEntryFilter.ANY);
-
-            EnumMap<PatternType, Set<String>> denyPatterns =
-                new EnumMap<>(PatternType.class) {{
-                        put(PatternType.LITERAL, new HashSet<>());
-                        put(PatternType.PREFIXED, new HashSet<>());
-                    }};
-            EnumMap<PatternType, Set<String>> allowPatterns =
-                new EnumMap<>(PatternType.class) {{
-                        put(PatternType.LITERAL, new HashSet<>());
-                        put(PatternType.PREFIXED, new HashSet<>());
-                    }};
-
-            boolean hasWildCardAllow = false;
-
-            KafkaPrincipal principal = new KafkaPrincipal(
-                requestContext.principal().getPrincipalType(),
-                requestContext.principal().getName());
-            String hostAddr = requestContext.clientAddress().getHostAddress();
-
-            for (AclBinding binding : acls(aclFilter)) {
-                String aclHost = binding.entry().host();
-                if (!aclHost.equals(hostAddr) && !aclHost.equals("*") && !CidrUtils.isInRange(hostAddr, aclHost))
-                    continue;
-
-                if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
-                        && !binding.entry().principal().equals("User:*"))
-                    continue;
-
-                if (binding.entry().operation() != op
-                        && binding.entry().operation() != AclOperation.ALL)
-                    continue;
-
-                if (binding.entry().permissionType() == AclPermissionType.DENY) {
-                    switch (binding.pattern().patternType()) {
-                        case LITERAL:
-                            // If wildcard deny exists, return deny directly
-                            if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
-                                return AuthorizationResult.DENIED;
-                            denyPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
-                            break;
-                        case PREFIXED:
-                            denyPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
-                            break;
-                        default:
-                    }
-                    continue;
-                }
-
-                if (binding.entry().permissionType() != AclPermissionType.ALLOW)
-                    continue;
-
-                switch (binding.pattern().patternType()) {
-                    case LITERAL:
-                        if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE)) {
-                            hasWildCardAllow = true;
-                            continue;
-                        }
-                        allowPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
-                        break;
-                    case PREFIXED:
-                        allowPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
-                        break;
-                    default:
-                }
-            }
-
-            if (hasWildCardAllow) {
-                return AuthorizationResult.ALLOWED;
-            }
-
-            // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
-            // For any prefix allowed, if there's no dominant prefix denied, return allow.
-            for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
-                for (String allowStr : entry.getValue()) {
-                    if (entry.getKey() == PatternType.LITERAL
-                            && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
-                        continue;
-                    StringBuilder sb = new StringBuilder();
-                    boolean hasDominatedDeny = false;
-                    for (char ch : allowStr.toCharArray()) {
-                        sb.append(ch);
-                        if (denyPatterns.get(PatternType.PREFIXED).contains(sb.toString())) {
-                            hasDominatedDeny = true;
-                            break;
-                        }
-                    }
-                    if (!hasDominatedDeny)
-                        return AuthorizationResult.ALLOWED;
-                }
-            }
-
-            return AuthorizationResult.DENIED;
-        }
-    }
 
     public static void main(String[] args) throws Exception {
-
         Options opt = new OptionsBuilder()
                 .include(AuthorizeByResourceTypeBenchmark.class.getSimpleName())
                 .warmupIterations(7)
