@@ -388,6 +388,9 @@ public record StreamsGroupMember(String memberId,
         // The assignment includes both assigned tasks and tasks pending
         // revocation because the member is still responsible for the latter until
         // revocation is complete.
+        // When an active task is demoted to standby on the same member, Describe can
+        // list it as both active and standby until the member acknowledges revocation
+        // of the active task.
         final TasksTupleWithEpochs assignedTasksWithPendingRevocation = tasksPendingRevocation.isEmpty() ?
             assignedTasks :
             assignedTasks.merge(tasksPendingRevocation);

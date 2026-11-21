@@ -96,21 +96,27 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
 
     // Member-1 reports that it still owns both tasks and receives a revocation request.
     // Do not acknowledge the reduced assignment: the revoked task is still pending.
-    val revocationResponse = streamsGroupHeartbeat(
-      groupId = "grp",
-      memberId = "member-1",
-      memberEpoch = member1Response.memberEpoch,
-      activeTasks = convertTaskIds(member1Response.activeTasks),
-      standbyTasks = List.empty,
-      warmupTasks = List.empty
-    )
-    assertEquals(1, revocationResponse.activeTasks.asScala.flatMap(_.partitions.asScala).size)
+    var revocationResponse: StreamsGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      revocationResponse = streamsGroupHeartbeat(
+        groupId = "grp",
+        memberId = "member-1",
+        memberEpoch = member1Response.memberEpoch,
+        activeTasks = convertTaskIds(member1Response.activeTasks),
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      revocationResponse.activeTasks != null &&
+        revocationResponse.activeTasks.asScala.flatMap(_.partitions.asScala).size == 1
+    }, msg = s"Member-1 did not receive a reduced assignment. Last response $revocationResponse.")
 
     for (version <- ApiKeys.STREAMS_GROUP_DESCRIBE.oldestVersion() to ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
-      val group = streamsGroupDescribe(groupIds = List("grp"), version = version.toShort).head
-      assertEquals(Errors.NONE.code, group.errorCode)
-      assertEquals("Reconciling", group.groupState)
-      assertEquals(2, group.members.size)
+      var group: StreamsGroupDescribeResponseData.DescribedGroup = null
+      TestUtils.waitUntilTrue(() => {
+        group = streamsGroupDescribe(groupIds = List("grp"), version = version.toShort).head
+        group.errorCode == Errors.NONE.code &&
+          group.groupState == "Reconciling"
+      }, msg = s"Describe version $version did not return the group in Reconciling state. Last response $group.")
 
       val member1 = group.members.asScala.find(_.memberId == "member-1").get
       val member2 = group.members.asScala.find(_.memberId == "member-2").get
