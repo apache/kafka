@@ -463,6 +463,8 @@ org.apache.kafka.server.logger.RuntimeLoggerManagerTest:
 - testValidateRemoveRootLogLevelConfigNotAllowed
 - testValidateSetLogLevelConfig
 - testValidateSetRootLogLevelConfig
+org.apache.kafka.server.metrics.BrokerMetricNamesTest:
+- testMetrics
 org.apache.kafka.server.metrics.BrokerServerMetricsTest:
 - testIgnoredStaticVoters
 - testLastAppliedRecordOffset

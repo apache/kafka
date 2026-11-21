@@ -1138,8 +1138,6 @@ kafka.server.BrokerLifecycleManagerTest:
 - testRegistrationTimeout
 - testRelativeCordonedLogDirsIncludedInHeartbeatAfterInitialCatchUp
 - testSuccessfulRegistration
-kafka.server.BrokerMetricNamesTest:
-- testMetrics
 kafka.server.ConfigAdminManagerTest:
 - testContainsDuplicates
 - testCopyWithoutPreprocessedForIncremental
