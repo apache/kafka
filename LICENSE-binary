@@ -265,6 +265,7 @@ Eclipse Public License - v 2.0
 see: licenses/eclipse-public-license-2.0
 
 - jakarta.annotation-api-2.1.1
+- jakarta.servlet-api-6.0.0
 - jakarta.ws.rs-api-3.1.0
 - hk2-api-3.0.6
 - hk2-locator-3.0.6
@@ -279,11 +280,11 @@ see: licenses/eclipse-public-license-2.0
 - jersey-server-3.1.10
 
 ---------------------------------------
-CDDL 1.1 + GPLv2 with classpath exception
-see: licenses/CDDL+GPL-1.1
+Eclipse Distribution License - v 1.0
+see: licenses/eclipse-distribution-license-1.0
 
+- jakarta.activation-2.0.1
 - jakarta.activation-api-2.1.0
-- jakarta.servlet-api-6.0.0
 - jakarta.xml.bind-api-3.0.1
 
 ---------------------------------------
@@ -308,7 +309,6 @@ BSD 3-Clause
 - jline-reader-3.30.17, see: licenses/jline-BSD-3-clause
 - jline-terminal-3.30.17, see: licenses/jline-BSD-3-clause
 - protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
-- jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
 ---------------------------------------
 Go License
