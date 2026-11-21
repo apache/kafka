@@ -107,6 +107,58 @@ public class ImplicitLinkedHashCollectionTest {
         }
     }
 
+    static final class CollidingElement implements ImplicitLinkedHashCollection.Element {
+        private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private final int key;
+        private final int hash;
+
+        CollidingElement(int key, int hash) {
+            this.key = key;
+            this.hash = hash;
+        }
+
+        @Override
+        public int prev() {
+            return prev;
+        }
+
+        @Override
+        public void setPrev(int prev) {
+            this.prev = prev;
+        }
+
+        @Override
+        public int next() {
+            return next;
+        }
+
+        @Override
+        public void setNext(int next) {
+            this.next = next;
+        }
+
+        @Override
+        public boolean elementKeysAreEqual(Object o) {
+            if (this == o) return true;
+            if ((o == null) || (o.getClass() != CollidingElement.class)) return false;
+            return key == ((CollidingElement) o).key;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if ((o == null) || (o.getClass() != CollidingElement.class)) return false;
+            CollidingElement that = (CollidingElement) o;
+            return key == that.key && hash == that.hash;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+    }
+
     @Test
     public void testNullForbidden() {
         ImplicitLinkedHashMultiCollection<TestElement> multiColl = new ImplicitLinkedHashMultiCollection<>();

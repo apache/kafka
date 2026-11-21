@@ -306,7 +306,14 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     final int slot(Element[] curElements, Object e) {
-        return (e.hashCode() & 0x7fffffff) % curElements.length;
+        // Mix the hash code bits (Murmur3 fmix32) so that similar hash codes do not end up in adjacent slots.
+        int hash = e.hashCode();
+        hash ^= hash >>> 16;
+        hash *= 0x85ebca6b;
+        hash ^= hash >>> 13;
+        hash *= 0xc2b2ae35;
+        hash ^= hash >>> 16;
+        return (hash & 0x7fffffff) % curElements.length;
     }
 
     /**
