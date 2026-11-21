@@ -69,6 +69,14 @@ public class DeleteRecordsCommand {
         try {
             execute(args, System.out);
             return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 1;
         } catch (Exception e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));

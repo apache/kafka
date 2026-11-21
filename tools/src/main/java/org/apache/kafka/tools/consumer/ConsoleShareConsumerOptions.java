@@ -167,7 +167,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         try {
             options = parser.parse(args);
         } catch (OptionException oe) {
-            CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            CommandLineUtils.printUsageAndThrow(parser, oe.getMessage());
         }
 
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics using share groups and outputs it to standard output.");
@@ -175,14 +175,14 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         checkRequiredArgs();
 
         if (options.has(rejectOpt) && options.has(releaseOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "At most one of --reject and --release may be specified.");
+            CommandLineUtils.printUsageAndThrow(parser, "At most one of --reject and --release may be specified.");
         }
 
         if (options.has(consumerPropertyOpt) && options.has(commandPropertyOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-property and --command-property cannot be specified together.");
+            CommandLineUtils.printUsageAndThrow(parser, "Options --consumer-property and --command-property cannot be specified together.");
         }
         if (options.has(consumerConfigOpt) && options.has(commandConfigOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-config and --command-config cannot be specified together.");
+            CommandLineUtils.printUsageAndThrow(parser, "Options --consumer-config and --command-config cannot be specified together.");
         }
 
         if (options.has(consumerPropertyOpt)) {
@@ -206,7 +206,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
 
     private void checkRequiredArgs() {
         if (!options.has(topicOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "--topic is a required argument");
+            CommandLineUtils.printUsageAndThrow(parser, "--topic is a required argument");
         }
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
     }
@@ -229,7 +229,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         if (groupIdsProvided.isEmpty()) {
             groupIdsProvided.add("console-share-consumer");
         } else if (groupIdsProvided.size() > 1) {
-            CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
+            CommandLineUtils.printUsageAndThrow(parser, "The group ids provided in different places (directly using '--group', "
                     + "via '--consumer-property', or via '--consumer-config') do not match. "
                     + "Detected group ids: "
                     + groupIdsProvided.stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
@@ -257,7 +257,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
             if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options --property and --formatter-property cannot be specified together.");
             }
             if (options.has(messageFormatterArgOptDeprecated)) {
                 System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
@@ -272,7 +272,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
             formatter.configure(formatterConfigs);
 
         } catch (Exception e) {
-            CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
         }
         return formatter;
     }

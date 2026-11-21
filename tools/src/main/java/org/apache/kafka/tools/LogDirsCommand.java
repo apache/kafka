@@ -55,7 +55,12 @@ public class LogDirsCommand {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
