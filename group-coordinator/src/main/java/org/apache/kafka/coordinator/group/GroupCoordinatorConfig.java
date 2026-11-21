@@ -180,7 +180,10 @@ public class GroupCoordinatorConfig {
     public static final int GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT = 3000;
 
     public static final String GROUP_MAX_SIZE_CONFIG = "group.max.size";
-    public static final String GROUP_MAX_SIZE_DOC = "The maximum number of consumers that a single consumer group can accommodate.";
+    public static final String GROUP_MAX_SIZE_DOC = "The maximum number of consumers that a single consumer group " +
+        "can accommodate. This value will only impact groups under the CLASSIC group protocol. If this value is " +
+        "lowered below the size of an existing group, the group is rebalanced when the group coordinator next loads it, " +
+        "and the members exceeding the limit are removed from the group.";
     public static final int GROUP_MAX_SIZE_DEFAULT = Integer.MAX_VALUE;
 
     ///
@@ -214,7 +217,8 @@ public class GroupCoordinatorConfig {
     public static final String CONSUMER_GROUP_MAX_SIZE_DOC = "The maximum number of consumers " +
         "that a single consumer group can accommodate. This value will only impact groups under " +
         "the CONSUMER group protocol. To configure the max group size when using the CLASSIC " +
-        "group protocol use " + GROUP_MAX_SIZE_CONFIG + " " + "instead.";
+        "group protocol use " + GROUP_MAX_SIZE_CONFIG + " " + "instead. Unlike " + GROUP_MAX_SIZE_CONFIG +
+        ", lowering this value does not remove existing members from a group that is already over the limit.";
     public static final int CONSUMER_GROUP_MAX_SIZE_DEFAULT = Integer.MAX_VALUE;
 
 
