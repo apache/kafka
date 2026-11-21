@@ -26,6 +26,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -47,7 +48,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -65,6 +65,10 @@ public class ShareConsumerPerformance {
     }
 
     static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator) {
+        run(args, shareConsumerCreator, Time.SYSTEM);
+    }
+
+    static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator, Time time) {
         try {
             LOG.info("Starting share consumer/consumers...");
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
@@ -88,9 +92,9 @@ public class ShareConsumerPerformance {
                 clientIds.add(shareConsumerClientId);
                 shareConsumers.add(shareConsumerCreator.apply(shareConsumerProps));
             }
-            long startMs = System.currentTimeMillis();
-            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs, clientIds);
-            long endMs = System.currentTimeMillis();
+            long startMs = time.milliseconds();
+            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs, clientIds, time);
+            long endMs = time.milliseconds();
 
             List<Map<MetricName, ? extends Metric>> shareConsumersMetrics = new ArrayList<>();
             if (options.printMetrics()) {
@@ -127,7 +131,8 @@ public class ShareConsumerPerformance {
                                 AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
                                 long startMs,
-                                List<String> clientIds) throws ExecutionException, InterruptedException {
+                                List<String> clientIds,
+                                Time time) throws ExecutionException, InterruptedException {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -146,39 +151,28 @@ public class ShareConsumerPerformance {
             futures.add(executorService.submit(() -> {
                 try {
                     consumeRecordsForSingleShareConsumer(shareConsumers.get(index), recordsRead, bytesRead, options,
-                        shareConsumerConsumption, index + 1);
+                        shareConsumerConsumption, index + 1, time);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }));
             shareConsumersConsumptionDetails.add(shareConsumerConsumption);
         }
-        LOG.debug("Shutting down of thread pool is started");
         executorService.shutdown();
 
+        // Each task stops by itself once it reads numRecords or gets no records for recordFetchTimeoutMs,
+        // so wait for all of them without a total time limit.
         try {
-            // Wait a while for existing tasks to terminate.
-            // Adding 100 ms to the timeout so all the threads can finish before we reach this part of code.
-            if (!executorService.awaitTermination(recordFetchTimeoutMs + 100, TimeUnit.MILLISECONDS)) {
-                LOG.debug("Shutting down of thread pool could not be completed. It will retry cancelling the tasks using shutdownNow.");
-                executorService.shutdownNow(); // Cancel currently executing tasks
-                // Wait a while for tasks to respond to being cancelled
-                if (!executorService.awaitTermination(recordFetchTimeoutMs + 100, TimeUnit.MILLISECONDS))
-                    LOG.debug("Shutting down of thread pool could not be completed even after retrying cancellation of the tasks using shutdownNow.");
+            for (Future<?> future : futures) {
+                future.get();
             }
-        } catch (InterruptedException e) {
-            // (Re-)Cancel if current thread also interrupted
-            LOG.warn("Encountered InterruptedException while shutting down thread pool. It will retry cancelling the tasks using shutdownNow.");
+        } finally {
+            // Stops the other tasks if one of them failed.
             executorService.shutdownNow();
-            // Preserve interrupt status
-            Thread.currentThread().interrupt();
-        }
-        for (Future<?> future : futures) {
-            future.get();
         }
 
         if (options.showShareConsumerStats()) {
-            long endMs = System.currentTimeMillis();
+            long endMs = time.milliseconds();
             for (int index = 0; index < shareConsumersConsumptionDetails.size(); index++) {
                 // Print stats for share consumer.
                 double elapsedSec = (endMs - startMs) / 1_000.0;
@@ -202,9 +196,10 @@ public class ShareConsumerPerformance {
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
                                                               ShareConsumerConsumption shareConsumerConsumption,
-                                                              int index) throws InterruptedException {
+                                                              int index,
+                                                              Time time) throws InterruptedException {
         SimpleDateFormat dateFormat = options.dateFormat();
-        long currentTimeMs = System.currentTimeMillis();
+        long currentTimeMs = time.milliseconds();
         long lastConsumedTimeMs = currentTimeMs;
         long lastReportTimeMs = currentTimeMs;
 
@@ -214,7 +209,7 @@ public class ShareConsumerPerformance {
         long bytesReadByConsumer = 0L;
         while (totalRecordsRead.get() < options.numRecords() && currentTimeMs - lastConsumedTimeMs <= options.recordFetchTimeoutMs()) {
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(100));
-            currentTimeMs = System.currentTimeMillis();
+            currentTimeMs = time.milliseconds();
             if (!records.isEmpty())
                 lastConsumedTimeMs = currentTimeMs;
             for (ConsumerRecord<byte[], byte[]> record : records) {
