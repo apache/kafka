@@ -65,7 +65,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
         long offset = firstOffset;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(offset++, record.offset());
     }
 
@@ -190,7 +190,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
 
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(logAppendTime, record.timestamp());
     }
 
@@ -216,7 +216,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(createTime, recordBatches.get(0).maxTimestamp());
 
         long expectedTimestamp = 1L;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(expectedTimestamp++, record.timestamp());
     }
 

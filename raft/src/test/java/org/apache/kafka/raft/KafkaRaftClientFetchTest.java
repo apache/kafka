@@ -348,8 +348,8 @@ public final class KafkaRaftClientFetchTest {
         // We expect to return the same number of total bytes in both requests.
         assertEquals(allRecords.sizeInBytes(), exactSizeBytesRecords.sizeInBytes());
 
-        var allIterator = allRecords.records().iterator();
-        var exactIterator = exactSizeBytesRecords.records().iterator();
+        var allIterator = TestUtils.records(allRecords).iterator();
+        var exactIterator = TestUtils.records(exactSizeBytesRecords).iterator();
         while (exactIterator.hasNext() && allIterator.hasNext()) {
             var r1 = exactIterator.next();
             var r2 = allIterator.next();

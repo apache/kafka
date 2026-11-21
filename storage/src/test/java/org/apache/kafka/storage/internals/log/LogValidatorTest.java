@@ -126,7 +126,7 @@ public class LogValidatorTest {
             } else {
                 ValidationResult result = validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression);
                 List<Long> recordsResult = new ArrayList<>();
-                result.validatedRecords().records().forEach(s -> recordsResult.add(s.offset()));
+                TestUtils.records(result.validatedRecords()).forEach(s -> recordsResult.add(s.offset()));
                 assertEquals(LongStream.range(0, numRecords).boxed().toList(), recordsResult);
             }
         });
@@ -1614,7 +1614,7 @@ public class LogValidatorTest {
 
         assertEquals(0, metricsRecorder.recordInvalidOffsetCount);
         checkOffsets(result.validatedRecords(), 0);
-        assertEquals(3, TestUtils.toList(result.validatedRecords().records()).size());
+        assertEquals(3, TestUtils.records(result.validatedRecords()).size());
     }
 
     @ParameterizedTest
@@ -2157,7 +2157,7 @@ public class LogValidatorTest {
         );
 
         MemoryRecords validatedRecords = validatedResults.validatedRecords();
-        assertEquals(iteratorSize(records.records().iterator()), iteratorSize(validatedRecords.records().iterator()),
+        assertEquals(iteratorSize(TestUtils.records(records).iterator()), iteratorSize(TestUtils.records(validatedRecords).iterator()),
                 "message set size should not change");
         long now = mockTime.milliseconds();
         validatedRecords.batches().forEach(batch -> validateLogAppendTime(now, -1, batch));
@@ -2195,10 +2195,10 @@ public class LogValidatorTest {
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
-        assertEquals(offsetCounter.value, iteratorSize(records.records().iterator()));
+        assertEquals(offsetCounter.value, iteratorSize(TestUtils.records(records).iterator()));
 
         MemoryRecords validatedRecords = validatedResults.validatedRecords();
-        assertEquals(iteratorSize(records.records().iterator()), iteratorSize(validatedRecords.records().iterator()), "message set size should not change");
+        assertEquals(iteratorSize(TestUtils.records(records).iterator()), iteratorSize(TestUtils.records(validatedRecords).iterator()), "message set size should not change");
 
         long now = mockTime.milliseconds();
 
@@ -2234,11 +2234,11 @@ public class LogValidatorTest {
 
     // Check that offsets are assigned consecutively from the given base offset
     private void checkOffsets(MemoryRecords records, long baseOffset) {
-        Assertions.assertTrue(iteratorSize(records.records().iterator()) != 0, "Message set should not be empty");
+        Assertions.assertTrue(iteratorSize(TestUtils.records(records).iterator()) != 0, "Message set should not be empty");
 
         long offset = baseOffset;
 
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             Assertions.assertEquals(offset, record.offset(), "Unexpected offset in message set iterator");
             offset += 1;
         }

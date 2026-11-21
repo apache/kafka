@@ -101,7 +101,7 @@ public class FileLogInputStreamTest {
             buffer.flip();
 
             MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
-            List<Record> records = Utils.toList(memRecords.records().iterator());
+            List<Record> records = Utils.toList(TestUtils.records(memRecords).iterator());
             assertEquals(1, records.size());
             Record record0 = records.get(0);
             assertTrue(record0.hasMagic(magic));

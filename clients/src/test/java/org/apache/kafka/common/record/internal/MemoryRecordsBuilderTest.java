@@ -283,7 +283,7 @@ public class MemoryRecordsBuilderTest {
                         voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList())));
 
             MemoryRecords built = builder.build();
-            List<Record> records = TestUtils.toList(built.records());
+            List<Record> records = TestUtils.records(built);
             assertEquals(1, records.size());
             LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(records.get(0));
 
@@ -441,7 +441,7 @@ public class MemoryRecordsBuilderTest {
                 RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.append(1L, "key".getBytes(), "value".getBytes());
         MemoryRecords memoryRecords = builder.build();
-        List<Record> records = TestUtils.toList(memoryRecords.records());
+        List<Record> records = TestUtils.records(memoryRecords);
         assertEquals(1, records.size());
     }
 
@@ -466,7 +466,7 @@ public class MemoryRecordsBuilderTest {
         assertFalse(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
 
         MemoryRecords memRecords = builder.build();
-        List<Record> records = TestUtils.toList(memRecords.records());
+        List<Record> records = TestUtils.records(memRecords);
         assertEquals(1, records.size());
 
         Record record = records.get(0);

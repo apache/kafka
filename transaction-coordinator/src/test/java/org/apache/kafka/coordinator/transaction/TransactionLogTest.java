@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -108,10 +109,10 @@ class TransactionLogTest {
             txnMetadata.addPartitions(topicPartitions);
         }
 
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes(txnMetadata.transactionalId()),
             TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         var deserialized = readResult.metadata();
 
@@ -173,10 +174,10 @@ class TransactionLogTest {
             TV_0
         );
 
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes("transactionalId"),
             TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         var deserialized = readResult.metadata();
 

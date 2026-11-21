@@ -663,7 +663,7 @@ public class LogCleanerIntegrationTest {
     private List<KeyValueOffset> readFromLogFull(UnifiedLog log) {
         List<KeyValueOffset> result = new ArrayList<>();
         for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
+            for (Record record : TestUtils.records(segment.log())) {
                 int key = Integer.parseInt(LogTestUtils.readString(record.key()));
                 String value = LogTestUtils.readString(record.value());
                 result.add(new KeyValueOffset(key, value, record.offset()));

@@ -182,7 +182,7 @@ public class FileRecordsTest {
         fileRecords.channel().write(buffer);
 
         // appending those bytes should not change the contents
-        Iterator<Record> records = fileRecords.records().iterator();
+        Iterator<Record> records = TestUtils.records(fileRecords).iterator();
         for (byte[] value : values) {
             assertTrue(records.hasNext());
             assertEquals(records.next().value(), ByteBuffer.wrap(value));
@@ -195,7 +195,7 @@ public class FileRecordsTest {
     @Test
     public void testIterationDoesntChangePosition() throws IOException {
         long position = fileRecords.channel().position();
-        Iterator<Record> records = fileRecords.records().iterator();
+        Iterator<Record> records = TestUtils.records(fileRecords).iterator();
         for (byte[] value : values) {
             assertTrue(records.hasNext());
             assertEquals(records.next().value(), ByteBuffer.wrap(value));

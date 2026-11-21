@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -561,6 +562,12 @@ public class TestUtils {
 
     public static List<Record> records(RecordBatch batch) {
         try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            return Utils.toList(iterator);
+        }
+    }
+
+    public static List<Record> records(Records records) {
+        try (CloseableIterator<Record> iterator = records.records()) {
             return Utils.toList(iterator);
         }
     }

@@ -28,8 +28,6 @@ import java.util.Optional;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<Record> records = this::recordsIterator;
-
     @Override
     public boolean hasMatchingMagic(byte magic) {
         for (RecordBatch batch : batches())
@@ -63,8 +61,8 @@ public abstract class AbstractRecords implements Records {
      * @return An iterator over the records
      */
     @Override
-    public Iterable<Record> records() {
-        return records;
+    public CloseableIterator<Record> records() {
+        return new RecordsIterator();
     }
 
     @Override
@@ -72,34 +70,35 @@ public abstract class AbstractRecords implements Records {
         return new DefaultRecordsSend<>(this);
     }
 
-    private Iterator<Record> recordsIterator() {
-        return new AbstractIterator<>() {
-            private final Iterator<? extends RecordBatch> batches = batches().iterator();
-            private Iterator<Record> records;
+    private class RecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
+        private final Iterator<? extends RecordBatch> batches = batches().iterator();
+        private CloseableIterator<Record> records;
 
-            @Override
-            protected Record makeNext() {
-                while (records == null || !records.hasNext()) {
-                    if (!batches.hasNext()) {
-                        return allDone();
-                    }
-
-                    RecordBatch batch = batches.next();
-                    // The Iterable API has no close method. Compressed batches must release the
-                    // decompression stream before handing records to a caller that may stop early.
-                    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && batch.isCompressed()) {
-                        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                            records = Utils.toList(iterator).iterator();
-                        }
-                    } else {
-                        // Uncompressed and legacy iterators do not hold decompression resources.
-                        records = batch.streamingIterator(BufferSupplier.NO_CACHING);
-                    }
-                }
-
-                return records.next();
+        @Override
+        protected Record makeNext() {
+            while (records == null || !records.hasNext()) {
+                closeCurrentBatch();
+                if (!batches.hasNext())
+                    return allDone();
+                records = batches.next().streamingIterator(BufferSupplier.NO_CACHING);
             }
-        };
+
+            return records.next();
+        }
+
+        private void closeCurrentBatch() {
+            if (records != null) {
+                CloseableIterator<Record> current = records;
+                records = null;
+                current.close();
+            }
+        }
+
+        @Override
+        public void close() {
+            allDone();
+            closeCurrentBatch();
+        }
     }
 
     public static int estimateSizeInBytes(byte magic,

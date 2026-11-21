@@ -1415,7 +1415,7 @@ public class LogCleanerTest {
         List<Integer> result = new ArrayList<>();
         for (LogSegment s : log.logSegments()) {
             Set<String> values = new HashSet<>();
-            for (Record record : s.log().records()) {
+            for (Record record : TestUtils.records(s.log())) {
                 values.add(Utils.utf8(record.value()));
             }
             result.add(values.size());
@@ -1539,7 +1539,7 @@ public class LogCleanerTest {
     private List<Long> offsetsInLog(UnifiedLog log) {
         List<Long> result = new ArrayList<>();
         for (LogSegment seg : log.logSegments()) {
-            for (Record r : seg.log().records()) {
+            for (Record r : TestUtils.records(seg.log())) {
                 if (r.hasValue() && r.hasKey()) {
                     result.add(r.offset());
                 }
@@ -1551,7 +1551,7 @@ public class LogCleanerTest {
     private int unkeyedMessageCountInLog(UnifiedLog log) {
         int count = 0;
         for (LogSegment seg : log.logSegments()) {
-            for (Record r : seg.log().records()) {
+            for (Record r : TestUtils.records(seg.log())) {
                 if (r.hasValue() && !r.hasKey()) count++;
             }
         }
@@ -2243,7 +2243,7 @@ public class LogCleanerTest {
         MemoryRecords corruptedMessage = invalidCleanedMessage(offset, set);
         MemoryRecords records = MemoryRecords.readableRecords(corruptedMessage.buffer());
 
-        for (Record logEntry : records.records()) {
+        for (Record logEntry : TestUtils.records(records)) {
             long entryOffset = logEntry.offset();
             long value = Long.parseLong(Utils.utf8(logEntry.value()));
             assertEquals(entryOffset, value);

@@ -8905,9 +8905,9 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append records from offset 10.
-            memoryRecords(10, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(10, 2)).forEach(builder::append);
             // Append records from offset 15.
-            memoryRecords(15, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(15, 2)).forEach(builder::append);
         }
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -8983,15 +8983,15 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 0, 2)) {
             // Append only 2 records for 0 offset batch starting from offset 1.
-            memoryRecords(1, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(1, 2)).forEach(builder::append);
         }
         // Do not include batch from offset 5. And compact batch starting at offset 20.
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 20, 2)) {
             // Append 2 records for 20 offset batch starting from offset 20.
-            memoryRecords(20, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(20, 2)).forEach(builder::append);
             // And append 2 records matching the end offset of the batch.
-            memoryRecords(33, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(33, 2)).forEach(builder::append);
         }
         // Send the full batch at offset 40.
         memoryRecordsBuilder(buffer, 40, 5).close();
@@ -8999,11 +8999,11 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 50, 2)) {
             // Append 5 records for 50 offset batch starting from offset 51.
-            memoryRecords(51, 5).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(51, 5)).forEach(builder::append);
             // Append 2 records for in middle of the batch.
-            memoryRecords(58, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(58, 2)).forEach(builder::append);
             // And append 1 record prior to the end offset.
-            memoryRecords(63, 1).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(63, 1)).forEach(builder::append);
         }
         buffer.flip();
         records = MemoryRecords.readableRecords(buffer);
@@ -9070,7 +9070,7 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append only 4 records for 5th offset batch starting from offset 6.
-            memoryRecords(6, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(6, 4)).forEach(builder::append);
         }
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -9184,7 +9184,7 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append only 4 records for 5th offset batch starting from offset 6.
-            memoryRecords(6, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(6, 4)).forEach(builder::append);
         }
         buffer.flip();
         records = MemoryRecords.readableRecords(buffer);
@@ -10908,9 +10908,9 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append records from offset 10.
-            memoryRecords(10, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(10, 4)).forEach(builder::append);
             // Append records from offset 19.
-            memoryRecords(16, 5).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(16, 5)).forEach(builder::append);
         }
 
         buffer.flip();

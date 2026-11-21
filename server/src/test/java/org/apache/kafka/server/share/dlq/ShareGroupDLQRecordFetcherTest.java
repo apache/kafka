@@ -36,6 +36,7 @@ import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -106,7 +107,7 @@ class ShareGroupDLQRecordFetcherTest {
     // hardcoded, so budget-boundary tests can align a budget precisely with a record's own size.
     private static int recordSizeInBytes(SimpleRecord simpleRecord) {
         MemoryRecords batch = MemoryRecords.withRecords(Compression.NONE, simpleRecord);
-        return batch.records().iterator().next().sizeInBytes();
+        return TestUtils.records(batch).iterator().next().sizeInBytes();
     }
 
     // ---- helpers ----

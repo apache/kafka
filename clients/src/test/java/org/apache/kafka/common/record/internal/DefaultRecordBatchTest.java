@@ -299,7 +299,7 @@ public class DefaultRecordBatchTest {
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
         long offset = firstOffset;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(offset++, record.offset());
     }
 
@@ -344,7 +344,7 @@ public class DefaultRecordBatchTest {
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
 
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(logAppendTime, record.timestamp());
     }
 
@@ -381,7 +381,7 @@ public class DefaultRecordBatchTest {
         MutableRecordBatch batch = batches.get(0);
         assertTrue(batch.isControlBatch());
 
-        List<Record> logRecords = TestUtils.toList(records.records());
+        List<Record> logRecords = TestUtils.records(records);
         assertEquals(1, logRecords.size());
 
         Record commitRecord = logRecords.get(0);
@@ -458,7 +458,7 @@ public class DefaultRecordBatchTest {
                 // assert that for uncompressed data stream record iterator is not used
                 assertInstanceOf(DefaultRecordBatch.RecordIterator.class, skipKeyValueIterator);
                 // superficial validation for correctness. Deep validation is already performed in other tests
-                assertEquals(Utils.toList(records.records()).size(), Utils.toList(skipKeyValueIterator).size());
+                assertEquals(TestUtils.records(records).size(), Utils.toList(skipKeyValueIterator).size());
             } else {
                 // assert that a streaming iterator is used for compressed records
                 assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);

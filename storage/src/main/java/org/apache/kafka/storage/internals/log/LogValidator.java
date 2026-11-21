@@ -183,8 +183,11 @@ public class LogValidator {
                                                                   MetricsRecorder metricsRecorder) {
         long now = time.milliseconds();
         long startNanos = time.nanoseconds();
-        int sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value,
-            CompressionType.NONE, records.records());
+        int sizeInBytesAfterConversion;
+        try (CloseableIterator<Record> iterator = records.records()) {
+            sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value,
+                CompressionType.NONE, () -> iterator);
+        }
 
         RecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE);
         long producerId = firstBatch.producerId();

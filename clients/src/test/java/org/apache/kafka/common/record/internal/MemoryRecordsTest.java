@@ -862,7 +862,7 @@ public class MemoryRecordsTest {
                 assertEquals(0, output.position());
 
             MemoryRecords filtered = MemoryRecords.readableRecords(result.outputBuffer());
-            records.addAll(TestUtils.toList(filtered.records()));
+            records.addAll(TestUtils.records(filtered));
         }
 
         assertEquals(5, records.size());
@@ -954,7 +954,7 @@ public class MemoryRecordsTest {
             }
         }
 
-        List<Record> records = TestUtils.toList(filteredRecords.records());
+        List<Record> records = TestUtils.records(filteredRecords);
         assertEquals(4, records.size());
 
         Record first = records.get(0);
@@ -1074,7 +1074,7 @@ public class MemoryRecordsTest {
         byte magic = args.magic;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
                 new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
-        String key = Utils.utf8(memoryRecords.records().iterator().next().key());
+        String key = Utils.utf8(TestUtils.records(memoryRecords).iterator().next().key());
         assertEquals("key1", key);
     }
 
