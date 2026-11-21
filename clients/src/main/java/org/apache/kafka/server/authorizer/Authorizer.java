@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
@@ -206,8 +207,9 @@ public interface Authorizer extends Configurable, Closeable {
         Set<String> denyPatternsLiteral = new HashSet<>();
         Set<String> denyPatternsPrefixed = new HashSet<>();
         BitSet denyPrefixLengths = new BitSet();
-        Set<String> allowPatternsLiteral = new HashSet<>();
-        Set<String> allowPatternsPrefixed = new HashSet<>();
+        // Allows are only traversed, so collecting them does not require hashing each name.
+        List<String> allowPatternsLiteral = new ArrayList<>();
+        List<String> allowPatternsPrefixed = new ArrayList<>();
 
         boolean hasWildCardAllow = false;
 
@@ -215,14 +217,22 @@ public interface Authorizer extends Configurable, Closeable {
                 requestContext.principal().getPrincipalType(),
                 requestContext.principal().getName());
         String hostAddr = requestContext.clientAddress().getHostAddress();
+        String previousAclPrincipal = null;
+        boolean matchesPrincipal = false;
 
         for (AclBinding binding : acls(aclFilter)) {
             String aclHost = binding.entry().host();
             if (!aclHost.equals(hostAddr) && !aclHost.equals("*") && !CidrUtils.isInRange(hostAddr, aclHost))
                 continue;
 
-            if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
-                    && !binding.entry().principal().equals("User:*"))
+            // Reuse the comparison when consecutive ACLs refer to the same principal.
+            String aclPrincipal = binding.entry().principal();
+            if (!aclPrincipal.equals(previousAclPrincipal)) {
+                matchesPrincipal = SecurityUtils.parseKafkaPrincipal(aclPrincipal).equals(principal)
+                        || aclPrincipal.equals("User:*");
+                previousAclPrincipal = aclPrincipal;
+            }
+            if (!matchesPrincipal)
                 continue;
 
             if (binding.entry().operation() != op

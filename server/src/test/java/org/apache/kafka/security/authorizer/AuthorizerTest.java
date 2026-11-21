@@ -379,6 +379,36 @@ public class AuthorizerTest {
     }
 
     @ParameterizedTest
+    @CsvSource({
+        "User:alice, User:alice, false",
+        "User:alice, User:bob, true",
+        "User:bob, User:alice, false",
+        "User:alice, User:*, false",
+        "User:*, User:alice, false",
+        "User:*, User:bob, true",
+        "User:bob, User:*, false",
+        "User:*, User:*, false",
+        "User:bob, User:carol, false",
+        "User:alice, Custom:alice, true",
+        "Custom:alice, User:alice, false"
+    })
+    public void testAuthorizeByResourceTypePrincipalFilteringIndependentOfAclOrder(
+            String allowPrincipal, String denyPrincipal, boolean expected) {
+        Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);
+        when(authorizer.authorize(any(), any())).thenReturn(List.of(AuthorizationResult.DENIED));
+        List<AclBinding> bindings = new ArrayList<>(List.of(
+            new AclBinding(new ResourcePattern(GROUP, "abc", LITERAL),
+                new AccessControlEntry(allowPrincipal, WILDCARD_HOST, READ, ALLOW)),
+            new AclBinding(new ResourcePattern(GROUP, "a", PREFIXED),
+                new AccessControlEntry(denyPrincipal, WILDCARD_HOST, READ, DENY))));
+        when(authorizer.acls(any())).thenReturn(bindings);
+
+        assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+        Collections.reverse(bindings);
+        assertEquals(expected, authorizeByResourceType(authorizer, requestContext, READ, GROUP));
+    }
+
+    @ParameterizedTest
     @ValueSource(ints = {0, 1, 8, 63, 64, 65, 127, 128, 129, 512})
     public void testAuthorizeByResourceTypeMultipleDenyPrefixLengths(int prefixLength) {
         Authorizer authorizer = mock(Authorizer.class, CALLS_REAL_METHODS);

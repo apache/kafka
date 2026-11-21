@@ -78,8 +78,8 @@ import java.util.concurrent.TimeUnit;
  */
 @State(Scope.Benchmark)
 @Fork(1)
-@Warmup(iterations = 7)
-@Measurement(iterations = 7)
+@Warmup(iterations = 7, timeUnit = TimeUnit.SECONDS, time = 1)
+@Measurement(iterations = 7, timeUnit = TimeUnit.SECONDS, time = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class AuthorizeByResourceTypeBenchmark {
