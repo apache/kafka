@@ -26,12 +26,6 @@ handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
 
-def get_env(key: str) -> str:
-    value = os.getenv(key)
-    logger.debug(f"Read env {key}: {value}")
-    return value
-
-
 def parse_rat_report(fp):
     file_count = 0
     unapproved_licenses = []
@@ -39,10 +33,11 @@ def parse_rat_report(fp):
     root = xml.etree.ElementTree.parse(fp).getroot()
 
     for resource in root.findall(".//resource"):
-        file_name = resource.get("name")
-        license_approval_elem = resource.find("license-approval")
+        # Since Rat 0.17, the name is relative to the Rat input directory (the repository root) and starts with "/"
+        file_name = resource.get("name").lstrip("/")
+        licenses = resource.findall("license")
 
-        if license_approval_elem is not None and license_approval_elem.get("name") == "false":
+        if any(license_elem.get("approval") == "false" for license_elem in licenses):
             file_count += 1
             unapproved_licenses.append(file_name)
         else:
@@ -66,8 +61,6 @@ if __name__ == "__main__":
     total_approved_licenses = 0
     all_unapproved_files = []
 
-    workspace_path = get_env("GITHUB_WORKSPACE")
-
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing Rat report file: {report}")
@@ -85,8 +78,7 @@ if __name__ == "__main__":
         print(f"{total_unapproved_licenses} unapproved licenses")
 
         print("Files with unapproved licenses:")
-        for file in all_unapproved_files:
-            rel_path = os.path.relpath(file, workspace_path)
+        for rel_path in all_unapproved_files:
             message = f"File with unapproved license: {rel_path}"
             print(f"::notice file={rel_path},title=Unapproved License::{message}")
 
