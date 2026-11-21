@@ -64,7 +64,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -129,6 +131,143 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     @AfterEach
     public void closeStore() {
         cachingStore.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldNotForwardBaseAgainAfterInsertionFlushReleasesRawBytes(final boolean hasIndex) {
+        setUp(hasIndex);
+        final byte[] rawKey = new byte[7];
+        final byte[] rawValue = new byte[128];
+        final List<String> forwarded = new ArrayList<>();
+        cachingStore.setFlushListener(record -> {
+            assertArrayEquals(rawKey, context.recordContext().sourceRawKey());
+            assertArrayEquals(rawValue, context.recordContext().sourceRawValue());
+            forwarded.add(new String(record.value().newValue, StandardCharsets.UTF_8));
+        }, false);
+        for (int i = 0; i < 2; i++) {
+            context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, i, 0, TOPIC,
+                new RecordHeaders(), rawKey, rawValue));
+            cachingStore.put(bytesKey("k" + i), bytesValue("v" + i), DEFAULT_TIMESTAMP);
+        }
+        // The second base insertion flushes both records before its index sentinel could be added.
+        assertTrue(cache.evicts() > 0);
+        assertEquals(Arrays.asList("v0", "v1"), forwarded);
+        final String cacheName = context.taskId() + "-test";
+        final SegmentedCacheFunction baseCacheFunction = new SegmentedCacheFunction(new TimeFirstWindowKeySchema(), SEGMENT_INTERVAL);
+        final LRUCacheEntry residentBase = cache.get(cacheName,
+            baseCacheFunction.cacheKey(TimeFirstWindowKeySchema.toStoreKeyBinary(bytesKey("k1"), DEFAULT_TIMESTAMP, 0)));
+        assertFalse(residentBase.isDirty());
+        assertNull(residentBase.context().sourceRawValue());
+        cachingStore.commit(Map.of());
+        assertEquals(Arrays.asList("v0", "v1"), forwarded);
+        for (int i = 0; i < 2; i++) {
+            assertArrayEquals(bytesValue("v" + i), cachingStore.fetch(bytesKey("k" + i), DEFAULT_TIMESTAMP));
+            assertArrayEquals(bytesValue("v" + i), underlyingStore.fetch(bytesKey("k" + i), DEFAULT_TIMESTAMP));
+        }
+        cachingStore.close();
+        assertEquals(0L, cache.sizeBytes());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRetainRawSourceBytesOnlyInBaseEntry(final boolean hasIndex) {
+        setUp(hasIndex);
+        cache.resize(10_000L);
+        final byte[] rawKey = new byte[7];
+        final byte[] rawValue = new byte[1024];
+        final Bytes key = bytesKey("key");
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0L, 0, TOPIC,
+            new RecordHeaders(), rawKey, rawValue));
+        cachingStore.put(key, bytesValue("value"), DEFAULT_TIMESTAMP);
+        final String cacheName = context.taskId() + "-test";
+        final SegmentedCacheFunction baseCacheFunction = new SegmentedCacheFunction(new TimeFirstWindowKeySchema(), SEGMENT_INTERVAL);
+        final LRUCacheEntry baseEntry = cache.get(cacheName,
+            baseCacheFunction.cacheKey(TimeFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0)));
+        assertArrayEquals(rawKey, baseEntry.context().sourceRawKey());
+        assertArrayEquals(rawValue, baseEntry.context().sourceRawValue());
+        if (hasIndex) {
+            final SegmentedCacheFunction indexCacheFunction = new SegmentedCacheFunction(new KeyFirstWindowKeySchema(), SEGMENT_INTERVAL);
+            final LRUCacheEntry indexEntry = cache.get(cacheName,
+                indexCacheFunction.cacheKey(KeyFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0)));
+            assertNull(indexEntry.context().sourceRawKey());
+            assertNull(indexEntry.context().sourceRawValue());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldHandleOversizedRawPayloadReleasedDuringFlushAndSameKeyUpdates(final boolean hasIndex) {
+        setUp(hasIndex);
+        final List<byte[]> forwarded = new ArrayList<>();
+        cachingStore.setFlushListener(record -> {
+            forwarded.add(record.value().newValue);
+            context.recordContext().freeRawRecord();
+        }, true);
+        final Bytes key = bytesKey("key");
+        for (int i = 1; i <= 2; i++) {
+            context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, i, 0, TOPIC,
+                new RecordHeaders(), new byte[7], new byte[MAX_CACHE_SIZE_BYTES * 4]));
+            cachingStore.put(key, bytesValue("v" + i), DEFAULT_TIMESTAMP);
+            assertArrayEquals(bytesValue("v" + i), cachingStore.fetch(key, DEFAULT_TIMESTAMP));
+            assertTrue(cache.sizeBytes() >= 0 && cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
+        }
+        cachingStore.commit(Map.of());
+        assertArrayEquals(bytesValue("v2"), underlyingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertFalse(forwarded.isEmpty());
+        assertArrayEquals(bytesValue("v2"), forwarded.get(forwarded.size() - 1));
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 3L, 0, TOPIC,
+            new RecordHeaders(), new byte[7], new byte[MAX_CACHE_SIZE_BYTES * 4]));
+        cachingStore.put(key, null, DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        assertNull(cachingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertNull(underlyingStore.fetch(key, DEFAULT_TIMESTAMP));
+        assertNull(forwarded.get(forwarded.size() - 1));
+        assertTrue(cache.evicts() > 0);
+        cachingStore.close();
+        assertEquals(0L, cache.sizeBytes());
+        assertEquals(0L, cache.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldPreserveWindowResultsWithRawSourceBytesUnderSmallCacheBudget(final boolean hasIndex) {
+        setUp(hasIndex);
+        for (int i = 0; i < 8; i++) {
+            context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, i, 0, TOPIC,
+                new RecordHeaders(), new byte[7], new byte[128]));
+            cachingStore.put(bytesKey("k" + i), bytesValue("v" + i), DEFAULT_TIMESTAMP);
+        }
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 8L, 0, TOPIC,
+            new RecordHeaders(), new byte[7], new byte[128]));
+        cachingStore.put(bytesKey("k0"), bytesValue("replacement"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("k1"), null, DEFAULT_TIMESTAMP);
+        assertTrue(cache.evicts() > 0);
+        assertTrue(cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
+        assertArrayEquals(bytesValue("replacement"), cachingStore.fetch(bytesKey("k0"), DEFAULT_TIMESTAMP));
+        assertNull(cachingStore.fetch(bytesKey("k1"), DEFAULT_TIMESTAMP));
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(
+            bytesKey("k0"), bytesKey("k7"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            final Map<Bytes, String> actual = new HashMap<>();
+            while (iterator.hasNext()) {
+                final KeyValue<Windowed<Bytes>, byte[]> entry = iterator.next();
+                assertEquals(DEFAULT_TIMESTAMP, entry.key.window().start());
+                assertNull(actual.put(entry.key.key(), new String(entry.value, StandardCharsets.UTF_8)));
+            }
+            final Map<Bytes, String> expected = new HashMap<>();
+            expected.put(bytesKey("k0"), "replacement");
+            for (int i = 2; i < 8; i++) {
+                expected.put(bytesKey("k" + i), "v" + i);
+            }
+            assertEquals(expected, actual);
+        }
+        cachingStore.commit(Map.of());
+        assertArrayEquals(bytesValue("replacement"), underlyingStore.fetch(bytesKey("k0"), DEFAULT_TIMESTAMP));
+        assertNull(underlyingStore.fetch(bytesKey("k1"), DEFAULT_TIMESTAMP));
+        for (int i = 2; i < 8; i++) {
+            assertArrayEquals(bytesValue("v" + i), underlyingStore.fetch(bytesKey("k" + i), DEFAULT_TIMESTAMP));
+        }
+        assertTrue(cache.sizeBytes() <= MAX_CACHE_SIZE_BYTES);
     }
 
     @ParameterizedTest
@@ -759,7 +898,19 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     public void shouldForwardDirtyItemToListenerWhenEvicted(final boolean hasIndex) {
         setUp(hasIndex);
         final int numRecords = addItemsToCache();
+        assertTrue(cache.evicts() > 0);
+        assertFalse(cacheListener.forwarded.isEmpty());
+        // Eviction forwards dirty entries, but later writes can remain cached. Do not depend on
+        // an extra index sentinel forcing another flush of the entire namespace.
+        cachingStore.commit(Map.of());
         assertEquals(numRecords, cacheListener.forwarded.size());
+        for (int i = 0; i < numRecords; i++) {
+            final String value = String.valueOf(i);
+            final Windowed<String> key = new Windowed<>(value,
+                new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+            assertEquals(value, cacheListener.forwarded.get(key).newValue);
+            assertArrayEquals(bytesValue(value), underlyingStore.fetch(bytesKey(value), DEFAULT_TIMESTAMP));
+        }
     }
 
     @ParameterizedTest
@@ -1448,7 +1599,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
             cachingStore.put(bytesKey(kv), bytesValue(kv), DEFAULT_TIMESTAMP);
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC) +
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC, 0, 0) +
                 8 + // timestamp
                 4; // sequenceNumber
         }

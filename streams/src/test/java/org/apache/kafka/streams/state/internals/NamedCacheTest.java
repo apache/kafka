@@ -279,7 +279,7 @@ public class NamedCacheTest {
         cache.put(Bytes.wrap(new byte[]{0}), dirty);
         cache.put(Bytes.wrap(new byte[]{1}), clean);
         cache.put(Bytes.wrap(new byte[]{2}), clean);
-        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        assertEquals(3 * cache.head().size() + rawKey.length + rawValue.length, cache.sizeInBytes());
         cache.setListener(dirty1 -> {
             cache.put(Bytes.wrap(new byte[]{3}), clean);
             // evict key 1
@@ -288,7 +288,7 @@ public class NamedCacheTest {
             cache.evict();
         });
 
-        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        assertEquals(3 * cache.head().size() + rawKey.length + rawValue.length, cache.sizeInBytes());
         // Evict key 0
         cache.evict();
         final Bytes entryFour = Bytes.wrap(new byte[]{4});
@@ -298,7 +298,7 @@ public class NamedCacheTest {
         final NamedCache.LRUNode head = cache.head();
         final NamedCache.LRUNode tail = cache.tail();
         assertEquals(2, cache.size());
-        assertEquals(2 * head.size(), cache.sizeInBytes());
+        assertEquals(head.size() + tail.size(), cache.sizeInBytes());
         // dirty should be the newest
         assertEquals(entryFour, head.key());
         assertEquals(Bytes.wrap(new byte[] {3}), tail.key());

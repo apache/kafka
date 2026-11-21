@@ -277,27 +277,31 @@ public class TimeOrderedCachingWindowStore
                 internalContext.recordContext().sourceRawValue()
             );
 
-        // Put to index first so that base can be evicted later
         if (hasIndex) {
             // Important: put base key first to avoid the situation that if we put index first,
             // it could be evicted when we are putting base key. In that case, base key is not yet
             // in cache so we can't store key/value to store when index is evicted. Then if we fetch
             // using index, we can't find it in either store or cache
             internalContext.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
-            final LRUCacheEntry emptyEntry =
-                new LRUCacheEntry(
-                    new byte[0],
-                    new RecordHeaders(),
-                    true,
-                    internalContext.recordContext().offset(),
-                    internalContext.recordContext().timestamp(),
-                    internalContext.recordContext().partition(),
-                    "",
-                    internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
-                );
-            final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
-            internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
+            // Inserting the base can flush it before we reach this point. The underlying store
+            // already has its index in that case; a new dirty sentinel would forward the clean
+            // base again after its raw context has been released.
+            if (entry.isDirty()) {
+                final LRUCacheEntry emptyEntry =
+                    new LRUCacheEntry(
+                        new byte[0],
+                        new RecordHeaders(),
+                        true,
+                        internalContext.recordContext().offset(),
+                        internalContext.recordContext().timestamp(),
+                        internalContext.recordContext().partition(),
+                        "",
+                        null,
+                        null
+                    );
+                final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
+                internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
+            }
         } else {
             internalContext.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
         }
