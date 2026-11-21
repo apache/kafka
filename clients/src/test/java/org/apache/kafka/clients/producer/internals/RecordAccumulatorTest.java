@@ -288,7 +288,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         ProducerBatch batch = batches.get(0);
 
-        Iterator<Record> iter = batch.records().records().iterator();
+        Iterator<Record> iter = TestUtils.records(batch.records()).iterator();
         for (int i = 0; i < appends; i++) {
             Record record = iter.next();
             assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
@@ -323,7 +323,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
-        List<Record> records = TestUtils.toList(recordBatch);
+        List<Record> records = TestUtils.records(recordBatch);
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
@@ -362,7 +362,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
-        List<Record> records = TestUtils.toList(recordBatch);
+        List<Record> records = TestUtils.records(recordBatch);
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
@@ -385,7 +385,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         ProducerBatch batch = batches.get(0);
 
-        Iterator<Record> iter = batch.records().records().iterator();
+        Iterator<Record> iter = TestUtils.records(batch.records()).iterator();
         Record record = iter.next();
         assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
         assertEquals(ByteBuffer.wrap(value), record.value(), "Values should match");
@@ -439,7 +439,7 @@ public class RecordAccumulatorTest {
             List<ProducerBatch> batches = accum.drain(metadataCache, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (ProducerBatch batch : batches) {
-                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : batch.records().records())
+                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : TestUtils.records(batch.records()))
                         read++;
                     accum.completeAndDeallocateBatch(batch);
                 }
@@ -1966,7 +1966,7 @@ public class RecordAccumulatorTest {
 
             // Extract the record and its key
             MemoryRecords batchRecords = batch.records();
-            Iterator<Record> recordIterator = batchRecords.records().iterator();
+            Iterator<Record> recordIterator = TestUtils.records(batchRecords).iterator();
             Record singleRecord = recordIterator.next();
 
             // Track keys to ensure no duplicates (putIfAbsent returns null if the key

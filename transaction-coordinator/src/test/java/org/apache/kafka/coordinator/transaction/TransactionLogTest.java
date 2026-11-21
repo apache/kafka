@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -109,10 +110,10 @@ class TransactionLogTest {
             txnMetadata.addPartitions(topicPartitions);
         }
 
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes(txnMetadata.transactionalId()),
             TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         var deserialized = readResult.metadata();
 
@@ -176,10 +177,10 @@ class TransactionLogTest {
             TV_0
         );
 
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes("transactionalId"),
             TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         var deserialized = readResult.metadata();
 
@@ -200,10 +201,10 @@ class TransactionLogTest {
         // ClientTransactionVersion is a tagged field, it can only be written at the flexible version and
         // falls back to the default (TV_0) at the non-flexible version, like the other tagged fields.
         var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes("transactionalId"),
             TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         assertEquals(TV_0, readResult.metadata().clientTransactionVersion());
     }
@@ -273,10 +274,10 @@ class TransactionLogTest {
             TV_2                            // clientTransactionVersion
         );
 
-        var recordWithPartitions = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var recordWithPartitions = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes("test-txn-id"),
             TransactionLog.valueToBytes(txnTransitMetadataWithPartitions, TV_2)
-        )).records().iterator().next();
+        ))).iterator().next();
         var readResultWithPartitions = assertInstanceOf(TransactionLog.TxnRecord.class,
             TransactionLog.read(recordWithPartitions.key(), recordWithPartitions.value()));
         var deserializedWithPartitions = readResultWithPartitions.metadata();

@@ -44,6 +44,8 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -79,6 +81,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
@@ -87,7 +90,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
@@ -1210,8 +1212,12 @@ public class UnifiedLog implements AutoCloseable {
 
                                     String firstOrLast = hasFirstOffset ? "First offset" : "Last offset of the first batch";
                                     List<String> offsets = new ArrayList<>();
-                                    for (Record record : records.records()) {
-                                        offsets.add(String.valueOf(record.offset()));
+                                    for (RecordBatch batch : records.batches()) {
+                                        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                                            while (offsets.size() < 10 && iterator.hasNext()) {
+                                                offsets.add(String.valueOf(iterator.next().offset()));
+                                            }
+                                        }
                                         if (offsets.size() == 10) break;
                                     }
                                     throw new UnexpectedAppendOffsetException(
@@ -1589,11 +1595,15 @@ public class UnifiedLog implements AutoCloseable {
             }
 
             if (requireOffsetsMonotonic && !monotonic) {
-                throw new OffsetsOutOfOrderException("Out of order offsets found in append to " + topicPartition() + ": " +
-                        StreamSupport.stream(records.records().spliterator(), false)
-                            .map(Record::offset)
-                            .map(String::valueOf)
-                            .collect(Collectors.joining(",")));
+                StringJoiner offsets = new StringJoiner(",");
+                for (RecordBatch recordBatch : records.batches()) {
+                    try (CloseableIterator<Record> iterator = recordBatch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                        while (iterator.hasNext()) {
+                            offsets.add(String.valueOf(iterator.next().offset()));
+                        }
+                    }
+                }
+                throw new OffsetsOutOfOrderException("Out of order offsets found in append to " + topicPartition() + ": " + offsets);
             }
         }
         Optional<Integer> lastLeaderEpochOpt = (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)

@@ -276,7 +276,7 @@ public class LogTestUtils {
     public static List<Record> allRecords(UnifiedLog log) {
         List<Record> result = new ArrayList<>();
         for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
+            for (Record record : TestUtils.records(segment.log())) {
                 result.add(record);
             }
         }
@@ -293,7 +293,7 @@ public class LogTestUtils {
                 if (batch.isControlBatch()) {
                     continue;
                 }
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     if (record.hasValue() && record.hasKey()) {
                         keys.add(Long.parseLong(readString(record.key())));
                     }

@@ -663,7 +663,7 @@ public class LogCleanerIntegrationTest {
     private List<KeyValueOffset> readFromLogFull(UnifiedLog log) {
         List<KeyValueOffset> result = new ArrayList<>();
         for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
+            for (Record record : TestUtils.records(segment.log())) {
                 int key = Integer.parseInt(LogTestUtils.readString(record.key()));
                 String value = LogTestUtils.readString(record.value());
                 result.add(new KeyValueOffset(key, value, record.offset()));
@@ -713,15 +713,14 @@ public class LogCleanerIntegrationTest {
                 // Compressed v0/v1 record batches are converted into record batches v2 with one or more records (depending on the
                 // number of retained records after compaction)
                 assertEquals(RecordVersion.V2.value, recordBatch.magic());
-                List<Record> recordList = new ArrayList<>();
-                recordBatch.forEach(recordList::add);
+                List<Record> recordList = TestUtils.records(recordBatch);
                 if (compressionType == CompressionType.NONE) {
                     assertEquals(1, recordList.size());
                 } else {
                     assertFalse(recordList.isEmpty());
                 }
 
-                Record firstRecord = recordBatch.iterator().next();
+                Record firstRecord = TestUtils.records(recordBatch).get(0);
                 String firstRecordKey = LogTestUtils.readString(firstRecord.key());
                 if (keysForV0RecordsWithNoV1V2Updates.contains(firstRecordKey)) {
                     assertEquals(TimestampType.CREATE_TIME, recordBatch.timestampType());
@@ -729,7 +728,7 @@ public class LogCleanerIntegrationTest {
                     assertEquals(timestampType, recordBatch.timestampType());
                 }
 
-                for (Record record : recordBatch) {
+                for (Record record : TestUtils.records(recordBatch)) {
                     String recordKey = LogTestUtils.readString(record.key());
                     if (keysForV0RecordsWithNoV1V2Updates.contains(recordKey)) {
                         assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp(),

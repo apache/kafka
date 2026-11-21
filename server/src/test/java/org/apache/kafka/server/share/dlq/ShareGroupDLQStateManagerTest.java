@@ -284,7 +284,7 @@ class ShareGroupDLQStateManagerTest {
 
             long expectedOffset = expected.firstOffset();
             int recordCount = 0;
-            for (Record record : records.records()) {
+            for (Record record : TestUtils.records(records)) {
                 Map<String, String> actualHeaders = new HashMap<>();
                 for (Header h : record.headers()) {
                     actualHeaders.put(h.key(), new String(h.value(), StandardCharsets.UTF_8));
@@ -628,7 +628,7 @@ class ShareGroupDLQStateManagerTest {
         long expectedTimestampMs = MOCK_TIME.milliseconds();
         for (ProduceRequestData.TopicProduceData topic : request.data().topicData()) {
             for (ProduceRequestData.PartitionProduceData partition : topic.partitionData()) {
-                for (Record record : ((MemoryRecords) partition.records()).records()) {
+                for (Record record : TestUtils.records(((MemoryRecords) partition.records()))) {
                     assertEquals(expectedTimestampMs, record.timestamp(),
                         "DLQ record timestamp should be wall-clock time, not an arbitrary-origin clock");
                 }
@@ -1608,7 +1608,7 @@ class ShareGroupDLQStateManagerTest {
         MemoryRecords records = (MemoryRecords) partition.records();
         assertEquals(sources.size(), recordCount(records));
         Set<String> headers = new HashSet<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             headers.add(headerValue(record, HEADER_DLQ_ERRORS_TOPIC)
                 + "-" + headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
         }
@@ -1621,7 +1621,7 @@ class ShareGroupDLQStateManagerTest {
 
     private static int recordCount(MemoryRecords records) {
         int count = 0;
-        Iterator<Record> iterator = records.records().iterator();
+        Iterator<Record> iterator = TestUtils.records(records).iterator();
         while (iterator.hasNext()) {
             count++;
             iterator.next();
@@ -1849,7 +1849,7 @@ class ShareGroupDLQStateManagerTest {
         // total-failure case - not just a single, floored offset.
         ProduceRequestData.TopicProduceData topicData = handler.topicProduceData();
         List<Record> records = new ArrayList<>();
-        ((MemoryRecords) topicData.partitionData().get(0).records()).records().forEach(records::add);
+        records.addAll(TestUtils.records((MemoryRecords) topicData.partitionData().get(0).records()));
         assertEquals(3, records.size(),
             "The whole 3-offset range must be given up on in this one round, not just a single floored offset");
         for (Record record : records) {
@@ -1868,7 +1868,7 @@ class ShareGroupDLQStateManagerTest {
     // hardcoded, so a test can size dlqTopicMaxMessageBytes precisely against a record's own raw size.
     private static int recordSizeInBytes(SimpleRecord simpleRecord) {
         MemoryRecords batch = MemoryRecords.withRecords(Compression.NONE, simpleRecord);
-        return batch.batches().iterator().next().iterator().next().sizeInBytes();
+        return TestUtils.records(batch).iterator().next().sizeInBytes();
     }
 
     // A read result carrying the given data and error. Other read metadata is irrelevant to the fetcher.
@@ -2110,7 +2110,7 @@ class ShareGroupDLQStateManagerTest {
         // Confirm directly on the raw header array that there is exactly one, never two.
         ProduceRequestData.TopicProduceData topic = capturedProduces.get(0).data().topicData().iterator().next();
         MemoryRecords dlqRecords = (MemoryRecords) topic.partitionData().iterator().next().records();
-        for (Record record : dlqRecords.records()) {
+        for (Record record : TestUtils.records(dlqRecords)) {
             long matchingHeaderCount = 0;
             for (Header h : record.headers()) {
                 if (h.key().equals(headerKey)) {
@@ -2213,7 +2213,7 @@ class ShareGroupDLQStateManagerTest {
         ProduceRequestData.TopicProduceData topic = capturedProduces.get(0).data().topicData().iterator().next();
         MemoryRecords dlqRecords = (MemoryRecords) topic.partitionData().iterator().next().records();
         List<Map<String, String>> actualHeadersByOffset = new ArrayList<>();
-        for (Record record : dlqRecords.records()) {
+        for (Record record : TestUtils.records(dlqRecords)) {
             Map<String, String> headerMap = new HashMap<>();
             for (Header h : record.headers()) {
                 headerMap.put(h.key(), new String(h.value(), StandardCharsets.UTF_8));
@@ -2610,7 +2610,7 @@ class ShareGroupDLQStateManagerTest {
         ProduceRequestData.TopicProduceData topic = capturedProduces.get(0).data().topicData().iterator().next();
         MemoryRecords dlqRecords = (MemoryRecords) topic.partitionData().iterator().next().records();
         int recordCount = 0;
-        for (Record record : dlqRecords.records()) {
+        for (Record record : TestUtils.records(dlqRecords)) {
             recordCount++;
             assertFalse(record.hasKey());
             assertFalse(record.hasValue());

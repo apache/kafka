@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
-
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -937,7 +937,7 @@ public class ChunkedRecordAccumulatorTest {
 
         int count = 0;
         for (RecordBatch rb : records.batches()) {
-            for (Record r : rb) {
+            for (Record r : TestUtils.records(rb)) {
                 count++;
                 assertNotNull(r.value());
             }

@@ -24,6 +24,8 @@ import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRec
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
@@ -127,37 +129,43 @@ public final class SnapshotFileReader implements AutoCloseable {
     }
 
     private void handleControlBatch(FileChannelRecordBatch batch) {
-        for (Record record : batch) {
-            try {
-                ControlRecordType type = ControlRecordType.parse(record.key());
-                switch (type) {
-                    case LEADER_CHANGE:
-                        LeaderChangeMessage message = new LeaderChangeMessage();
-                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        listener.handleLeaderChange(new LeaderAndEpoch(
-                            OptionalInt.of(message.leaderId()),
-                            batch.partitionLeaderEpoch()
-                        ));
-                        break;
-                    default:
-                        log.error("Ignoring control record with type {} at offset {}",
-                            type, record.offset());
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                try {
+                    ControlRecordType type = ControlRecordType.parse(record.key());
+                    switch (type) {
+                        case LEADER_CHANGE:
+                            LeaderChangeMessage message = new LeaderChangeMessage();
+                            message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                            listener.handleLeaderChange(new LeaderAndEpoch(
+                                OptionalInt.of(message.leaderId()),
+                                batch.partitionLeaderEpoch()
+                            ));
+                            break;
+                        default:
+                            log.error("Ignoring control record with type {} at offset {}",
+                                type, record.offset());
+                    }
+                } catch (Throwable e) {
+                    log.error("unable to read control record at offset {}", record.offset(), e);
                 }
-            } catch (Throwable e) {
-                log.error("unable to read control record at offset {}", record.offset(), e);
             }
         }
     }
 
     private void handleMetadataBatch(FileChannelRecordBatch batch) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
-        for (Record record : batch) {
-            ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
-            try {
-                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
-                messages.add(messageAndVersion);
-            } catch (Throwable e) {
-                log.error("unable to read metadata record at offset {}", record.offset(), e);
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
+                try {
+                    ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
+                    messages.add(messageAndVersion);
+                } catch (Throwable e) {
+                    log.error("unable to read metadata record at offset {}", record.offset(), e);
+                }
             }
         }
         listener.handleCommit(
