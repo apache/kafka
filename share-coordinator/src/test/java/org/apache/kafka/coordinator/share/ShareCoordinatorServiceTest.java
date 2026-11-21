@@ -49,6 +49,7 @@ import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.MockTime;
@@ -86,6 +87,8 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings("ClassFanOutComplexity")
 class ShareCoordinatorServiceTest {
+
+    private static final RequestTimeRecorder NO_OP_REQUEST_TIME_RECORDER = mock(RequestTimeRecorder.class);
 
     @SuppressWarnings("unchecked")
     private CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> mockRuntime() {
@@ -204,6 +207,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-share-group-state"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any(),
             any()
         ))
             .thenReturn(CompletableFuture.completedFuture(response1))
@@ -211,7 +216,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<WriteShareGroupStateResponseData> future = service.writeState(
             requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -317,6 +323,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("read-update-leader-epoch-state"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any(),
             any()
         ))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateResponseData()
@@ -326,7 +334,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<ReadShareGroupStateResponseData> future = service.readState(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<ReadShareGroupStateResponseData.ReadStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -397,6 +406,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("read-share-group-state-summary"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any(),
             any())
         ).thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResponseData()
             .setResults(List.of(topicData1)))
@@ -406,7 +417,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<ReadShareGroupStateSummaryResponseData> future = service.readStateSummary(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -476,12 +488,15 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("delete-share-group-state"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(response1)).thenReturn(CompletableFuture.completedFuture(response2));
 
         CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
             requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -559,12 +574,15 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("initialize-share-group-state"),
             eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any(),
             any())).thenReturn(CompletableFuture.completedFuture(response1)).thenReturn(CompletableFuture.completedFuture(response2)
         );
 
         CompletableFuture<InitializeShareGroupStateResponseData> future = service.initializeState(
             requestContext(ApiKeys.INITIALIZE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -605,7 +623,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new WriteShareGroupStateResponseData(),
             service.writeState(
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
-                new WriteShareGroupStateRequestData().setGroupId(groupId)
+                new WriteShareGroupStateRequestData().setGroupId(groupId),
+                NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -614,7 +633,8 @@ class ShareCoordinatorServiceTest {
             service.writeState(
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
                 new WriteShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
-                    new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId)))
+                    new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId))),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -624,7 +644,8 @@ class ShareCoordinatorServiceTest {
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
                 new WriteShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
                     new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId).setPartitions(List.of(
-                        new WriteShareGroupStateRequestData.PartitionData().setPartition(partition)))))
+                        new WriteShareGroupStateRequestData.PartitionData().setPartition(partition))))),
+                        NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -652,7 +673,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateResponseData(),
             service.readState(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
-                new ReadShareGroupStateRequestData().setGroupId(groupId)
+                new ReadShareGroupStateRequestData().setGroupId(groupId),
+                NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -661,7 +683,8 @@ class ShareCoordinatorServiceTest {
             service.readState(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
                 new ReadShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
-                    new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId)))
+                    new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId))),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -671,7 +694,8 @@ class ShareCoordinatorServiceTest {
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
                 new ReadShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
                     new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId).setPartitions(List.of(
-                        new ReadShareGroupStateRequestData.PartitionData().setPartition(partition)))))
+                        new ReadShareGroupStateRequestData.PartitionData().setPartition(partition))))),
+                        NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -699,7 +723,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateSummaryResponseData(),
             service.readStateSummary(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
-                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId)
+                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId),
+                NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -708,7 +733,8 @@ class ShareCoordinatorServiceTest {
             service.readStateSummary(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
                 new ReadShareGroupStateSummaryRequestData().setGroupId(groupId).setTopics(List.of(
-                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId)))
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId))),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -718,7 +744,8 @@ class ShareCoordinatorServiceTest {
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
                 new ReadShareGroupStateSummaryRequestData().setGroupId(null).setTopics(List.of(
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId).setPartitions(List.of(
-                        new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partition)))))
+                        new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partition))))),
+                        NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -746,7 +773,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new DeleteShareGroupStateResponseData(),
             service.deleteState(
                 requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
-                new DeleteShareGroupStateRequestData().setGroupId(groupId)
+                new DeleteShareGroupStateRequestData().setGroupId(groupId),
+                NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -755,7 +783,8 @@ class ShareCoordinatorServiceTest {
             service.deleteState(
                 requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
-                    new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId)))
+                    new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId))),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -765,7 +794,8 @@ class ShareCoordinatorServiceTest {
                 requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
                     new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId).setPartitions(List.of(
-                        new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)))))
+                        new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition))))),
+                        NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -793,7 +823,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new InitializeShareGroupStateResponseData(),
             service.initializeState(
                 requestContext(ApiKeys.INITIALIZE_SHARE_GROUP_STATE),
-                new InitializeShareGroupStateRequestData().setGroupId(groupId)
+                new InitializeShareGroupStateRequestData().setGroupId(groupId),
+                NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -802,7 +833,8 @@ class ShareCoordinatorServiceTest {
             service.initializeState(
                 requestContext(ApiKeys.INITIALIZE_SHARE_GROUP_STATE),
                 new InitializeShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
-                    new InitializeShareGroupStateRequestData.InitializeStateData().setTopicId(topicId)))
+                    new InitializeShareGroupStateRequestData.InitializeStateData().setTopicId(topicId))),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
 
@@ -812,7 +844,8 @@ class ShareCoordinatorServiceTest {
                 requestContext(ApiKeys.INITIALIZE_SHARE_GROUP_STATE),
                 new InitializeShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
                     new InitializeShareGroupStateRequestData.InitializeStateData().setTopicId(topicId).setPartitions(List.of(
-                        new InitializeShareGroupStateRequestData.PartitionData().setPartition(partition)))))
+                        new InitializeShareGroupStateRequestData.PartitionData().setPartition(partition))))),
+                        NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -877,7 +910,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<WriteShareGroupStateResponseData> future = service.writeState(
             requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -940,7 +974,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<ReadShareGroupStateResponseData> future = service.readState(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<ReadShareGroupStateResponseData.ReadStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -1003,7 +1038,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<ReadShareGroupStateSummaryResponseData> future = service.readStateSummary(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -1064,7 +1100,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
             requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -1124,7 +1161,8 @@ class ShareCoordinatorServiceTest {
 
         CompletableFuture<InitializeShareGroupStateResponseData> future = service.initializeState(
             requestContext(ApiKeys.INITIALIZE_SHARE_GROUP_STATE),
-            request
+            request,
+            NO_OP_REQUEST_TIME_RECORDER
         );
 
         HashSet<InitializeShareGroupStateResponseData.InitializeStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
@@ -1164,7 +1202,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any()))
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new WriteShareGroupStateResponseData()
@@ -1191,7 +1229,8 @@ class ShareCoordinatorServiceTest {
                                 .setDeliveryCount((short) 1)
                                 .setDeliveryState((byte) 1)))
                         ))
-                    ))
+                    )),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -1215,7 +1254,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any()))
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateResponseData()
@@ -1234,7 +1273,8 @@ class ShareCoordinatorServiceTest {
                             .setPartition(partition)
                             .setLeaderEpoch(1)
                         ))
-                    ))
+                    )),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -1258,7 +1298,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any()))
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateSummaryResponseData()
@@ -1277,7 +1317,8 @@ class ShareCoordinatorServiceTest {
                             .setPartition(partition)
                             .setLeaderEpoch(1)
                         ))
-                    ))
+                    )),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -1301,7 +1342,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any()))
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new DeleteShareGroupStateResponseData()
@@ -1319,7 +1360,8 @@ class ShareCoordinatorServiceTest {
                         .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
                             .setPartition(partition)
                         ))
-                    ))
+                    )),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -1343,7 +1385,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any(), any())).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(
             new InitializeShareGroupStateResponseData().setResults(List.of(new InitializeShareGroupStateResponseData.InitializeStateResult()
@@ -1360,7 +1402,8 @@ class ShareCoordinatorServiceTest {
                         .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
                             .setPartition(partition)
                         ))
-                    ))
+                    )),
+                    NO_OP_REQUEST_TIME_RECORDER
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -1445,6 +1488,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(
             CompletableFuture.completedFuture(Optional.of(10L))
@@ -1470,6 +1515,8 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // Prune should be called.
@@ -1477,12 +1524,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // Prune should be called.
         verify(runtime, times(2))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1524,6 +1575,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             eq(tp1),
+            any(),
+            any(),
             any()
         )).thenReturn(
             CompletableFuture.completedFuture(Optional.of(10L))
@@ -1534,6 +1587,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             eq(tp2),
+            any(),
+            any(),
             any()
         )).thenReturn(
             CompletableFuture.completedFuture(Optional.of(20L))
@@ -1559,6 +1614,8 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // Prune should be called.
@@ -1566,12 +1623,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // Prune should be called as future completes exceptionally.
         verify(runtime, times(4))   // Second prune with 2 topic partitions.
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1595,6 +1656,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
@@ -1616,12 +1679,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
         verify(runtime, times(1))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1644,6 +1711,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Optional.of(20L)));
 
@@ -1665,12 +1734,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
         verify(runtime, times(1))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1691,6 +1764,8 @@ class ShareCoordinatorServiceTest {
 
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
+            any(),
+            any(),
             any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
@@ -1713,12 +1788,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
         verify(runtime, times(1))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1748,6 +1827,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(
             CompletableFuture.completedFuture(Optional.of(10L))
@@ -1772,6 +1853,8 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
@@ -1779,12 +1862,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
         verify(runtime, times(2))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1818,6 +1905,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(
             CompletableFuture.completedFuture(Optional.of(10L))
@@ -1843,6 +1932,8 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
@@ -1850,12 +1941,16 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(30005L); // prune should be called
         verify(runtime, times(2))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
+                any(),
+                any(),
                 any(),
                 any());
 
@@ -1889,6 +1984,8 @@ class ShareCoordinatorServiceTest {
 
         when(runtime.scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         )).thenReturn(List.of(CompletableFuture.completedFuture(null)));
 
@@ -1898,18 +1995,24 @@ class ShareCoordinatorServiceTest {
             .scheduleWriteOperation(
                 eq("snapshot-cold-partitions"),
                 any(),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(10005L); // Snapshotting should be called.
         verify(runtime, times(1))
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(10005L); // Snapshotting should be called.
         verify(runtime, times(2))
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
+                any(),
+                any(),
                 any());
 
         checkMetrics(metrics);
@@ -1926,6 +2029,8 @@ class ShareCoordinatorServiceTest {
 
         when(runtime.scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         )).thenReturn(
             List.of(CompletableFuture.completedFuture(null), CompletableFuture.failedFuture(new Exception("bad stuff")))
@@ -1950,18 +2055,24 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(0))
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(10005L); // Snapshotting should be called.
         verify(runtime, times(1))   // For 2 topic partitions.
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
+                any(),
+                any(),
                 any());
 
         timer.advanceClock(10005L); // Snapshotting should be called (despite previous partial failure).
         verify(runtime, times(2))   // For 2 topic partitions.
             .scheduleWriteAllOperation(
                 eq("snapshot-cold-partitions"),
+                any(),
+                any(),
                 any());
 
         checkMetrics(metrics);
@@ -1992,12 +2103,16 @@ class ShareCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
         // Snapshot job.
         when(runtime.scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         )).thenReturn(List.of());
 
@@ -2013,10 +2128,14 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(0)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         );
         verify(runtime, times(0)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         );
         // Enable feature.
@@ -2029,10 +2148,14 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         );
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         );
         // Disable feature
@@ -2045,10 +2168,14 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         );
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         );
         timer.advanceClock(30001L);
@@ -2084,6 +2211,8 @@ class ShareCoordinatorServiceTest {
         when(runtime.<Optional<Long>>scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         ))
             .thenReturn(firstPruneFuture)
@@ -2091,6 +2220,8 @@ class ShareCoordinatorServiceTest {
 
         when(runtime.<Void>scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         ))
             .thenReturn(List.of(firstSnapshotFuture))
@@ -2112,10 +2243,14 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         );
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         );
 
@@ -2137,10 +2272,14 @@ class ShareCoordinatorServiceTest {
         verify(runtime, times(2)).scheduleWriteOperation(
             eq("write-state-record-prune"),
             any(),
+            any(),
+            any(),
             any()
         );
         verify(runtime, times(2)).scheduleWriteAllOperation(
             eq("snapshot-cold-partitions"),
+            any(),
+            any(),
             any()
         );
 
@@ -2221,6 +2360,8 @@ class ShareCoordinatorServiceTest {
 
         when(runtime.scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         )).thenReturn(
             List.of(
@@ -2234,6 +2375,8 @@ class ShareCoordinatorServiceTest {
 
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         );
     }
@@ -2271,6 +2414,8 @@ class ShareCoordinatorServiceTest {
         // Verify no operations scheduled.
         verify(runtime, times(0)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         );
     }
@@ -2307,6 +2452,8 @@ class ShareCoordinatorServiceTest {
         // Verify no cleanup operations scheduled.
         verify(runtime, times(0)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         );
     }
@@ -2346,6 +2493,8 @@ class ShareCoordinatorServiceTest {
         // Mock operations with some futures failing.
         when(runtime.scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         )).thenReturn(
             List.of(
@@ -2361,6 +2510,8 @@ class ShareCoordinatorServiceTest {
         // Verify operations were still scheduled.
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
+            any(),
+            any(),
             any()
         );
     }

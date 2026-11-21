@@ -812,12 +812,20 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #1.
+        List<String> write1Calls = new ArrayList<>();
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1")
+            () -> write1Calls.add("start"),
+            () -> write1Calls.add("end"),
+            state -> {
+                write1Calls.add("op");
+                return new CoordinatorResult<>(List.of("record1", "record2"), "response1");
+            }
         );
 
         // Verify that the write is not committed yet.
         assertFalse(write1.isDone());
+        // The processing callbacks ran around the write.
+        assertEquals(List.of("start", "op", "end"), write1Calls);
 
         // The last written offset is updated.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
@@ -897,12 +905,20 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(3L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #4 but without records.
+        List<String> write4Calls = new ArrayList<>();
         CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
-            state -> new CoordinatorResult<>(List.of(), "response4"));
+            () -> write4Calls.add("start"),
+            () -> write4Calls.add("end"),
+            state -> {
+                write4Calls.add("op");
+                return new CoordinatorResult<>(List.of(), "response4");
+            });
 
         // It is completed immediately because the state is fully committed.
         assertTrue(write4.isDone());
         assertEquals("response4", write4.get(5, TimeUnit.SECONDS));
+        // The processing callbacks ran around the write.
+        assertEquals(List.of("start", "op", "end"), write4Calls);
         assertEquals(List.of(3L), ctx.coordinator.snapshotRegistry().epochsList());
     }
 
@@ -927,9 +943,17 @@ public class CoordinatorRuntimeTest {
 
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
         // does not exist.
+        List<String> calls = new ArrayList<>();
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
-            state -> new CoordinatorResult<>(List.of(), "response1"));
+            () -> calls.add("start"),
+            () -> calls.add("end"),
+            state -> {
+                calls.add("op");
+                return new CoordinatorResult<>(List.of(), "response1");
+            });
         assertFutureThrows(NotCoordinatorException.class, write);
+        // The processing callbacks still ran, without the operation.
+        assertEquals(List.of("start", "end"), calls);
     }
 
     @Test
@@ -956,10 +980,17 @@ public class CoordinatorRuntimeTest {
 
         // Scheduling a write that fails when the operation is called. The exception
         // is used to complete the future.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, state -> {
-            throw new KafkaException("error");
-        });
+        List<String> calls = new ArrayList<>();
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
+            () -> calls.add("start"),
+            () -> calls.add("end"),
+            state -> {
+                calls.add("op");
+                throw new KafkaException("error");
+            });
         assertFutureThrows(KafkaException.class, write);
+        // The processing callbacks ran around the failed operation.
+        assertEquals(List.of("start", "op", "end"), calls);
     }
 
     @Test
@@ -1412,9 +1443,12 @@ public class CoordinatorRuntimeTest {
         // For TV2, the coordinator bumps the epoch before writing the marker (epoch + 1).
         // For TV1, the marker uses the same epoch as transactional records.
         short markerEpoch = (transactionVersion >= 2) ? (short) (transactionalEpoch + 1) : transactionalEpoch;
+        List<String> complete1Calls = new ArrayList<>();
         CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
             "complete#1",
             TP,
+            () -> complete1Calls.add("start"),
+            () -> complete1Calls.add("end"),
             100L,
             markerEpoch,
             10,
@@ -1424,6 +1458,8 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the completion is not committed yet.
         assertFalse(complete1.isDone());
+        // The processing callbacks ran around the completion.
+        assertEquals(List.of("start", "end"), complete1Calls);
 
         // The last written offset is updated.
         assertEquals(3L, ctx.coordinator.lastWrittenOffset());
@@ -1839,15 +1875,22 @@ public class CoordinatorRuntimeTest {
         assertEquals(2, ctx.coordinator.lastCommittedOffset());
 
         // Read.
-        CompletableFuture<String> read = runtime.scheduleReadOperation("read", TP, (state, offset) -> {
-            // The read operation should be given the last committed offset.
-            assertEquals(ctx.coordinator.lastCommittedOffset(), offset);
-            return "read-response";
-        });
+        List<String> readCalls = new ArrayList<>();
+        CompletableFuture<String> read = runtime.scheduleReadOperation("read", TP,
+            () -> readCalls.add("start"),
+            () -> readCalls.add("end"),
+            (state, offset) -> {
+                readCalls.add("op");
+                // The read operation should be given the last committed offset.
+                assertEquals(ctx.coordinator.lastCommittedOffset(), offset);
+                return "read-response";
+            });
 
         // The read is completed immediately.
         assertTrue(read.isDone());
         assertEquals("read-response", read.get(5, TimeUnit.SECONDS));
+        // The processing callbacks ran around the read.
+        assertEquals(List.of("start", "op", "end"), readCalls);
     }
 
     @Test

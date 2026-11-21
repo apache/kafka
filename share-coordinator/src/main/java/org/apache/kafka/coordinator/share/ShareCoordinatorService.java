@@ -55,6 +55,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -369,6 +370,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         runtime.scheduleWriteOperation(
             "write-state-record-prune",
             tp,
+            null,
+            null,
             ShareCoordinatorShard::lastRedundantOffset
         ).whenComplete((result, exception) -> {
             if (exception != null) {
@@ -438,6 +441,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
                     "snapshot-cold-partitions",
+                    null,
+                    null,
                     ShareCoordinatorShard::snapshotColdPartitions
                 );
 
@@ -469,7 +474,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request) {
+    public CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder) {
         // Send an empty response if topic data is empty
         if (isEmpty(request.topics())) {
             log.error("Topic Data is empty: {}", request);
@@ -523,6 +528,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     CompletableFuture<WriteShareGroupStateResponseData> future = runtime.scheduleWriteOperation(
                             "write-share-group-state",
                             topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
+                            requestTimeRecorder::beginLocalTime,
+                            requestTimeRecorder::endLocalTime,
                             coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
                                 .setGroupId(groupId)
                                 .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
@@ -586,7 +593,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request) {
+    public CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder) {
         String groupId = request.groupId();
         // A map to store the futures for each topicId and partition.
         Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponseData>>> futureMap = new HashMap<>();
@@ -656,6 +663,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<ReadShareGroupStateResponseData> readFuture = runtime.scheduleWriteOperation(
                     "read-update-leader-epoch-state",
                     topicPartitionFor(coordinatorKey),
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     coordinator -> coordinator.readStateAndMaybeUpdateLeaderEpoch(requestForCurrentPartition)
                 ).exceptionally(readException ->
                     handleOperationException(
@@ -704,7 +713,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request) {
+    public CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request, RequestTimeRecorder requestTimeRecorder) {
         // Send an empty response if the coordinator is not active.
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -765,6 +774,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<ReadShareGroupStateSummaryResponseData> readFuture = runtime.scheduleWriteOperation(
                     "read-share-group-state-summary",
                     topicPartitionFor(coordinatorKey),
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     coordinator -> coordinator.readStateSummary(requestForCurrentPartition)
                 ).exceptionally(readException ->
                     handleOperationException(
@@ -813,7 +824,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request) {
+    public CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder) {
         // Send an empty response if the coordinator is not active.
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -874,6 +885,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<DeleteShareGroupStateResponseData> deleteFuture = runtime.scheduleWriteOperation(
                     "delete-share-group-state",
                     topicPartitionFor(coordinatorKey),
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     coordinator -> coordinator.deleteState(requestForCurrentPartition)
                 ).exceptionally(deleteException ->
                     handleOperationException(
@@ -922,7 +935,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request) {
+    public CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request, RequestTimeRecorder requestTimeRecorder) {
         // Send an empty response if the coordinator is not active.
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
@@ -967,6 +980,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<InitializeShareGroupStateResponseData> initializeFuture = runtime.scheduleWriteOperation(
                     "initialize-share-group-state",
                     topicPartitionFor(coordinatorKey),
+                    requestTimeRecorder::beginLocalTime,
+                    requestTimeRecorder::endLocalTime,
                     coordinator -> coordinator.initializeState(groupId, topicId, partitionData)
                 ).exceptionally(initializeException ->
                     handleOperationException(
@@ -1158,6 +1173,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
             FutureUtils.mapExceptionally(
                 runtime.scheduleWriteAllOperation(
                     "on-topics-deleted",
+                    null,
+                    null,
                     coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
                 ),
                 exception -> {
