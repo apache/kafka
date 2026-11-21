@@ -646,7 +646,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val embedRequestData = new AlterClientQuotasRequest.Builder(util.List.of, false).build()
             .serializeWithHeader(requestHeader)
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
-            InetAddress.getByName("192.168.1.1").getAddress)
+            InetAddress.getByName("192.168.1.1").getAddress, ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion))
 
         case ApiKeys.DESCRIBE_CLUSTER =>
           new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
