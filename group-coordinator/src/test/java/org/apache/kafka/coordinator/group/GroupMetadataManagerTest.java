@@ -36103,6 +36103,132 @@ public class GroupMetadataManagerTest {
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
     }
 
+    @Test
+    public void testShareGroupAsyncTargetAssignmentWithPartitionInitialization() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        SimpleAssignor assignor = new SimpleAssignor();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // The member joins the group and gets no assignment yet. The share partitions start initializing.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result1 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(fooTopicName)));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of())),
+            result1.response().getKey()
+        );
+        verifyShareGroupHeartbeatInitializeRequest(
+            result1.response().getValue(),
+            Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)),
+            groupId,
+            2,
+            true
+        );
+
+        // Assignor for epoch 2 is scheduled on executor.
+        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+
+        // The share partitions are initialized while the assignor is running.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)))
+            .records()
+            .forEach(context::replay);
+
+        // Assignor completes on executor. The share partitions were still initializing when the run
+        // was scheduled, so nothing is assigned.
+        assertEquals(
+            List.of(
+                new MockCoordinatorExecutor.ExecutorResult<>(
+                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
+                    new CoordinatorResult<>(List.of(
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())
+                    ))
+                )
+            ),
+            context.processTasks()
+        );
+
+        // The member heartbeats again and gets no assignment yet. The group epoch is bumped to
+        // assign the initialized share partitions.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result2 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(1));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000),
+            result2.response().getKey()
+        );
+
+        // Assignor for epoch 3 is scheduled on executor.
+        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+
+        // Assignor completes on executor and assigns the initialized share partitions.
+        assertEquals(
+            List.of(
+                new MockCoordinatorExecutor.ExecutorResult<>(
+                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
+                    new CoordinatorResult<>(List.of(
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                            mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+                        )),
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds())
+                    ))
+                )
+            ),
+            context.processTasks()
+        );
+
+        // The member heartbeats again and receives the assignment.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result3 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(2));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(3)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(0, 1, 2, 3, 4, 5))
+                    ))),
+            result3.response().getKey()
+        );
+    }
+
     /**
      * Tests the records written when an offloaded assignor run completes. Target assignment records
      * are written only for members whose target assignment changed.
