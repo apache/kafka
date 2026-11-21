@@ -509,29 +509,52 @@ public class ConsumerGroupCommand {
             }).sorted().collect(Collectors.joining(";"));
         }
 
+        private static String formatCoordinator(Node coordinator) {
+            return coordinator.host() + ":" + coordinator.port() + "  (" + coordinator.idString() + ")";
+        }
+
         private void printStates(Map<String, GroupInformation> states, boolean verbose) {
+            List<GroupInformation> printableStates = new ArrayList<>();
             states.forEach((groupId, state) -> {
                 if (shouldPrintMemberState(groupId, Optional.of(state.groupState()), Optional.of(1))) {
-                    String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
-                    int coordinatorColLen = Math.max(25, coordinator.length());
-                    int groupColLen = Math.max(15, state.group().length());
-
-                    String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
-
-                    if (verbose) {
-                        String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
-                        System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
-                            "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
-                            state.groupEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers());
-                    } else {
-                        String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
-                        System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(), state.numMembers());
-                    }
-                    System.out.println();
+                    printableStates.add(state);
                 }
             });
+
+            if (printableStates.isEmpty()) {
+                return;
+            }
+
+            int coordinatorColLen = 25;
+            int groupColLen = 15;
+            for (GroupInformation state : printableStates) {
+                String coordinator = formatCoordinator(state.coordinator());
+                coordinatorColLen = Math.max(coordinatorColLen, coordinator.length());
+                groupColLen = Math.max(groupColLen, state.group().length());
+            }
+
+            String format;
+            if (verbose) {
+                format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
+                System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
+                    "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+            } else {
+                format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
+                System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
+            }
+
+            for (GroupInformation state : printableStates) {
+                String coordinator = formatCoordinator(state.coordinator());
+                String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
+                if (verbose) {
+                    System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
+                        state.groupEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                        state.targetAssignmentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers());
+                } else {
+                    System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(), state.numMembers());
+                }
+                System.out.println();
+            }
         }
 
         void describeGroups() throws Exception {
