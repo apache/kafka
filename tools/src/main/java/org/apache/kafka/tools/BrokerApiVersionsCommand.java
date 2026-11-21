@@ -167,7 +167,7 @@ public class BrokerApiVersionsCommand {
             String clientId = "admin-" + ADMIN_CLIENT_ID_SEQUENCE.getAndIncrement();
             LogContext logContext = new LogContext("[LegacyAdminClient clientId=" + clientId + "] ");
             Time time = Time.SYSTEM;
-            Metrics metrics = new Metrics(time);
+            Metrics metrics = Metrics.Internal.of(time);
             Metadata metadata = new Metadata(
                     CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                     CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,

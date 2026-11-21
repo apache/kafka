@@ -155,7 +155,7 @@ public final class ConsumerUtils {
                 .tags(metricsTags);
         MetricsContext metricsContext = new KafkaMetricsContext(CONSUMER_JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        return new Metrics(metricConfig, reporters, time, metricsContext);
+        return Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
     }
 
     public static FetchMetricsManager createFetchMetricsManager(Metrics metrics) {

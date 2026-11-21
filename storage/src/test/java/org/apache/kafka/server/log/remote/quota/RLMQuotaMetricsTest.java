@@ -17,14 +17,11 @@
 
 package org.apache.kafka.server.log.remote.quota;
 
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -33,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class RLMQuotaMetricsTest {
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     @Test
     public void testNewSensorWhenExpired() {

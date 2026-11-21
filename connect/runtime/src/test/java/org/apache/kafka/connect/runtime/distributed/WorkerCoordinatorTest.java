@@ -130,7 +130,7 @@ public class WorkerCoordinatorTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, heartbeatIntervalMs);
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = mock(KafkaConfigBackingStore.class);
         this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,

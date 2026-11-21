@@ -105,7 +105,7 @@ public class StreamsMembershipManagerTest {
     private static final int PARTITION_1 = 1;
 
     private final Time time = new MockTime(0);
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     private StreamsMembershipManager membershipManager;
 
@@ -1546,7 +1546,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupEpochIsStaticMemberEpochForStaticMember() {
-        try (final Metrics localMetrics = new Metrics(time)) {
+        try (final Metrics localMetrics = Metrics.Internal.of(time)) {
             final StreamsMembershipManager staticMember = new StreamsMembershipManager(
                 GROUP_ID,
                 Optional.of(INSTANCE_ID),
@@ -1560,7 +1560,7 @@ public class StreamsMembershipManagerTest {
     @Test
     public void testIsLeavingGroupReturnsTrueForStaticMemberWithRemainInGroupOperation() {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
-        try (final Metrics localMetrics = new Metrics(time)) {
+        try (final Metrics localMetrics = Metrics.Internal.of(time)) {
             final StreamsMembershipManager staticMember = new StreamsMembershipManager(
                 GROUP_ID,
                 Optional.of(INSTANCE_ID),
@@ -1622,7 +1622,7 @@ public class StreamsMembershipManagerTest {
         final CloseOptions.GroupMembershipOperation operation,
         final int expectedEpoch
     ) {
-        try (final Metrics localMetrics = new Metrics(time)) {
+        try (final Metrics localMetrics = Metrics.Internal.of(time)) {
             StreamsMembershipManager membershipManagerWithStaticMember = new StreamsMembershipManager(
                 GROUP_ID,
                 Optional.of(INSTANCE_ID),

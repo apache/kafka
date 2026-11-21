@@ -81,7 +81,7 @@ public class ChunkedRecordAccumulatorTest {
     private final Cluster cluster = metadataCache.cluster();
 
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private final LogContext logContext = new LogContext();
     private final long maxBlockTimeMs = 1000;
     private final byte[] key = "k".getBytes();

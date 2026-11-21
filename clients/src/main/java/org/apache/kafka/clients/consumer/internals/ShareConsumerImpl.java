@@ -373,7 +373,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.groupId = groupId;
         this.log = logContext.logger(getClass());
         this.time = time;
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.clientTelemetryReporter = Optional.empty();
         this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();

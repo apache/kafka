@@ -126,7 +126,7 @@ public class SensorTest {
     public void testExpiredSensor() {
         MetricConfig config = new MetricConfig();
         Time mockTime = new MockTime();
-        try (Metrics metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), mockTime, true)) {
+        try (Metrics metrics = Metrics.Internal.of(config, Collections.singletonList(new JmxReporter()), mockTime, true, new KafkaMetricsContext(""))) {
             long inactiveSensorExpirationTimeSeconds = 60L;
             Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
                     inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
@@ -242,7 +242,7 @@ public class SensorTest {
     @Test
     public void testStrictQuotaEnforcementWithRate() {
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
-        final Metrics metrics = new Metrics(time);
+        final Metrics metrics = Metrics.Internal.of(time);
         final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
             .quota(Quota.upperBound(2))
             .timeWindow(1, TimeUnit.SECONDS)
@@ -271,7 +271,7 @@ public class SensorTest {
     @Test
     public void testStrictQuotaEnforcementWithTokenBucket() {
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
-        final Metrics metrics = new Metrics(time);
+        final Metrics metrics = Metrics.Internal.of(time);
         final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
             .quota(Quota.upperBound(2))
             .timeWindow(1, TimeUnit.SECONDS)
@@ -306,7 +306,7 @@ public class SensorTest {
     @Test
     public void testRecordAndCheckQuotaUseMetricConfigOfEachStat() {
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
-        final Metrics metrics = new Metrics(time);
+        final Metrics metrics = Metrics.Internal.of(time);
         final Sensor sensor = metrics.sensor("sensor");
 
         final MeasurableStat stat1 = Mockito.mock(MeasurableStat.class);
@@ -333,7 +333,7 @@ public class SensorTest {
     @Test
     public void testUpdatingMetricConfigIsReflectedInTheSensor() {
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
-        final Metrics metrics = new Metrics(time);
+        final Metrics metrics = Metrics.Internal.of(time);
         final Sensor sensor = metrics.sensor("sensor");
 
         final MeasurableStat stat = Mockito.mock(MeasurableStat.class);

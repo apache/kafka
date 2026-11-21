@@ -248,7 +248,7 @@ public class TopicMetadataFetcherTest {
         metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
-        metrics = new Metrics(metricConfig, time);
+        metrics = Metrics.Internal.of(metricConfig, time);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
     }

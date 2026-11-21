@@ -51,7 +51,7 @@ public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTe
     @Test
     public void testStrictControllerMutationQuotaViolation() {
         MockTime time = new MockTime(0, System.currentTimeMillis(), 0);
-        try (Metrics metrics = new Metrics(time)) {
+        try (Metrics metrics = Metrics.Internal.of(time)) {
             Sensor sensor = metrics.sensor("sensor", new MetricConfig()
                     .quota(Quota.upperBound(10))
                     .timeWindow(1, TimeUnit.SECONDS)
@@ -88,7 +88,7 @@ public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTe
     @Test
     public void testPermissiveControllerMutationQuotaViolation() {
         MockTime time = new MockTime(0, System.currentTimeMillis(), 0);
-        try (Metrics metrics = new Metrics(time)) {
+        try (Metrics metrics = Metrics.Internal.of(time)) {
             Sensor sensor = metrics.sensor("sensor", new MetricConfig()
                     .quota(Quota.upperBound(10))
                     .timeWindow(1, TimeUnit.SECONDS)
@@ -134,7 +134,7 @@ public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTe
     @Test
     public void testThrottleTime() {
         MockTime time = new MockTime(0, System.currentTimeMillis(), 0);
-        try (Metrics metrics = new Metrics(time)) {
+        try (Metrics metrics = Metrics.Internal.of(time)) {
             Sensor sensor = metrics.sensor("sensor");
             MetricName metricName = metrics.metricName("tokens", "test-group");
             sensor.add(metricName, new TokenBucket());

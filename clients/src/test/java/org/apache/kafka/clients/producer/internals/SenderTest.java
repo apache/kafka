@@ -3954,7 +3954,7 @@ public class SenderTest {
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
         MetricConfig metricConfig = new MetricConfig().tags(Collections.singletonMap("client-id", CLIENT_ID));
-        this.metrics = new Metrics(metricConfig, time);
+        this.metrics = Metrics.Internal.of(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
         this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, lingerMs, 0L, 0L,

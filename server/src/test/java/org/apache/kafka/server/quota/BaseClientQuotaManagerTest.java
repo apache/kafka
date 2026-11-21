@@ -17,7 +17,6 @@
 package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -38,7 +37,6 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -52,7 +50,7 @@ public class BaseClientQuotaManagerTest {
 
     @BeforeEach
     public void setup() {
-        metrics = new Metrics(new MetricConfig(), List.of(), time);
+        metrics = Metrics.Internal.of(time);
     }
 
     @AfterEach

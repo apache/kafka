@@ -130,7 +130,7 @@ public class RecordAccumulatorTest {
     private final byte[] value = "value".getBytes();
     private final int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length, Record.EMPTY_HEADERS);
 
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
     private AtomicInteger mockRandom = null;

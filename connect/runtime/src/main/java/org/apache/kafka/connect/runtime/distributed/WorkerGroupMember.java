@@ -95,7 +95,7 @@ public class WorkerGroupMember {
             contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
 
-            this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            this.metrics = Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
             long retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
             Metadata metadata = new Metadata(retryBackoffMs, retryBackoffMaxMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),

@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ChunkedByteBufferOutputStreamTest {
 
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     @AfterEach
     public void teardown() {

@@ -129,7 +129,7 @@ public class RecordAccumulatorReadyBenchmark {
             Collections.emptyMap(), cluster);
 
         LogContext logContext = new LogContext();
-        metrics = new Metrics(Time.SYSTEM);
+        metrics = Metrics.Internal.of(Time.SYSTEM);
         int batchSize = 16 * 1024;
         long totalMemory = (long) (partitionsWithPendingBatch + 16) * batchSize;
         RecordAccumulator.PartitionerConfig partitionerConfig =

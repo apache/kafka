@@ -64,7 +64,7 @@ class TestRaftServer(
   // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for __cluster_metadata.
   private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
-  private val metrics = new Metrics(time)
+  private val metrics = Metrics.Internal.of(time)
   private val shutdownLatch = new CountDownLatch(1)
   private val threadNamePrefix = "test-raft"
   private val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()

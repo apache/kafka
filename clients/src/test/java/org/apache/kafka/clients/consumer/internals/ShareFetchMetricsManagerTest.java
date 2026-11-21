@@ -46,7 +46,7 @@ class ShareFetchMetricsManagerTest {
 
     @BeforeEach
     public void setup() {
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         shareFetchMetricsRegistry = new ShareFetchMetricsRegistry(CONSUMER_SHARE_METRIC_GROUP_PREFIX);
         shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, shareFetchMetricsRegistry);
     }

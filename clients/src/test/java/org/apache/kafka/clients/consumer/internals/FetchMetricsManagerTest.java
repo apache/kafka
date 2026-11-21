@@ -54,7 +54,7 @@ public class FetchMetricsManagerTest {
 
     @BeforeEach
     public void setup() {
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         metricsRegistry = new FetchMetricsRegistry(metrics.config().tags().keySet(), "test");
         metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
     }

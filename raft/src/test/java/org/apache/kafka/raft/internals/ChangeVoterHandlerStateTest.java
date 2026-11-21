@@ -49,7 +49,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testAddVoterLifecycle() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -90,7 +90,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testRemoveVoterLifecycle() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -128,7 +128,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testMaybeExpirePendingAddVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -166,7 +166,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testMaybeExpirePendingRemoveVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -200,7 +200,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testIsOperationPendingWithAddVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -234,7 +234,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testIsOperationPendingWithRemoveVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -265,7 +265,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testMaybeResetPendingVoterHandlerState() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -304,7 +304,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetAddVoterWhenRemoveVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -340,7 +340,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetRemoveVoterWhenAddVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -376,7 +376,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCanReplaceAddVoterWithAnotherAddVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -414,7 +414,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCanReplaceRemoveVoterWithAnotherRemoveVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -448,7 +448,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetAddVoterWhenUpdateVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -492,7 +492,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetRemoveVoterWhenUpdateVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -534,7 +534,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetUpdateVoterWhenAddVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -578,7 +578,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCannotSetUpdateVoterWhenRemoveVoterPresent() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 
@@ -620,7 +620,7 @@ public class ChangeVoterHandlerStateTest {
     @Test
     public void testCanReplaceUpdateVoterWithAnotherUpdateVoter() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         raftMetrics.addLeaderMetrics();
 

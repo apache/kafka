@@ -19,7 +19,6 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.annotation.InterfaceAudience;
-import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.KafkaThread;
@@ -90,82 +89,20 @@ public final class Metrics implements Closeable {
     }
 
     /**
-     * Create a metrics repository with no metric reporters and default configuration.
-     * Expiration of Sensors is disabled.
-     */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(Time time) {
-        this(new MetricConfig(), new ArrayList<>(0), time);
-    }
-
-    /**
-     * Create a metrics repository with no metric reporters and the given default configuration.
-     * Expiration of Sensors is disabled.
-     */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(MetricConfig defaultConfig, Time time) {
-        this(defaultConfig, new ArrayList<>(0), time);
-    }
-
-
-  /**
      * Create a metrics repository with no reporters and the given default config. This config will be used for any
      * metric that doesn't override its own config. Expiration of Sensors is disabled.
      * @param defaultConfig The default config to use for all metrics that don't override their config
      */
     public Metrics(MetricConfig defaultConfig) {
-        this(defaultConfig, new ArrayList<>(0), Time.SYSTEM);
+        this(defaultConfig, new ArrayList<>(0), Time.SYSTEM, false, new KafkaMetricsContext(""));
     }
 
     /**
-     * Create a metrics repository with a default config and the given metric reporters.
-     * Expiration of Sensors is disabled.
-     * @param defaultConfig The default config
-     * @param reporters The metrics reporters
-     * @param time The time instance to use with the metrics
+     * The only real constructor. It stays private so the internal {@code Time} is never part of the public API;
+     * Kafka's own code reaches it through {@link Internal}.
      */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
-        this(defaultConfig, reporters, time, false);
-    }
-
-    /**
-     * Create a metrics repository with a default config, metric reporters and metric context
-     * Expiration of Sensors is disabled.
-     * @param defaultConfig The default config
-     * @param reporters The metrics reporters
-     * @param time The time instance to use with the metrics
-     * @param metricsContext The metricsContext to initialize metrics reporter with
-     */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, MetricsContext metricsContext) {
-        this(defaultConfig, reporters, time, false, metricsContext);
-    }
-
-    /**
-     * Create a metrics repository with a default config, given metric reporters and the ability to expire eligible sensors
-     * @param defaultConfig The default config
-     * @param reporters The metrics reporters
-     * @param time The time instance to use with the metrics
-     * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
-     */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
-        this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext(""));
-    }
-
-    /**
-     * Create a metrics repository with a default config, given metric reporters, the ability to expire eligible sensors
-     * and MetricContext
-     * @param defaultConfig The default config
-     * @param reporters The metrics reporters
-     * @param time The time instance to use with the metrics
-     * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
-     * @param metricsContext The metricsContext to initialize metrics reporter with
-     */
-    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
-    public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
-                   MetricsContext metricsContext) {
+    private Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
+                    MetricsContext metricsContext) {
         this.config = defaultConfig;
         this.sensors = new ConcurrentHashMap<>();
         this.metrics = new ConcurrentHashMap<>();
@@ -706,5 +643,32 @@ public final class Metrics implements Closeable {
             }
         }
         log.info("Metrics reporters closed");
+    }
+
+    /**
+     * Factory methods that accept the internal {@code Time}. They exist so Kafka's own clients, servers and tests
+     * can inject a custom clock (for example {@code MockTime}) without making {@code Time} part of the public API.
+     *
+     * <p>This class is NOT part of the public API. It carries no compatibility guarantees and may change or be
+     * removed at any time. External code must use the public {@link Metrics} constructors instead.
+     */
+    @InterfaceAudience.Private
+    public static final class Internal {
+
+        private Internal() {
+        }
+
+        public static Metrics of(Time time) {
+            return of(new MetricConfig(), time);
+        }
+
+        public static Metrics of(MetricConfig defaultConfig, Time time) {
+            return of(defaultConfig, new ArrayList<>(0), time, false, new KafkaMetricsContext(""));
+        }
+
+        public static Metrics of(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time,
+                                 boolean enableExpiration, MetricsContext metricsContext) {
+            return new Metrics(defaultConfig, reporters, time, enableExpiration, metricsContext);
+        }
     }
 }

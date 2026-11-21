@@ -64,7 +64,7 @@ public class ShareCoordinatorMetricsTest {
     @Test
     public void testShardGlobalSensors() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         ShareCoordinatorMetrics coordinatorMetrics = new ShareCoordinatorMetrics(metrics);
         ShareCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
             new SnapshotRegistry(new LogContext()), new TopicPartition("__share_group_state", 0)
@@ -83,7 +83,7 @@ public class ShareCoordinatorMetricsTest {
     @Test
     public void testCoordinatorGlobalSensors() {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         ShareCoordinatorMetrics coordinatorMetrics = new ShareCoordinatorMetrics(metrics);
 
         coordinatorMetrics.record(SHARE_COORDINATOR_WRITE_SENSOR_NAME);

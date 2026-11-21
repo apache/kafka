@@ -84,7 +84,7 @@ public class RecordAccumulatorFlushBenchmark {
     public void setup() throws InterruptedException {
         tp = new TopicPartition(TOPIC, PARTITION);
         time = new MockTime();
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
 
         Cluster cluster = createTestCluster();
         accum = createRecordAccumulator();

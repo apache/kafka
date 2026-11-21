@@ -60,7 +60,7 @@ public class AppInfoParserTest {
 
     @Test
     public void testRegisterAppInfoRegistersMetrics() throws JMException {
-        try (Metrics metrics = new Metrics(new MockTime(1))) {
+        try (Metrics metrics = Metrics.Internal.of(new MockTime(1))) {
             registerAppInfo(metrics);
             registerAppInfoMultipleTimes(metrics);
             AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
@@ -69,7 +69,7 @@ public class AppInfoParserTest {
 
     @Test
     public void testUnregisterAppInfoUnregistersMetrics() throws JMException {
-        try (Metrics metrics = new Metrics(new MockTime(1))) {
+        try (Metrics metrics = Metrics.Internal.of(new MockTime(1))) {
             registerAppInfo(metrics);
             AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
 
@@ -133,7 +133,7 @@ public class AppInfoParserTest {
             "other-tag", "tag-value",
             "another-tag", "another-value"
         );
-        Metrics metrics = new Metrics(new MetricConfig().tags(tags), new MockTime(1));
+        Metrics metrics = Metrics.Internal.of(new MetricConfig().tags(tags), new MockTime(1));
         AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS);
 
         assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
