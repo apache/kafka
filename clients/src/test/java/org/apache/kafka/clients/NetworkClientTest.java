@@ -1271,11 +1271,14 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
+        // Bootstrap is disabled here (rather than using the shared `bootstrapConfiguration` field):
+        // this test supplies its own already-populated metadataUpdater and asserts an exact count of
+        // calls to mockHostResolver, which bootstrap resolution would now also call into.
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1332,11 +1335,14 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
+        // Bootstrap is disabled here (rather than using the shared `bootstrapConfiguration` field):
+        // this test supplies its own already-populated metadataUpdater and asserts an exact count of
+        // calls to mockHostResolver, which bootstrap resolution would now also call into.
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
@@ -1385,11 +1391,14 @@ public class NetworkClientTest {
         ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
         when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
 
+        // Bootstrap is disabled here (rather than using the shared `bootstrapConfiguration` field):
+        // this test supplies its own already-populated metadataUpdater and asserts an exact count of
+        // calls to mockHostResolver, which bootstrap resolution would now also call into.
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Uuid.randomUuid(), Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
             time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
-                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, bootstrapConfiguration, false);
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
@@ -1815,6 +1824,45 @@ public class NetworkClientTest {
         // Subsequent polls should not fail even if already bootstrapped
         client.poll(1000, time.milliseconds());
         assertTrue(metadataUpdater.isBootstrapped());
+    }
+
+    @Test
+    public void testEnsureBootstrappedRecoversAfterTransientDnsFailure() throws InterruptedException {
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        BootstrapConfiguration config = BootstrapConfiguration.enabled(
+                BOOTSTRAP_ADDRESSES,
+                ClientDnsLookup.USE_ALL_DNS_IPS,
+                5000,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+
+        AtomicInteger resolutionAttempts = new AtomicInteger();
+        HostResolver flakyThenWorking = host -> {
+            if (resolutionAttempts.getAndIncrement() < 2) {
+                throw new UnknownHostException("Simulated transient DNS failure for " + host);
+            }
+            return new InetAddress[] {InetAddress.getByName("127.0.0.1")};
+        };
+
+        NetworkClient client = new NetworkClient(null, metadata, selector, "mock", Uuid.randomUuid(),
+                Integer.MAX_VALUE, reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), null, new LogContext(), flakyThenWorking, null,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, config, false);
+
+        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+
+        // First poll kicks off resolution, which should fail the first couple of attempts.
+        client.poll(1000, time.milliseconds());
+        assertFalse(metadataUpdater.isBootstrapped());
+
+        TestUtils.waitForCondition(() -> {
+            client.poll(100, time.milliseconds());
+            return metadataUpdater.isBootstrapped();
+        }, "Bootstrap should eventually complete after transient DNS failures");
+
+        assertTrue(metadataUpdater.isBootstrapped());
+        assertTrue(resolutionAttempts.get() >= 3,
+                "Expected at least 2 failed resolution attempts before the successful one, got " + resolutionAttempts.get());
     }
 
 }
