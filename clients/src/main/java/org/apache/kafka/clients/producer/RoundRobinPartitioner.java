@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -34,6 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * to distribute the writes to all partitions equally. This
  * is the behaviour regardless of record key hash. 
  *
+ * Each partitioner instance starts from a random partition, so producers that
+ * start at the same time do not send to the same partitions in lockstep.
  */
 @InterfaceAudience.Public
 public class RoundRobinPartitioner implements Partitioner {
@@ -66,7 +69,7 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(0));
+        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(ThreadLocalRandom.current().nextInt()));
         return counter.getAndIncrement();
     }
 
