@@ -24,12 +24,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,8 +40,8 @@ public class TaskMetadataImplTest {
     public static final TopicPartition TP_0 = new TopicPartition("t", 0);
     public static final TopicPartition TP_1 = new TopicPartition("t", 1);
     public static final Set<TopicPartition> TOPIC_PARTITIONS = Set.of(TP_0, TP_1);
-    public static final Map<TopicPartition, Long> COMMITTED_OFFSETS = mkMap(mkEntry(TP_1, 1L), mkEntry(TP_1, 2L));
-    public static final Map<TopicPartition, Long> END_OFFSETS = mkMap(mkEntry(TP_1, 1L), mkEntry(TP_1, 3L));
+    public static final Map<TopicPartition, Long> COMMITTED_OFFSETS = Map.of(TP_0, 1L, TP_1, 2L);
+    public static final Map<TopicPartition, Long> END_OFFSETS = Map.of(TP_0, 1L, TP_1, 3L);
     public static final Optional<Long> TIME_CURRENT_IDLING_STARTED = Optional.of(3L);
 
     private TaskMetadata taskMetadata;
@@ -58,9 +58,16 @@ public class TaskMetadataImplTest {
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertTrue(isUnmodifiable(taskMetadata.topicPartitions()));
-        assertTrue(isUnmodifiable(taskMetadata.committedOffsets()));
-        assertTrue(isUnmodifiable(taskMetadata.endOffsets()));
+        // Use mutable collections to ensure unmodifiable wrapping is verified
+        final TaskMetadata mutableInputTask = new TaskMetadataImpl(
+            TASK_ID,
+            new HashSet<>(TOPIC_PARTITIONS),
+            new HashMap<>(COMMITTED_OFFSETS),
+            new HashMap<>(END_OFFSETS),
+            TIME_CURRENT_IDLING_STARTED);
+        assertTrue(isUnmodifiable(mutableInputTask.topicPartitions()));
+        assertTrue(isUnmodifiable(mutableInputTask.committedOffsets()));
+        assertTrue(isUnmodifiable(mutableInputTask.endOffsets()));
     }
 
     @Test
@@ -80,7 +87,7 @@ public class TaskMetadataImplTest {
         final TaskMetadataImpl stillSameDifferCommittedOffsets = new TaskMetadataImpl(
             TASK_ID,
             TOPIC_PARTITIONS,
-            mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
+            Map.of(TP_0, 1000000L, TP_1, 2L),
             END_OFFSETS,
             TIME_CURRENT_IDLING_STARTED);
         assertEquals(stillSameDifferCommittedOffsets, taskMetadata);
@@ -93,7 +100,7 @@ public class TaskMetadataImplTest {
             TASK_ID,
             TOPIC_PARTITIONS,
             COMMITTED_OFFSETS,
-            mkMap(mkEntry(TP_1, 1000000L), mkEntry(TP_1, 2L)),
+            Map.of(TP_0, 1000000L, TP_1, 2L),
             TIME_CURRENT_IDLING_STARTED);
         assertEquals(stillSameDifferEndOffsets, taskMetadata);
         assertEquals(stillSameDifferEndOffsets.hashCode(), taskMetadata.hashCode());
