@@ -832,7 +832,7 @@ public class RaftEventSimulationTest {
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
-            Metrics metrics = new Metrics(time);
+            Metrics metrics = Metrics.Internal.of(time);
 
             persistentState.log.reopen();
 

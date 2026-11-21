@@ -54,7 +54,7 @@ public class KafkaRaftMetricsTest {
     private final int fetchTimeoutMs = 10000;
 
     private final Time time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
 

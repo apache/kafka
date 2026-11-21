@@ -4310,7 +4310,7 @@ public class ShareConsumeRequestManagerTest {
         metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
-        metrics = new Metrics(metricConfig, time);
+        metrics = Metrics.Internal.of(metricConfig, time);
         shareFetchMetricsRegistry = new ShareFetchMetricsRegistry(metricConfig.tags().keySet(), "consumer-share" + groupId);
         metricsManager = spy(new ShareFetchMetricsManager(metrics, shareFetchMetricsRegistry));
 

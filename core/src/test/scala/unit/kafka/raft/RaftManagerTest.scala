@@ -106,7 +106,7 @@ class RaftManagerTest {
       topicPartition,
       topicId,
       Time.SYSTEM,
-      new Metrics(Time.SYSTEM),
+      Metrics.Internal.of(Time.SYSTEM),
       _ => {},
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),

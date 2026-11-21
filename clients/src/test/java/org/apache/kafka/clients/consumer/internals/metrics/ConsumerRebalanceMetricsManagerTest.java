@@ -57,7 +57,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
         metricConfig = new MetricConfig()
                 .samples(numSamples)
                 .timeWindow(windowSizeMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-        metrics = new Metrics(metricConfig, time);
+        metrics = Metrics.Internal.of(metricConfig, time);
         subscriptionState = new ConsumerSubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }

@@ -193,7 +193,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Mock
     private BackgroundEventHandler backgroundEventHandler;
 
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     private final Node coordinatorNode = new Node(1, "localhost", 9092);
 

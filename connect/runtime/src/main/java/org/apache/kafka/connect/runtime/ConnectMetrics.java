@@ -97,7 +97,7 @@ public class ConnectMetrics {
             contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, groupId);
         }
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
-        this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+        this.metrics = Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
 
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
         AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics, time.milliseconds());

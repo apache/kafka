@@ -17,14 +17,12 @@
 
 package org.apache.kafka.server.quota;
 
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -32,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ThrottledChannelExpirationTest {
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private int numCallbacksForStartThrottling = 0;
     private int numCallbacksForEndThrottling = 0;
     private final ThrottleCallback callback = new ThrottleCallback() {

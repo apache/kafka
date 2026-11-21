@@ -193,7 +193,7 @@ public class StreamTaskTest {
     private final TaskId taskId = new TaskId(0, 0);
 
     private MockTime time = new MockTime();
-    private Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
+    private Metrics metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
 
     private StateDirectory stateDirectory;
@@ -801,7 +801,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         // Create a processor that only forwards even keys to test the metrics at the source and terminal nodes
         final MockSourceNode<Integer, Integer> evenKeyForwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
@@ -902,7 +902,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         final long processingDelay = 5L;
 
@@ -951,7 +951,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         // Source node that forwards every record to the terminal node.
         final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
@@ -998,7 +998,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
             InternalProcessorContext<Integer, Integer> context;
@@ -1045,7 +1045,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         final long punctuatorDelay = 7L;
 
@@ -1081,7 +1081,7 @@ public class StreamTaskTest {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+        metrics = Metrics.Internal.of(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
             InternalProcessorContext<Integer, Integer> context;

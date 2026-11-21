@@ -4359,7 +4359,7 @@ public class FetchRequestManagerTest {
         metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
-        metrics = new Metrics(metricConfig, time);
+        metrics = Metrics.Internal.of(metricConfig, time);
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
         metricsManager = spy(new FetchMetricsManager(metrics, metricsRegistry));
         backgroundEventHandler = mock(BackgroundEventHandler.class);

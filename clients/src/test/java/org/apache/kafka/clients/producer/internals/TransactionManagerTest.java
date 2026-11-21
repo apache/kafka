@@ -185,7 +185,7 @@ public class TransactionManagerTest {
         boolean transactionV2Enabled,
         boolean enable2pc
     ) {
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
             new ApiVersion()
@@ -755,7 +755,7 @@ public class TransactionManagerTest {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(producerId, epoch);
 
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         final int requestTimeout = 10000;
         final int deliveryTimeout = 15000;
 
@@ -1037,7 +1037,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransactionManagerDisablesV2() {
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
             new ApiVersion()
@@ -3769,7 +3769,7 @@ public class TransactionManagerTest {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(Metrics.Internal.of(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager);
         initializeIdempotentProducerId(producerId, epoch);
 
@@ -3894,7 +3894,7 @@ public class TransactionManagerTest {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(Metrics.Internal.of(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager);
         initializeIdempotentProducerId(producerId, epoch);
 

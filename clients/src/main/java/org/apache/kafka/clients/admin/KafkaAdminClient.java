@@ -613,7 +613,7 @@ public class KafkaAdminClient extends AdminClient {
                 .tags(metricTags);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-            metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            metrics = Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
 
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,
@@ -653,7 +653,7 @@ public class KafkaAdminClient extends AdminClient {
         clientTelemetryReporter.ifPresent(reporters::add);
 
         try {
-            metrics = new Metrics(new MetricConfig(), reporters, time);
+            metrics = Metrics.Internal.of(new MetricConfig(), reporters, time, false, new KafkaMetricsContext(""));
             LogContext logContext = createLogContext(clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext, clientTelemetryReporter);

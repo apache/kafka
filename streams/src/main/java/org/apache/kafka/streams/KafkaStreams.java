@@ -1130,7 +1130,7 @@ public class KafkaStreams implements AutoCloseable {
 
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                                                                       config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-        return new Metrics(metricConfig, reporters, time, metricsContext);
+        return Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
     }
 
     /**

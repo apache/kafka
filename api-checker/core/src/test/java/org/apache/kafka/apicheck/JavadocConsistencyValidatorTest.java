@@ -94,6 +94,49 @@ class JavadocConsistencyValidatorTest {
     }
 
     @Test
+    void explicitPrivateNestedOfPublic_isNotFlagged() throws IOException {
+        // Outer.Internal opts out of Outer's @Public with its own @Private. Javadoc still emits a
+        // page for it (public nested types cannot be excluded), which must not be reported.
+        ClassFacts outer = factsPublic("org.apache.kafka.foo.Outer");
+        ClassFacts internal = factsBuilder("org.apache.kafka.foo.Outer$Internal")
+                .addFlag(ClassFacts.Flag.PRIVATE_API)
+                .build();
+        ApiSurface surface = ApiSurface.builder()
+                .recordClass(outer, DUMMY_JAR).recordClass(internal, DUMMY_JAR)
+                .addDirectPublic(outer)
+                .addEffectivePublic(outer)
+                .build();
+        File javadocJar = TempJarBuilder.jar()
+                .addHtml("org/apache/kafka/foo/Outer.html", "")
+                .addHtml("org/apache/kafka/foo/Outer.Internal.html", "")
+                .writeTo(tempDir, "javadoc.jar");
+
+        CheckResult result = JavadocConsistencyValidator.validate(javadocJar, surface);
+
+        assertTrue(result.violations().isEmpty(),
+                "explicit @Private nested class of a @Public outer should not be flagged: " + result.violations());
+    }
+
+    @Test
+    void explicitPrivateTopLevelInJavadoc_isStillFlagged() throws IOException {
+        // The exemption only covers nested types. A top-level @Private class can be excluded from
+        // javadoc, so it showing up there is still a real leak.
+        ClassFacts hidden = factsBuilder("org.apache.kafka.foo.Hidden")
+                .addFlag(ClassFacts.Flag.PRIVATE_API)
+                .build();
+        ApiSurface surface = ApiSurface.builder().recordClass(hidden, DUMMY_JAR).build();
+        File javadocJar = TempJarBuilder.jar()
+                .addHtml("org/apache/kafka/foo/Hidden.html", "")
+                .writeTo(tempDir, "javadoc.jar");
+
+        CheckResult result = JavadocConsistencyValidator.validate(javadocJar, surface);
+
+        assertEquals(1, result.violations().size());
+        assertEquals("MISSING_PUBLICAPI_ANNOTATION", result.violations().get(0).getViolationType());
+        assertEquals("org.apache.kafka.foo.Hidden", result.violations().get(0).getClassName());
+    }
+
+    @Test
     void deprecatedClassInJavadoc_isFilteredOut() throws IOException {
         // OldClass is deprecated and not in directPublic — would normally trip MISSING_PUBLICAPI_ANNOTATION,
         // but isDeprecated removes it from the HTML set first.

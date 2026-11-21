@@ -163,7 +163,7 @@ public class ProducerAppendPathBenchmark {
         singlePartitionSnapshot = createMetadataSnapshot(node, STEADY_STATE_PARTITION + 1);
         cluster = metadataSnapshot.cluster();
 
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         accum = createAccumulator();
     }
 

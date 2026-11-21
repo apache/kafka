@@ -130,7 +130,7 @@ public class ConsumerMembershipManagerTest {
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);
         backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class)));
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
@@ -2382,7 +2382,7 @@ public class ConsumerMembershipManagerTest {
                 new LogContext(),
                 subscriptionState,
                 time,
-                new RebalanceCallbackMetricsManager(new Metrics(time))
+                new RebalanceCallbackMetricsManager(Metrics.Internal.of(time))
         );
     }
 

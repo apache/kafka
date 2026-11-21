@@ -84,7 +84,7 @@ public class ShareHeartbeatRequestManagerTest
         membershipManager = mock(ShareMembershipManager.class);
         super.membershipManager = membershipManager;
         heartbeatState = mock(ShareHeartbeatRequestManager.HeartbeatState.class);
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         logContext = new LogContext();
         ConsumerConfig config = mock(ConsumerConfig.class);
 
@@ -117,7 +117,7 @@ public class ShareHeartbeatRequestManagerTest
             Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
         mockJoiningMemberData();
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
-        try (Metrics metrics = new Metrics(time)) {
+        try (Metrics metrics = Metrics.Internal.of(time)) {
             ShareHeartbeatRequestManager manager = new ShareHeartbeatRequestManager(
                 logContext,
                 time,

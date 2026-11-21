@@ -243,7 +243,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testPartitionLoadSensorMetrics() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true)) {
             long startTimeMs = time.milliseconds();
@@ -265,7 +265,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testThreadIdleSensor() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true);
         IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000.0));
@@ -279,7 +279,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testBackgroundThreadIdleSensor() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true);
         IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordBackgroundThreadBusyTime((i + 1) * 1000.0));
@@ -292,7 +292,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testEventQueueSize() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 5);
@@ -332,7 +332,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     })
     public void testHistogramMetrics(String metricNamePrefix) {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true);
 
@@ -387,7 +387,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testRecordEventPurgatoryTimeLimit() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true);
 
@@ -408,7 +408,7 @@ public class CoordinatorRuntimeMetricsImplTest {
     @Test
     public void testFlushRateSensor() {
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP, true);
         IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordFlushTime((i + 1) * 1000));

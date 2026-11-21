@@ -18,7 +18,6 @@ package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.utils.MockTime;
@@ -36,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ReplicationQuotaManagerTest {
 
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     @AfterEach
     public void tearDown() {

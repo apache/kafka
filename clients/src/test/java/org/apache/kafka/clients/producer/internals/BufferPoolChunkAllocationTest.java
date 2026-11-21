@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class BufferPoolChunkAllocationTest {
 
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     // Safety ceiling for block-until-available requests that the test unblocks itself (by
     // deallocating or closing). The waiter is always signaled first, so a passing test returns in

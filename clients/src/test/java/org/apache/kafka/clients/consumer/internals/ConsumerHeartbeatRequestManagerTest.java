@@ -120,7 +120,7 @@ public class ConsumerHeartbeatRequestManagerTest
         super.subscriptions = subscriptions;
         this.membershipManager = mock(ConsumerMembershipManager.class);
         super.membershipManager = this.membershipManager;
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         ConsumerConfig config = mock(ConsumerConfig.class);
 
         this.heartbeatRequestState = spy(new HeartbeatRequestState(
@@ -152,7 +152,7 @@ public class ConsumerHeartbeatRequestManagerTest
             Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
         mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
-        try (Metrics metrics = new Metrics(time)) {
+        try (Metrics metrics = Metrics.Internal.of(time)) {
             ConsumerHeartbeatRequestManager manager = new ConsumerHeartbeatRequestManager(
                 logContext,
                 time,

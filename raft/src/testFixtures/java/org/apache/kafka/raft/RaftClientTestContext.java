@@ -407,7 +407,7 @@ public final class RaftClientTestContext {
         }
 
         public RaftClientTestContext build() throws IOException {
-            Metrics metrics = new Metrics(time);
+            Metrics metrics = Metrics.Internal.of(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             MockListener listener = new MockListener(localId);
             Map<Integer, InetSocketAddress> staticVoterAddressMap = Map.of();
