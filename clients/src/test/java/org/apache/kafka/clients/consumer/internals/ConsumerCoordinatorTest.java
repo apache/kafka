@@ -1421,6 +1421,44 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testAutoCommitOnRebalanceAfterWakeupDuringJoinPrepare() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(
+                rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
+            subscriptions.setRebalanceListener(rebalanceListener, rebalanceConsumer);
+            subscriptions.subscribe(singleton(topic1));
+            joinAsFollowerAndReceiveAssignment(coordinator, singletonList(t1p));
+
+            subscriptions.seek(t1p, 100L);
+            coordinator.requestRejoin("test wakeup during join prepare");
+            client.prepareResponse(request -> {
+                if (!offsetCommitRequestMatcher(singletonMap(t1p, 100L)).matches(request))
+                    return false;
+                consumerClient.wakeup();
+                return true;
+            }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
+
+            assertThrows(WakeupException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
+
+            prepareJoinAndSyncResponse(consumerId, 2, singletonList(topic1), singletonList(t1p));
+            assertTrue(coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
+
+            time.sleep(rebalanceTimeoutMs + 1L);
+            subscriptions.seek(t1p, 200L);
+            coordinator.requestRejoin("test rebalance after wakeup");
+
+            assertFalse(coordinator.joinGroupIfNeeded(time.timer(0L)));
+            assertInstanceOf(OffsetCommitRequest.class, client.requests().peek().requestBuilder().build());
+            respondToOffsetCommitRequest(singletonMap(t1p, 200L), Errors.NONE);
+            prepareJoinAndSyncResponse(consumerId, 3, singletonList(topic1), singletonList(t1p));
+            assertTrue(coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.rejoinNeededOrPending());
+        }
+    }
+
+    @Test
     public void testJoinPrepareWithDisableAutoCommit() {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
             coordinator.ensureActiveGroup();
