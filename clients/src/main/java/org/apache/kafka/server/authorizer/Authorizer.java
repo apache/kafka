@@ -34,8 +34,9 @@ import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -199,35 +200,39 @@ public interface Authorizer extends Configurable, Closeable {
         // Filter out all the resource pattern corresponding to the RequestContext,
         // AclOperation, and ResourceType
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
-            resourceType, null, PatternType.ANY);
+                resourceType, null, PatternType.ANY);
         AclBindingFilter aclFilter = new AclBindingFilter(
-            resourceTypeFilter, AccessControlEntryFilter.ANY);
+                resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        EnumMap<PatternType, Set<String>> denyPatterns =
-            new EnumMap<>(PatternType.class) {{
-                    put(PatternType.LITERAL, new HashSet<>());
-                    put(PatternType.PREFIXED, new HashSet<>());
-                }};
-        EnumMap<PatternType, Set<String>> allowPatterns =
-            new EnumMap<>(PatternType.class) {{
-                    put(PatternType.LITERAL, new HashSet<>());
-                    put(PatternType.PREFIXED, new HashSet<>());
-                }};
+        Set<String> denyPatternsLiteral = new HashSet<>();
+        Set<String> denyPatternsPrefixed = new HashSet<>();
+        BitSet denyPrefixLengths = new BitSet();
+        // Allows are only traversed, so collecting them does not require hashing each name.
+        List<String> allowPatternsLiteral = new ArrayList<>();
+        List<String> allowPatternsPrefixed = new ArrayList<>();
 
         boolean hasWildCardAllow = false;
 
         KafkaPrincipal principal = new KafkaPrincipal(
-            requestContext.principal().getPrincipalType(),
-            requestContext.principal().getName());
+                requestContext.principal().getPrincipalType(),
+                requestContext.principal().getName());
         String hostAddr = requestContext.clientAddress().getHostAddress();
+        String previousAclPrincipal = null;
+        boolean matchesPrincipal = false;
 
         for (AclBinding binding : acls(aclFilter)) {
             String aclHost = binding.entry().host();
             if (!aclHost.equals(hostAddr) && !aclHost.equals("*") && !CidrUtils.isInRange(hostAddr, aclHost))
                 continue;
 
-            if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
-                    && !binding.entry().principal().equals("User:*"))
+            // Reuse the comparison when consecutive ACLs refer to the same principal.
+            String aclPrincipal = binding.entry().principal();
+            if (!aclPrincipal.equals(previousAclPrincipal)) {
+                matchesPrincipal = SecurityUtils.parseKafkaPrincipal(aclPrincipal).equals(principal)
+                        || aclPrincipal.equals("User:*");
+                previousAclPrincipal = aclPrincipal;
+            }
+            if (!matchesPrincipal)
                 continue;
 
             if (binding.entry().operation() != op
@@ -240,10 +245,11 @@ public interface Authorizer extends Configurable, Closeable {
                         // If wildcard deny exists, return deny directly
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                        denyPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
+                        denyPatternsLiteral.add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        denyPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
+                        denyPatternsPrefixed.add(binding.pattern().name());
+                        denyPrefixLengths.set(binding.pattern().name().length());
                         break;
                     default:
                 }
@@ -259,10 +265,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allowPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
+                    allowPatternsLiteral.add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allowPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
+                    allowPatternsPrefixed.add(binding.pattern().name());
                     break;
                 default:
             }
@@ -272,28 +278,29 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
-        // For any prefix allowed, if there's no dominant prefix denied, return allow.
-        for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
-            for (String allowStr : entry.getValue()) {
-                if (entry.getKey() == PatternType.LITERAL
-                        && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
-                    continue;
-                StringBuilder sb = new StringBuilder();
-                boolean hasDominatedDeny = false;
-                for (char ch : allowStr.toCharArray()) {
-                    sb.append(ch);
-                    if (denyPatterns.get(PatternType.PREFIXED).contains(sb.toString())) {
-                        hasDominatedDeny = true;
-                        break;
-                    }
-                }
-                if (!hasDominatedDeny)
-                    return AuthorizationResult.ALLOWED;
-            }
+        // Literal denies cannot eliminate all names covered by a prefixed allow.
+        for (String allowStr : allowPatternsPrefixed) {
+            if (!isDeniedByPrefix(allowStr, denyPatternsPrefixed, denyPrefixLengths))
+                return AuthorizationResult.ALLOWED;
         }
 
+        for (String allowStr : allowPatternsLiteral) {
+            if (!denyPatternsLiteral.contains(allowStr)
+                    && !isDeniedByPrefix(allowStr, denyPatternsPrefixed, denyPrefixLengths))
+                return AuthorizationResult.ALLOWED;
+        }
         return AuthorizationResult.DENIED;
     }
 
+    private boolean isDeniedByPrefix(String name, Set<String> denyPatternsPrefixed, BitSet denyPrefixLengths) {
+        // Only construct prefixes at lengths present in the deny set. A full-length
+        // substring reuses the name, and an empty deny prefix matches every name.
+        for (int length = denyPrefixLengths.nextSetBit(0);
+                length >= 0 && length <= name.length();
+                length = denyPrefixLengths.nextSetBit(length + 1)) {
+            if (denyPatternsPrefixed.contains(name.substring(0, length)))
+                return true;
+        }
+        return false;
+    }
 }
