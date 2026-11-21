@@ -80,7 +80,7 @@ controller.listener.names=CONTROLLER
 listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL
 ```
 
-The controller listener is still configured in this example to use the `SASL_SSL` security protocol, but it is not included in `listeners` since the broker does not expose the controller listener itself. The port that will be used in this case comes from the `controller.quorum.voters` configuration, which defines the complete list of controllers.
+The controller listener is still configured in this example to use the `SASL_SSL` security protocol, but it is not included in `listeners` since the broker does not expose the controller listener itself. The controller endpoints used by the broker come from the `controller.quorum.bootstrap.servers` configuration.
 
 For KRaft servers which have both the broker and controller role enabled, the configuration is similar. The only difference is that the controller listener must be included in `listeners`:
 
@@ -94,6 +94,8 @@ listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL
 ```
 
 It is a requirement that the host and port defined in `controller.quorum.bootstrap.servers` is routed to the exposed controller listeners. For example, here the `CONTROLLER` listener is bound to localhost:9093. The connection string defined by `controller.quorum.bootstrap.servers` must then also use localhost:9093, as it does here.
+
+When a controller listener uses SASL, `sasl.mechanism.controller.protocol` selects the mechanism used for connections to the controllers. The mechanism must be enabled, and each SASL listener must have a JAAS configuration for that mechanism. See [Authentication using SASL](../authentication-using-sasl) for mechanism-specific configuration and production recommendations.
 
 The controller will accept requests on all listeners defined by `controller.listener.names`. Typically there would be just one controller listener, but it is possible to have more. For example, this provides a way to change the active listener from one port or security protocol to another through a roll of the cluster (one roll to expose the new listener, and one roll to remove the old listener). When multiple controller listeners are defined, the first one in the list will be used for outbound requests.
 
