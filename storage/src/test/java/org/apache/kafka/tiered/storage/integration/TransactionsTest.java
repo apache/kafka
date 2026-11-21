@@ -23,6 +23,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
@@ -157,6 +158,7 @@ public class TransactionsTest {
         TransactionsTestHelper.testConsecutivelyRunInitTransactions(clusterInstance);
     }
 
+    @Flaky("KAFKA-21588")
     @ClusterTest
     public void testRecoveryFromEpochOverflow() throws Exception {
         TransactionsTestHelper.testRecoveryFromEpochOverflow(clusterInstance, TOPIC_CONFIG);
