@@ -176,7 +176,7 @@ class ReplicationControlTestContext {
             setLogContext(logContext).
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
-            setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
+            setSessionTimeoutNs(TimeUnit.MILLISECONDS.toNanos(BROKER_SESSION_TIMEOUT_MS)).
             setReplicaPlacer(new StripedReplicaPlacer(random)).
             setFeatureControlManager(featureControl).
             setBrokerShutdownHandler(this::handleBrokerShutdown).
@@ -422,7 +422,7 @@ class ReplicationControlTestContext {
     }
 
     void fenceBrokers(Set<Integer> brokerIds) {
-        time.sleep(BROKER_SESSION_TIMEOUT_MS);
+        time.sleep(BROKER_SESSION_TIMEOUT_MS + 1);
 
         Set<Integer> unfencedBrokerIds = clusterControl.brokerRegistrations().keySet().stream()
             .filter(brokerId -> !brokerIds.contains(brokerId))
