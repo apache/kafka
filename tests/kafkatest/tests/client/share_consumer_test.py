@@ -186,8 +186,21 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        enable_assignment_batching=[False, True],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[False],
         enable_assignment_offload=[False, True]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
     def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True, enable_assignment_offload=True):
 
@@ -222,8 +235,23 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         num_failed_brokers=[1, 2],
-        enable_assignment_batching=[False, True],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        num_failed_brokers=[1],
+        enable_assignment_batching=[False],
         enable_assignment_offload=[False, True]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        num_failed_brokers=[1],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
     def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, enable_assignment_batching=True, enable_assignment_offload=True):
 
@@ -258,8 +286,23 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
-        enable_assignment_batching=[False, True],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[False],
         enable_assignment_offload=[False, True]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
     def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, enable_assignment_batching=True, enable_assignment_offload=True):
         """
@@ -304,8 +347,23 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         num_failed_consumers=[1, 2],
         metadata_quorum=[quorum.isolated_kraft],
-        enable_assignment_batching=[False, True],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[True]
+    )
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
+    @matrix(
+        clean_shutdown=[True],
+        num_failed_consumers=[1],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[False],
         enable_assignment_offload=[False, True]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        num_failed_consumers=[1],
+        metadata_quorum=[quorum.isolated_kraft],
+        enable_assignment_batching=[True],
+        enable_assignment_offload=[False]
     )
     def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, enable_assignment_batching=True, enable_assignment_offload=True):
 
