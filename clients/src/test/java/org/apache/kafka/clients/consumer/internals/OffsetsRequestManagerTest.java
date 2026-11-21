@@ -28,7 +28,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -752,6 +754,143 @@ public class OffsetsRequestManagerTest {
         ConsumerSubscriptionState.FetchPosition expectedPosition = new ConsumerSubscriptionState.FetchPosition(
                 offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
         verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
+    }
+
+    @Test
+    public void testUpdatePositionsSkipsInitializationWhenMemberIsFencedDuringOffsetFetch() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        // OffsetFetch in flight
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        assertFalse(updatePositions1.isDone());
+
+        // Member fenced while the request was in flight: the fetch fails with UNKNOWN_MEMBER_ID
+        fetchResult.completeExceptionally(new UnknownMemberIdException("fenced"));
+
+        // Not an error, no position set, and no fallback to offset reset. The partitions will be initialized
+        // on the next call to updateFetchPositions, after the member rejoins.
+        assertTrue(updatePositions1.isDone());
+        assertFalse(updatePositions1.isCompletedExceptionally(),
+            "Fencing during an in-flight OffsetFetch should not fail the update positions");
+        verify(subscriptionState, never()).seekUnvalidated(any(), any());
+        verify(subscriptionState, never()).resetInitializingPositions(any());
+        assertEquals(0, requestManager.requestsToSend(), "No ListOffsets request should be generated");
+    }
+
+    @Test
+    public void testUpdatePositionsSkipsInitializationWhenMemberEpochIsStaleDuringOffsetFetch() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        assertFalse(updatePositions1.isDone());
+
+        // Member fenced while the request was in flight: the fetch fails with STALE_MEMBER_EPOCH
+        fetchResult.completeExceptionally(new StaleMemberEpochException("fenced"));
+
+        assertTrue(updatePositions1.isDone());
+        assertFalse(updatePositions1.isCompletedExceptionally(),
+            "Fencing during an in-flight OffsetFetch should not fail the update positions");
+        verify(subscriptionState, never()).seekUnvalidated(any(), any());
+        verify(subscriptionState, never()).resetInitializingPositions(any());
+        assertEquals(0, requestManager.requestsToSend(), "No ListOffsets request should be generated");
+    }
+
+    @Test
+    public void testUpdatePositionsRetriesOffsetFetchAfterMemberFenced() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        // First OffsetFetch fails because the member was fenced
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult1 = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult1);
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        fetchResult1.completeExceptionally(new UnknownMemberIdException("fenced"));
+        assertTrue(updatePositions1.isDone());
+        assertFalse(updatePositions1.isCompletedExceptionally());
+        clearInvocations(commitRequestManager);
+
+        // Next call to updateFetchPositions (after rejoining) should send a new OffsetFetch request, and use
+        // the committed offsets to set positions
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult2 = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult2);
+        CompletableFuture<Void> updatePositions2 = requestManager.updateFetchPositions(time.milliseconds());
+        assertFalse(updatePositions2.isDone(), "Update positions should wait for the new OffsetFetch request");
+        verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
+
+        when(subscriptionState.initializingPartitions()).thenReturn(initPartitions1);
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.of(1), "");
+        fetchResult2.complete(new CommitRequestManager.OffsetFetchResult(
+            Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
+
+        assertTrue(updatePositions2.isDone());
+        assertFalse(updatePositions2.isCompletedExceptionally());
+        ConsumerSubscriptionState.FetchPosition expectedPosition = new ConsumerSubscriptionState.FetchPosition(
+                offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
+        verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
+    }
+
+    @Test
+    public void testUpdatePositionsReusingRequestSkipsInitializationWhenMemberIsFenced() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        clearInvocations(commitRequestManager);
+
+        // Second call reuses the pending OffsetFetch request
+        CompletableFuture<Void> updatePositions2 = requestManager.updateFetchPositions(time.milliseconds());
+        verify(commitRequestManager, never()).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
+
+        // Member fenced while the request was in flight. Both calls should complete without error
+        fetchResult.completeExceptionally(new UnknownMemberIdException("fenced"));
+
+        assertTrue(updatePositions1.isDone());
+        assertFalse(updatePositions1.isCompletedExceptionally());
+        assertTrue(updatePositions2.isDone());
+        assertFalse(updatePositions2.isCompletedExceptionally());
+        verify(subscriptionState, never()).seekUnvalidated(any(), any());
+        verify(subscriptionState, never()).resetInitializingPositions(any());
+    }
+
+    @Test
+    public void testUpdatePositionsFailsWhenOffsetFetchFailsWithOtherError() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+
+        // Errors other than fencing should still propagate
+        fetchResult.completeExceptionally(new TopicAuthorizationException(Set.of("topic1")));
+
+        assertTrue(updatePositions1.isDone());
+        assertFutureThrows(TopicAuthorizationException.class, updatePositions1);
+        verify(subscriptionState, never()).seekUnvalidated(any(), any());
+        verify(subscriptionState, never()).resetInitializingPositions(any());
     }
 
     @Test
