@@ -136,7 +136,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                           Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         boolean isAllSubscriptionsEqual = true;
 
-        Set<String> subscribedTopics = new HashSet<>();
+        // the topics of the first subscription, which every other subscription is compared with
+        Set<String> subscribedTopics = null;
 
         // keep track of all previously owned partitions so we can invalidate them if invalid input is
         // detected, eg two consumers somehow claiming the same partition in the same/current generation
@@ -146,9 +147,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             final String consumer = subscriptionEntry.getKey();
             final Subscription subscription = subscriptionEntry.getValue();
 
-            // initialize the subscribed topics set if this is the first subscription
-            if (subscribedTopics.isEmpty()) {
-                subscribedTopics.addAll(subscription.topics());
+            // initialize the subscribed topics set if this is the first subscription. It may be empty, so
+            // check for null and not for an empty set
+            if (subscribedTopics == null) {
+                subscribedTopics = new HashSet<>(subscription.topics());
             } else if (isAllSubscriptionsEqual && !(subscription.topics().size() == subscribedTopics.size()
                 && subscribedTopics.containsAll(subscription.topics()))) {
                 isAllSubscriptionsEqual = false;
