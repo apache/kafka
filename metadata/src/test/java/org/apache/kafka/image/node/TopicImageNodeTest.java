@@ -23,6 +23,7 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.node.printer.NodeStringifier;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -42,17 +43,31 @@ public class TopicImageNodeTest {
             setDirectories(DirectoryId.migratingArray(3)).
             setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
+    private static final TopicImageNode MIRROR_NODE = new TopicImageNode(newTopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, "test-mirror", MirrorPartitionState.STOPPED.value(), new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+            setDirectories(DirectoryId.migratingArray(3)).
+            setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
+
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
+        return newTopicImage(name, id, null, MirrorPartitionState.UNKNOWN.value(), partitions);
+    }
+
+    private static TopicImage newTopicImage(String name, Uuid id, String mirrorName, byte desiredMirrorState, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
         int i = 0;
         for (PartitionRegistration partition : partitions) {
             partitionMap.put(i++, partition);
         }
-        return new TopicImage(name, id, partitionMap);
+        return new TopicImage(name, id, mirrorName, desiredMirrorState, partitionMap);
     }
+
     @Test
     public void testChildNames() {
         assertEquals(List.of("name", "id", "0"), NODE.childNames());
+    }
+
+    @Test
+    public void testMirrorChildNames() {
+        assertEquals(List.of("name", "id", "0", "mirrorName", "mirrorDesiredState"), MIRROR_NODE.childNames());
     }
 
     @Test
@@ -92,5 +107,19 @@ public class TopicImageNodeTest {
         MetadataNode child2 = NODE.child("a");
         assertNull(child1);
         assertNull(child2);
+    }
+
+    @Test
+    public void testChildMirror() {
+        MetadataNode mirrorName = MIRROR_NODE.child("mirrorName");
+        assertNotNull(mirrorName);
+        assertEquals("test-mirror", mirrorName.stringify());
+
+        MetadataNode mirrorDesiredState = MIRROR_NODE.child("mirrorDesiredState");
+        assertNotNull(mirrorDesiredState);
+        assertEquals(MirrorPartitionState.STOPPED.name(), mirrorDesiredState.stringify());
+
+        assertNull(NODE.child("mirrorName"));
+        assertNull(NODE.child("mirrorDesiredState"));
     }
 }

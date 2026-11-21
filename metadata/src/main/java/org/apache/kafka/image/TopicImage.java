@@ -18,11 +18,13 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.image.node.TopicImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.Collections;
 import java.util.Map;
@@ -34,7 +36,16 @@ import java.util.Map.Entry;
  *
  * This class is thread-safe.
  */
-public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+public record TopicImage(String name,
+                         Uuid id,
+                         String mirrorName,
+                         byte desiredMirrorState,
+                         Map<Integer, PartitionRegistration> partitions) {
+
+    public TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+        this(name, id, null, MirrorPartitionState.UNKNOWN.value(), partitions);
+    }
+
     public TopicImage {
         partitions = Collections.unmodifiableMap(partitions);
     }
@@ -47,6 +58,12 @@ public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistratio
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
             writer.write(partition.toRecord(id, partitionId, options));
+        }
+        if (mirrorName != null) {
+            writer.write(0, new MirrorTopicStateChangeRecord().
+                    setTopicName(name).
+                    setMirrorName(mirrorName).
+                    setDesiredState(desiredMirrorState));
         }
     }
 
