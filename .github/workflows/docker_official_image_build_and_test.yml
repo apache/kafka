@@ -45,6 +45,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r docker/requirements.txt
+    - name: Setup Docker
+      uses: gradle/develocity-actions/setup-docker@f852d93dada312948b1ba533226c28e05d756866 # v2.4
+      with:
+        develocity-url: https://develocity.apache.org
+        develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+        develocity-project-id: kafka
     - name: Build image and run tests
       working-directory: ./docker
       env:
