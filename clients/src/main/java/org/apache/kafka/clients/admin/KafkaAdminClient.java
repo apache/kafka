@@ -582,6 +582,7 @@ public class KafkaAdminClient extends AdminClient {
             boolean usingBootstrapControllers = determineBootstrapType(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 usingBootstrapControllers);
 
@@ -832,7 +833,7 @@ public class KafkaAdminClient extends AdminClient {
             // metadata update and hope it appears.  This behavior is useful for avoiding
             // flaky behavior in tests when the cluster is starting up and not all nodes
             // have appeared.
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -862,7 +863,7 @@ public class KafkaAdminClient extends AdminClient {
                 (metadataManager.controller() != null)) {
                 return metadataManager.controller();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -883,7 +884,7 @@ public class KafkaAdminClient extends AdminClient {
                 // In that case, we will postpone node assignment.
                 return client.leastLoadedNode(time.milliseconds()).node();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -909,7 +910,7 @@ public class KafkaAdminClient extends AdminClient {
                     return client.leastLoadedNode(time.milliseconds()).node();
                 }
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -4282,7 +4283,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private void handleNotControllerError(Errors error) throws ApiException {
         metadataManager.clearController();
-        metadataManager.requestUpdate();
+        metadataManager.requestUpdate(true);
         throw error.exception();
     }
 

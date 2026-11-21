@@ -1324,7 +1324,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             doReturn(false).doReturn(true).when(metadataManager).isReady();
 
             // make maybeDrainPendingCall throw UnsupportedVersionException and go to Call#fail
-            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate();
+            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate(false);
 
             // make sure describeCluster handleUnsupportedVersionException doesn't always return false
             doReturn(false).when(metadataManager).usingBootstrapControllers();
