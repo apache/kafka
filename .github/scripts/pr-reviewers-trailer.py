@@ -15,10 +15,9 @@
 
 # Appends a reviewer to the `Reviewers:` trailer of a PR body. This is the
 # shared engine behind the pr-reviewers-trailer-on-review.yml and
-# pr-reviewers-trailer-on-comment.yml workflows. It is intentionally separate
-# from pr-format.py (the PR linter): those workflows only want to credit a
-# reviewer, not run the title/body lint, so coupling the two would surface
-# spurious lint failures and rewrite the whole body on every review/comment.
+# pr-reviewers-trailer-on-comment.yml workflows. It is the only script that
+# edits a PR body, and it only changes the trailer block. pr-format.py (the PR
+# linter) is separate and read-only.
 #
 # Reads PR_NUMBER and REVIEWER_LOGIN from the environment. Expects the `gh`
 # CLI and `git` to be available. No-op (exit 0) when REVIEWER_LOGIN is unset
@@ -33,6 +32,7 @@ import subprocess
 import shlex
 import sys
 import tempfile
+import textwrap
 from typing import Dict, List, Optional, TextIO
 
 logger = logging.getLogger()
@@ -178,24 +178,58 @@ def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
     return identity.lower() in ", ".join(existing_reviewers).lower()
 
 
-def update_reviewers_trailer(body: str, trailer: str) -> str:
-    """Update the Reviewers trailer in the body using git interpret-trailers."""
+def fold_reviewers(reviewers: str) -> str:
+    """Build a Reviewers trailer with no line longer than 72 characters.
+
+    Continuation lines start with a space, as RFC 822 folding requires, so
+    git still reads them as one trailer. GitHub wraps longer lines when it
+    builds the squash commit message and does not indent the continuation,
+    which cuts the trailer short.
+    """
+    return textwrap.fill(f"Reviewers: {reviewers}", width=72, subsequent_indent=" ",
+                         break_long_words=False, break_on_hyphens=False)
+
+
+def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[str]:
+    """Set the Reviewers trailer of the body using git interpret-trailers.
+
+    Only the trailer block (the last paragraph) is changed. Everything the
+    author wrote above it is kept as is. Returns None if git fails.
+    """
+    trailer = f"Reviewers: {reviewers}"
+    # git reads the first paragraph as the commit subject, so pass the title too.
+    subject = f"{title}\n\n"
     with tempfile.NamedTemporaryFile() as fp:
-        fp.write(body.strip().encode())
+        fp.write(subject.encode())
+        fp.write(body.rstrip().encode())
         fp.write(b"\n")
         fp.flush()
         cmd = f"git interpret-trailers --if-exists replace --trailer {shlex.quote(trailer)} {fp.name}"
         p = subprocess.run(shlex.split(cmd), capture_output=True)
         fp.close()
 
-    if p.returncode == 0:
-        return p.stdout.decode()
-    return body
+    # git writes the trailer on a single line, as the last line of the message.
+    updated = p.stdout.decode()
+    head, sep, tail = updated.rpartition(trailer)
+    if p.returncode != 0 or not sep or tail.strip() or not head.startswith(subject):
+        logger.error(f"Unexpected output from git interpret-trailers; leaving the body unchanged.\nSTDERR: {p.stderr.decode()}")
+        return None
+    return head[len(subject):] + fold_reviewers(reviewers) + "\n"
+
+
+def gh_pr_view(pr_number: str, fields: str) -> Dict:
+    cmd = f"gh pr view {pr_number} --json '{fields}'"
+    p = subprocess.run(shlex.split(cmd), capture_output=True)
+    if p.returncode != 0:
+        logger.error(f"GitHub CLI failed with exit code {p.returncode}.\nSTDOUT: {p.stdout.decode()}\nSTDERR:{p.stderr.decode()}")
+        exit(1)
+    return json.loads(p.stdout)
 
 
 if __name__ == "__main__":
     """
-    Appends REVIEWER_LOGIN to the Reviewers trailer of PR_NUMBER's body.
+    Appends REVIEWER_LOGIN to the Reviewers trailer of PR_NUMBER's body, and
+    folds the trailer if it has a line longer than 72 characters.
     Approvals are review events too, so approvers are credited the same way.
     The PR author is never added as their own reviewer.
     """
@@ -205,16 +239,7 @@ if __name__ == "__main__":
         logger.info("PR_NUMBER and REVIEWER_LOGIN are both required; nothing to do.")
         exit(0)
 
-    cmd = f"gh pr view {pr_number} --json 'title,body,author'"
-    p = subprocess.run(shlex.split(cmd), capture_output=True)
-    if p.returncode != 0:
-        logger.error(f"GitHub CLI failed with exit code {p.returncode}.\nSTDOUT: {p.stdout.decode()}\nSTDERR:{p.stderr.decode()}")
-        exit(1)
-
-    gh_json = json.loads(p.stdout)
-    title = gh_json["title"]
-    body = gh_json["body"]
-    pr_author = (gh_json.get("author") or {}).get("login")
+    pr_author = (gh_pr_view(pr_number, "author").get("author") or {}).get("login")
 
     if reviewer_login == pr_author:
         logger.info(f"Reviewer {reviewer_login} is the PR author; not adding to Reviewers.")
@@ -228,14 +253,28 @@ if __name__ == "__main__":
         identity = f"(github:{reviewer_login})"
     resolved = f"{name} {identity}"
 
-    existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
-    if already_exists(identity, existing_reviewers):
-        logger.info(f"Reviewer {resolved} already present; nothing to do.")
-        exit(0)
+    # Read the body only now. Resolving the reviewer takes several API calls,
+    # and an edit made between reading the body and writing it back is lost.
+    gh_json = gh_pr_view(pr_number, "title,body")
+    title = gh_json["title"]
+    body = gh_json["body"]
 
-    existing_value = ", ".join(existing_reviewers)
-    new_value = f"{existing_value}, {resolved}" if existing_value else resolved
-    body = update_reviewers_trailer(body, f"Reviewers: {new_value}")
+    existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
+    new_value = ", ".join(existing_reviewers)
+    if already_exists(identity, existing_reviewers):
+        logger.info(f"Reviewer {resolved} already present.")
+    else:
+        new_value = f"{new_value}, {resolved}" if new_value else resolved
+
+    # Write the trailer even if the reviewer is already present. A trailer
+    # typed by hand may be on one long line, and it has to be folded.
+    new_body = update_reviewers_trailer(title, body, new_value)
+    if new_body is None:
+        exit(1)
+    if new_body.rstrip() == body.rstrip():
+        logger.info("Reviewers trailer is up to date; nothing to do.")
+        exit(0)
+    body = new_body
 
     if get_env("GITHUB_ACTIONS"):
         with tempfile.NamedTemporaryFile() as fp:
@@ -247,7 +286,7 @@ if __name__ == "__main__":
             if p.returncode != 0:
                 logger.error(f"Could not update PR {pr_number}. STDOUT: {p.stdout.decode()}")
                 exit(1)
-        logger.info(f"Added reviewer {resolved} to PR #{pr_number}.")
+        logger.info(f"Updated the Reviewers trailer of PR #{pr_number}: {new_value}")
     else:
         logger.info(f"Not updating {pr_number} since this is not running on GitHub Actions.")
     exit(0)
