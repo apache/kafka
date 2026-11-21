@@ -2996,7 +2996,7 @@ public class AssignmentRefinerTest {
     @Test
     public void shouldNotGrantAnyMoveAwayFromAnOwnerWhenActiveTasksHaveToStay() {
         // A move inside a process, a grant to a version 0 target owner, and a grant away from an owner that is still
-        // restoring the task all wait for the next epoch.
+        // restoring the task all wait for the next epoch, without a warm-up task.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA1", member("memberA1", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
             "memberA2", member("memberA2", "processA", TasksTuple.EMPTY),
@@ -3024,11 +3024,34 @@ public class AssignmentRefinerTest {
                 new AssignmentRefinerImpl.StagedMigration(
                     STATEFUL_0, "memberA1", "memberA2", Optional.empty(), Optional.empty()),
                 new AssignmentRefinerImpl.StagedMigration(
-                    STATEFUL_1, "memberB", "memberC", Optional.of("processC"), Optional.empty()),
+                    STATEFUL_1, "memberB", "memberC", Optional.empty(), Optional.empty()),
                 new AssignmentRefinerImpl.StagedMigration(
-                    STATEFUL_2, "memberB", "memberC", Optional.of("processC"), Optional.empty())
+                    STATEFUL_2, "memberB", "memberC", Optional.empty(), Optional.empty())
             ),
             decisions.stagedMigrations()
+        );
+    }
+
+    @Test
+    public void shouldNotWarmUpAVersion0TargetOwnerWhenActiveTasksHaveToStay() {
+        // Every member has been heard from, so warm-up tasks are funded, but memberB heartbeats with version 0 and
+        // could never be seen to catch up.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+
+        assertEquals(
+            Map.of(
+                "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+                "memberB", TasksTuple.EMPTY
+            ),
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions, true, 1)
         );
     }
 

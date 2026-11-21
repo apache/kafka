@@ -254,8 +254,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * that no member holds as an active task, on a member that does not report its restore progress, see
      * {@link #unobservableStandbyToPromote}.
      *
-     * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
-     * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
+     * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never warmed up: its target owner never
+     * reports its restore progress, so no warm-up task could ever be seen to complete the migration. It is granted to
+     * the target owner at once, unless {@code keepActiveTasks} is set.
      *
      * <p>If {@code keepActiveTasks} is set, every active task stays with the member that holds it, and only tasks that
      * no member holds as an active task are placed.
@@ -330,10 +331,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // member reconciles to. Tasks that no member holds as an active task are placed below as usual.
             if (holder != null && keepActiveTasks) {
                 // A process can't hold a warm-up task next to the active task, so a move within it can't be warmed up.
+                // A target owner that never reports its restore progress could not be seen to finish warming up.
                 final boolean sameProcess = members.get(holder.memberId()).processId().equals(targetProcessId);
+                final boolean warmable = !sameProcess
+                    && WarmupSupport.of(heartbeatVersions.get(targetOwner)) != WarmupSupport.NOT_SUPPORTED;
                 stagedMigrations.add(stagedMigration(
                     currentAssignment, task, holder.memberId(), targetOwner,
-                    sameProcess ? Optional.empty() : Optional.of(targetProcessId)));
+                    warmable ? Optional.of(targetProcessId) : Optional.empty()));
                 continue;
             }
 
@@ -470,7 +474,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * Builds the staged migration that keeps the task on {@code currentOwner}. An empty {@code targetProcessId} means
      * the migration cannot be warmed up, which is the case when the target assignment names a member the group no
-     * longer has, or when the task moves between two members of one process.
+     * longer has, when the task moves between two members of one process, or when the target owner does not report its
+     * restore progress.
      */
     private static StagedMigration stagedMigration(
         final CurrentAssignmentIndex currentAssignment,
@@ -773,8 +778,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      */
     private static Warming warmingOf(final StagedMigration migration) {
         if (migration.targetProcessId().isEmpty()) {
-            // The target assignment names a member the group no longer has, so there is nowhere to warm up and no
-            // warm-up slot may be spent. The task simply stays with its current owner.
+            // The migration cannot be warmed up (see StagedMigration#targetProcessId), so no warm-up slot may be
+            // spent. The task simply stays with its current owner.
             return Warming.PARK;
         }
 
@@ -1364,10 +1369,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param targetOwner
      *        The member the target assignment moves the task to.
      * @param targetProcessId
-     *        The process the target owner runs in, or empty if the target assignment names a member the group no
-     *        longer has. Empty means the migration can never be warmed up: it gets no warm-up task, no warm-up slot
-     *        is spent on it, and the task stays with its current owner until the assignor names a member that still
-     *        exists.
+     *        The process the target owner runs in, or empty if the migration cannot be warmed up: the target
+     *        assignment names a member the group no longer has, the task moves between two members of one process,
+     *        or the target owner does not report its restore progress. An empty process gets the migration no warm-up
+     *        task and spends no warm-up slot on it, and the task stays with its current owner.
      * @param copyOnTargetProcess
      *        The copy of the task that the target owner's process already holds, if any. When there is none, the
      *        migration is a candidate for a fresh warm-up task. When there is one, the process is already restoring
