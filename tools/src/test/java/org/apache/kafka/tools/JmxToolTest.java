@@ -73,7 +73,12 @@ public class JmxToolTest {
 
     @AfterAll
     public static void afterAll() throws Exception {
-        jmxAgent.stop();
+        try {
+            jmxAgent.stop();
+        } finally {
+            ManagementFactory.getPlatformMBeanServer().unregisterMBean(
+                new ObjectName("kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"));
+        }
     }
 
     @BeforeEach
