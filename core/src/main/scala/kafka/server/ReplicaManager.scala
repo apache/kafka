@@ -19,7 +19,7 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.cluster.Partition
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
-import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
+import kafka.server.ReplicaManager.{createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.share.DelayedShareFetch
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
@@ -67,7 +67,7 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, LogAppendResult, LogDeleteRecordsResult, common}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, LogAppendResult, LogDeleteRecordsResult, common, ReplicaManager => JReplicaManager}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchPartitionStatus, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogReadInfo, LogReadResult, OffsetResultHolder, RecordValidationException, RecordValidationStats, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -87,39 +87,6 @@ import scala.jdk.OptionConverters.RichOptional
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
-
-  private val LeaderCountMetricName = "LeaderCount"
-  private val PartitionCountMetricName = "PartitionCount"
-  private val OfflineReplicaCountMetricName = "OfflineReplicaCount"
-  private val UnderReplicatedPartitionsMetricName = "UnderReplicatedPartitions"
-  private val UnderMinIsrPartitionCountMetricName = "UnderMinIsrPartitionCount"
-  private val AtMinIsrPartitionCountMetricName = "AtMinIsrPartitionCount"
-  private val ReassigningPartitionsMetricName = "ReassigningPartitions"
-  private val PartitionsWithLateTransactionsCountMetricName = "PartitionsWithLateTransactionsCount"
-  private val ProducerIdCountMetricName = "ProducerIdCount"
-  private val IsrExpandsPerSecMetricName = "IsrExpandsPerSec"
-  private val IsrShrinksPerSecMetricName = "IsrShrinksPerSec"
-  private val FailedIsrUpdatesPerSecMetricName = "FailedIsrUpdatesPerSec"
-
-  private[server] val GaugeMetricNames = Set(
-    LeaderCountMetricName,
-    PartitionCountMetricName,
-    OfflineReplicaCountMetricName,
-    UnderReplicatedPartitionsMetricName,
-    UnderMinIsrPartitionCountMetricName,
-    AtMinIsrPartitionCountMetricName,
-    ReassigningPartitionsMetricName,
-    PartitionsWithLateTransactionsCountMetricName,
-    ProducerIdCountMetricName
-  )
-
-  private[server] val MeterMetricNames = Set(
-    IsrExpandsPerSecMetricName,
-    IsrShrinksPerSecMetricName,
-    FailedIsrUpdatesPerSecMetricName
-  )
-
-  private[server] val MetricNames = GaugeMetricNames.union(MeterMetricNames)
 
   private val timestampMinSupportedVersion: immutable.Map[Long, Short] = immutable.Map[Long, Short](
     ListOffsetsRequest.EARLIEST_TIMESTAMP -> 1.toShort,
@@ -234,16 +201,16 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorPlugin: Option[Plugin[ReplicaSelector]] = createReplicaSelector(metrics)
 
-  metricsGroup.newGauge(LeaderCountMetricName, () => leaderPartitionsIterator.size)
+  metricsGroup.newGauge(JReplicaManager.LEADER_COUNT, () => leaderPartitionsIterator.size)
   // Visible for testing
-  private[kafka] val partitionCount = metricsGroup.newGauge(PartitionCountMetricName, () => allPartitions.size)
-  metricsGroup.newGauge(OfflineReplicaCountMetricName, () => offlinePartitionCount)
-  metricsGroup.newGauge(UnderReplicatedPartitionsMetricName, () => underReplicatedPartitionCount)
-  metricsGroup.newGauge(UnderMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isUnderMinIsr))
-  metricsGroup.newGauge(AtMinIsrPartitionCountMetricName, () => leaderPartitionsIterator.count(_.isAtMinIsr))
-  metricsGroup.newGauge(ReassigningPartitionsMetricName, () => reassigningPartitionsCount)
-  metricsGroup.newGauge(PartitionsWithLateTransactionsCountMetricName, () => lateTransactionsCount)
-  metricsGroup.newGauge(ProducerIdCountMetricName, () => producerIdCount)
+  private[kafka] val partitionCount = metricsGroup.newGauge(JReplicaManager.PARTITION_COUNT, () => allPartitions.size)
+  metricsGroup.newGauge(JReplicaManager.OFFLINE_REPLICA_COUNT, () => offlinePartitionCount)
+  metricsGroup.newGauge(JReplicaManager.UNDER_REPLICATED_PARTITIONS, () => underReplicatedPartitionCount)
+  metricsGroup.newGauge(JReplicaManager.UNDER_MIN_ISR_PARTITION_COUNT, () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  metricsGroup.newGauge(JReplicaManager.AT_MIN_ISR_PARTITION_COUNT, () => leaderPartitionsIterator.count(_.isAtMinIsr))
+  metricsGroup.newGauge(JReplicaManager.REASSIGNING_PARTITIONS, () => reassigningPartitionsCount)
+  metricsGroup.newGauge(JReplicaManager.PARTITIONS_WITH_LATE_TRANSACTIONS_COUNT, () => lateTransactionsCount)
+  metricsGroup.newGauge(JReplicaManager.PRODUCER_ID_COUNT, () => producerIdCount)
 
   private def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -254,9 +221,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   def producerIdCount: Int = onlinePartitionsIterator.map(_.producerIdCount).sum
 
-  val isrExpandRate: Meter = metricsGroup.newMeter(IsrExpandsPerSecMetricName, "expands", TimeUnit.SECONDS)
-  val isrShrinkRate: Meter = metricsGroup.newMeter(IsrShrinksPerSecMetricName, "shrinks", TimeUnit.SECONDS)
-  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter(FailedIsrUpdatesPerSecMetricName, "failedUpdates", TimeUnit.SECONDS)
+  val isrExpandRate: Meter = metricsGroup.newMeter(JReplicaManager.ISR_EXPANDS_PER_SEC, "expands", TimeUnit.SECONDS)
+  val isrShrinkRate: Meter = metricsGroup.newMeter(JReplicaManager.ISR_SHRINKS_PER_SEC, "shrinks", TimeUnit.SECONDS)
+  val failedIsrUpdatesRate: Meter = metricsGroup.newMeter(JReplicaManager.FAILED_ISR_UPDATES_PER_SEC, "failedUpdates", TimeUnit.SECONDS)
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 
@@ -2211,7 +2178,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def removeMetrics(): Unit = {
-    ReplicaManager.MetricNames.foreach(metricsGroup.removeMetric)
+    JReplicaManager.ALL_METRIC_NAMES.asScala.foreach(metricsGroup.removeMetric)
   }
 
   def beginControlledShutdown(): Unit = {
