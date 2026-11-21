@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -330,6 +331,40 @@ public class DefaultSslEngineFactoryTest {
         assertNotNull(keyStore.getCertificate("kafka"), "Certificate not found");
         assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
         assertEquals(KeyStore.getDefaultType(), keyStore.getType());
+    }
+    
+    @Test
+    public void testNoCipherSuitesConfiguredUsesJdkDefaults() throws Exception {
+        factory.configure(configs);
+        assertNotNull(factory.createServerSslEngine("localhost", 9092));
+    }
+
+    @Test
+    public void testAllSupportedCipherSuitesPassThrough() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_CIPHER_B");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B", "TLS_CIPHER_C"};
+        assertArrayEquals(configured.toArray(new String[0]), DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testUnsupportedCipherSuiteIsFiltered() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_FAKE_CIPHER_DOES_NOT_EXIST");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B"};
+        assertArrayEquals(new String[]{"TLS_CIPHER_A"}, DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testAllUnsupportedCipherSuitesThrows() {
+        List<String> configured = Arrays.asList("TLS_FAKE_CIPHER_A", "TLS_FAKE_CIPHER_B");
+        String[] supported = {"TLS_CIPHER_A", "TLS_CIPHER_B"};
+        assertThrows(InvalidConfigurationException.class,
+                () -> DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testNullSupportedCipherSuitesPassThrough() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_CIPHER_B");
+        assertArrayEquals(configured.toArray(new String[0]), DefaultSslEngineFactory.filterCipherSuites(configured, null));
     }
 
     @Test
