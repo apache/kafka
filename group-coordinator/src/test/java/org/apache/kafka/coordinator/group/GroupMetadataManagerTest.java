@@ -36468,7 +36468,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testShareGroupAsyncTargetAssignmentCancelledOnRollbackAfterHeartbeatEpochBump() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -36479,18 +36480,35 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+
+        ShareGroupMember member1 = new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+            .build();
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withShareGroupAssignor(assignor)
             .withMetadataImage(metadataImage)
+            .withShareGroup(new ShareGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash))
             .build();
 
-        // Member joins the group and gets no assignment yet.
+        // Member 2 joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(fooTopicName)));
 
@@ -36500,12 +36518,12 @@ public class GroupMetadataManagerTest {
         // Simulate a failed write to the log.
         context.rollback();
 
-        // The member rejoins, re-bumping the group epoch to the same value.
+        // Member 2 rejoins, re-bumping the group epoch to the same value.
         // The stale assignor run is cancelled and replaced.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
-                .setMemberId(memberId)
+                .setMemberId(memberId2)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(fooTopicName)));
 
