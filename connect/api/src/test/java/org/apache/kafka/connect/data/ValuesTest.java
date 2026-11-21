@@ -951,6 +951,65 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldConvertMidnightTimestampToStringUsingTimestampFormat() {
+        java.util.Date midnight = new java.util.Date(MILLIS_PER_DAY * 20089);
+
+        String converted = Values.convertToString(Timestamp.SCHEMA, midnight);
+
+        assertEquals(formatWith(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN, midnight), converted);
+    }
+
+    @Test
+    public void shouldConvertDateToStringUsingDateFormatRegardlessOfMillis() {
+        java.util.Date dateWithTimeComponent = new java.util.Date(MILLIS_PER_DAY * 20089 + 12345);
+
+        String converted = Values.convertToString(Date.SCHEMA, dateWithTimeComponent);
+
+        assertEquals(formatWith(Values.ISO_8601_DATE_FORMAT_PATTERN, dateWithTimeComponent), converted);
+    }
+
+    @Test
+    public void shouldConvertTimeToStringUsingTimeFormatRegardlessOfMillis() {
+        java.util.Date timeBeyondOneDay = new java.util.Date(MILLIS_PER_DAY * 20089 + 12345);
+
+        String converted = Values.convertToString(Time.SCHEMA, timeBeyondOneDay);
+
+        assertEquals(formatWith(Values.ISO_8601_TIME_FORMAT_PATTERN, timeBeyondOneDay), converted);
+    }
+
+    @Test
+    public void shouldConvertMidnightTimestampWithoutSchemaUsingDateFormat() {
+        java.util.Date midnight = new java.util.Date(MILLIS_PER_DAY * 20089);
+
+        String converted = Values.convertToString(null, midnight);
+
+        assertEquals(formatWith(Values.ISO_8601_DATE_FORMAT_PATTERN, midnight), converted);
+    }
+
+    @Test
+    public void shouldConvertMidnightTimestampNestedInStructUsingTimestampFormat() {
+        java.util.Date midnight = new java.util.Date(MILLIS_PER_DAY * 20089);
+        Schema schema = SchemaBuilder.struct().field("ts", Timestamp.SCHEMA).build();
+        Struct struct = new Struct(schema).put("ts", midnight);
+
+        String converted = Values.convertToString(schema, struct);
+
+        assertEquals("{\"ts\":" + formatWith(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN, midnight) + "}", converted);
+    }
+
+    @Test
+    public void shouldConvertMidnightTimestampNestedInArrayAndMapUsingTimestampFormat() {
+        java.util.Date midnight = new java.util.Date(MILLIS_PER_DAY * 20089);
+        String expectedTimestamp = formatWith(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN, midnight);
+
+        Schema arraySchema = SchemaBuilder.array(Timestamp.SCHEMA).build();
+        assertEquals("[" + expectedTimestamp + "]", Values.convertToString(arraySchema, List.of(midnight)));
+
+        Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Timestamp.SCHEMA).build();
+        assertEquals("{\"k\":" + expectedTimestamp + "}", Values.convertToString(mapSchema, Map.of("k", midnight)));
+    }
+
+    @Test
     public void shouldConvertDecimalValues() {
         // Various forms of the same number should all be parsed to the same BigDecimal
         Number number = 1.0f;
@@ -1328,5 +1387,9 @@ public class ValuesTest {
             assertEquals(value, result.value());
             assertEquals(schema, result.schema());
         }
+    }
+
+    protected String formatWith(String pattern, java.util.Date value) {
+        return new SimpleDateFormat(pattern).format(value);
     }
 }
