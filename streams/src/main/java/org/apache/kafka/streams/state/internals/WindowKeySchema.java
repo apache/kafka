@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -141,6 +142,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
                                        final Deserializer<K> deserializer,
                                        final Headers headers,
                                        final String topic) {
+        checkKeyLength(binaryKey, TIMESTAMP_SIZE);
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         final K key = deserializer.deserialize(topic, headers, bytes);
@@ -199,6 +201,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     static byte[] extractStoreKeyBytes(final byte[] binaryKey) {
+        checkKeyLength(binaryKey, SUFFIX_SIZE);
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return bytes;
@@ -207,16 +210,19 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     static <K> K extractStoreKey(final byte[] binaryKey,
                                  final Headers headers,
                                  final StateSerdes<K, ?> serdes) {
+        checkKeyLength(binaryKey, SUFFIX_SIZE);
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return serdes.keyFrom(bytes, headers);
     }
 
     static long extractStoreTimestamp(final byte[] binaryKey) {
+        checkKeyLength(binaryKey, SUFFIX_SIZE);
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
 
     static int extractStoreSequence(final byte[] binaryKey) {
+        checkKeyLength(binaryKey, SUFFIX_SIZE);
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
 
@@ -247,8 +253,17 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     static Window extractStoreWindow(final byte[] binaryKey,
                                      final long windowSize) {
+        checkKeyLength(binaryKey, SUFFIX_SIZE);
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
         return timeWindowForSize(start, windowSize);
+    }
+
+    private static void checkKeyLength(final byte[] binaryKey, final int minLength) {
+        if (binaryKey.length < minLength) {
+            throw new SerializationException(
+                "Invalid window key: expected at least " + minLength + " bytes, but got " + binaryKey.length
+            );
+        }
     }
 }
