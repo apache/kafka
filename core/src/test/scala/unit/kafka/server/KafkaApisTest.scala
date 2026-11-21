@@ -5027,7 +5027,7 @@ class KafkaApisTest extends Logging {
       ))
     ).thenThrow(Errors.INVALID_REQUEST.exception)
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -5922,7 +5922,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId4, 0, topicName4), false
     ))
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -7121,7 +7121,7 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).
@@ -7356,7 +7356,7 @@ class KafkaApisTest extends Logging {
       new FinalContext()
     )
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -7423,7 +7423,7 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).
@@ -7572,7 +7572,7 @@ class KafkaApisTest extends Logging {
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
-    when(sharePartitionManager.acknowledgeSessionUpdate(any(), any(), any())).thenThrow(
+    when(sharePartitionManager.acknowledgeSessionUpdate(any(), any(), any(), any())).thenThrow(
       Errors.INVALID_SHARE_SESSION_EPOCH.exception
     )
 
@@ -7618,7 +7618,7 @@ class KafkaApisTest extends Logging {
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
-    when(sharePartitionManager.acknowledgeSessionUpdate(any(), any(), any())).thenThrow(
+    when(sharePartitionManager.acknowledgeSessionUpdate(any(), any(), any(), any())).thenThrow(
       Errors.SHARE_SESSION_NOT_FOUND.exception
     )
 
@@ -7665,7 +7665,7 @@ class KafkaApisTest extends Logging {
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).
@@ -7722,7 +7722,7 @@ class KafkaApisTest extends Logging {
     when(partition.leaderReplicaIdOpt).thenAnswer(_ => Some(newLeaderId))
     when(partition.getLeaderEpoch).thenAnswer(_ => newLeaderEpoch)
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     when(sharePartitionManager.acknowledge(
       any(),
@@ -7795,7 +7795,7 @@ class KafkaApisTest extends Logging {
       CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).
@@ -7848,9 +7848,9 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
           new ShareAcknowledgeResponseData.PartitionData()
@@ -7917,9 +7917,9 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
-    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any(), any())).thenReturn(
       CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -14827,7 +14827,7 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
+    doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any(), any())
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).

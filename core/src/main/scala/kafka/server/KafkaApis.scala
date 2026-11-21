@@ -3502,7 +3502,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManager.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId, request.context.connectionId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
@@ -3697,7 +3697,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // Updating the cache for Share Session Handling
-      sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, shareSessionEpoch)
+      sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, shareSessionEpoch, request.context.connectionId)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
@@ -3733,7 +3733,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManager.releaseSession(groupId, memberId).
+            sharePartitionManager.releaseSession(groupId, memberId, request.context.connectionId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
