@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -68,6 +69,7 @@ public class CachingKeyValueStore
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Position position;
+    private boolean transactionalStateStoresEnabled;
 
     @FunctionalInterface
     public interface CacheQueryHandler {
@@ -109,6 +111,10 @@ public class CachingKeyValueStore
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
+        transactionalStateStoresEnabled = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false);
     }
 
     @Override
@@ -143,19 +149,24 @@ public class CachingKeyValueStore
             lock.lock();
             try {
                 validateStoreOpen();
-                final Position mergedPosition = getPosition();
 
-                // We use the merged position since the cache and the store may be at different positions
-                if (!StoreQueryUtils.isPermitted(mergedPosition, positionBound, partition)) {
-                    result = QueryResult.notUpToBound(mergedPosition, positionBound, partition);
+                if (transactionalStateStoresEnabled && config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
+                    result = wrapped().query(query, positionBound, config);
                 } else {
-                    result = (QueryResult<R>) handler.apply(
-                        query,
-                        mergedPosition,
-                        positionBound,
-                        config,
-                        this
-                    );
+                    final Position mergedPosition = getPosition();
+
+                    // We use the merged position since the cache and the store may be at different positions
+                    if (!StoreQueryUtils.isPermitted(mergedPosition, positionBound, partition)) {
+                        result = QueryResult.notUpToBound(mergedPosition, positionBound, partition);
+                    } else {
+                        result = (QueryResult<R>) handler.apply(
+                            query,
+                            mergedPosition,
+                            positionBound,
+                            config,
+                            this
+                        );
+                    }
                 }
             } finally {
                 lock.unlock();
