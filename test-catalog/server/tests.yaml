@@ -262,9 +262,9 @@ org.apache.kafka.server.EnvelopeUtilsTest:
 - testNonForwardableApiIsRejected
 - testPrincipalDeserializationFailureIsRejected
 org.apache.kafka.server.ExpiringErrorCacheTest:
+- testBothPutMethodsWriteToSameCache
 - testCapacityEnforcement
 - testCapacityWithDifferentTTLs
-- testClearOperation
 - testConcurrentPutAndGet
 - testConcurrentPutOperations
 - testConcurrentUpdates
@@ -276,6 +276,7 @@ org.apache.kafka.server.ExpiringErrorCacheTest:
 - testGetNonExistentTopic
 - testMixedExpiredAndValidEntries
 - testPutAndGet
+- testPutCreatableTopicResultsUsesDefaultErrorMessageWhenMissing
 - testSingleEntryCache
 - testStaleEntriesInQueueHandledCorrectly
 - testUpdateDoesNotLeaveStaleEntries

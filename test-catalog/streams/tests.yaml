@@ -2868,6 +2868,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldNotCallRecordRestoreTimeIfRestoreDoesNotComplete
 - shouldNotDecrementRemainingRecordsBelowZeroWhenSkippingPastStoredOffset
 - shouldNotGiveUpOnPollsThatHaveNotWaited
+- shouldNotLookUpLimitOffsetsForChangelogsOfPausedStandbyTasks
 - shouldNotProbeStandbyWithStoredOffset
 - shouldNotProbeWhenStoredOffsetGapIsSmall
 - shouldNotProbeWindowedStoreWithUnboundedRetention
