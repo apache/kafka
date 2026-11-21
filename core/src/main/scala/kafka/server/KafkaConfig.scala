@@ -21,7 +21,7 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{ConfigDef, ConfigException}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -91,7 +91,16 @@ object KafkaConfig extends Logging {
   def apply(props: java.util.Map[_, _], doLog: Boolean = true): KafkaConfig = new KafkaConfig(props, doLog)
 
   def apply(props: java.util.Map[_, _], doLog: Boolean, enforceProviderAllowlist: Boolean): KafkaConfig =
-    new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props), enforceProviderAllowlist)
+    new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props),
+      if (enforceProviderAllowlist) Some(util.Map.of[String, AnyRef]()) else None)
+
+  /**
+   * Create a config from props whose variables are already resolved. Config providers are kept but never instantiated.
+   */
+  def fromResolvedProps(props: java.util.Map[_, _], doLog: Boolean): KafkaConfig =
+    new KafkaConfig(doLog, AbstractKafkaConfig.populateSynonyms(props),
+      // A non-empty configProviderProps whose config.providers is empty makes AbstractConfig instantiate no provider.
+      Some(util.Map.of[String, AnyRef](AbstractConfig.CONFIG_PROVIDERS_CONFIG, "")))
 
   def configType(configName: String): Option[ConfigDef.Type] =
     AbstractKafkaConfig.configType(configName).toScala
@@ -107,16 +116,16 @@ object KafkaConfig extends Logging {
  * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
  * For more details check KAFKA-15853
  */
-class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProviderAllowlist: Boolean)
+class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], configProviderProps: Option[util.Map[String, _]])
   extends AbstractKafkaConfig(
     KafkaConfig.configDef,
     props,
-    if (enforceProviderAllowlist) util.Map.of() else Utils.castToStringObjectMap(props),
+    configProviderProps.getOrElse(Utils.castToStringObjectMap(props)),
     doLog
   ) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props), false)
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props), false)
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props), None)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props), None)
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
