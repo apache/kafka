@@ -72,10 +72,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -300,6 +302,49 @@ public class LogLoaderTest {
                         producerStateManager, Optional.empty(), true, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
             }
         };
+    }
+
+    @Test
+    public void testRecoverySnapshotFailurePreservesRecords() throws IOException {
+        LogConfig config = new LogConfig(Map.of());
+        UnifiedLog log = createLog(logDir, config);
+        log.appendAsLeader(LogTestUtils.singletonRecords("first".getBytes(), mockTime.milliseconds()), 0);
+        log.roll();
+        log.appendAsLeader(LogTestUtils.singletonRecords("second".getBytes(), mockTime.milliseconds()), 0);
+        List<Path> logFiles = log.logSegments().stream().map(s -> s.log().file().toPath()).toList();
+        log.close();
+        log.producerStateManager().deleteSnapshotsBefore(Long.MAX_VALUE);
+        List<byte[]> originalBytes = new ArrayList<>();
+        for (Path file : logFiles) {
+            originalBytes.add(Files.readAllBytes(file));
+        }
+
+        // A directory at the snapshot path makes the write fail without damaging either log segment.
+        Path snapshotPath = LogFileUtils.producerSnapshotFile(logDir, 1L).toPath();
+        Files.createDirectory(snapshotPath);
+        TopicPartition topicPartition = UnifiedLog.parseTopicPartitionName(logDir);
+        LogDirFailureChannel failureChannel = new LogDirFailureChannel(1);
+        LeaderEpochFileCache epochCache = UnifiedLog.createLeaderEpochCache(
+                logDir, topicPartition, failureChannel, Optional.empty(), mockTime.scheduler);
+        ProducerStateManager stateManager = new ProducerStateManager(
+                topicPartition, logDir, 60000, producerStateManagerConfig, mockTime);
+        IOException failure = null;
+        try (LogSegments segments = new LogSegments(topicPartition)) {
+            LogLoader loader = new LogLoader(logDir, topicPartition, config, mockTime.scheduler, mockTime,
+                    failureChannel, false, segments, 0L, 0L, epochCache, stateManager,
+                    new ConcurrentHashMap<>(), false);
+            try {
+                loader.load();
+            } catch (IOException e) {
+                failure = e;
+            }
+            for (int i = 0; i < logFiles.size(); i++) {
+                assertTrue(Files.exists(logFiles.get(i)), "Recovery must preserve later log segments");
+                assertArrayEquals(originalBytes.get(i), Files.readAllBytes(logFiles.get(i)),
+                        "Recovery must preserve valid record bytes");
+            }
+            assertNotNull(failure, "Recovery must propagate storage errors");
+        }
     }
 
     @Test
