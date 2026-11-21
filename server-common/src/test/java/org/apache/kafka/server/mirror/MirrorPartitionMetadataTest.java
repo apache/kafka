@@ -1,0 +1,135 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.server.mirror;
+
+import org.apache.kafka.server.common.OffsetAndEpoch;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class MirrorPartitionMetadataTest {
+    @Test
+    void testBuilder() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.FAILED)
+            .withStateEpoch(7)
+            .withLastMirror(new OffsetAndEpoch(4_294_967_313L, 42))
+            .withErrorMessage("error")
+            .withRetryAttempt((short) 3)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
+            .build();
+
+        assertEquals(MirrorPartitionState.FAILED, metadata.state());
+        assertEquals(7, metadata.stateEpoch());
+        assertEquals(new OffsetAndEpoch(4_294_967_313L, 42), metadata.lastMirror());
+        assertEquals("error", metadata.errorMessage());
+        assertEquals((short) 3, metadata.retryAttempt());
+        assertEquals(MirrorPartitionState.MIRRORING, metadata.previousState());
+    }
+
+    @Test
+    void testEmpty() {
+        MirrorPartitionMetadata empty = MirrorPartitionMetadata.EMPTY;
+
+        assertEquals(MirrorPartitionState.UNKNOWN, empty.state());
+        assertEquals(0, empty.stateEpoch());
+        assertEquals(new OffsetAndEpoch(-1L, -1), empty.lastMirror());
+        assertEquals(MirrorPartitionMetadata.EMPTY_LAST_MIRROR, empty.lastMirror());
+        assertNull(empty.errorMessage());
+        assertEquals((short) 0, empty.retryAttempt());
+        assertEquals(MirrorPartitionState.UNKNOWN, empty.previousState());
+        assertEquals(empty, new MirrorPartitionMetadata.Builder().build());
+    }
+
+    @Test
+    void testPartialBuilderKeepsDefaults() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.MIRRORING)
+            .withStateEpoch(3)
+            .build();
+
+        assertEquals(MirrorPartitionState.MIRRORING, metadata.state());
+        assertEquals(3, metadata.stateEpoch());
+        assertEquals(MirrorPartitionMetadata.EMPTY.lastMirror(), metadata.lastMirror());
+        assertNull(metadata.errorMessage());
+        assertEquals(MirrorPartitionMetadata.EMPTY.retryAttempt(), metadata.retryAttempt());
+        assertEquals(MirrorPartitionMetadata.EMPTY.previousState(), metadata.previousState());
+    }
+
+    @Test
+    void testCopyBuilderChangesOnlyTheSetFields() {
+        MirrorPartitionMetadata mirroring = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.MIRRORING)
+            .withStateEpoch(3)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .build();
+
+        MirrorPartitionMetadata failed = new MirrorPartitionMetadata.Builder(mirroring)
+            .withState(MirrorPartitionState.FAILED)
+            .withStateEpoch(4)
+            .withErrorMessage("error")
+            .withRetryAttempt((short) 1)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
+            .build();
+
+        assertEquals(new MirrorPartitionMetadata(MirrorPartitionState.FAILED, 4, new OffsetAndEpoch(100L, 10), "error",
+            (short) 1, MirrorPartitionState.MIRRORING), failed);
+        assertEquals(mirroring, new MirrorPartitionMetadata.Builder(mirroring).build());
+    }
+
+    @Test
+    void testNonRetryableError() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.FAILED)
+            .withErrorMessage("error")
+            .withRetryAttempt(MirrorPartitionMetadata.NON_RETRYABLE_ERROR)
+            .withPreviousState(MirrorPartitionState.MIRRORING)
+            .build();
+
+        assertEquals((short) -1, metadata.retryAttempt());
+        assertEquals(MirrorPartitionMetadata.NON_RETRYABLE_ERROR, metadata.retryAttempt());
+    }
+
+    @Test
+    void testNullFieldsAreRejected() {
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withState(null).build());
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withLastMirror(null).build());
+        assertThrows(NullPointerException.class, () -> new MirrorPartitionMetadata.Builder().withPreviousState(null).build());
+    }
+
+    @Test
+    void testEquality() {
+        MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.STOPPED)
+            .withStateEpoch(2)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withPreviousState(MirrorPartitionState.STOPPING)
+            .build();
+
+        assertEquals(metadata, new MirrorPartitionMetadata.Builder()
+            .withState(MirrorPartitionState.STOPPED)
+            .withStateEpoch(2)
+            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withPreviousState(MirrorPartitionState.STOPPING)
+            .build());
+        assertNotEquals(metadata, new MirrorPartitionMetadata.Builder(metadata).withStateEpoch(3).build());
+    }
+}

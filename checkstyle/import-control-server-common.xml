@@ -94,6 +94,10 @@
             <allow pkg="com.yammer.metrics" />
         </subpackage>
 
+        <subpackage name="mirror">
+            <allow pkg="org.apache.kafka.server.common" />
+        </subpackage>
+
         <subpackage name="network">
             <allow pkg="org.apache.kafka.server.authorizer" />
         </subpackage>
