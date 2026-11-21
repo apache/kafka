@@ -35,7 +35,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
+import static org.apache.kafka.common.utils.internals.ByteUtils.incrementWithoutOverflow;
 
 /**
  * A generic implementation of {@link RocksDBStore.ColumnFamilyAccessor} that supports dual-column-family
