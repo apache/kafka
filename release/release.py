@@ -223,14 +223,27 @@ def release_tags():
     return sorted([t for t in git.tags() if re.match(release_tag_pattern, t)], key=version_key)
 
 
+def get_previous_release(version, tags):
+    """
+    The release that the given release is compared with: a bugfix release X.Y.Z (Z > 0) is compared with X.Y.(Z-1),
+    and a minor or major release X.Y.0 is compared with the latest earlier X'.Y'.0 release (e.g. 4.4.0 -> 4.3.0, 4.0.0 -> 3.9.0).
+    Returns None if no such release exists.
+    """
+    if version.endswith(".0"):
+        # minor or major release: ignore bugfix releases
+        tags = [t for t in tags if t.endswith(".0")]
+    earlier_tags = [t for t in tags if version_key(t) < version_key(version)]
+    return earlier_tags[-1] if earlier_tags else None
+
+
 def prompt_current_and_previous_release():
     tags = release_tags()
     release_version_num = tags[-1]
     if not confirm(f"Is the current release {release_version_num}?"):
         release_version_num = prompt("What is the current release version:")
         validate_release_num(release_version_num)
-    previous_release_version_num = tags[-2]
-    if not confirm(f"Is the previous release {previous_release_version_num}?"):
+    previous_release_version_num = get_previous_release(release_version_num, tags)
+    if previous_release_version_num is None or not confirm(f"Is the previous release {previous_release_version_num}?"):
         previous_release_version_num = prompt("What is the previous release version:")
         validate_release_num(previous_release_version_num)
     if version_key(release_version_num) < version_key(previous_release_version_num):
