@@ -28,11 +28,10 @@ import java.util.OptionalLong;
 /**
  * This class represents the state of a specific producer-id.
  * It contains batchMetadata queue which is ordered such that the batch with the lowest sequence is at the head of the
- * queue while the batch with the highest sequence is at the tail of the queue. We will retain at most {@link ProducerStateEntry#NUM_BATCHES_TO_RETAIN}
+ * queue while the batch with the highest sequence is at the tail of the queue. We will retain at most {@link RecordBatch#NUM_BATCHES_RETAINED_PER_PRODUCER}
  * elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
  */
 public class ProducerStateEntry {
-    public static final int NUM_BATCHES_TO_RETAIN = 5;
     private final long producerId;
     private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
 
@@ -99,7 +98,7 @@ public class ProducerStateEntry {
     }
 
     private void addBatchMetadata(BatchMetadata batch) {
-        if (batchMetadata.size() == ProducerStateEntry.NUM_BATCHES_TO_RETAIN) batchMetadata.removeFirst();
+        if (batchMetadata.size() == RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER) batchMetadata.removeFirst();
         batchMetadata.add(batch);
     }
 
