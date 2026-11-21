@@ -44,16 +44,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class BalancedTaskAssignorTest {
+public class SpreadTaskAssignorTest {
 
     private static final String SUBTOPOLOGY_1 = "test-subtopology1";
     private static final String SUBTOPOLOGY_2 = "test-subtopology2";
 
-    private final BalancedTaskAssignor assignor = new BalancedTaskAssignor();
+    private final SpreadTaskAssignor assignor = new SpreadTaskAssignor();
 
     @Test
     public void testToStringReturnsName() {
-        assertEquals("balanced", assignor.name());
+        assertEquals("spread", assignor.name());
         assertEquals(assignor.name(), assignor.toString());
     }
 
@@ -183,7 +183,7 @@ public class BalancedTaskAssignorTest {
     @Test
     public void shouldNotDependOnPreviousAssignmentAcrossProcessesUnlikeStickyAssignor() {
         // The previous assignment groups the tasks by subtopology. The sticky assignor keeps that layout, because
-        // both members are below quota; the balanced assignor recomputes the interleaved layout regardless.
+        // both members are below quota; the spread assignor recomputes the interleaved layout regardless.
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberWithTasks("process1", mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0, 1))), Map.of())),
             mkEntry("member2", memberWithTasks("process2", mkMap(mkEntry(SUBTOPOLOGY_2, Set.of(0, 1))), Map.of()))
@@ -194,10 +194,10 @@ public class BalancedTaskAssignorTest {
         assertEquals(mkMap(mkEntry(SUBTOPOLOGY_1, Set.of(0, 1))), sticky.members().get("member1").activeTasks());
         assertEquals(mkMap(mkEntry(SUBTOPOLOGY_2, Set.of(0, 1))), sticky.members().get("member2").activeTasks());
 
-        final GroupAssignment balanced = assignor.assign(new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT), topology);
-        assertOnePartitionOfEachSubtopology(balanced, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
-        assertOnePartitionOfEachSubtopology(balanced, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
-        assertAllTasksAssignedOnce(balanced, topology);
+        final GroupAssignment spread = assignor.assign(new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT), topology);
+        assertOnePartitionOfEachSubtopology(spread, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertOnePartitionOfEachSubtopology(spread, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
+        assertAllTasksAssignedOnce(spread, topology);
     }
 
     @Test
@@ -307,7 +307,7 @@ public class BalancedTaskAssignorTest {
 
     @Test
     public void shouldKeepATaskOnItsMemberWhenItsRoleChangesWithinAProcess() {
-        // process1 currently runs tasks 1 and 3 and holds standbys of 0 and 2; the balanced placement gives it the
+        // process1 currently runs tasks 1 and 3 and holds standbys of 0 and 2; the spread placement gives it the
         // opposite roles. Each task stays with the member that holds its state: tasks 2 and 0 go from standby to
         // active on member1 and member2, and tasks 3 and 1 from active to standby on the same members.
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
@@ -387,8 +387,8 @@ public class BalancedTaskAssignorTest {
     public void shouldNotAssignAnyStandbysWithInsufficientCapacityAndLogTheShortfallOnce() {
         // A single process cannot hold a standby of its own active tasks. The assignor carries on and reports the
         // shortfall in one INFO line for the whole assignment, not in one warning per task.
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(BalancedTaskAssignor.class)) {
-            appender.setClassLogger(BalancedTaskAssignor.class, Level.INFO);
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(SpreadTaskAssignor.class)) {
+            appender.setClassLogger(SpreadTaskAssignor.class, Level.INFO);
             final GroupAssignment result = assignor.assign(
                 new GroupSpecImpl(
                     members("member1", "process1", "member2", "process1"),
