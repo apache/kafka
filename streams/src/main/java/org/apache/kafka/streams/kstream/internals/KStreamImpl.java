@@ -1374,6 +1374,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
@@ -1386,6 +1387,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
@@ -1408,6 +1410,45 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (builder.processProcessValueFixEnabled()) {
             processNode.setValueChangingOperation(true);
         }
+
+        builder.addGraphNode(graphNode, processNode);
+        // cannot inherit value serde
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            null,
+            subTopologySourceNodes,
+            repartitionRequired,
+            processNode,
+            builder);
+    }
+
+    @Override
+    public <VOut> KStream<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier, final String... stateStoreNames) {
+        return processFixedKey(
+            processorSupplier,
+            Named.as(builder.newProcessorName(PROCESSVALUES_NAME)),
+            stateStoreNames
+        );
+    }
+
+    @Override
+    public <VOut> KStream<K, VOut> processFixedKey(final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier, final Named named, final String... stateStoreNames) {
+        ApiUtils.checkSupplier(processorSupplier);
+        Objects.requireNonNull(named, "named cannot be null");
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames cannot be a null array");
+        for (final String stateStoreName : stateStoreNames) {
+            Objects.requireNonNull(stateStoreName, "state store name cannot be null");
+        }
+
+        final String name = new NamedInternal(named).name();
+        final ProcessorToStateConnectorNode<? super K, ? super V> processNode = new ProcessorToStateConnectorNode<>(
+            name,
+            new ProcessorParameters<>(processorSupplier, name),
+            stateStoreNames
+        );
+
+        processNode.setValueChangingOperation(true);
 
         builder.addGraphNode(graphNode, processNode);
         // cannot inherit value serde
