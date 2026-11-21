@@ -466,7 +466,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableTransformValues<>(
             this,
             transformerSupplier,
-            queryableStoreName);
+            queryableStoreName,
+            stateStoreNames);
 
         final ProcessorParameters<K, VR, ?, ?> processorParameters =
             unsafeCastProcessorParametersToCompletelyDifferentType(
