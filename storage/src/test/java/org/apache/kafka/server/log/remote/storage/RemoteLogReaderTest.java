@@ -19,6 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.util.ServerTestUtils;
@@ -40,6 +41,8 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -128,5 +131,39 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteFetchRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteFetchBytesRate().count());
         assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().count());
+    }
+
+    @Test
+    public void testRemoteLogReaderConvertsMetadataNotReadyException() throws RemoteStorageException, IOException {
+        RemoteLogMetadataNotReadyException exception = new RemoteLogMetadataNotReadyException("not ready");
+        when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(exception);
+
+        RemoteLogReadResult result = readWithError();
+        ReplicaNotAvailableException error = assertInstanceOf(ReplicaNotAvailableException.class, result.error().get());
+        assertSame(exception, error.getCause());
+    }
+
+    @Test
+    public void testRemoteLogReaderDoesNotConvertRemoteStorageNotReadyException() throws RemoteStorageException, IOException {
+        RemoteStorageNotReadyException exception = new RemoteStorageNotReadyException("not ready");
+        when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(exception);
+
+        RemoteLogReadResult result = readWithError();
+        assertSame(exception, result.error().get());
+    }
+
+    private RemoteLogReadResult readWithError() {
+        Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        RemoteLogReader remoteLogReader =
+                new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
+        remoteLogReader.call();
+
+        ArgumentCaptor<RemoteLogReadResult> remoteLogReadResultArg = ArgumentCaptor.forClass(RemoteLogReadResult.class);
+        verify(callback, times(1)).accept(remoteLogReadResultArg.capture());
+        RemoteLogReadResult result = remoteLogReadResultArg.getValue();
+        assertTrue(result.error().isPresent());
+        assertFalse(result.fetchDataInfo().isPresent());
+        return result;
     }
 }

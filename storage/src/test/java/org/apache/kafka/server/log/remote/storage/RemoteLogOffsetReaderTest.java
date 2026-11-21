@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -48,6 +49,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import static org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -137,6 +140,38 @@ class RemoteLogOffsetReaderTest {
             assertTrue(futureHolder.taskFuture().isDone());
             assertTrue(futureHolder.taskFuture().get().hasException());
             assertEquals(exception, futureHolder.taskFuture().get().exception().get());
+        }
+    }
+
+    @Test
+    public void testConvertMetadataNotReadyExceptionOnFindOffsetByTimestamp() throws Exception {
+        RemoteLogMetadataNotReadyException exception = new RemoteLogMetadataNotReadyException("not ready");
+        ReplicaNotAvailableException error = assertInstanceOf(ReplicaNotAvailableException.class,
+                findOffsetByTimestampError(exception));
+        assertSame(exception, error.getCause());
+    }
+
+    @Test
+    public void testNotConvertRemoteStorageNotReadyExceptionOnFindOffsetByTimestamp() throws Exception {
+        RemoteStorageNotReadyException exception = new RemoteStorageNotReadyException("not ready");
+        assertSame(exception, findOffsetByTimestampError(exception));
+    }
+
+    private Exception findOffsetByTimestampError(RemoteStorageException exception) throws Exception {
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+            @Override
+            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                                                                      long timestamp,
+                                                                      long startingOffset,
+                                                                      LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
+                throw exception;
+            }
+        }) {
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> futureHolder
+                    = rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty);
+            OffsetResultHolder.FileRecordsOrError result = futureHolder.taskFuture().get(1, TimeUnit.SECONDS);
+            assertTrue(result.hasException());
+            return result.exception().get();
         }
     }
 

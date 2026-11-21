@@ -17,7 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataNotReadyException;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -117,7 +117,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     }
 
     private RemoteLogMetadataCache getRemoteLogMetadataCache(TopicIdPartition topicIdPartition)
-            throws RemoteResourceNotFoundException {
+            throws RemoteStorageException {
         Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
         RemoteLogMetadataCache remoteLogMetadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
@@ -127,8 +127,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             try {
                 boolean initialized = remoteLogMetadataCache.awaitInitialized(100, TimeUnit.MILLISECONDS);
                 if (!initialized) {
-                    // Throwing a retriable ReplicaNotAvailableException here for clients retry.
-                    throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+                    throw new RemoteLogMetadataNotReadyException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
                 }
             } catch (InterruptedException ex) {
                 throw new RemoteResourceNotFoundException("Couldn't initialize remote log metadata cache for partition: " + topicIdPartition);
