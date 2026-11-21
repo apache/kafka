@@ -62,6 +62,7 @@ class Scheduler implements AutoCloseable {
         try {
             executor.submit(() -> executeThread(task, description, true)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.warn("{} was interrupted running task: {}", name, description);
         } catch (TimeoutException e) {
             LOG.error("{} timed out running task: {}", name, description);
@@ -83,6 +84,7 @@ class Scheduler implements AutoCloseable {
                 LOG.error("{} timed out during shutdown of internal scheduler.", name);
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.warn("{} was interrupted during shutdown of internal scheduler.", name);
         }
     }
@@ -101,6 +103,7 @@ class Scheduler implements AutoCloseable {
                 LOG.warn("{} took too long ({} ms) running task: {}", name, elapsed, description);
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             LOG.warn("{} was interrupted running task: {}", name, description);
         } catch (Throwable e) {
             LOG.error("{} caught exception in scheduled task: {}", name, description, e);

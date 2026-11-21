@@ -220,6 +220,7 @@ public class MirrorMaker {
         try {
             stopLatch.await();
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             log.error("Interrupted waiting for MirrorMaker to shutdown");
         }
     }

@@ -100,6 +100,7 @@ public class Connect<H extends Herder> {
         try {
             stopLatch.await();
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             log.error("Interrupted waiting for Kafka Connect to shutdown");
         }
     }
