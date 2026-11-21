@@ -225,8 +225,8 @@ def release_tags():
 
 def get_previous_release(version, tags):
     """
-    The release that the given release is compared with: a bugfix release X.Y.Z (Z > 0) is compared with X.Y.(Z-1),
-    and a minor or major release X.Y.0 is compared with the latest earlier X'.Y'.0 release (e.g. 4.4.0 -> 4.3.0, 4.0.0 -> 3.9.0).
+    The release that the given release is compared with, i.e. the latest release before it in the sorted tags.
+    For a minor or major release (X.Y.0), bugfix releases are ignored (e.g. 4.4.1 -> 4.4.0, 4.4.0 -> 4.3.0, 4.0.0 -> 3.9.0).
     Returns None if no such release exists.
     """
     if version.endswith(".0"):
