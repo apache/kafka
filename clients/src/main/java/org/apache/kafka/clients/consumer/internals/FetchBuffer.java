@@ -72,8 +72,8 @@ public class FetchBuffer implements AutoCloseable {
      * @return {@code true} if the buffer is empty, {@code false} otherwise
      */
     boolean isEmpty() {
+        lock.lock();
         try {
-            lock.lock();
             return completedFetches.isEmpty();
         } finally {
             lock.unlock();
@@ -87,8 +87,8 @@ public class FetchBuffer implements AutoCloseable {
      * @return {@code true} if there are completed fetches that match the {@link Predicate}, {@code false} otherwise
      */
     boolean hasCompletedFetches(Predicate<CompletedFetch> predicate) {
+        lock.lock();
         try {
-            lock.lock();
             return completedFetches.stream().anyMatch(predicate);
         } finally {
             lock.unlock();
@@ -103,8 +103,8 @@ public class FetchBuffer implements AutoCloseable {
         if (completedFetches == null || completedFetches.isEmpty())
             return;
 
+        lock.lock();
         try {
-            lock.lock();
             this.completedFetches.addAll(completedFetches);
             wokenup.set(true);
             blockingCondition.signalAll();
@@ -114,8 +114,8 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     CompletedFetch nextInLineFetch() {
+        lock.lock();
         try {
-            lock.lock();
             return nextInLineFetch;
         } finally {
             lock.unlock();
@@ -123,8 +123,8 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     void setNextInLineFetch(CompletedFetch nextInLineFetch) {
+        lock.lock();
         try {
-            lock.lock();
             this.nextInLineFetch = nextInLineFetch;
         } finally {
             lock.unlock();
@@ -132,8 +132,8 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     CompletedFetch peek() {
+        lock.lock();
         try {
-            lock.lock();
             return completedFetches.peek();
         } finally {
             lock.unlock();
@@ -141,8 +141,8 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     CompletedFetch poll() {
+        lock.lock();
         try {
-            lock.lock();
             return completedFetches.poll();
         } finally {
             lock.unlock();
@@ -163,9 +163,8 @@ public class FetchBuffer implements AutoCloseable {
      * @param timer Timer that provides time to wait
      */
     void awaitWakeup(Timer timer) {
+        lock.lock();
         try {
-            lock.lock();
-
             while (!wokenup.compareAndSet(true, false)) {
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
@@ -194,8 +193,8 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     void wakeup() {
+        lock.lock();
         try {
-            lock.lock();
             wokenup.set(true);
             blockingCondition.signalAll();
         } finally {
@@ -210,9 +209,8 @@ public class FetchBuffer implements AutoCloseable {
      * @param partitions {@link Set} of {@link TopicPartition}s for which any buffered data should be kept
      */
     void retainAll(final Set<TopicPartition> partitions) {
+        lock.lock();
         try {
-            lock.lock();
-
             completedFetches.removeIf(cf -> maybeDrain(partitions, cf));
 
             if (maybeDrain(partitions, nextInLineFetch))
@@ -242,9 +240,8 @@ public class FetchBuffer implements AutoCloseable {
      * @return {@link TopicPartition Partition} set
      */
     Set<TopicPartition> bufferedPartitions() {
+        lock.lock();
         try {
-            lock.lock();
-
             final Set<TopicPartition> partitions = new HashSet<>();
 
             if (nextInLineFetch != null && !nextInLineFetch.isConsumed()) {
@@ -260,9 +257,8 @@ public class FetchBuffer implements AutoCloseable {
 
     @Override
     public void close() {
+        lock.lock();
         try {
-            lock.lock();
-
             idempotentCloser.close(
                     () -> retainAll(Collections.emptySet()),
                     () -> log.warn("The fetch buffer was already closed")

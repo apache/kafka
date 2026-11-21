@@ -182,8 +182,8 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
                 throw new IOException("Could not refresh JWKS", e);
             }
 
+            refreshLock.writeLock().lock();
             try {
-                refreshLock.writeLock().lock();
                 jsonWebKeys = Collections.unmodifiableList(localJWKs);
             } finally {
                 refreshLock.writeLock().unlock();
@@ -243,8 +243,8 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
         if (!isInitialized)
             throw new IllegalStateException("Please call init() first");
 
+        refreshLock.readLock().lock();
         try {
-            refreshLock.readLock().lock();
             return jsonWebKeys;
         } finally {
             refreshLock.readLock().unlock();
@@ -297,9 +297,8 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
                 }
             });
 
+            refreshLock.writeLock().lock();
             try {
-                refreshLock.writeLock().lock();
-
                 for (JsonWebKey jwk : localJWKs)
                     missingKeyIds.remove(jwk.getKeyId());
 
@@ -351,9 +350,8 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             log.warn("Key ID {} was too long to cache", snippet);
             return false;
         } else {
+            refreshLock.writeLock().lock();
             try {
-                refreshLock.writeLock().lock();
-
                 Long nextCheckTime = missingKeyIds.get(keyId);
                 long currTime = time.milliseconds();
                 log.debug("For key ID {}, nextCheckTime: {}, currTime: {}", keyId, nextCheckTime, currTime);
