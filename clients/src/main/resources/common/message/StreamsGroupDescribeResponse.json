@@ -106,7 +106,7 @@
             { "name": "Assignment", "type": "Assignment", "versions": "0+",
               "about": "The current assignment." },
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
-              "about": "The target assignment." },
+              "about": "The target assignment. WarmupTasks is always empty, since warm-up tasks are only part of the current assignment." },
             { "name": "IsClassic", "type": "bool", "versions": "0+",
               "about": "True for classic members that have not been upgraded yet." }
           ]},

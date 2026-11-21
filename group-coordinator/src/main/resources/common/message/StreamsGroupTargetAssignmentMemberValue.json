@@ -21,11 +21,11 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ActiveTasks", "versions": "0+", "type": "[]TaskIds",
-      "about": "Currently assigned active tasks for this streams client." },
+      "about": "Active tasks in the target assignment of this member." },
     { "name": "StandbyTasks", "versions": "0+", "type": "[]TaskIds",
-      "about": "Currently assigned standby tasks for this streams client." },
+      "about": "Standby tasks in the target assignment of this member." },
     { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskIds",
-      "about": "Currently assigned warm-up tasks for this streams client." }
+      "about": "Always empty. Warm-up tasks are only part of the current assignment of a member, never of its target assignment." }
   ],
   "commonStructs": [
     { "name": "TaskIds", "versions": "0+", "fields": [
