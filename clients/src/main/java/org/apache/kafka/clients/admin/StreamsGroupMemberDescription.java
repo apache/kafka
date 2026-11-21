@@ -176,6 +176,8 @@ public class StreamsGroupMemberDescription {
 
     /**
      * The target assignment.
+     * Its {@link StreamsGroupMemberAssignment#warmupTasks() warm-up tasks} are always empty, since warm-up tasks are
+     * only part of the {@link #assignment() current assignment}.
      */
     public StreamsGroupMemberAssignment targetAssignment() {
         return targetAssignment;
