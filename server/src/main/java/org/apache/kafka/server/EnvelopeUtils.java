@@ -103,7 +103,7 @@ public final class EnvelopeUtils {
             // set the dequeue time of forwardedRequest as the value of envelope request
             forwardedRequest.requestDequeueTimeNanos(envelope.requestDequeueTimeNanos());
             return forwardedRequest;
-        } catch (InvalidRequestException e) {
+        } catch (InvalidRequestException | UnsupportedVersionException e) {
             // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
             // The purpose is to disambiguate structural errors in the envelope request
             // itself, such as an invalid client address.

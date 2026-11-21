@@ -162,6 +162,7 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @param timer Timer to enforce time limit
      */
     // Visible for testing
+    @Override
     protected synchronized void closeInternal(Timer timer) {
         // we do not need to re-enable wake-ups since we are closing already
         client.disableWakeups();

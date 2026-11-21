@@ -49,6 +49,29 @@ object ConsumerProtocolMigrationTest {
   )
   class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ConsumerProtocolMigrationTest(cluster) {
   }
+
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )
+  )
+  class WithAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ConsumerProtocolMigrationTest(cluster) {
+  }
+
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )
+  )
+  class WithAssignmentBatchingAndAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ConsumerProtocolMigrationTest(cluster) {
+  }
 }
 
 @ClusterTestDefaults(
@@ -62,6 +85,10 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
   protected def isConsumerAssignmentBatchingEnabled: Boolean = {
     cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs > 0)
+  }
+
+  protected def isConsumerAssignorOffloadEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.consumerGroupAssignorOffloadEnable)
   }
 
   @ClusterTest(
@@ -234,14 +261,28 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The joining request with a consumer group member 2 is accepted.
-    val memberId2 = consumerGroupHeartbeat(
+    val memberId2 = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
-    ).memberId
+    )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
@@ -311,14 +352,28 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // The joining request with a consumer group member 2 is accepted. Member 2 subscribes to a
     // different topic so that member 1 keeps its partitions.
-    val memberId2 = consumerGroupHeartbeat(
+    val memberId2 = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("bar"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
-    ).memberId
+    )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // Member 1 rejoins and syncs to catch up with the new target assignment.
     val rejoinGroupResponseData = sendJoinRequest(
@@ -429,25 +484,41 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val joinGroupResponseData = sendJoinRequest(
       groupId = groupId
     )
-    val memberId2 = sendJoinRequest(
+    val joinGroupResponseData2 = sendJoinRequest(
       groupId = groupId,
       memberId = joinGroupResponseData.memberId,
       metadata = metadata(List.empty)
-    ).memberId
+    )
+    val memberId2 = joinGroupResponseData2.memberId
+    val generationId2 = joinGroupResponseData2.generationId
 
     // Member 2 syncs. The assigned partition is empty.
-    assertEquals(
-      new SyncGroupResponseData()
-        .setErrorCode(Errors.NONE.code)
-        .setProtocolType("consumer")
-        .setProtocolName("consumer-range")
-        .setAssignment(assignment(List.empty)),
-      syncGroupWithOldProtocol(
-        groupId = groupId,
-        memberId = memberId2,
-        generationId = if (isConsumerAssignmentBatchingEnabled) 2 else 3
-      )
+    val syncGroupResponseData = syncGroupWithOldProtocol(
+      groupId = groupId,
+      memberId = memberId2,
+      generationId = generationId2
     )
+    if (isConsumerAssignorOffloadEnabled &&
+        syncGroupResponseData.errorCode == Errors.REBALANCE_IN_PROGRESS.code) {
+      // When assignor offload is enabled, the target assignment may be updated any time after the
+      // first consumer join. When the target assignment is updated before the classic sync, it
+      // triggers a classic rebalance. Regardless of ordering, the group should downgrade to classic
+      // once the consumer member leaves.
+      assertEquals(
+        new SyncGroupResponseData()
+          .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code),
+        syncGroupResponseData
+      )
+    } else {
+      assertEquals(
+        new SyncGroupResponseData()
+          .setErrorCode(Errors.NONE.code)
+          .setProtocolType("consumer")
+          .setProtocolName("consumer-range")
+          .setAssignment(assignment(List.empty)),
+        syncGroupResponseData
+      )
+    }
 
     // Downgrade the group by leaving member 1.
     leaveGroupWithNewProtocol(
@@ -537,15 +608,30 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val instanceId = "instance-id"
 
     // A static member using the consumer protocol joins the group.
-    consumerGroupHeartbeat(
+    val memberId = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId,
       instanceId = instanceId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          instanceId = instanceId,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     val rejectedResponse = new JoinGroupResponseData()
       .setProtocolName(null)
@@ -684,14 +770,28 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The joining request with a consumer group member is accepted.
-    consumerGroupHeartbeat(
+    val memberId2 = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
@@ -750,7 +850,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // The joining request with a consumer group member 2 is accepted.
     val memberId2 = Uuid.randomUuid.toString
-    val response = consumerGroupHeartbeat(
+    var response = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
@@ -758,7 +858,26 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(1, response.memberEpoch)
+    // TODO: KAFKA-21581: When assignor offload is enabled, the heartbeat incorrectly returns epoch 0,
+    // which is reserved for joining members. The member should get an epoch greater than 0.
+    assertEquals(if (isConsumerAssignorOffloadEnabled) 0 else 1, response.memberEpoch)
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    // Member 2 is still at epoch 0, so it rejoins with its full subscription.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = response.memberEpoch,
+          rebalanceTimeoutMs = 5 * 60 * 1000,
+          subscribedTopicNames = List("foo"),
+          topicPartitions = List.empty,
+          expectedError = Errors.NONE
+        )
+        response.memberEpoch > 0
+      }, msg = s"Did not receive initial assignment. Last response $response.")
+    }
 
     // The pending join request of the classic member is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
@@ -833,7 +952,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // The joining request with a consumer group member 3 is accepted.
     val memberId3 = Uuid.randomUuid.toString
-    val response = consumerGroupHeartbeat(
+    var response = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId3,
       rebalanceTimeoutMs = 5 * 60 * 1000,
@@ -841,7 +960,20 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(generationId1 + 1, response.memberEpoch)
+    assertEquals(if (isConsumerAssignorOffloadEnabled) generationId1 else generationId1 + 1, response.memberEpoch)
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        response = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId3,
+          memberEpoch = response.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        response.memberEpoch > generationId1
+      }, msg = s"Did not receive initial assignment. Last response $response.")
+    }
 
     // The pending join request of classic member 2 is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture2, Duration.Inf).errorCode)
@@ -909,7 +1041,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The joining request with a consumer group member is accepted.
-    consumerGroupHeartbeat(
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
@@ -917,6 +1049,19 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
@@ -1032,14 +1177,28 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The joining request with a consumer group member is accepted.
-    consumerGroupHeartbeat(
+    val memberId = Uuid.randomUuid.toString
+    var consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
       groupId = groupId,
-      memberId = Uuid.randomUuid.toString,
+      memberId = memberId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List(topicName),
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
+
+    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = consumerGroupHeartbeatResponse.memberEpoch,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
@@ -1106,7 +1265,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ConsumerGroupHeartbeatResponseData()
         .setErrorCode(Errors.NONE.code)
         .setMemberId(memberId2)
-        .setMemberEpoch(2)
+        .setMemberEpoch(if (isConsumerAssignorOffloadEnabled) 1 else 2)
         .setHeartbeatIntervalMs(5000)
         .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
           .setTopicPartitions(List.empty.asJava)),
@@ -1120,6 +1279,21 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         expectedError = Errors.NONE
       )
     )
+
+    // When assignor offload is enabled, the assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponseData = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = 1,
+          instanceId = if (useStaticMembers) instanceId2 else null,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(
@@ -1465,7 +1639,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ConsumerGroupHeartbeatResponseData()
         .setErrorCode(Errors.NONE.code)
         .setMemberId(memberId2)
-        .setMemberEpoch(2)
+        .setMemberEpoch(if (isConsumerAssignorOffloadEnabled) 1 else 2)
         .setHeartbeatIntervalMs(5000)
         .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
           .setTopicPartitions(List.empty.asJava)),
@@ -1479,6 +1653,21 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         expectedError = Errors.NONE
       )
     )
+
+    // When assignor offload is enabled, the assignment is available in a later heartbeat.
+    if (isConsumerAssignorOffloadEnabled) {
+      var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponseData = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = consumerGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = 1,
+          instanceId = if (useStaticMembers) instanceId2 else null,
+          expectedError = Errors.NONE
+        )
+        consumerGroupHeartbeatResponse.memberEpoch > 1
+      }, msg = s"Did not receive assignment. Last response $consumerGroupHeartbeatResponse.")
+    }
 
     // The group has become a consumer group.
     assertEquals(

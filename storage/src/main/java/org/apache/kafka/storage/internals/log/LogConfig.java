@@ -64,38 +64,14 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class LogConfig extends AbstractConfig {
 
-    private static class RemoteLogConfig {
-
-        private final boolean remoteStorageEnable;
-        private final boolean remoteLogDeleteOnDisable;
-        private final boolean remoteLogCopyDisable;
-        private final long remoteCopyLagMs;
-        private final long remoteCopyLagBytes;
-        private final long localRetentionMs;
-        private final long localRetentionBytes;
-
-        private RemoteLogConfig(LogConfig config) {
-            this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-            this.remoteLogCopyDisable = config.getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
-            this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
-            this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-            this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            this.remoteCopyLagMs = config.getLong(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
-            this.remoteCopyLagBytes = config.getLong(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
-        }
-
-        @Override
-        public String toString() {
-            return "RemoteLogConfig{" +
-                    "remoteStorageEnable=" + remoteStorageEnable +
-                    ", remoteLogCopyDisable=" + remoteLogCopyDisable +
-                    ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
-                    ", remoteCopyLagMs=" + remoteCopyLagMs +
-                    ", remoteCopyLagBytes=" + remoteCopyLagBytes +
-                    ", localRetentionMs=" + localRetentionMs +
-                    ", localRetentionBytes=" + localRetentionBytes +
-                    '}';
-        }
+    private record RemoteLogConfig(
+            boolean remoteStorageEnable,
+            boolean remoteLogDeleteOnDisable,
+            boolean remoteLogCopyDisable,
+            long remoteCopyLagMs,
+            long remoteCopyLagBytes,
+            long localRetentionMs,
+            long localRetentionBytes) {
     }
 
     // Visible for testing
@@ -311,7 +287,6 @@ public class LogConfig extends AbstractConfig {
     private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
     private final int maxDecompressedMessageBytes;
-    private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
         this(props, Set.of());
@@ -320,7 +295,6 @@ public class LogConfig extends AbstractConfig {
     @SuppressWarnings({"this-escape"})
     public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
         super(CONFIG, props, false);
-        this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
@@ -361,7 +335,14 @@ public class LogConfig extends AbstractConfig {
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
-        remoteLogConfig = new RemoteLogConfig(this);
+        this.remoteLogConfig = new RemoteLogConfig(
+                getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG),
+                getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG),
+                getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG),
+                getLong(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG),
+                getLong(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG),
+                getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
+                getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG));
     }
 
     private Optional<Compression> getCompression() {
@@ -422,38 +403,39 @@ public class LogConfig extends AbstractConfig {
     }
 
     public boolean remoteStorageEnable() {
-        return remoteLogConfig.remoteStorageEnable;
+        return remoteLogConfig.remoteStorageEnable();
     }
 
     public Boolean remoteLogDeleteOnDisable() {
-        return remoteLogConfig.remoteLogDeleteOnDisable;
+        return remoteLogConfig.remoteLogDeleteOnDisable();
     }
 
     public Boolean remoteLogCopyDisable() {
-        return remoteLogConfig.remoteLogCopyDisable;
+        return remoteLogConfig.remoteLogCopyDisable();
     }
 
     public long remoteCopyLagMs() {
-        return remoteLogConfig.remoteCopyLagMs == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
+        return remoteLogConfig.remoteCopyLagMs() == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs();
     }
 
     public long remoteCopyLagBytes() {
-        return remoteLogConfig.remoteCopyLagBytes == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
+        return remoteLogConfig.remoteCopyLagBytes() == RemoteLogManagerConfig.MAX_LOG_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes();
     }
 
     public long localRetentionMs() {
-        return remoteLogConfig.localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs;
+        return remoteLogConfig.localRetentionMs() == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs();
     }
 
     public long localRetentionBytes() {
-        return remoteLogConfig.localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes;
+        return remoteLogConfig.localRetentionBytes() == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes();
     }
 
     public String overriddenConfigsAsLoggableString() {
         Map<String, Object> overriddenTopicProps = new HashMap<>();
-        props.forEach((k, v) -> {
-            if (overriddenConfigs.contains(k))
-                overriddenTopicProps.put((String) k, v);
+        Map<String, Object> originals = originals();
+        overriddenConfigs.forEach(k -> {
+            if (originals.containsKey(k))
+                overriddenTopicProps.put(k, originals.get(k));
         });
         return ConfigUtils.configMapToRedactedString(overriddenTopicProps, CONFIG);
     }

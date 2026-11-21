@@ -2028,6 +2028,70 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @Test
+  def testListGroupsWithRequireCommittedOffsets(): Unit = {
+    val committingGroupId = "committing_group_id"
+    val nonCommittingGroupId = "non_committing_group_id"
+    val simpleGroupId = "simple_group_id"
+    val testTopicName = "test_topic"
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    client.createTopics(util.Set.of(
+      new NewTopic(testTopicName, 1, 1.toShort)
+    )).all().get()
+    waitForTopics(client, List(testTopicName), List())
+    val topicPartition = new TopicPartition(testTopicName, 0)
+
+    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name)
+    consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val committingGroupConfig = new Properties(consumerConfig)
+    committingGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, committingGroupId)
+    val committingGroup = createConsumer(configOverrides = committingGroupConfig)
+
+    val nonCommittingGroupConfig = new Properties(consumerConfig)
+    nonCommittingGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, nonCommittingGroupId)
+    val nonCommittingGroup = createConsumer(configOverrides = nonCommittingGroupConfig)
+
+    try {
+      // The committing group commits one offset. The non-committing group has a member that never commits.
+      committingGroup.subscribe(util.Set.of(testTopicName))
+      TestUtils.pollUntilTrue(committingGroup, () => !committingGroup.assignment().isEmpty,
+        "Expected the committing group to receive its assignment")
+      committingGroup.commitSync(util.Map.of(topicPartition, new OffsetAndMetadata(0L)))
+
+      nonCommittingGroup.subscribe(util.Set.of(testTopicName))
+      TestUtils.pollUntilTrue(nonCommittingGroup, () => !nonCommittingGroup.assignment().isEmpty,
+        "Expected the non-committing group to receive its assignment")
+
+      // The simple group is created by an offset commit without any member.
+      client.alterConsumerGroupOffsets(simpleGroupId, util.Map.of(topicPartition, new OffsetAndMetadata(0L))).all().get()
+
+      TestUtils.waitUntilTrue(() => client.listGroups().all().get().size() == 3, "Expected to find all groups")
+
+      def listGroupIds(options: ListGroupsOptions): Set[String] = {
+        val result = client.listGroups(options)
+        assertTrue(result.errors().get().isEmpty)
+        assertEquals(result.all().get().asScala.toSet, result.valid().get().asScala.toSet)
+        result.all().get().asScala.map(_.groupId).toSet
+      }
+
+      assertEquals(Set(committingGroupId, nonCommittingGroupId, simpleGroupId), listGroupIds(new ListGroupsOptions()))
+      assertEquals(Set(committingGroupId, simpleGroupId), listGroupIds(new ListGroupsOptions().requireCommittedOffsets(true)))
+      assertEquals(Set(committingGroupId), listGroupIds(new ListGroupsOptions()
+        .requireCommittedOffsets(true)
+        .withTypes(util.Set.of(GroupType.CONSUMER))))
+      assertEquals(Set(simpleGroupId), listGroupIds(new ListGroupsOptions()
+        .requireCommittedOffsets(true)
+        .inGroupStates(util.Set.of(GroupState.EMPTY))))
+    } finally {
+      Utils.closeQuietly(committingGroup, "committingGroup")
+      Utils.closeQuietly(nonCommittingGroup, "nonCommittingGroup")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
   def testDescribeClassicGroups(groupProtocol: String): Unit = {

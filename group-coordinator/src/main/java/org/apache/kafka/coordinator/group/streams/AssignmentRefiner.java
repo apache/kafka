@@ -75,6 +75,9 @@ public interface AssignmentRefiner {
      *        its restore progress cannot be observed and it could never be promoted from warm-up to active. An
      *        implementation must not newly place a warm-up task on a member that is not known to report them, but a
      *        member of unknown version may keep a warm-up task that its process already holds.
+     * @param keepActiveTasks
+     *        Whether every active task has to stay with the member that holds it. If set, the intermediate assignment
+     *        moves no active task from one member to another.
      * @param subtopologies
      *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
      *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator
@@ -95,6 +98,7 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
         Map<String, Integer> heartbeatVersions,
+        boolean keepActiveTasks,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag

@@ -1215,7 +1215,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldExcludePausedStandbyFromPeriodicOffsetRefresh() {
+    public void shouldRefreshHealthyStandbyWhenOtherStandbyIsPaused() {
         assertPeriodicRefreshExcludesUnavailableStandby(true);
     }
 
@@ -1284,9 +1284,12 @@ public class StoreChangelogReaderTest {
         time.sleep(101L); // Periodic refresh is due, but initialization retry is not.
         reader.restore(paused ? Map.of(healthyId, healthy) : both);
         assertEquals(2, requests.size());
+        // The healthy standby still refreshes even while the other is paused or backing off.
         assertEquals(Set.of(tp), requests.get(1));
         assertEquals(7L, reader.changelogMetadata(tp).endOffset());
-        if (!paused) {
+        if (paused) {
+            verify(other, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        } else {
             verify(other, times(1)).maybeInitTaskTimeoutOrThrow(anyLong(), any());
             verify(other, never()).clearTaskTimeout();
         }
@@ -1531,6 +1534,70 @@ public class StoreChangelogReaderTest {
         changelogReader.register(tp, standbyStateManager);
 
         assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
+    public void shouldNotLookUpLimitOffsetsForChangelogsOfPausedStandbyTasks() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+        when(standbyStateManager.taskId()).thenReturn(taskId);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+
+        final AtomicBoolean failLookups = new AtomicBoolean(false);
+        final AtomicInteger lookups = new AtomicInteger();
+        final MockAdminClient adminClient = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
+                lookups.incrementAndGet();
+                if (failLookups.get()) {
+                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(groupSpecs.keySet().iterator().next(), new TimeoutException("KABOOM!"));
+                }
+                return super.listConsumerGroupOffsets(groupSpecs, options);
+            }
+        };
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+
+        final long now = time.milliseconds();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        changelogReader.register(tp, standbyStateManager);
+        final Map<TaskId, Task> tasks = Collections.singletonMap(taskId, mock(Task.class));
+        changelogReader.restore(tasks);
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
+
+        // records beyond the limit stay buffered
+        for (long offset = 4L; offset < 10L; offset++) {
+            consumer.addRecord(new ConsumerRecord<>(topicName, 0, offset, "key".getBytes(), "value".getBytes()));
+        }
+        changelogReader.restore(tasks);
+        assertEquals(3, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        final int lookupsBeforePause = lookups.get();
+
+        // the task is paused, so it is not passed to restore, and the lookup of committed offsets would fail
+        failLookups.set(true);
+        time.setCurrentTimeMs(now + 101L);
+        changelogReader.restore(Collections.emptyMap());
+
+        assertEquals(lookupsBeforePause, lookups.get());
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(3, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+
+        // once the task is resumed, its limit offset is updated again
+        failLookups.set(false);
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 9L));
+        changelogReader.restore(tasks);
+
+        assertEquals(lookupsBeforePause + 1, lookups.get());
+        assertEquals(9L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(2, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
     }
 
     @Test

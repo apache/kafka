@@ -52,15 +52,18 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
         rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
     }
 
+    @Override
     public void recordRebalanceStarted(long nowMs) {
         lastRebalanceStartMs = nowMs;
     }
 
+    @Override
     public void recordRebalanceEnded(long nowMs) {
         lastRebalanceEndMs = nowMs;
         rebalanceSensor.record(nowMs - lastRebalanceStartMs);
     }
 
+    @Override
     public boolean rebalanceStarted() {
         return lastRebalanceStartMs > lastRebalanceEndMs;
     }

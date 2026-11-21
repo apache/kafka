@@ -2276,7 +2276,8 @@ project(':clients') {
         'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
         'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
         'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
-        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorException.java'
     )
   }
 }
@@ -2811,6 +2812,7 @@ project(':tools') {
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation testFixtures(project(':streams'))
+    testImplementation libs.classgraph
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension

@@ -178,6 +178,20 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testAssignmentEpochsFromBeforeLoad() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.setTargetAssignmentMetadata(5, 0L);
+
+        // A group the coordinator has not loaded has no epoch from a previous coordinator.
+        assertFalse(streamsGroup.isAssignmentEpochFromBeforeLoad(5));
+
+        streamsGroup.recordAssignmentEpochAtLoad();
+        assertTrue(streamsGroup.isAssignmentEpochFromBeforeLoad(4));
+        assertTrue(streamsGroup.isAssignmentEpochFromBeforeLoad(5));
+        assertFalse(streamsGroup.isAssignmentEpochFromBeforeLoad(6));
+    }
+
+    @Test
     public void testCacheAndRetrieveRefinedAssignment() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 

@@ -63,6 +63,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return errorCounts;
     }
 
+    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
