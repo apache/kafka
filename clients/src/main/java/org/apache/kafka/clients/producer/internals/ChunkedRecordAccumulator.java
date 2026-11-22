@@ -259,7 +259,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // TODO: review when compression is supported.
                     final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
-                            () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
+                            () -> chunkedRecordsBuilder(pendingNewBatch.stream), nowMs);
                     if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.needsBufferExtension()) {
@@ -369,16 +369,12 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * Build a {@link MemoryRecordsBuilder} backed by the chunked stream.
      *
      * @param bufferStream    the chunked stream backing the batch
-     * @param firstRecordSize the first record's uncompressed size upper bound. Used to set the
-     *                        builder's write limit used by {@code hasRoomFor}/{@code isFull}
      */
-    private MemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream,
-                                                       int firstRecordSize) {
-        int writeLimit = Math.max(batchSize, firstRecordSize);
+    private MemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream) {
         return new MemoryRecordsBuilder(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE, compression,
                 TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, batchSize);
     }
 
     /**
