@@ -3023,6 +3023,60 @@ public class SenderTest {
         }
     }
 
+    @Test
+    public void testEmptyTransactionAbortOnShutdownDoesNotBlock() {
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            TransactionManager txnManager = new TransactionManager(logContext, "testEmptyTransactionAbortOnShutdownDoesNotBlock", 6000, 100, apiVersions, metadata, false);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                    1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
+
+            setupWithTransactionState(txnManager);
+            doInitTransactions(txnManager, new ProducerIdAndEpoch(123456L, (short) 0));
+
+            txnManager.beginTransaction();
+            client.advanceTimeDuringPoll(true);
+            long startMs = time.milliseconds();
+            sender.initiateClose();
+            sender.run();
+
+            assertFalse(txnManager.hasOngoingTransaction());
+            assertTrue(time.milliseconds() - startMs < REQUEST_TIMEOUT,
+                    "Sender shutdown took " + (time.milliseconds() - startMs) + " ms with an empty transaction");
+        } finally {
+            m.close();
+        }
+    }
+
+    @Test
+    public void testEmptyTransactionCommitBeforeShutdownDoesNotBlock() {
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            TransactionManager txnManager = new TransactionManager(logContext, "testEmptyTransactionCommitBeforeShutdownDoesNotBlock", 6000, 100, apiVersions, metadata, false);
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                    1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
+
+            setupWithTransactionState(txnManager);
+            doInitTransactions(txnManager, new ProducerIdAndEpoch(123456L, (short) 0));
+
+            txnManager.beginTransaction();
+            TransactionalRequestResult result = txnManager.beginCommit();
+            client.advanceTimeDuringPoll(true);
+            long startMs = time.milliseconds();
+            sender.initiateClose();
+            sender.run();
+
+            assertTrue(result.isCompleted());
+            assertFalse(txnManager.hasOngoingTransaction());
+            assertTrue(time.milliseconds() - startMs < REQUEST_TIMEOUT,
+                    "Sender shutdown took " + (time.milliseconds() - startMs) + " ms with an empty transaction");
+        } finally {
+            m.close();
+        }
+    }
+
     @Timeout(10L)
     @Test
     public void testForceShutdownWithIncompleteTransaction() {
