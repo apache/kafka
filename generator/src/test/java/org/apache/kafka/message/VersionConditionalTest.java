@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Timeout;
 import java.io.StringWriter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
@@ -64,17 +65,15 @@ public class VersionConditionalTest {
 
     @Test
     public void testAllowMembershipCheckAlwaysFalseFails() {
-        try {
-            CodeBuffer buffer = new CodeBuffer();
+        CodeBuffer buffer = new CodeBuffer();
+        RuntimeException e = assertThrows(RuntimeException.class, () ->
             VersionConditional.
                 forVersions(Versions.parse("1-2", null), Versions.parse("3+", null)).
                 ifMember(__ -> buffer.printf("System.out.println(\"hello world\");%n")).
                 ifNotMember(__ -> buffer.printf("System.out.println(\"foobar\");%n")).
                 allowMembershipCheckAlwaysFalse(false).
-                generate(buffer);
-        } catch (RuntimeException e) {
-            assertTrue(e.getMessage().contains("no versions in common"));
-        }
+                generate(buffer));
+        assertTrue(e.getMessage().contains("no versions in common"));
     }
 
     @Test

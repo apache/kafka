@@ -78,6 +78,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
         return features.get(feature);
     }
 
+    @Override
     public String toString() {
         return String.format(
             "Features{%s}",

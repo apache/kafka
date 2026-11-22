@@ -122,6 +122,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     }
     updateThrottledList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
+    updateThrottledList(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.mirror)
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
@@ -165,6 +166,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
     quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
     quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
     quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
+    quotaManagers.mirror.updateQuota(upperBound(getOrDefault(QuotaConfig.MIRROR_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
   }
 }
 

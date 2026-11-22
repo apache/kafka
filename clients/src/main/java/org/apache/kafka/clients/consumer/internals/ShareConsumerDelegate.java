@@ -32,8 +32,6 @@ import org.apache.kafka.common.metrics.Metrics;
  */
 public interface ShareConsumerDelegate<K, V> extends ShareConsumer<K, V> {
 
-    String clientId();
-
     Metrics metricsRegistry();
 
     KafkaShareConsumerMetrics kafkaShareConsumerMetrics();

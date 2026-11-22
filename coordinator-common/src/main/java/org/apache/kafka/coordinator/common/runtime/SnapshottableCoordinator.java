@@ -87,7 +87,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     ) {
         if (offset > lastWrittenOffset) {
             throw new IllegalStateException("New offset " + offset + " of " + tp +
-                " must be smaller than " + lastWrittenOffset + ".");
+                " must be less than or equal to " + lastWrittenOffset + ".");
         }
 
         log.debug("Revert last written offset of {} to {}.", tp, offset);
@@ -227,9 +227,9 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     }
 
     /**
-     * @return The snapshot registry.
+     * Returns the snapshot registry. Only used for testing.
      *
-     * Only used for testing.
+     * @return The snapshot registry.
      */
     synchronized SnapshotRegistry snapshotRegistry() {
         return this.snapshotRegistry;

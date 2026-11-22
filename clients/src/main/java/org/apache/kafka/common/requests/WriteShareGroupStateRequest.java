@@ -28,12 +28,19 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class WriteShareGroupStateRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<WriteShareGroupStateRequest> {
 
         private final WriteShareGroupStateRequestData data;
 
-        public Builder(WriteShareGroupStateRequestData data) {
-            super(ApiKeys.WRITE_SHARE_GROUP_STATE);
+        /**
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
+        public Builder(WriteShareGroupStateRequestData data, short requestHeaderVersion) {
+            super(ApiKeys.WRITE_SHARE_GROUP_STATE,
+                ApiKeys.WRITE_SHARE_GROUP_STATE.oldestVersion(),
+                ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

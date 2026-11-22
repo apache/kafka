@@ -27,6 +27,28 @@ def execute(command):
     if subprocess.run(command).returncode != 0:
         raise SystemError("Failure in executing following command:- ", " ".join(command))
 
+def detect_compose_command(container_runtime):
+    compose_command = [container_runtime, "compose"]
+    try:
+        if subprocess.run(
+            compose_command + ["version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0:
+            return compose_command
+    except FileNotFoundError:
+        pass
+
+    legacy_compose_command = f"{container_runtime}-compose"
+    if shutil.which(legacy_compose_command) is not None:
+        return [legacy_compose_command]
+
+    raise RuntimeError(
+        f"No Compose command found. Tried '{container_runtime} compose' and "
+        f"'{legacy_compose_command}'. Please install Compose and ensure it "
+        "is available on PATH."
+    )
+
 def get_input(message):
     value = input(message)
     if value == "":

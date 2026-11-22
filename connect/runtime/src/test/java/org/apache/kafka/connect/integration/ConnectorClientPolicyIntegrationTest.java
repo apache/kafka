@@ -41,6 +41,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
@@ -161,9 +162,8 @@ public class ConnectorClientPolicyIntegrationTest {
     private void assertFailCreateConnector(String policy, Map<String, String> props) {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
-            connect.configureConnector(CONNECTOR_NAME, props);
-            fail("Shouldn't be able to create connector");
-        } catch (ConnectRestException e) {
+            ConnectRestException e = assertThrows(ConnectRestException.class,
+                () -> connect.configureConnector(CONNECTOR_NAME, props), "Shouldn't be able to create connector");
             assertEquals(400, e.statusCode());
         } finally {
             connect.stop();

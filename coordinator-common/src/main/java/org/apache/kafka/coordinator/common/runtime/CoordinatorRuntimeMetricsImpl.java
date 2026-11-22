@@ -36,7 +36,7 @@ import java.util.function.Supplier;
 public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics {
 
     /**
-     * The metrics group
+     * The metrics group.
      */
     private final String metricsGroup;
 
@@ -51,7 +51,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String EVENT_QUEUE_TIME_METRIC_NAME = "event-queue-time-ms";
 
     /**
-     * The event queue time metric name.
+     * The event processing time metric name.
      */
     public static final String EVENT_PROCESSING_TIME_METRIC_NAME = "event-processing-time-ms";
 

@@ -18,24 +18,27 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -47,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AddPartitionsTest {
 
     @ClusterTest
-    public void testWrongReplicaCount(ClusterInstance cluster) throws Exception {
+    public void testWrongReplicaCount(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -87,7 +90,7 @@ public class AddPartitionsTest {
     }
 
     @ClusterTest
-    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) throws Exception {
+    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -108,9 +111,6 @@ public class AddPartitionsTest {
 
             admin.createPartitions(Map.of("topic1", NewPartitions.increaseTo(3))).all().get();
 
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic1", 2, 30000);
-
             cluster.waitTopicCreation("topic1", 3);
 
             Map<String, TopicDescription> descriptions = admin.describeTopics(List.of("topic1")).allTopicNames().get();
@@ -130,14 +130,10 @@ public class AddPartitionsTest {
         @ClusterTest(brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
     })
     public void testCreatePartitionsAcrossMetadataVersions(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                new NewTopic("foo", 1, (short) 3),
-                new NewTopic("bar", 2, (short) 3)
-            )).values();
-            createResults.get("foo").get();
-            createResults.get("bar").get();
+        cluster.createTopic("foo", 1, (short) 3);
+        cluster.createTopic("bar", 2, (short) 3);
 
+        try (Admin admin = cluster.admin()) {
             Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
                 "foo", NewPartitions.increaseTo(3),
                 "bar", NewPartitions.increaseTo(2)
@@ -158,9 +154,6 @@ public class AddPartitionsTest {
             admin.createPartitions(Map.of("topic2", NewPartitions.increaseTo(3,
                 List.of(List.of(0, 1), List.of(2, 3))))).all().get();
 
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 1, 30000);
-            AdminUtils.fetchOrWaitForLeader(admin, "topic2", 2, 30000);
-
             cluster.waitTopicCreation("topic2", 3);
 
             Map<String, TopicDescription> descriptions = admin.describeTopics(List.of("topic2")).allTopicNames().get();
@@ -180,6 +173,34 @@ public class AddPartitionsTest {
                 .collect(Collectors.toSet());
             assertEquals(2, partition1Replicas.size());
             assertEquals(Set.of(0, 1), partition1Replicas);
+        }
+    }
+
+    @ClusterTest
+    public void testIncreasePartitionsUsesReplicationFactorOfPartitionZero(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            // The partitions are kept in a hash map. With 3 partitions, iterating over it does not
+            // start at partition 0, so this test fails if the controller uses the iterator's first
+            // partition instead of partition 0.
+            Map<Integer, List<Integer>> assignment = IntStream.range(0, 3).boxed()
+                .collect(Collectors.toMap(p -> p, p -> List.of(p % 4)));
+            cluster.createTopicWithAssignment("foo", assignment);
+
+            // Increase the replication factor of partition 0 only.
+            admin.alterPartitionReassignments(Map.of(new TopicPartition("foo", 0),
+                Optional.of(new NewPartitionReassignment(List.of(0, 1, 2))))).all().get();
+            TestUtils.waitForCondition(() -> admin.listPartitionReassignments().reassignments().get().isEmpty() &&
+                partition(admin, "foo", 0).replicas().size() == 3,
+                "Timed out waiting for the reassignment of partition 0");
+
+            admin.createPartitions(Map.of("foo", NewPartitions.increaseTo(4))).all().get();
+            cluster.waitTopicCreation("foo", 4);
+            assertEquals(3, partition(admin, "foo", 3).replicas().size());
+
+            // Manual assignments are also validated against partition 0.
+            ExecutionException e = assertThrows(ExecutionException.class, () -> admin.createPartitions(Map.of("foo",
+                NewPartitions.increaseTo(5, List.of(List.of(0))))).all().get());
+            assertInstanceOf(InvalidReplicaAssignmentException.class, e.getCause());
         }
     }
 
@@ -246,11 +267,8 @@ public class AddPartitionsTest {
         try (Admin admin = cluster.admin()) {
             String topic1 = "create-partitions-topic-1";
             String topic2 = "create-partitions-topic-2";
-            admin.createTopics(List.of(
-                    new NewTopic(topic1, 1, (short) 1),
-                    new NewTopic(topic2, 1, (short) 2))).all().get();
-            cluster.waitTopicCreation(topic1, 1);
-            cluster.waitTopicCreation(topic2, 1);
+            cluster.createTopic(topic1, 1, (short) 1);
+            cluster.createTopic(topic2, 1, (short) 2);
             assertEquals(1, numPartitions(admin, topic1));
             assertEquals(1, numPartitions(admin, topic2));
 
@@ -412,6 +430,10 @@ public class AddPartitionsTest {
 
     private static List<TopicPartitionInfo> partitions(Admin admin, String topic) throws Exception {
         return admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic).partitions();
+    }
+
+    private static TopicPartitionInfo partition(Admin admin, String topic, int partition) throws Exception {
+        return partitions(admin, topic).stream().filter(p -> p.partition() == partition).findFirst().orElseThrow();
     }
 
     private static List<Integer> replicaIds(TopicPartitionInfo partition) {

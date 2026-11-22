@@ -44,7 +44,7 @@ import java.util.function.Function;
 
 /**
  * Coordinator loader which reads records from a partition and replays them
- * to a group coordinator.
+ * to a coordinator.
  *
  * @param <T> The record type.
  */
@@ -95,10 +95,12 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition
-     * and applying them to the Replayable object.
+     * and applying them to the CoordinatorPlayback object.
      *
      * @param tp          The TopicPartition to read from.
      * @param coordinator The object to apply records to.
+     * @return A future completed with the summary of the load once all the records are applied, or
+     *         completed exceptionally if the load fails.
      */
     @Override
     public CompletableFuture<LoadSummary> load(TopicPartition tp, CoordinatorPlayback<T> coordinator) {
@@ -264,8 +266,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     try {
                         coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
                     } catch (Deserializer.UnknownRecordTypeException ex) {
-                        LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
-                            " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
+                        LOG.warn("Unknown record type {} while loading records from {}." +
+                            " Ignoring it. It could be left over from an aborted upgrade.", ex.unknownType(), tp);
                     } catch (RuntimeException ex) {
                         String msg = String.format("Deserializing record %s from %s failed.", record, tp);
                         LOG.error(msg, ex);

@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -294,7 +295,6 @@ public class ConfigurationControlManager {
         boolean forwarded
     ) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
-        List<String> explicitlyDeletedConfigs = new ArrayList<>();
         for (Entry<String, Entry<OpType, String>> keysToOpsEntry : keysToOps.entrySet()) {
             String key = keysToOpsEntry.getKey();
             String currentValue = null;
@@ -312,7 +312,6 @@ public class ConfigurationControlManager {
                     break;
                 case DELETE:
                     newValue = null;
-                    explicitlyDeletedConfigs.add(key);
                     break;
                 case APPEND:
                 case SUBTRACT:
@@ -345,8 +344,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), explicitlyDeletedConfigs,
-            newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             return error;
         }
@@ -358,7 +356,6 @@ public class ConfigurationControlManager {
         ConfigResource configResource,
         List<ApiMessageAndVersion> recordsExplicitlyAltered,
         List<ApiMessageAndVersion> recordsImplicitlyDeleted,
-        List<String> explicitlyDeletedConfigs,
         boolean newlyCreatedResource,
         boolean forwarded
     ) {
@@ -382,16 +379,15 @@ public class ConfigurationControlManager {
                 return INVALID_CORDONED_LOG_DIRS_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
-            } else if (configRecord.value().length() > Short.MAX_VALUE) {
+            } else if (Utils.utf8Length(configRecord.value()) > Short.MAX_VALUE) {
                 // In KRaft mode, large config values cannot be created by appending.
-                // If the size exceeds Short.MAX_VALUE, this error will be thrown to notify the user.
+                // If the size exceeds `Short.MAX_VALUE` UTF-8 bytes, an error will be thrown to notify the user.
                 return DISALLOWED_CONFIG_VALUE_SIZE_ERROR;
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
             }
             alteredConfigsForAlterConfigPolicyCheck.put(configRecord.name(), configRecord.value());
         }
-        explicitlyDeletedConfigs.forEach(config -> alteredConfigsForAlterConfigPolicyCheck.put(config, null));
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
             if (isDisallowedBrokerMinIsrTransition(configRecord)) {
@@ -568,8 +564,7 @@ public class ConfigurationControlManager {
                     setValue(null), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, List.of(),
-            newlyCreatedResource, forwarded);
+        ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource, forwarded);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;

@@ -465,6 +465,34 @@ public class ClientQuotaControlManagerTest {
     }
 
     @Test
+    public void testValidateQuotaKeyValueForNaNConsumerByteRate() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota consumer_byte_rate must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", Double.NaN));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForInfiniteConsumerByteRate() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota consumer_byte_rate must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", Double.POSITIVE_INFINITY));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForNaNRequestPercentage() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota request_percentage must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "request_percentage", Double.NaN));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForInfiniteRequestPercentage() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota request_percentage must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "request_percentage", Double.POSITIVE_INFINITY));
+    }
+
+    @Test
     public void testValidateQuotaKeyValueForValidConsumerByteRate() {
         assertEquals(ApiError.NONE, ClientQuotaControlManager.validateQuotaKeyValue(
             VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", 1234.0));

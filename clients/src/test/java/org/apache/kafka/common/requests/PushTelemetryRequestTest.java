@@ -17,7 +17,10 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
@@ -31,6 +34,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,6 +52,32 @@ public class PushTelemetryRequestTest {
         PushTelemetryRequest req = new PushTelemetryRequest(new PushTelemetryRequestData(), (short) 0);
         PushTelemetryResponse response = req.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 1), response.errorCounts());
+    }
+
+    @Test
+    public void testBuildV1SendsClientInstanceIdInHeaderOnly() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        PushTelemetryRequestData data = new PushTelemetryRequestData()
+            .setClientInstanceId(clientInstanceId)
+            .setSubscriptionId(1)
+            .setCompressionType(CompressionType.NONE.id)
+            .setMetrics(ByteBuffer.wrap("test-metrics".getBytes(StandardCharsets.UTF_8)));
+        PushTelemetryRequest.Builder builder = new PushTelemetryRequest.Builder(data, true);
+
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
+
+        // The data carries the v0 body ID because the version is only chosen when the request is built.
+        PushTelemetryRequest v1 = builder.build((short) 1);
+        ByteBuffer buffer = v1.serializeWithHeader(
+            new RequestHeader(ApiKeys.PUSH_TELEMETRY, (short) 1, "client", clientInstanceId, 0));
+
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(clientInstanceId, header.clientInstanceId());
+        PushTelemetryRequest parsed = (PushTelemetryRequest) AbstractRequest.parseRequest(
+            ApiKeys.PUSH_TELEMETRY, (short) 1, new ByteBufferAccessor(buffer)).request;
+        assertEquals(data.duplicate().setClientInstanceId(Uuid.ZERO_UUID), parsed.data());
+        // Building v1 must not mutate the data the builder was given.
+        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }
 
     @ParameterizedTest

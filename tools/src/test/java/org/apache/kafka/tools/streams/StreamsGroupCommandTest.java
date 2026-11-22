@@ -53,6 +53,9 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
@@ -68,6 +71,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
@@ -234,12 +238,16 @@ public class StreamsGroupCommandTest {
         service.close();
     }
 
-    @Test
-    public void testDescribeStreamsGroupsWithTopologyNotStored() throws Exception {
+    @ParameterizedTest
+    @MethodSource("topologyDescriptionStatusErrors")
+    public void testDescribeStreamsGroupsWithUnavailableTopology(
+        StreamsGroupTopologyDescriptionStatus status,
+        String expectedMessage
+    ) throws Exception {
         String group = "foo-group";
         StreamsGroupDescription exp = new StreamsGroupDescription(
             group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
-            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_STORED, Optional.empty());
+            Optional.empty(), status, Optional.empty());
 
         Admin admin = mock(KafkaAdminClient.class);
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
@@ -250,9 +258,26 @@ public class StreamsGroupCommandTest {
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", group, "--describe", "--topology"});
         StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(opts, admin);
 
-        // A missing topology description must surface a non-zero exit code.
-        assertEquals(1, service.describeGroups());
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            try {
+                // A missing or unavailable topology description must surface a non-zero exit code.
+                assertEquals(1, service.describeGroups());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertTrue(output.contains(expectedMessage), "Unexpected output: " + output);
         service.close();
+    }
+
+    private static Stream<Arguments> topologyDescriptionStatusErrors() {
+        return Stream.of(
+            Arguments.of(StreamsGroupTopologyDescriptionStatus.NOT_STORED,
+                "No topology description is stored for streams group 'foo-group'."),
+            Arguments.of(StreamsGroupTopologyDescriptionStatus.ERROR,
+                "The broker failed to fetch the topology description for streams group 'foo-group'. See the broker logs for details.")
+        );
     }
 
     @Test

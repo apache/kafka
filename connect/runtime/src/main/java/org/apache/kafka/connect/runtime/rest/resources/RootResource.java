@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
+import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.WorkerStatus;
 import org.apache.kafka.connect.util.FutureCallback;
@@ -29,6 +30,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -58,6 +63,11 @@ public class RootResource {
 
     @GET
     @Operation(summary = "Get details about this Connect worker and the ID of the Kafka cluster it is connected to")
+    @ApiResponse(
+        responseCode = "200",
+        description = "Connect worker details retrieved successfully",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ServerInfo.class))
+    )
     public ServerInfo serverInfo() {
         return new ServerInfo(herder.kafkaClusterId());
     }
@@ -65,6 +75,26 @@ public class RootResource {
     @GET
     @Path("/health")
     @Operation(summary = "Health check endpoint to verify worker readiness and liveness")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Worker has completed startup and is ready to handle requests",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkerStatus.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Worker was unable to handle this request and may be unable to handle other requests",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(oneOf = {WorkerStatus.class, ErrorMessage.class})
+            )
+        ),
+        @ApiResponse(
+            responseCode = "503",
+            description = "Worker is still starting up",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkerStatus.class))
+        )
+    })
     public Response healthCheck() throws Throwable {
         WorkerStatus workerStatus;
         int statusCode;

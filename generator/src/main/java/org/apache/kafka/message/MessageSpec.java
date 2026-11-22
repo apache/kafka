@@ -97,9 +97,15 @@ public final class MessageSpec {
             }
             this.latestVersionUnstable = latestVersionUnstable;
 
-            if (headerVersions != null && type != MessageSpecType.REQUEST && type != MessageSpecType.RESPONSE) {
+            boolean isRpc = type == MessageSpecType.REQUEST || type == MessageSpecType.RESPONSE;
+            if (headerVersions != null && !isRpc) {
                 throw new RuntimeException("The `headerVersions` property is only valid for " +
                         "messages with type `request` or `response`");
+            }
+            if (headerVersions == null && isRpc) {
+                throw new RuntimeException("You must specify a value for headerVersions in message " + name +
+                        ", e.g. {\"0+\": \"2\"} (request) or {\"0+\": \"1\"} (response) when all versions are " +
+                        "flexible, or {\"0-1\": \"1\", \"2+\": \"2\"} for older non-flexible versions.");
             }
             this.headerVersions = Optional.ofNullable(
                     HeaderVersions.parse(name, headerVersions, this.validVersions()));

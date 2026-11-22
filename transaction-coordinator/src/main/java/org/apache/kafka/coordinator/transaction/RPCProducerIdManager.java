@@ -55,6 +55,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
     final Time time;
     private final Supplier<Long> brokerEpochSupplier;
     private final NodeToControllerChannelManager controllerChannel;
+    private final Supplier<Short> requestHeaderVersionSupplier;
 
     // Visible for testing
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
@@ -66,12 +67,14 @@ public class RPCProducerIdManager implements ProducerIdManager {
     public RPCProducerIdManager(int brokerId,
                                 Time time,
                                 Supplier<Long> brokerEpochSupplier,
-                                NodeToControllerChannelManager controllerChannel
+                                NodeToControllerChannelManager controllerChannel,
+                                Supplier<Short> requestHeaderVersionSupplier
     ) {
         this.brokerId = brokerId;
         this.time = time;
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.controllerChannel = controllerChannel;
+        this.requestHeaderVersionSupplier = requestHeaderVersionSupplier;
         this.logPrefix = "[RPC ProducerId Manager " + brokerId + "]: ";
     }
 
@@ -136,7 +139,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
         var message = new AllocateProducerIdsRequestData()
                 .setBrokerEpoch(brokerEpochSupplier.get())
                 .setBrokerId(brokerId);
-        var request = new AllocateProducerIdsRequest.Builder(message);
+        var request = new AllocateProducerIdsRequest.Builder(message, requestHeaderVersionSupplier.get());
         log.debug("{} Requesting next Producer ID block", logPrefix);
         controllerChannel.sendRequest(request, new ControllerRequestCompletionHandler() {
 
