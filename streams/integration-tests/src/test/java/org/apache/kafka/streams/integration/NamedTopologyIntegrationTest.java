@@ -82,7 +82,7 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
@@ -441,7 +441,7 @@ public class NamedTopologyIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         streams.addNamedTopology(topology2Builder.build()).all().get();
 
-        waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT));
+        waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT_MS));
 
         assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
         assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));
@@ -459,7 +459,7 @@ public class NamedTopologyIntegrationTest {
 
         streams.addNamedTopology(topology3Builder.build()).all().get();
 
-        waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT));
+        waitForApplicationState(Collections.singletonList(streams), State.RUNNING, Duration.ofMillis(DEFAULT_TIMEOUT_MS));
 
         assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 5));
         assertEquals(COUNT_OUTPUT_DATA, waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 5));

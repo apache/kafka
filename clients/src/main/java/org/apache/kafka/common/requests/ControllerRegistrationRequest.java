@@ -26,8 +26,14 @@ public class ControllerRegistrationRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ControllerRegistrationRequest> {
         private final ControllerRegistrationRequestData data;
 
-        public Builder(ControllerRegistrationRequestData data) {
-            super(ApiKeys.CONTROLLER_REGISTRATION);
+        /**
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
+        public Builder(ControllerRegistrationRequestData data, short requestHeaderVersion) {
+            super(ApiKeys.CONTROLLER_REGISTRATION,
+                ApiKeys.CONTROLLER_REGISTRATION.oldestVersion(),
+                ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

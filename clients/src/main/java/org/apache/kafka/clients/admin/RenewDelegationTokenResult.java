@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
- * The result of the {@link KafkaAdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)} call.
+ * The result of the {@link KafkaAdminClient#renewDelegationToken(byte[], RenewDelegationTokenOptions)} call.
  */
 @InterfaceAudience.Public
 public class RenewDelegationTokenResult {

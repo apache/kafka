@@ -388,6 +388,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
+    @Override
     public void send(NetworkSend send) {
         String connectionId = send.destinationId();
         KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
@@ -884,6 +885,7 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Close the connection identified by the given id
      */
+    @Override
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel != null) {
@@ -1374,6 +1376,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
+        @Override
         public void close() {
             for (MetricName metricName : topLevelMetricNames)
                 metrics.removeMetric(metricName);
