@@ -3440,7 +3440,9 @@ class ReplicaManagerTest {
       val leaderMetadataImage = imageFromTopics(delta.apply())
       replicaManager.applyDelta(delta, leaderMetadataImage)
 
-      val params = new FetchParams(replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, Optional.empty)
+      val clientMetadata = if (isFromFollower) Optional.empty[ClientMetadata]() else Optional.of[ClientMetadata](
+        new DefaultClientMetadata("rack-a", "client-id", InetAddress.getByName("localhost"), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), "default"))
+      val params = new FetchParams(replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, clientMetadata)
       val fetchOffset = 1
 
       def fetchCallback(responseStatus: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {

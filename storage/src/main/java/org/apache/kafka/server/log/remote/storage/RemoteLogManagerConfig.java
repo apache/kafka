@@ -206,6 +206,34 @@ public final class RemoteLogManagerConfig {
             "The default value is 1 second.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS = 1;
 
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP = "remote.fetch.principal.metrics.enable";
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_DOC = "Whether to record remote (tiered) storage fetch metrics per principal " +
+            "in the remote-fetch-principal-metrics group (remote-fetch-byte-rate, remote-fetch-byte-total, remote-fetch-request-rate and " +
+            "remote-fetch-request-total). Metrics are only created for principals that actually read from remote storage. " +
+            "Fetch requests older than version 11 cannot be attributed. Disabled by default.";
+    public static final boolean DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE = false;
+
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE_PROP = "remote.fetch.principal.metrics.topic.enable";
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE_DOC = "Whether the remote fetch principal metrics are also tagged with the topic name, " +
+            "to show which topic each principal reads from remote storage. This multiplies the number of metrics by the number of topics read.";
+    public static final boolean DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE = false;
+
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE_PROP = "remote.fetch.principal.metrics.client.id.enable";
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE_DOC = "Whether the remote fetch principal metrics are also tagged with the client id. " +
+            "The client id is chosen by the client and is not authenticated, and enabling this can significantly increase the number of metrics.";
+    public static final boolean DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE = false;
+
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS_PROP = "remote.fetch.principal.metrics.ttl.ms";
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS_DOC = "The time after which the remote fetch principal metrics of a principal (and topic / client id, " +
+            "if enabled) with no remote reads are removed. If the key reads again, its metrics restart from zero.";
+    public static final long DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS = 3_600_000L;
+
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS_PROP = "remote.fetch.principal.metrics.max.keys";
+    public static final String REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS_DOC = "The maximum number of keys (principals, or principal/topic/client-id combinations if those tags are enabled) " +
+            "for which remote fetch principal metrics are tracked on a broker. When the limit is reached, reads from new keys are not recorded " +
+            "until idle keys expire, and a warning is logged. Existing keys continue to be recorded. Must be at least 1.";
+    public static final int DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS = 1000;
+
     public static final String REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.fetch.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be fetched from remote storage to local storage per second. " +
             "This is a global limit for all the partitions that are being fetched from remote storage to local storage. " +
@@ -399,6 +427,33 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+                .define(REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP,
+                        BOOLEAN,
+                        DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE,
+                        LOW,
+                        REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_DOC)
+                .define(REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE_PROP,
+                        BOOLEAN,
+                        DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE,
+                        LOW,
+                        REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE_DOC)
+                .define(REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE_PROP,
+                        BOOLEAN,
+                        DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE,
+                        LOW,
+                        REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE_DOC)
+                .define(REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS,
+                        atLeast(1),
+                        LOW,
+                        REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS_DOC)
+                .define(REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS_PROP,
+                        INT,
+                        DEFAULT_REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS,
+                        atLeast(1),
+                        LOW,
+                        REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS_DOC)
                 .define(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND,
@@ -580,6 +635,26 @@ public final class RemoteLogManagerConfig {
 
     public long remoteLogManagerCopyMaxBytesPerSecond() {
         return config.getLong(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP);
+    }
+
+    public boolean remoteFetchPrincipalMetricsEnabled() {
+        return config.getBoolean(REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP);
+    }
+
+    public boolean remoteFetchPrincipalMetricsTopicEnabled() {
+        return config.getBoolean(REMOTE_FETCH_PRINCIPAL_METRICS_TOPIC_ENABLE_PROP);
+    }
+
+    public boolean remoteFetchPrincipalMetricsClientIdEnabled() {
+        return config.getBoolean(REMOTE_FETCH_PRINCIPAL_METRICS_CLIENT_ID_ENABLE_PROP);
+    }
+
+    public long remoteFetchPrincipalMetricsTtlMs() {
+        return config.getLong(REMOTE_FETCH_PRINCIPAL_METRICS_TTL_MS_PROP);
+    }
+
+    public int remoteFetchPrincipalMetricsMaxKeys() {
+        return config.getInt(REMOTE_FETCH_PRINCIPAL_METRICS_MAX_KEYS_PROP);
     }
 
     public long remoteLogManagerFetchMaxBytesPerSecond() {

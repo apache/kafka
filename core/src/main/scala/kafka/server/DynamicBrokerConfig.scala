@@ -878,6 +878,9 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
       if (newRLMConfig.remoteLogReaderThreads() != oldRLMConfig.remoteLogReaderThreads())
         remoteLogManager.resizeReaderThreadPool(newRLMConfig.remoteLogReaderThreads())
+
+      if (newRLMConfig.remoteFetchPrincipalMetricsEnabled() != oldRLMConfig.remoteFetchPrincipalMetricsEnabled())
+        remoteLogManager.updateFetchPrincipalMetricsEnabled(newRLMConfig.remoteFetchPrincipalMetricsEnabled())
     }
   }
 

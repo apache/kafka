@@ -17,9 +17,22 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.replica.ClientMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 
+import java.util.Optional;
+
+/**
+ * @param clientMetadata the requester of the fetch, used to attribute remote fetch metrics. Empty if unknown,
+ *                       e.g. for fetch requests older than version 11.
+ */
 public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
+                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation,
+                                     Optional<ClientMetadata> clientMetadata) {
+
+    public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
+                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
+        this(fetchMaxBytes, minOneMessage, topicIdPartition, fetchInfo, fetchIsolation, Optional.empty());
+    }
 }
