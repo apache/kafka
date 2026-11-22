@@ -19,6 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.util.ServerTestUtils;
@@ -42,7 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -96,6 +99,10 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteFetchRequestRate().count());
         assertEquals(100, brokerTopicStats.allTopicsStats().remoteFetchBytesRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().count());
+
+        // Verify the principal metrics hooks
+        verify(mockRLM).recordRemoteFetchRequest(remoteStorageFetchInfo);
+        verify(mockRLM).recordRemoteFetchBytes(remoteStorageFetchInfo, 100);
     }
 
     @Test
@@ -128,5 +135,29 @@ public class RemoteLogReaderTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteFetchRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteFetchBytesRate().count());
         assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().count());
+
+        // A failed read counts as a request and an error, but never as bytes
+        verify(mockRLM).recordRemoteFetchRequest(remoteStorageFetchInfo);
+        verify(mockRLM, never()).recordRemoteFetchBytes(any(), anyLong());
+    }
+
+    @Test
+    public void testOffsetOutOfRangeIsCountedAsRequestWithoutBytes() throws RemoteStorageException, IOException {
+        when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(new OffsetOutOfRangeException("out of range"));
+
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        new RemoteLogReader(remoteStorageFetchInfo, mockRLM, mock(Consumer.class), brokerTopicStats, mockQuotaManager, timer).call();
+
+        verify(mockRLM).recordRemoteFetchRequest(remoteStorageFetchInfo);
+        verify(mockRLM, never()).recordRemoteFetchBytes(any(), anyLong());
+    }
+
+    @Test
+    public void testRequestIsNotAttributedWhenReaderIsOnlyConstructed() {
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        new RemoteLogReader(remoteStorageFetchInfo, mockRLM, mock(Consumer.class), brokerTopicStats, mockQuotaManager, timer);
+
+        // e.g. the reader pool rejected the task, so the read never started
+        verify(mockRLM, never()).recordRemoteFetchRequest(any());
     }
 }

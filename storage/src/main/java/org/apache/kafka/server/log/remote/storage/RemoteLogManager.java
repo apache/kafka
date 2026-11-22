@@ -163,6 +163,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final Function<TopicPartition, Optional<UnifiedLog>> fetchLog;
     private final BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset;
     private final BrokerTopicStats brokerTopicStats;
+    private final RemoteFetchPrincipalMetrics remoteFetchPrincipalMetrics;
+    private volatile boolean remoteFetchPrincipalMetricsEnabled;
     private final Metrics metrics;
 
     private final Plugin<RemoteStorageManager> remoteStorageManagerPlugin;
@@ -249,6 +251,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         copyQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
 
+        remoteFetchPrincipalMetrics = new RemoteFetchPrincipalMetrics(metrics,
+            rlmConfig.remoteFetchPrincipalMetricsTopicEnabled(), rlmConfig.remoteFetchPrincipalMetricsClientIdEnabled(),
+            rlmConfig.remoteFetchPrincipalMetricsTtlMs());
+        remoteFetchPrincipalMetricsEnabled = rlmConfig.remoteFetchPrincipalMetricsEnabled();
+
         indexCache = new RemoteIndexCache(
             rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(),
             rlmConfig.remoteLogIndexFileCacheTtlMs(),
@@ -285,6 +292,26 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public void updateCopyQuota(long quota) {
         LOGGER.info("Updating remote copy quota to {} bytes per second", quota);
         rlmCopyQuotaManager.updateQuota(new Quota(quota, true));
+    }
+
+    public void updateFetchPrincipalMetricsEnabled(boolean enabled) {
+        LOGGER.info("Updating remote fetch principal metrics enabled to {}", enabled);
+        remoteFetchPrincipalMetricsEnabled = enabled;
+        if (!enabled) {
+            remoteFetchPrincipalMetrics.clear();
+        }
+    }
+
+    public void recordRemoteFetchRequest(RemoteStorageFetchInfo fetchInfo) {
+        if (remoteFetchPrincipalMetricsEnabled) {
+            remoteFetchPrincipalMetrics.recordRequest(fetchInfo.topicIdPartition().topic(), fetchInfo.clientMetadata(), time.milliseconds());
+        }
+    }
+
+    public void recordRemoteFetchBytes(RemoteStorageFetchInfo fetchInfo, long bytes) {
+        if (remoteFetchPrincipalMetricsEnabled) {
+            remoteFetchPrincipalMetrics.recordBytes(fetchInfo.topicIdPartition().topic(), fetchInfo.clientMetadata(), bytes, time.milliseconds());
+        }
     }
 
     public void updateFetchQuota(long quota) {

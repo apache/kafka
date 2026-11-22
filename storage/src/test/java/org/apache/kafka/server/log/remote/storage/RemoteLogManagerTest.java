@@ -35,7 +35,9 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -3965,6 +3967,29 @@ public class RemoteLogManagerTest {
         assertEquals(100L, rlmFetchQuotaManagerConfig.quotaBytesPerSecond());
         assertEquals(31, rlmFetchQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmFetchQuotaManagerConfig.quotaWindowSizeSeconds());
+    }
+
+    @Test
+    public void testRemoteFetchPrincipalMetricsAreDisabledByDefaultAndCanBeToggled() {
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("attributed", 0));
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(1024, false, topicIdPartition, null, null,
+            Optional.of(new DefaultClientMetadata("", "client", null, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), "PLAINTEXT")));
+        Supplier<Long> principalMetrics = () -> metrics.metrics().keySet().stream()
+            .filter(name -> RemoteFetchPrincipalMetrics.GROUP.equals(name.group())).count();
+
+        remoteLogManager.recordRemoteFetchRequest(fetchInfo);
+        remoteLogManager.recordRemoteFetchBytes(fetchInfo, 100);
+        assertEquals(0L, principalMetrics.get());
+
+        remoteLogManager.updateFetchPrincipalMetricsEnabled(true);
+        remoteLogManager.recordRemoteFetchRequest(fetchInfo);
+        remoteLogManager.recordRemoteFetchBytes(fetchInfo, 100);
+        Map<String, String> tags = Map.of("user", "alice");
+        assertEquals(100.0, metrics.metric(metrics.metricName(RemoteFetchPrincipalMetrics.BYTE_TOTAL, RemoteFetchPrincipalMetrics.GROUP, "", tags)).metricValue());
+        assertEquals(1.0, metrics.metric(metrics.metricName(RemoteFetchPrincipalMetrics.REQUEST_TOTAL, RemoteFetchPrincipalMetrics.GROUP, "", tags)).metricValue());
+
+        remoteLogManager.updateFetchPrincipalMetricsEnabled(false);
+        assertEquals(0L, principalMetrics.get());
     }
 
     @Test
