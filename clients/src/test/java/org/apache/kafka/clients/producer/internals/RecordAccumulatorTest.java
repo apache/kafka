@@ -334,12 +334,12 @@ public class RecordAccumulatorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("oversizedRecordCompressionTypes")
-    public void testCompressedOversizedRecordIsReadyWithoutWaitingForLinger(CompressionType compressionType) throws Exception {
+    @MethodSource("oversizedRecordCompressions")
+    public void testCompressedOversizedRecordIsReadyWithoutWaitingForLinger(Compression compression) throws Exception {
         int batchSize = 16 * 1024;
         int lingerMs = 1000;
         RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
-            batchSize, 8 * 1024 * 1024, Compression.of(compressionType).build(), lingerMs);
+            batchSize, 8 * 1024 * 1024, compression, lingerMs);
         try {
             long now = time.milliseconds();
             accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
@@ -361,12 +361,12 @@ public class RecordAccumulatorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("oversizedRecordCompressionTypes")
-    public void testCompressedOversizedRecordWaitsForLingerBelowBatchSize(CompressionType compressionType) throws Exception {
+    @MethodSource("oversizedRecordCompressions")
+    public void testCompressedOversizedRecordWaitsForLingerBelowBatchSize(Compression compression) throws Exception {
         int batchSize = 16 * 1024;
         int lingerMs = 1000;
         RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
-            batchSize, 8 * 1024 * 1024, Compression.of(compressionType).build(), lingerMs);
+            batchSize, 8 * 1024 * 1024, compression, lingerMs);
         try {
             accum.append(topic, partition1, 0L, null, new byte[1024 * 1024],
                 Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
@@ -1433,8 +1433,6 @@ public class RecordAccumulatorTest {
         int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
         RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize, totalSize, Compression.NONE, 0);
 
-        boolean isFullStrategy = BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL.equals(allocationStrategy);
-
         // Set up callbacks so that we know what partition is chosen.
         final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
         RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
@@ -1467,25 +1465,25 @@ public class RecordAccumulatorTest {
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition1, partition.get());
-        assertEquals(isFullStrategy ? 2 : 1, mockRandom.get());
+        assertEquals(2, mockRandom.get());
 
         // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition2, partition.get());
-        assertEquals(isFullStrategy ? 3 : 2, mockRandom.get());
+        assertEquals(3, mockRandom.get());
 
         // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition3, partition.get());
-        assertEquals(isFullStrategy ? 4 : 3, mockRandom.get());
+        assertEquals(4, mockRandom.get());
 
         // Use the partition selected by the previous append, then select the next partition.
         accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, time.milliseconds(), cluster);
         assertEquals(partition1, partition.get());
-        assertEquals(isFullStrategy ? 5 : 4, mockRandom.get());
+        assertEquals(5, mockRandom.get());
     }
 
     @ParameterizedTest
@@ -1884,8 +1882,8 @@ public class RecordAccumulatorTest {
         }
     }
 
-    private static Stream<CompressionType> oversizedRecordCompressionTypes() {
-        return Stream.of(CompressionType.GZIP, CompressionType.ZSTD);
+    private static Stream<Compression> oversizedRecordCompressions() {
+        return Stream.of(Compression.gzip().build(), Compression.zstd().build());
     }
 
     private static Stream<String> allocationStrategies() {
