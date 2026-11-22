@@ -23,7 +23,6 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalInt;
@@ -31,6 +30,7 @@ import java.util.OptionalLong;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 class TxnPartitionEntry {
     static final int NO_LAST_ACKED_SEQUENCE_NUMBER = -1;
@@ -188,12 +188,10 @@ class TxnPartitionEntry {
         // after it move down along with the in-flight ones. The failed batch itself may have been recorded as
         // completed ahead of the oldest in-flight batch when it was removed from the in-flight set, so drop it first.
         completedSequencesAheadOfOldestInflight.remove(baseSequence);
-        List<Integer> adjustedSequences = new ArrayList<>(completedSequencesAheadOfOldestInflight.size());
-        for (int completedSequence : completedSequencesAheadOfOldestInflight) {
-            adjustedSequences.add(completedSequence > baseSequence ? completedSequence - recordCount : completedSequence);
-        }
-        completedSequencesAheadOfOldestInflight.clear();
-        completedSequencesAheadOfOldestInflight.addAll(adjustedSequences);
+        SortedSet<Integer> tail = completedSequencesAheadOfOldestInflight.tailSet(baseSequence, false);
+        List<Integer> shifted = tail.stream().map(sequence -> sequence - recordCount).collect(Collectors.toUnmodifiableList());
+        tail.clear();
+        completedSequencesAheadOfOldestInflight.addAll(shifted);
     }
 
     private void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {

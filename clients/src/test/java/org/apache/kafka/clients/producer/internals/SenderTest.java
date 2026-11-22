@@ -2416,7 +2416,7 @@ public class SenderTest {
             sender.runOnce();
             assertEquals(i + 1, sender.inFlightBatches(tp0).size());
         }
-        List<ClientRequest> requests = new ArrayList<>(client.requests());
+        List<ClientRequest> requests = List.copyOf(client.requests());
         assertEquals(window, requests.size());
 
         // Acknowledge every batch but the first, as a new leader would while the first is still in flight to the
@@ -2512,7 +2512,7 @@ public class SenderTest {
     }
 
     private ClientRequest lastRequest() {
-        List<ClientRequest> requests = new ArrayList<>(client.requests());
+        List<ClientRequest> requests = List.copyOf(client.requests());
         return requests.get(requests.size() - 1);
     }
 
@@ -2522,8 +2522,8 @@ public class SenderTest {
     }
 
     private MetadataResponse metadataWithTp0Leader(Node leader, int leaderEpoch) {
-        return RequestTestUtils.metadataUpdateWith("kafka-cluster", 2, Collections.emptyMap(),
-            Collections.singletonMap(TOPIC_NAME, 2), tp -> leaderEpoch,
+        return RequestTestUtils.metadataUpdateWith("kafka-cluster", 2, Map.of(),
+            Map.of(TOPIC_NAME, 2), tp -> leaderEpoch,
             (error, tp, leaderId, epoch, replicas, isr, offline) -> new MetadataResponse.PartitionMetadata(
                 error, tp, tp0.equals(tp) ? Optional.of(leader.id()) : leaderId, epoch, replicas, isr, offline),
             ApiKeys.METADATA.latestVersion(), TOPIC_IDS);
@@ -2551,7 +2551,7 @@ public class SenderTest {
             futures.add(appendToAccumulator(tp0));
             sender.runOnce();
         }
-        List<ClientRequest> requests = new ArrayList<>(client.requests());
+        List<ClientRequest> requests = List.copyOf(client.requests());
         assertEquals(window, requests.size());
 
         // The leader moved: the first batch is rejected by the previous leader while the later batches are
@@ -2620,7 +2620,7 @@ public class SenderTest {
                 others.add(appendToAccumulator(tp0));
                 sender.runOnce();
             }
-            List<ClientRequest> requests = new ArrayList<>(client.requests());
+            List<ClientRequest> requests = List.copyOf(client.requests());
             assertEquals(4, requests.size());
             assertEquals(5, transactionManager.sequenceNumber(tp0));
 

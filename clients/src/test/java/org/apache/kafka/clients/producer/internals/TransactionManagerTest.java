@@ -93,6 +93,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -843,7 +844,7 @@ public class TransactionManagerTest {
         ProducerBatch batch = new ProducerBatch(tp, MemoryRecords.builder(ByteBuffer.allocate(1024),
                 Compression.NONE, TimestampType.CREATE_TIME, 0L), now);
         for (String value : values) {
-            batch.tryAppend(now, new byte[0], value.getBytes(), new Header[0], null, now);
+            batch.tryAppend(now, new byte[0], value.getBytes(StandardCharsets.UTF_8), new Header[0], null, now);
         }
         batch.setProducerState(manager.producerIdAndEpoch(), manager.sequenceNumber(tp), isTransactional);
         manager.incrementSequenceNumber(tp, batch.recordCount);
