@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +33,13 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
@@ -65,15 +73,63 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
 
-        CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
-        assertSame(resolver, VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+        CloseableVerificationKeyResolver first = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        CloseableVerificationKeyResolver second = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        assertSame(first, second);
 
-        resolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
-        resolver.close();
+        first.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        first.close();
+
+        // The reference acquired by the second get() is still open, so the resolver stays cached.
+        try (CloseableVerificationKeyResolver third = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertSame(second, third);
+        }
+
+        second.close();
 
         // Closing the last reference removes the cache entry, so the next get() creates a new resolver
         // rather than returning the closed one.
-        assertNotSame(resolver, VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+        try (CloseableVerificationKeyResolver fourth = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertNotSame(second, fourth);
+        }
+    }
+
+    @Test
+    public void testConfiguresDelegateOnceAndClosesItWithLastReference() throws Exception {
+        CloseableVerificationKeyResolver delegate = mock(CloseableVerificationKeyResolver.class);
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://jwks.example/configure-once");
+        CloseableVerificationKeyResolver first = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(), () -> delegate);
+        CloseableVerificationKeyResolver second = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(), () -> delegate);
+
+        first.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        second.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        verify(delegate, times(1)).configure(any(), any(), any());
+
+        first.close();
+        verify(delegate, never()).close();
+
+        second.close();
+        verify(delegate, times(1)).close();
+    }
+
+    @Test
+    public void testRetriesConfiguringDelegateAfterFailure() throws Exception {
+        CloseableVerificationKeyResolver delegate = mock(CloseableVerificationKeyResolver.class);
+        KafkaException error = new KafkaException("Could not refresh JWKS");
+        doThrow(error).doNothing().when(delegate).configure(any(), any(), any());
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://jwks.example/configure-retry");
+        CloseableVerificationKeyResolver first = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(), () -> delegate);
+        CloseableVerificationKeyResolver second = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(), () -> delegate);
+
+        assertSame(error, assertThrows(KafkaException.class, () -> first.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())));
+        first.close();
+
+        // The failed attempt did not configure the delegate, so the next caller tries again.
+        second.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        verify(delegate, times(2)).configure(any(), any(), any());
+
+        second.close();
+        verify(delegate, times(1)).close();
     }
 
     @Test

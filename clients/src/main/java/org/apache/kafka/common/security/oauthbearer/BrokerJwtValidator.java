@@ -199,7 +199,10 @@ public class BrokerJwtValidator implements JwtValidator {
 
     @Override
     public void close() throws IOException {
-        Utils.closeQuietly(verificationKeyResolver, "JWT validator verification key resolver");
+        // Clear the field first, so that calling close() again does not release the shared resolver twice.
+        CloseableVerificationKeyResolver resolver = verificationKeyResolver;
+        verificationKeyResolver = null;
+        Utils.closeQuietly(resolver, "JWT validator verification key resolver");
     }
 
     /**

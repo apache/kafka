@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -52,36 +52,52 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * a new instance for each particular set of configuration. Because each set of configuration
  * may have multiple instances, we want to reuse the single instance.
  *
- * <p>The resolver returned from {@link #get(Map, String, List)} is reference counted: the caller
- * must call {@link CloseableVerificationKeyResolver#configure(Map, String, List)} before use and
- * {@link CloseableVerificationKeyResolver#close()} when finished with it so that the underlying
- * resolver is initialized on first use and its resources are released when the last user closes it.
+ * <p>Each call to {@link #get(Map, String, List)} acquires a reference to the shared resolver: the
+ * caller must call {@link CloseableVerificationKeyResolver#configure(Map, String, List)} before use
+ * and {@link CloseableVerificationKeyResolver#close()} when finished with it. The underlying resolver
+ * is configured by the first {@code configure()} call and closed when the last reference is closed.
  */
 public class VerificationKeyResolverFactory {
 
     private static final Logger LOG = LoggerFactory.getLogger(VerificationKeyResolverFactory.class);
 
-    private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> CACHE = new HashMap<>();
+    private static final Map<VerificationKeyResolverKey, RefCountingVerificationKeyResolver> CACHE = new HashMap<>();
 
-    public static synchronized CloseableVerificationKeyResolver get(Map<String, ?> configs,
-                                                                    String saslMechanism,
-                                                                    List<AppConfigurationEntry> jaasConfigEntries) {
-        VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, saslMechanism, jaasConfigEntries);
-
-        return CACHE.computeIfAbsent(key, k ->
-            new RefCountingVerificationKeyResolver(
-                create(
-                    configs,
-                    saslMechanism,
-                    jaasConfigEntries
-                ),
-                k
-            )
-        );
+    public static CloseableVerificationKeyResolver get(Map<String, ?> configs,
+                                                       String saslMechanism,
+                                                       List<AppConfigurationEntry> jaasConfigEntries) {
+        return get(configs, saslMechanism, jaasConfigEntries, () -> create(configs, saslMechanism, jaasConfigEntries));
     }
 
-    private static synchronized void remove(VerificationKeyResolverKey cacheKey) {
-        CACHE.remove(cacheKey);
+    /*
+     * Package-visible for testing, so that tests can supply the delegate instead of creating it from the
+     * configuration.
+     */
+    static synchronized CloseableVerificationKeyResolver get(Map<String, ?> configs,
+                                                             String saslMechanism,
+                                                             List<AppConfigurationEntry> jaasConfigEntries,
+                                                             Supplier<CloseableVerificationKeyResolver> delegateSupplier) {
+        VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, saslMechanism, jaasConfigEntries);
+
+        RefCountingVerificationKeyResolver resolver = CACHE.computeIfAbsent(key, k ->
+            new RefCountingVerificationKeyResolver(delegateSupplier.get(), k));
+
+        // Acquire the reference while holding the lock, so that another caller closing its own reference
+        // cannot close the resolver before this caller uses it.
+        resolver.refCount++;
+        return resolver;
+    }
+
+    /*
+     * Releases a reference acquired by get(). Returns true if it was the last reference, in which case the
+     * resolver has been removed from the cache and the caller must close it.
+     */
+    private static synchronized boolean release(RefCountingVerificationKeyResolver resolver) {
+        if (--resolver.refCount != 0)
+            return false;
+
+        CACHE.remove(resolver.cacheKey, resolver);
+        return true;
     }
 
     static CloseableVerificationKeyResolver create(Map<String, ?> configs,
@@ -177,7 +193,12 @@ public class VerificationKeyResolverFactory {
 
         private final VerificationKeyResolverKey cacheKey;
 
-        private final AtomicInteger count = new AtomicInteger(0);
+        // Guarded by the VerificationKeyResolverFactory class lock, so that references are acquired and
+        // released atomically with the cache lookup and removal.
+        private int refCount;
+
+        // Guarded by this.
+        private boolean configured;
 
         public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate, VerificationKeyResolverKey cacheKey) {
             this.delegate = delegate;
@@ -190,19 +211,21 @@ public class VerificationKeyResolverFactory {
         }
 
         @Override
-        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-            if (count.incrementAndGet() == 1)
+        public synchronized void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+            // Only the first call configures the delegate. Concurrent callers wait here until it is done,
+            // so none of them uses the delegate before it is configured.
+            if (!configured) {
                 delegate.configure(configs, saslMechanism, jaasConfigEntries);
+                configured = true;
+            }
         }
 
         @Override
         public void close() throws IOException {
-            if (count.decrementAndGet() == 0) {
-                // Drop the cache entry so that a later get() with the same configuration builds a new
-                // resolver rather than resurrecting this closed one.
-                remove(cacheKey);
+            // Releasing the last reference also drops the cache entry, so that a later get() with the same
+            // configuration builds a new resolver rather than returning this closed one.
+            if (release(this))
                 delegate.close();
-            }
         }
     }
 }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
@@ -42,8 +43,14 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
@@ -86,14 +93,57 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
 
-        CloseableVerificationKeyResolver cached = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
-
         BrokerJwtValidator validator = new BrokerJwtValidator();
         validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        CloseableVerificationKeyResolver shared = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        shared.close();
+
+        // The validator still holds its reference, so the resolver stays cached.
+        try (CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertSame(shared, resolver);
+        }
+
         validator.close();
 
-        // Closing the validator releases the shared resolver. The factory should return a new one.
-        assertNotSame(cached, VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+        // Closing the validator releases the last reference. The factory should return a new resolver.
+        try (CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertNotSame(shared, resolver);
+        }
+    }
+
+    @Test
+    public void testCloseReleasesVerificationKeyResolverOnlyOnce() throws Exception {
+        CloseableVerificationKeyResolver resolver = mock(CloseableVerificationKeyResolver.class);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
+        validator.configure(getSaslConfigs(Map.of(
+                        SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                        SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE))),
+                OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        validator.close();
+        validator.close();
+
+        // Releasing the shared resolver twice would close it while other validators still use it.
+        verify(resolver, times(1)).close();
+    }
+
+    @Test
+    public void testCloseReleasesVerificationKeyResolverAfterConfigureFails() throws Exception {
+        CloseableVerificationKeyResolver resolver = mock(CloseableVerificationKeyResolver.class);
+        KafkaException error = new KafkaException("Could not refresh JWKS");
+        doThrow(error).when(resolver).configure(any(), any(), any());
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
+        Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+
+        assertSame(error, assertThrows(KafkaException.class,
+                () -> validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())));
+
+        // The caller closes the validator after configure() fails, which must release the resolver.
+        validator.close();
+        verify(resolver, times(1)).close();
     }
 
     @Test
