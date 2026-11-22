@@ -604,6 +604,9 @@ public class PartitionChangeBuilder {
             ", topicId=" + topicId +
             ", partitionId=" + partitionId +
             ", isAcceptableLeader=" + isAcceptableLeader +
+            ", metadataVersion=" + metadataVersion +
+            ", minISR=" + minISR +
+            ", targetDirectories=" + targetDirectories +
             ", targetIsr=" + targetIsr +
             ", targetReplicas=" + targetReplicas +
             ", targetRemoving=" + targetRemoving +
@@ -613,6 +616,10 @@ public class PartitionChangeBuilder {
             ", uncleanShutdownReplicas=" + uncleanShutdownReplicas +
             ", election=" + election +
             ", targetLeaderRecoveryState=" + targetLeaderRecoveryState +
+            ", targetLeaderEpoch=" + targetLeaderEpoch +
+            ", eligibleLeaderReplicasEnabled=" + eligibleLeaderReplicasEnabled +
+            ", defaultDirProvider=" + defaultDirProvider +
+            ", useLastKnownLeaderInBalancedRecovery=" + useLastKnownLeaderInBalancedRecovery +
             ')';
     }
 }
