@@ -37,9 +37,10 @@ import java.util.SortedMap;
  *                                    failed.
  * @param internalTopicsToBeCreated   Contains a list of internal topics that need to be created. This is used to create the topics in the
  *                                    broker.
- * @param topicConfigurationException If the topic configuration process failed, e.g. because expected topics are missing or have an
- *                                    incorrect number of partitions, this field will store the error that occurred, so that is can be
- *                                    reported back to the client.
+ * @param topicConfigurationException If the topic configuration process failed, e.g. because
+ *                                    expected topics are missing or have an incorrect number of
+ *                                    partitions, this field will store the error that occurred, so
+ *                                    that it can be reported back to the client.
  */
 public record ConfiguredTopology(int topologyEpoch,
                                  long metadataHash,

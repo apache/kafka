@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 @InterfaceAudience.Public
 public class IntegerSerializer implements Serializer<Integer> {
+    @Override
     public byte[] serialize(String topic, Integer data) {
         if (data == null)
             return null;

@@ -2,7 +2,7 @@
 
 ## Introduction
 - The Native Apache Kafka Docker Image can launch brokers with sub-second startup time and minimal memory footprint by leveraging native Kafka executable.
-- The native Kafka executable is built by compiling Apache Kafka code ahead-of-time using the [GraalVM native-image tool](https://www.graalvm.org/jdk21/reference-manual/native-image/).
+- The native Kafka executable is built by compiling Apache Kafka code ahead-of-time using the [GraalVM native-image tool](https://www.graalvm.org/jdk25/reference-manual/native-image/).
 - This image is experimental and intended for local development and testing purposes only; it is not recommended for production use.
 - This is introduced with [KIP-974](https://cwiki.apache.org/confluence/x/KZizDw).
 
@@ -22,6 +22,7 @@ export JAVA_TOOL_OPTIONS="-agentlib:native-image-agent=config-merge-dir=/path/to
 
 ## Limitations of Native Apache Kafka executable
 - Dynamic Features: For any new dynamic feature added or modified in Apache Kafka, the corresponding metadata configurations must be added or updated in the `native-image-configs`. As of now these configs are static.
+  `NativeImageConfigTest` checks that the implementations of known pluggable interfaces are registered in `reflect-config.json`. When adding a new pluggable interface, add it to `NativeImageConfigTest.PLUGGABLE_INTERFACES`.
 - Runtime Jars: Native Kafka Executable does not support capabilities that require a new runtime jar provided by the user, as the jar's information is not available during build time. In such cases, a new native Kafka binary must be built, including that jar in the classpath during the build.
 - Garbage Collection: This implementation uses the community edition of GraalVM, which supports only `serial` GC. Therefore, Native Apache Kafka supports `serial` GC and not `G1` GC.
 

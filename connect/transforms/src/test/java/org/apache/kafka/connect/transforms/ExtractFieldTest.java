@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ExtractFieldTest {
     private final ExtractField<SinkRecord> xformKey = new ExtractField.Key<>();
@@ -169,12 +169,8 @@ public class ExtractFieldTest {
         final Struct key = new Struct(keySchema).put("magic", 42);
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
 
-        try {
-            xformKey.apply(record);
-            fail("Expected exception wasn't raised");
-        } catch (IllegalArgumentException iae) {
-            assertEquals("Unknown field: nonexistent", iae.getMessage());
-        }
+        IllegalArgumentException iae = assertThrows(IllegalArgumentException.class, () -> xformKey.apply(record), "Expected exception wasn't raised");
+        assertEquals("Unknown field: nonexistent", iae.getMessage());
     }
 
     @Test
@@ -189,12 +185,8 @@ public class ExtractFieldTest {
         final Struct key = new Struct(keySchema).put("magic", new Struct(fooSchema).put("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
 
-        try {
-            xformKey.apply(record);
-            fail("Expected exception wasn't raised");
-        } catch (IllegalArgumentException iae) {
-            assertEquals("Unknown field: magic.nonexistent", iae.getMessage());
-        }
+        IllegalArgumentException iae = assertThrows(IllegalArgumentException.class, () -> xformKey.apply(record), "Expected exception wasn't raised");
+        assertEquals("Unknown field: magic.nonexistent", iae.getMessage());
     }
 
     @Test

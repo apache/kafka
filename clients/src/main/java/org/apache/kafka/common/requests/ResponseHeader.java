@@ -78,6 +78,7 @@ public class ResponseHeader implements AbstractRequestResponse {
         return headerVersion;
     }
 
+    @Override
     public ResponseHeaderData data() {
         return data;
     }

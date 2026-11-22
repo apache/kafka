@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -37,11 +41,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Instant;
+import java.util.Map;
+
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,6 +78,21 @@ public class SessionToHeadersStoreAdapterTest {
     public void setUp() {
         when(innerStore.persistent()).thenReturn(true);
         adapter = new SessionToHeadersStoreAdapter(innerStore);
+    }
+
+    @SuppressWarnings("unchecked")
+    private KeyValueIterator<Windowed<Bytes>, byte[]> innerIteratorWithRawValue() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        when(innerIter.hasNext()).thenReturn(true);
+        when(innerIter.next()).thenReturn(KeyValue.pair(SESSION_KEY, RAW_VALUE));
+        return innerIter;
+    }
+
+    private void assertAddsEmptyHeaders(final KeyValueIterator<Windowed<Bytes>, byte[]> result) {
+        assertTrue(result.hasNext());
+        final KeyValue<Windowed<Bytes>, byte[]> entry = result.next();
+        assertEquals(SESSION_KEY, entry.key);
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, entry.value);
     }
 
     @Test
@@ -105,78 +128,78 @@ public class SessionToHeadersStoreAdapterTest {
         assertNull(adapter.fetchSession(KEY, 10L, 20L));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapFindSessionsIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(KEY, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapBackwardFindSessionsIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.backwardFindSessions(KEY, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFindSessions(KEY, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapFindSessionsWithKeyRangeIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.findSessions(KEY_FROM, KEY_TO, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result =
             adapter.findSessions(KEY_FROM, KEY_TO, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapBackwardFindSessionsWithKeyRangeIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.backwardFindSessions(KEY_FROM, KEY_TO, 10L, 20L)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result =
             adapter.backwardFindSessions(KEY_FROM, KEY_TO, 10L, 20L);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapFindSessionsWithEndTimeRangeIterator() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        when(innerStore.findSessions(10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(10L, 20L);
+        assertAddsEmptyHeaders(result);
+    }
+
     @Test
     public void shouldWrapFetchIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.fetch(KEY)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.fetch(KEY);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapBackwardFetchIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.backwardFetch(KEY)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFetch(KEY);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapFetchWithKeyRangeIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.fetch(KEY_FROM, KEY_TO)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.fetch(KEY_FROM, KEY_TO);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldWrapBackwardFetchWithKeyRangeIterator() {
-        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.backwardFetch(KEY_FROM, KEY_TO)).thenReturn(innerIter);
         final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.backwardFetch(KEY_FROM, KEY_TO);
-        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+        assertAddsEmptyHeaders(result);
     }
 
     @Test
@@ -216,6 +239,40 @@ public class SessionToHeadersStoreAdapterTest {
         assertEquals("test-store", adapter.name());
     }
 
+    @Test
+    public void shouldDelegateCommit() {
+        final Map<TopicPartition, Long> changelogOffsets = Map.of(new TopicPartition("changelog", 0), 7L);
+        adapter.commit(changelogOffsets);
+        verify(innerStore).commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateManagesOffsets() {
+        when(innerStore.managesOffsets()).thenReturn(true);
+        assertTrue(adapter.managesOffsets());
+    }
+
+    @Test
+    public void shouldDelegateCommittedOffset() {
+        final TopicPartition partition = new TopicPartition("changelog", 0);
+        when(innerStore.committedOffset(partition)).thenReturn(7L);
+        assertEquals(7L, adapter.committedOffset(partition));
+    }
+
+    @Test
+    public void shouldDelegateApproximateNumUncommittedBytes() {
+        when(innerStore.approximateNumUncommittedBytes()).thenReturn(123L);
+        assertEquals(123L, adapter.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldDelegateGetPosition() {
+        final Position position = Position.emptyPosition();
+        when(innerStore.getPosition()).thenReturn(position);
+        assertSame(position, adapter.getPosition());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldDelegateQueryToInnerStore() {
@@ -228,6 +285,25 @@ public class SessionToHeadersStoreAdapterTest {
         final QueryResult<Void> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
         assertTrue(result.isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldConvertValueOnWindowRangeQuery() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> innerResult =
+            QueryResult.forResult(innerIter);
+        when(innerStore.query(any(WindowRangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) innerResult);
+
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(KEY);
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
+        // Assert on the converted value, not just the iterator type: this proves
+        // the timestampedToHeaders conversion (empty headers prepended) is wired here.
+        assertAddsEmptyHeaders(result.getResult());
     }
 
     @SuppressWarnings("unchecked")
@@ -269,5 +345,22 @@ public class SessionToHeadersStoreAdapterTest {
 
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
+    }
+
+    // Instant overloads delegate to the long-based overloads; verify conversion still happens.
+    @Test
+    public void shouldConvertFetchSessionViaInstantOverload() {
+        when(innerStore.fetchSession(KEY, 10L, 20L)).thenReturn(RAW_VALUE);
+        final byte[] result = adapter.fetchSession(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result);
+    }
+
+    @Test
+    public void shouldWrapFindSessionsViaInstantOverload() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result =
+            adapter.findSessions(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertAddsEmptyHeaders(result);
     }
 }

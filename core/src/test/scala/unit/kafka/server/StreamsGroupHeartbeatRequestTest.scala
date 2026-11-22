@@ -27,7 +27,7 @@ import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.server.common.Feature
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertThrows, assertTrue}
 
 import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
@@ -817,7 +817,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val options3 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
       admin.incrementalAlterConfigs(configChanges3, options3).all().get()
 
-      // Send heartbeats to trigger rebalance after config change
+      // Wait for standby tasks: heartbeats can echo the old assignment before the config change takes effect.
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
           groupId = groupId,
@@ -829,8 +829,9 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           warmupTasks = List.empty
         )
         streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse1.standbyTasks() != null
-      }, "First member heartbeat after config change did not succeed within the timeout period.")
+          streamsGroupHeartbeatResponse1.standbyTasks() != null &&
+          !streamsGroupHeartbeatResponse1.standbyTasks().isEmpty
+      }, "First member did not receive standby tasks after config change within the timeout period.")
 
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
@@ -843,8 +844,9 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           warmupTasks = List.empty
         )
         streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse2.standbyTasks() != null
-      }, "Second member heartbeat after config change did not succeed within the timeout period.")
+          streamsGroupHeartbeatResponse2.standbyTasks() != null &&
+          !streamsGroupHeartbeatResponse2.standbyTasks().isEmpty
+      }, "Second member did not receive standby tasks after config change within the timeout period.")
 
       // Verify that at least one member has active tasks
       val member1ActiveTasksNum = streamsGroupHeartbeatResponse1.activeTasks().size()
@@ -1258,6 +1260,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       assertNotNull(streamsGroupHeartbeatResponse.activeTasks())
 
+      val assignmentBeforeRestart = streamsGroupHeartbeatResponse.duplicate()
+
       // Restart the only running broker
       val broker = cluster.brokers().values().iterator().next()
       cluster.shutdownBroker(broker.config.brokerId)
@@ -1277,13 +1281,12 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest after broker restart did not succeed within the timeout period.")
 
-      // Verify the response. Epoch should not have changed and null assignments determine that no
-      // change in old assignment
+      // The epoch and assignment should be unchanged. Reporting all owned tasks echoes the assignment.
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
       assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
-      assertNull(streamsGroupHeartbeatResponse.activeTasks())
-      assertNull(streamsGroupHeartbeatResponse.standbyTasks())
-      assertNull(streamsGroupHeartbeatResponse.warmupTasks())
+      assertEquals(assignmentBeforeRestart.activeTasks(), streamsGroupHeartbeatResponse.activeTasks())
+      assertEquals(assignmentBeforeRestart.standbyTasks(), streamsGroupHeartbeatResponse.standbyTasks())
+      assertEquals(assignmentBeforeRestart.warmupTasks(), streamsGroupHeartbeatResponse.warmupTasks())
 
     } finally {
       admin.close()

@@ -92,10 +92,10 @@ Apache Kafka includes several built-in serde implementations for Java primitives
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
     </dependency>
 
-This artifact provides the following serde implementations under the package [org.apache.kafka.common.serialization](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization), which you can leverage when e.g., defining default serializers in your Streams configuration.  
+This artifact provides the following serde implementations under the package [org.apache.kafka.common.serialization](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/serialization), which you can leverage when e.g., defining default serializers in your Streams configuration.  
   
 <table>  
 <tr>  
@@ -200,13 +200,13 @@ Boolean
 
 **Tip**
 
-[Bytes](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java) is a wrapper for Java's `byte[]` (byte array) that supports proper equality and ordering semantics. You may want to consider using `Bytes` instead of `byte[]` in your applications.
+[Bytes](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java) is a wrapper for Java's `byte[]` (byte array) that supports proper equality and ordering semantics. You may want to consider using `Bytes` instead of `byte[]` in your applications.
 
 ## JSON
 
 The Kafka Streams code examples also include a basic serde implementation for JSON:
 
-  * [PageViewTypedDemo](https://github.com/apache/kafka/blob/4.3/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/PageViewTypedDemo.java#L83)
+  * [PageViewTypedDemo](https://github.com/apache/kafka/blob/4.4/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/PageViewTypedDemo.java#L83)
 
 
 
@@ -220,10 +220,10 @@ Apache Kafka Streams includes serde implementations for windowed types in its `k
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-streams</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
     </dependency>
 
-This artifact provides the following windowed serde implementations under the package [org.apache.kafka.streams.kstream](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/kstream):
+This artifact provides the following windowed serde implementations under the package [org.apache.kafka.streams.kstream](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/kstream):
 
 **Serdes:**
 
@@ -300,9 +300,9 @@ The following `StreamsConfig` parameters are deprecated in favor of passing para
 
 If you need to implement custom Serdes, your best starting point is to take a look at the source code references of existing Serdes (see previous section). Typically, your workflow will be similar to:
 
-  1. Write a _serializer_ for your data type `T` by implementing [org.apache.kafka.common.serialization.Serializer](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java).
-  2. Write a _deserializer_ for `T` by implementing [org.apache.kafka.common.serialization.Deserializer](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java).
-  3. Write a _serde_ for `T` by implementing [org.apache.kafka.common.serialization.Serde](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java), which you either do manually (see existing Serdes in the previous section) or by leveraging helper functions in [Serdes](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java) such as `Serdes.serdeFrom(Serializer<T>, Deserializer<T>)`. Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to `KafkaStreams`. If your serde class has generic types or you use `Serdes.serdeFrom(Serializer<T>, Deserializer<T>)`, you can pass your serde only via methods calls (for example `builder.stream("topicName", Consumed.with(...))`).
+  1. Write a _serializer_ for your data type `T` by implementing [org.apache.kafka.common.serialization.Serializer](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java).
+  2. Write a _deserializer_ for `T` by implementing [org.apache.kafka.common.serialization.Deserializer](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java).
+  3. Write a _serde_ for `T` by implementing [org.apache.kafka.common.serialization.Serde](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java), which you either do manually (see existing Serdes in the previous section) or by leveraging helper functions in [Serdes](https://github.com/apache/kafka/blob/4.4/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java) such as `Serdes.serdeFrom(Serializer<T>, Deserializer<T>)`. Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to `KafkaStreams`. If your serde class has generic types or you use `Serdes.serdeFrom(Serializer<T>, Deserializer<T>)`, you can pass your serde only via methods calls (for example `builder.stream("topicName", Consumed.with(...))`).
 
 
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -137,13 +136,7 @@ public class ConnectInternalTopicsTest {
 
     @ClusterTest(brokers = 3)
     void testCreateMissingTopics(ClusterInstance cluster) throws Exception {
-        try (var adminClient = cluster.admin()) {
-            adminClient.createTopics(Set.of(
-                    new NewTopic(CONFIG_TOPIC_NAME, 1, (short) 1)
-                            .configs(Map.of("retention.ms", "1000"))
-            ));
-            waitForTopics(adminClient, Set.of(CONFIG_TOPIC_NAME));
-        }
+        cluster.createTopic(CONFIG_TOPIC_NAME, 1, (short) 1, Map.of("retention.ms", "1000"));
         var properties = new Properties();
         properties.setProperty("bootstrap.servers", cluster.bootstrapServers());
         properties.setProperty("config.storage.topic", CONFIG_TOPIC_NAME);

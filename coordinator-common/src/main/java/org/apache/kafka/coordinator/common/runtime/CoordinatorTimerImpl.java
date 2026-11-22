@@ -119,11 +119,11 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
                     }
 
                     if (retry) {
-                        log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
+                        log.info("The write event {} for the timer {} failed due to {}. Rescheduling it.",
                             operationName, key, ex.getMessage());
                         schedule(key, retryBackoff, TimeUnit.MILLISECONDS, true, retryBackoff, operation);
                     } else {
-                        log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
+                        log.error("The write event {} for the timer {} failed due to {}. Ignoring it.",
                             operationName, key, ex.getMessage(), ex);
                     }
 

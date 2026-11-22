@@ -125,8 +125,8 @@ def detect_docs_release_version(version):
 
 def command_stage_docs():
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo_dir, "..", "kafka-site")
-    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
-        fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
+    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "hugo.yaml")):
+        fail(f"{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
     jdk25_env = get_jdk(25)
 
@@ -139,20 +139,40 @@ def command_stage_docs():
     # Disable parallel execution for aggregatedJavadoc due to Gradle 9 issues
     cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} aggregatedJavadoc --no-parallel", cwd=repo_dir, env=jdk25_env,)
 
-
     docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
-    versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(project_version))
-    if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 0o755)
+    # Hugo layout: markdown/content pages live under content/en/<version>,
+    # javadoc and other static assets live under static/<version>
+    docs_slot = docs_version(project_version)
+    content_docs_path = os.path.join(kafka_site_repo_path, "content", "en", docs_slot)
+    static_docs_path = os.path.join(kafka_site_repo_path, "static", docs_slot)
+    if not os.path.exists(content_docs_path):
+        os.makedirs(content_docs_path, 0o755)
+    if not os.path.exists(static_docs_path):
+        os.makedirs(static_docs_path, 0o755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=versioned_docs_path)
+    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=content_docs_path)
+
+    # Images come bundled in the tar, but belong under static/<version>, not
+    # content/en/<version>. Move them out after extraction.
+    content_images_path = os.path.join(content_docs_path, "images")
+    if os.path.exists(content_images_path):
+        static_images_path = os.path.join(static_docs_path, "images")
+        cmd("Moving images to static assets", f"mkdir -p {static_images_path} && cp -R {content_images_path}/. {static_images_path} && rm -rf {content_images_path}", shell=True)
+
+    # LICENSE and NOTICE sit at the root of the site-docs tar and get dumped into
+    # content/en/<version> by the extract above, but they are not docs content and
+    # do not belong in the kafka-site content tree. Drop them after extraction.
+    for stray_file in ("LICENSE", "NOTICE"):
+        stray_path = os.path.join(content_docs_path, stray_file)
+        if os.path.exists(stray_path):
+            cmd(f"Removing stray {stray_file}", f"rm -f {stray_path}")
 
     javadocs_src_dir = os.path.join(repo_dir, "build", "docs", "javadoc")
 
-    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {versioned_docs_path}")
+    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {static_docs_path}")
 
     sys.exit(0)
 
@@ -377,8 +397,6 @@ for filename in os.listdir(artifacts_dir):
     # argument for the file is included in the output and verification uses a simple diff that will break if an absolute path
     # is used.
     dir, fname = os.path.split(full_path)
-    cmd(f"Generating MD5    for {full_path}", f"gpg --print-md md5    {fname} > {fname}.md5   ", shell=True, cwd=dir)
-    cmd(f"Generating SHA1   for {full_path}", f"gpg --print-md sha1   {fname} > {fname}.sha1  ", shell=True, cwd=dir)
     cmd(f"Generating SHA512 for {full_path}", f"gpg --print-md sha512 {fname} > {fname}.sha512", shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", f"ls -R {artifacts_dir}")
@@ -388,7 +406,7 @@ confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag
 svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13 --no-parallel", cwd=kafka_dir, env=jdk25_env, shell=True)
 # Publishes the KIP-1265 plugin artifacts to the same Nexus staging repo. The api-checker
 # tree is a separate Gradle build (composite/included) so the root :publish task does not
 # descend into it. The four coordinates uploaded here are:
@@ -406,7 +424,7 @@ cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", 
 # scalaVersion flag isn't passed. Publish credentials come from ~/.gradle/gradle.properties
 # (mavenUrl / mavenUsername / mavenPassword).
 cmd("Building and uploading archives",
-    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish",
+    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish --no-parallel",
     cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 

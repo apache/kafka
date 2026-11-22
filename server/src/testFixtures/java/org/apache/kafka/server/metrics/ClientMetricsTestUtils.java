@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -72,6 +73,19 @@ public class ClientMetricsTestUtils {
             false);
     }
 
+    public static RequestContext requestContext(ApiKeys apiKey, short apiVersion, Uuid clientInstanceId) throws UnknownHostException {
+        return new RequestContext(
+            new RequestHeader(apiKey, apiVersion, "producer-1", clientInstanceId, 0),
+            TestUtils.randomString(5),
+            InetAddress.getLocalHost(),
+            Optional.of(CLIENT_PORT),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            new ClientInformation("apache-kafka-java", "3.5.2"),
+            false);
+    }
+
     public static RequestContext requestContextWithNullClientInfo() throws UnknownHostException {
         return new RequestContext(
             new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
@@ -102,10 +116,12 @@ public class ClientMetricsTestUtils {
     public static class TestClientMetricsReceiver implements ClientTelemetryReceiver {
         public int exportMetricsInvokedCount = 0;
         public List<ByteBuffer> metricsData = new ArrayList<>();
+        public List<Uuid> clientInstanceIds = new ArrayList<>();
 
         public void exportMetrics(AuthorizableRequestContext context, ClientTelemetryPayload payload) {
             exportMetricsInvokedCount += 1;
             metricsData.add(payload.data());
+            clientInstanceIds.add(payload.clientInstanceId());
         }
     }
 
@@ -113,12 +129,14 @@ public class ClientMetricsTestUtils {
         public int exportMetricsInvokedCount = 0;
         public List<ByteBuffer> metricsData = new ArrayList<>();
         public List<Integer> pushIntervals = new ArrayList<>();
+        public List<Uuid> clientInstanceIds = new ArrayList<>();
 
         @Override
         public void exportMetrics(ClientTelemetryContext context, ClientTelemetryPayload payload) {
             exportMetricsInvokedCount += 1;
             metricsData.add(payload.data());
             pushIntervals.add(context.pushIntervalMs());
+            clientInstanceIds.add(payload.clientInstanceId());
         }
     }
 

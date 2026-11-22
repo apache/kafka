@@ -42,10 +42,10 @@ public class HeaderVersionsTest {
             "', 'flexibleVersions': '" + flexibleVersions + "'}");
     }
 
-    // The real RequestHeader / ResponseHeader shapes: request header 1-2 (flexible from 2),
+    // The real RequestHeader / ResponseHeader shapes: request header 1-3 (flexible from 2),
     // response header 0-1 (flexible from 1).
     private static MessageSpec requestHeader() throws Exception {
-        return headerSpec("RequestHeader", "1-2", "2+");
+        return headerSpec("RequestHeader", "1-3", "2+");
     }
 
     private static MessageSpec responseHeader() throws Exception {
@@ -337,11 +337,11 @@ public class HeaderVersionsTest {
 
     @Test
     public void testRequestHeaderVersionMustExist() {
-        // The synthetic request header schema stops at v2, so a schema may not declare header v3.
+        // The request header schema stops at v3, so a schema may not declare header v4.
         assertMessageContains("does not exist",
-            () -> checkHeaderVersions(parse(requestSpec("0-5", "0+", "{'0+': '3'}"))));
+            () -> checkHeaderVersions(parse(requestSpec("0-5", "0+", "{'0+': '4'}"))));
         assertMessageContains("does not exist",
-            () -> checkHeaderVersions(parse(requestSpec("0-6", "3+", "{'0-2': '1', '3-5': '2', '6+': '3'}"))));
+            () -> checkHeaderVersions(parse(requestSpec("0-6", "3+", "{'0-2': '1', '3-5': '2', '6+': '4'}"))));
     }
 
     @Test
@@ -360,9 +360,9 @@ public class HeaderVersionsTest {
 
     @Test
     public void testHighestExistingHeaderVersionsAccepted() throws Exception {
-        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '2'}"));
+        MessageSpec spec = parse(requestSpec("0-5", "0+", "{'0+': '3'}"));
         checkHeaderVersions(spec);
-        assertEquals((short) 2, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
+        assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
         spec = parse(responseSpec(0, "FooResponse", "0-5", "0+", "{'0+': '1'}"));
         checkHeaderVersions(spec);
         assertEquals((short) 1, spec.headerVersions().orElseThrow().entries().get(0).headerVersion());
@@ -403,14 +403,6 @@ public class HeaderVersionsTest {
         assertMessageContains("which is flexible", () -> checkHeaderVersions(
             parse("{'apiKey': 18, 'type': 'request', 'name': 'ApiVersionsRequest', 'validVersions': '0-3', " +
                 "'flexibleVersions': '3+', 'headerVersions': {'0+': '1'}}")));
-    }
-
-    @Test
-    public void testHeaderVersionThreeAcceptedWhenHeaderSchemaAllowsIt() throws Exception {
-        // Once the request header schema is bumped to 1-3, a map may declare header v3.
-        MessageSpec spec = parse(requestSpec("0-5", "2+", "{'0-1': '1', '2': '2', '3+': '3'}"));
-        spec.checkHeaderVersions(headerSpec("RequestHeader", "1-3", "2+"), responseHeader());
-        assertEquals((short) 3, spec.headerVersions().orElseThrow().entries().get(2).headerVersion());
     }
 
     @Test

@@ -18,15 +18,16 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "GetTelemetrySubscriptionsRequest",
-  "validVersions": "0",
+  // Version 1 removes ClientInstanceId and uses the v3 request header (KIP-1313).
+  "latestVersionUnstable": true,
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
-    "0+": "2"
+    "0": "2",
+    "1+": "3"
   },
   "fields": [
-    {
-      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
-      "about": "Unique id for this client instance, must be set to 0 on the first request."
-    }
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0",
+      "about": "Unique id for this client instance, must be set to 0 on the first request." }
   ]
 }

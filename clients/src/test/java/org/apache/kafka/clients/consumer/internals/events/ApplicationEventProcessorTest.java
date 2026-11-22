@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
@@ -35,7 +36,6 @@ import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.StreamsGroupTopologyDescriptionRequestManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -93,7 +93,7 @@ public class ApplicationEventProcessorTest {
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
     private final FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
-    private SubscriptionState subscriptionState = mock(SubscriptionState.class);
+    private ConsumerSubscriptionState subscriptionState = mock(ConsumerSubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
     private final StreamsGroupTopologyDescriptionRequestManager streamsGroupTopologyDescriptionRequestManager = mock(StreamsGroupTopologyDescriptionRequestManager.class);
@@ -261,7 +261,7 @@ public class ApplicationEventProcessorTest {
     public void testSeekUnvalidatedEvent() {
         TopicPartition tp = new TopicPartition("topic", 0);
         Optional<Integer> offsetEpoch = Optional.of(1);
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                 0, offsetEpoch, Metadata.LeaderAndEpoch.noLeaderOrEpoch());
         SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, offsetEpoch);
 
@@ -364,7 +364,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testTopicSubscriptionChangeEventWithIllegalSubscriptionState() {
-        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         TopicSubscriptionChangeEvent event = new TopicSubscriptionChangeEvent(
             Set.of("topic1", "topic2"), 12345);
 
@@ -433,7 +433,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testTopicPatternSubscriptionChangeEventWithIllegalSubscriptionState() {
-        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(
             Pattern.compile("topic.*"), 12345);
 

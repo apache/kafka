@@ -71,9 +71,7 @@
   }, {
     "pattern":"\\Qkafka/kafka-version.properties\\E"
   }, {
-    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.7-17.so\\E"
-  }, {
-    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.7-17.so\\E"
+    "pattern":"linux/(aarch64|amd64)/libzstd-jni-[0-9][^/]*\\.so"
   }, {
     "pattern":"\\Qlog4j2.StatusLogger.properties\\E"
   }, {
@@ -115,15 +113,7 @@
   }, {
     "pattern":"java.base:\\Qjava/util/List.tasty\\E"
   }, {
-    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfkc.nrm\\E"
-  }, {
-    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/uprops.icu\\E"
-  }, {
-    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfc.nrm\\E"
-  }, {
-    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfkc.nrm\\E"
-  }, {
-    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/uprops.icu\\E"
+    "pattern":"java.base:jdk/internal/icu/impl/data/(icudt[0-9]+b|icudata)/(nfc\\.nrm|nfkc\\.nrm|uprops\\.icu)"
   }, {
     "pattern":"java.base:\\Qsun/net/idn/uidna.spp\\E"
   }, {

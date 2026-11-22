@@ -39,6 +39,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ConsoleConsumerOptionsTest {
 
     @Test
+    public void shouldLoadMirrorStateMessageFormatter() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "__mirror_state",
+            "--from-beginning",
+            "--formatter", "org.apache.kafka.tools.consumer.MirrorStateMessageFormatter"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        assertInstanceOf(MirrorStateMessageFormatter.class, config.formatter());
+    }
+
+    @Test
     public void shouldParseValidConsumerValidConfig() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",

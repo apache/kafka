@@ -54,9 +54,9 @@ import org.mockito.ArgumentCaptor;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,7 +88,7 @@ public class KRaftTopicCreatorTest {
             .setMaxVersion(ApiKeys.CREATE_TOPICS.latestVersion());
 
         when(brokerToController.controllerApiVersions())
-            .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))));
+            .thenReturn(Optional.of(NodeApiVersions.create(Set.of(createTopicApiVersion))));
 
         kraftTopicCreator = new KRaftTopicCreator(brokerToController);
     }
