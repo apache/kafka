@@ -434,21 +434,19 @@ public class DefaultRecordBatchTest {
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
                 assertInstanceOf(DefaultRecordBatch.RecordIterator.class, skipKeyValueIterator);
-                // superficial validation for correctness. Deep validation is already performed in other tests
-                assertEquals(Utils.toList(records.records()).size(), Utils.toList(skipKeyValueIterator).size());
             } else {
                 // assert that a streaming iterator is used for compressed records
                 assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);
-                // assert correctness for compressed records
-                assertIterableEquals(Arrays.asList(
-                        new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
-                        new PartialDefaultRecord(8, (byte) 0, 1L, 2L, -1, 1, -1),
-                        new PartialDefaultRecord(8, (byte) 0, 2L, 3L, -1, -1, 1),
-                        new PartialDefaultRecord(7, (byte) 0, 3L, 4L, -1, -1, -1),
-                        new PartialDefaultRecord(15 + largeRecordValue.length, (byte) 0, 4L, 1000L, -1, 3, largeRecordValue.length),
-                        new PartialDefaultRecord(23, (byte) 0, 5L, 9999L, -1, 3, 1)
-                    ), Utils.toList(skipKeyValueIterator));
             }
+            // assert correctness for both uncompressed and compressed records
+            assertIterableEquals(Arrays.asList(
+                    new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
+                    new PartialDefaultRecord(8, (byte) 0, 1L, 2L, -1, 1, -1),
+                    new PartialDefaultRecord(8, (byte) 0, 2L, 3L, -1, -1, 1),
+                    new PartialDefaultRecord(7, (byte) 0, 3L, 4L, -1, -1, -1),
+                    new PartialDefaultRecord(15 + largeRecordValue.length, (byte) 0, 4L, 1000L, -1, 3, largeRecordValue.length),
+                    new PartialDefaultRecord(23, (byte) 0, 5L, 9999L, -1, 3, 1)
+                ), Utils.toList(skipKeyValueIterator));
         }
     }
 

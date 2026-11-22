@@ -376,6 +376,82 @@ public class DefaultRecord implements Record {
     }
 
     /**
+     * Skip-decode a record directly from an uncompressed {@link ByteBuffer} without slicing key, value,
+     * or header buffers. Validates record framing, bounds, header count, and header key sizes.
+     */
+    public static PartialDefaultRecord readPartiallyFrom(ByteBuffer buffer,
+                                                         long baseOffset,
+                                                         long baseTimestamp,
+                                                         int baseSequence,
+                                                         Long logAppendTime) {
+        int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
+        if (sizeOfBodyInBytes < 0)
+            throw new InvalidRecordException("Invalid record size: " + sizeOfBodyInBytes + " is negative.");
+        if (buffer.remaining() < sizeOfBodyInBytes)
+            throw new InvalidRecordException("Invalid record size: expected " + sizeOfBodyInBytes +
+                " bytes in record payload, but instead the buffer has only " + buffer.remaining() +
+                " remaining bytes.");
+        try {
+            int recordStart = buffer.position();
+            int recordEnd = recordStart + sizeOfBodyInBytes;
+            byte attributes = buffer.get();
+            long timestampDelta = ByteUtils.readVarlong(buffer);
+            long timestamp = logAppendTime != null ? logAppendTime : baseTimestamp + timestampDelta;
+
+            int offsetDelta = ByteUtils.readVarint(buffer);
+            long offset = baseOffset + offsetDelta;
+            int sequence = baseSequence >= 0 ?
+                DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                RecordBatch.NO_SEQUENCE;
+
+            // skip key
+            int keySize = ByteUtils.readVarint(buffer);
+            skipBytes(buffer, keySize, recordEnd);
+
+            // skip value
+            int valueSize = ByteUtils.readVarint(buffer);
+            skipBytes(buffer, valueSize, recordEnd);
+
+            // skip headers
+            int numHeaders = ByteUtils.readVarint(buffer);
+            if (numHeaders < 0)
+                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+            int remainingInRecord = recordEnd - buffer.position();
+            if (numHeaders > remainingInRecord)
+                throw new InvalidRecordException("Found invalid number of record headers. " + numHeaders +
+                    " is larger than the remaining size of the record");
+            for (int i = 0; i < numHeaders; i++) {
+                int headerKeySize = ByteUtils.readVarint(buffer);
+                if (headerKeySize < 0)
+                    throw new InvalidRecordException("Invalid negative header key size " + headerKeySize);
+                skipBytes(buffer, headerKeySize, recordEnd);
+
+                int headerValueSize = ByteUtils.readVarint(buffer);
+                skipBytes(buffer, headerValueSize, recordEnd);
+            }
+
+            if (buffer.position() != recordEnd)
+                throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
+                    " bytes in record payload, but instead read " + (buffer.position() - recordStart));
+
+            int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+            return new PartialDefaultRecord(totalSizeInBytes, attributes, offset, timestamp, sequence, keySize, valueSize);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            throw new InvalidRecordException("Found invalid record structure", e);
+        }
+    }
+
+    private static void skipBytes(ByteBuffer buffer, int bytesToSkip, int recordEnd) {
+        if (bytesToSkip <= 0) return;
+        int remainingInRecord = recordEnd - buffer.position();
+        if (bytesToSkip > remainingInRecord) {
+            throw new InvalidRecordException("Invalid record size: expected to skip " + bytesToSkip +
+                " bytes, but instead the record has only " + remainingInRecord + " remaining bytes.");
+        }
+        buffer.position(buffer.position() + bytesToSkip);
+    }
+
+    /**
      * Skip-decode a record from the (decompressed) stream, rejecting any record whose declared body
      * size exceeds {@code maxRecordBodySize}. See
      * {@link #readFrom(InputStream, long, long, int, Long, int)}.

@@ -317,6 +317,27 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
+    private CloseableIterator<Record> uncompressedSkipKeyValueIterator() {
+        final ByteBuffer buffer = this.buffer.duplicate();
+        buffer.position(RECORDS_OFFSET);
+        return new RecordIterator() {
+            @Override
+            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
+                try {
+                    return DefaultRecord.readPartiallyFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                } catch (BufferUnderflowException e) {
+                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+                }
+            }
+            @Override
+            protected boolean ensureNoneRemaining() {
+                return !buffer.hasRemaining();
+            }
+            @Override
+            public void close() {}
+        };
+    }
+
     @Override
     public Iterator<Record> iterator() {
         if (count() == 0)
@@ -347,13 +368,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return CloseableIterator.wrap(Collections.emptyIterator());
         }
 
-        /*
-         * For uncompressed iterator, it is actually not worth skipping key / value / headers at all since
-         * its ByteBufferInputStream's skip() function is less efficient compared with just reading it actually
-         * as it will allocate new byte array.
-         */
         if (!isCompressed())
-            return uncompressedIterator();
+            return uncompressedSkipKeyValueIterator();
 
         // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
         // while we can save memory footprint of not decompressing the full record set ahead of time
