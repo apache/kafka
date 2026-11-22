@@ -588,9 +588,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A result containing snapshot records, if any, and a void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
-        boolean allPartitionsQuiet = shareStateMap.entrySet().stream()
-            .allMatch(entry -> entry.getValue().createTimestamp() != entry.getValue().writeTimestamp() &&
-                snapshotUpdateCount.getOrDefault(entry.getKey(), 0) == 0);
+        // snapshotUpdateCount only holds share partitions with pending share updates.
+        boolean allPartitionsQuiet = snapshotUpdateCount.isEmpty() && shareStateMap.values().stream()
+            .allMatch(shareGroupOffset -> shareGroupOffset.createTimestamp() != shareGroupOffset.writeTimestamp());
 
         // If all share partitions are cold snapshotted with no pending updates,
         // it means that system is quiet and cold snapshotting will not help much.
