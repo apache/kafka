@@ -125,10 +125,16 @@ public class ProducerIntegrationTest {
         Map<String, Object> properties = Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar",
             ProducerConfig.CLIENT_ID_CONFIG, "test",
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
+            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "60000");
         var producer = cluster.producer(properties);
-        producer.initTransactions();
-        producer.beginTransaction();
+        try {
+            producer.initTransactions();
+            producer.beginTransaction();
+        } catch (RuntimeException e) {
+            producer.close();
+            throw e;
+        }
         long start = System.nanoTime();
         producer.close();
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
