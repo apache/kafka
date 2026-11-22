@@ -64,8 +64,8 @@ public class DefaultJwtValidator implements JwtValidator {
                 CloseableVerificationKeyResolver createCloseableVerificationKeyResolver(Map<String, ?> configs,
                                                                                        String saslMechanism,
                                                                                        List<AppConfigurationEntry> jaasConfigEntries) {
-                    // The code that supplied the resolver manages its lifecycle, so hand the delegate a resolver
-                    // that only resolves keys; its configure() and close() are no-ops.
+                    // The code that supplied the resolver manages its lifecycle, so hand the delegate a key-only
+                    // resolver whose configure() and close() are no-ops.
                     return resolver::resolveKey;
                 }
             };
