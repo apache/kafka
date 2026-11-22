@@ -70,17 +70,21 @@ public class ProducerCompressionTest {
      */
     @ClusterTest
     public void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        for (CompressionType compression : CompressionType.values()) {
-            processCompressionTest(cluster, compression);
+        for (String allocationStrategy : List.of(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+            ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)) {
+            for (CompressionType compression : CompressionType.values()) {
+                processCompressionTest(cluster, compression, allocationStrategy);
+            }
         }
     }
 
 
-    void processCompressionTest(ClusterInstance cluster, CompressionType compression) throws InterruptedException,
-        ExecutionException {
-        String compressionTopic = topicName + "_" + compression.name;
+    void processCompressionTest(ClusterInstance cluster, CompressionType compression, String allocationStrategy)
+        throws InterruptedException, ExecutionException {
+        String compressionTopic = topicName + "_" + allocationStrategy + "_" + compression.name;
         cluster.createTopic(compressionTopic, 1, (short) 1);
         Map<String, Object> producerProps = new HashMap<>();
+        producerProps.put(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG, allocationStrategy);
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression.name);
         producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000");
         producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200");
