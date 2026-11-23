@@ -39069,12 +39069,12 @@ public class GroupMetadataManagerTest {
 
         StickyTaskAssignor assignor = new StickyTaskAssignor();
 
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+        MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .buildCoordinatorMetadataImage();
+            .build();
 
         long groupMetadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))));
 
         StreamsGroupMember member1 = streamsGroupMemberBuilderWithDefaults(memberId1)
             .setMemberEpoch(10)
@@ -39094,7 +39094,7 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
             .withStreamsGroupTaskAssignors(List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -39126,11 +39126,29 @@ public class GroupMetadataManagerTest {
         // Assignor for epoch 11 is scheduled on executor.
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
 
+        assertEquals(6, context.groupMetadataManager.streamsGroup(groupId).configuredTopology().get()
+            .subtopologies().get().get(subtopology).numberOfTasks());
+
         // The metadata image is updated.
-        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 3)
-            .buildCoordinatorMetadataImage();
-        context.groupMetadataManager.onMetadataUpdate(newMetadataImage.emptyDelta(), newMetadataImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(metadataImage)
+            .build();
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(6));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(7));
+        context.groupMetadataManager.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(delta),
+            new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY))
+        );
+
+        // Member 1 heartbeats again. The topology is reconfigured.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(10));
+
+        assertEquals(8, context.groupMetadataManager.streamsGroup(groupId).configuredTopology().get()
+            .subtopologies().get().get(subtopology).numberOfTasks());
 
         // The target assignment is written, computed from the metadata image from when the run was scheduled.
         assertEquals(
