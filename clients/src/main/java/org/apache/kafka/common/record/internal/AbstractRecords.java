@@ -104,11 +104,13 @@ public abstract class AbstractRecords implements Records {
     public static int estimateSizeInBytes(byte magic,
                                           long baseOffset,
                                           CompressionType compressionType,
-                                          Iterable<Record> records) {
+                                          Iterator<Record> records) {
         int size = 0;
         if (magic <= RecordBatch.MAGIC_VALUE_V1) {
-            for (Record record : records)
+            while (records.hasNext()) {
+                Record record = records.next();
                 size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
+            }
         } else {
             size = DefaultRecordBatch.sizeInBytes(baseOffset, records);
         }

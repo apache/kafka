@@ -186,7 +186,7 @@ public class LogValidator {
         int sizeInBytesAfterConversion;
         try (CloseableIterator<Record> iterator = records.records()) {
             sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value,
-                CompressionType.NONE, () -> iterator);
+                CompressionType.NONE, iterator);
         }
 
         RecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE);
@@ -444,7 +444,7 @@ public class LogValidator {
                                                           int uncompressedSizeInBytes) {
         long startNanos = time.nanoseconds();
         int estimatedSize = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value, targetCompression.type(),
-            validatedRecords);
+            validatedRecords.iterator());
         // The current implementation of BufferSupplier is naive and works best when the buffer size
         // cardinality is low, so don't use it here
         ByteBuffer buffer = ByteBuffer.allocate(estimatedSize);

@@ -498,8 +498,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
 
-    public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
-        Iterator<Record> iterator = records.iterator();
+    public static int sizeInBytes(long baseOffset, Iterator<Record> iterator) {
         if (!iterator.hasNext())
             return 0;
 

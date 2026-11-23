@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -49,6 +50,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AbstractRecordsTest {
+    @ParameterizedTest
+    @ValueSource(bytes = {RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2})
+    void testEstimateSizeInBytesConsumesIterator(byte magic) {
+        assertEquals(0, AbstractRecords.estimateSizeInBytes(magic, 0L,
+            CompressionType.NONE, Collections.emptyIterator()));
+
+        MemoryRecords records = MemoryRecords.withRecords(magic, Compression.NONE,
+            new SimpleRecord(1L, "key".getBytes(), "value".getBytes()),
+            new SimpleRecord(2L, null, "another value".getBytes()));
+        try (CloseableIterator<Record> iterator = records.records()) {
+            assertEquals(records.sizeInBytes(), AbstractRecords.estimateSizeInBytes(magic, 0L,
+                CompressionType.NONE, iterator));
+            assertFalse(iterator.hasNext());
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     void testRecordsAcrossBatches(CompressionType compressionType) {
