@@ -1212,13 +1212,10 @@ public class UnifiedLog implements AutoCloseable {
 
                                     String firstOrLast = hasFirstOffset ? "First offset" : "Last offset of the first batch";
                                     List<String> offsets = new ArrayList<>();
-                                    for (RecordBatch batch : records.batches()) {
-                                        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                                            while (offsets.size() < 10 && iterator.hasNext()) {
-                                                offsets.add(String.valueOf(iterator.next().offset()));
-                                            }
+                                    try (CloseableIterator<Record> iterator = records.records()) {
+                                        while (offsets.size() < 10 && iterator.hasNext()) {
+                                            offsets.add(String.valueOf(iterator.next().offset()));
                                         }
-                                        if (offsets.size() == 10) break;
                                     }
                                     throw new UnexpectedAppendOffsetException(
                                             "Unexpected offset in append to " + topicPartition() + ". " + firstOrLast + " " +
