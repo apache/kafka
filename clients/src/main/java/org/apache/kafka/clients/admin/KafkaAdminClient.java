@@ -1219,8 +1219,10 @@ public class KafkaAdminClient extends AdminClient {
          */
         private void timeoutPendingCalls(TimeoutProcessor processor) {
             int numTimedOut = processor.handleTimeouts(pendingCalls, "Timed out waiting for a node assignment.");
-            if (numTimedOut > 0)
+            if (numTimedOut > 0) {
                 log.debug("Timed out {} pending calls.", numTimedOut);
+                metadataManager.resetEquivalentResponseBackoff();
+            }
         }
 
         /**

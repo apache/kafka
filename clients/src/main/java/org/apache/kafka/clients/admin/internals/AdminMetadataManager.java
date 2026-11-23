@@ -281,6 +281,10 @@ public class AdminMetadataManager {
         }
     }
 
+    public void resetEquivalentResponseBackoff() {
+        this.equivalentResponseCount.set(0);
+    }
+
     public void clearController() {
         if (cluster.controller() != null) {
             log.trace("Clearing cached controller node {}.", cluster.controller());
