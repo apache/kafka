@@ -1886,7 +1886,14 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         );
 
         // top the producer after some time (but after coordinator shutdown)
-        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
+        // The consumer stops at its first empty poll after the producer stops, so the producer must not
+        // stop before the consumer receives its assignment. In the worst case this can take more than
+        // 10 seconds:
+        //   Heartbeat 1 at +0 seconds sends the subscription and triggers an assignor run.
+        //     multipart is not yet ready, so the assignor returns an empty assignment.
+        //   Heartbeat 2 at +5 seconds triggers another assignor run now that multipart is assignable.
+        //   Heartbeat 3 at +10 seconds receives the assignment with multipart.
+        service.schedule(() -> prodState.done().set(true), 20L, TimeUnit.SECONDS);
 
         // wait for both producer and consumer to finish
         TestUtils.waitForCondition(
