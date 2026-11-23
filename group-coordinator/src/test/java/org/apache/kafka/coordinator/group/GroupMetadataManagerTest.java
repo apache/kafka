@@ -35274,12 +35274,12 @@ public class GroupMetadataManagerTest {
 
         RangeAssignor assignor = new RangeAssignor();
 
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+        MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .buildCoordinatorMetadataImage();
+            .build();
 
         long groupMetadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))));
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
             .setState(MemberState.STABLE)
@@ -35310,7 +35310,7 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -35338,10 +35338,15 @@ public class GroupMetadataManagerTest {
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
 
         // The metadata image is updated.
-        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 3)
-            .buildCoordinatorMetadataImage();
-        context.groupMetadataManager.onMetadataUpdate(newMetadataImage.emptyDelta(), newMetadataImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(metadataImage)
+            .build();
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(6));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(7));
+        context.groupMetadataManager.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(delta),
+            new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY))
+        );
 
         // The target assignment is written, computed from the metadata image from when the run was scheduled.
         assertEquals(
