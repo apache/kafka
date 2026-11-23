@@ -1138,7 +1138,7 @@ public class NetworkClient implements KafkaClient {
                     }
                 });
                 metadataUpdater.rebootstrap(now);
-            } else if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
+            } else if (req.request.version() == ApiVersionsRequest.FALLBACK_VERSION || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
@@ -1146,8 +1146,8 @@ public class NetworkClient implements KafkaClient {
             } else {
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
-                // If not provided, the client falls back to version 0.
-                short maxApiVersion = 0;
+                // If not provided, the client falls back to ApiVersionsRequest.FALLBACK_VERSION.
+                short maxApiVersion = ApiVersionsRequest.FALLBACK_VERSION;
                 if (!apiVersionsResponse.data().apiKeys().isEmpty()) {
                     ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
                     if (apiVersion != null) {

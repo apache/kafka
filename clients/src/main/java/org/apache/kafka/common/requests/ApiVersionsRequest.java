@@ -28,6 +28,20 @@ import java.util.regex.Pattern;
 
 public class ApiVersionsRequest extends AbstractRequest {
 
+    /**
+     * The version used by the ApiVersions handshake when the client and the broker do not agree on a version:
+     * <ul>
+     *     <li>The broker treats an ApiVersionsRequest with an unsupported version as a request of this version
+     *     and responds with this version.</li>
+     *     <li>The client falls back to parsing the ApiVersionsResponse with this version if it can't parse it
+     *     with the version of the original request.</li>
+     *     <li>The client retries with this version if the broker returns UNSUPPORTED_VERSION without its
+     *     supported ApiVersions versions.</li>
+     * </ul>
+     * Both clients and brokers rely on this version to discover each other's capabilities, so it must never be removed.
+     */
+    public static final short FALLBACK_VERSION = 0;
+
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
         private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
 
@@ -90,8 +104,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         this.data = data;
 
         // Unlike other request types, the broker handles ApiVersion requests with higher versions than
-        // supported. It does so by treating the request as if it were v0 and returns a response using
-        // the v0 response schema. The reason for this is that the client does not yet know what versions
+        // supported. It does so by treating the request as if it were FALLBACK_VERSION and returns a response using
+        // the FALLBACK_VERSION response schema. The reason for this is that the client does not yet know what versions
         // a broker supports when this request is sent, so instead of assuming the lowest supported version,
         // it can use the most recent version and only fallback to the old version when necessary.
         this.unsupportedRequestVersion = unsupportedRequestVersion;
