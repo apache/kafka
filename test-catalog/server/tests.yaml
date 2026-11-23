@@ -402,6 +402,9 @@ org.apache.kafka.server.NodeToControllerRequestThreadTest:
 - testRetryTimeoutWhileControllerNotAvailable
 - testThreadNotStarted
 - testUnsupportedVersionHandling
+org.apache.kafka.server.ProcessRoleTest:
+- testFromString
+- testFromStringWithInvalidRole
 org.apache.kafka.server.RaftClusterSnapshotTest:
 - testSnapshotsGenerated
 org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:

@@ -131,6 +131,7 @@ org.apache.kafka.clients.admin.DescribeProducersWithBrokerIdTest:
 - testDescribeProducersFromFollower
 - testDescribeProducersWithInvalidBrokerId
 org.apache.kafka.clients.admin.DynamicBrokerConfigTest:
+- testChannelBuildersRemovedOnNetworkThreadShrink
 - testIncreaseNumIoThreads
 org.apache.kafka.clients.admin.DynamicGroupConfigIntegrationTest:
 - testDescribeGroupConfigSynonymsWithBrokerSynonym
