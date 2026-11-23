@@ -77,7 +77,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -328,22 +327,16 @@ public class LogLoaderTest {
                 logDir, topicPartition, failureChannel, Optional.empty(), mockTime.scheduler);
         ProducerStateManager stateManager = new ProducerStateManager(
                 topicPartition, logDir, 60000, producerStateManagerConfig, mockTime);
-        IOException failure = null;
         try (LogSegments segments = new LogSegments(topicPartition)) {
             LogLoader loader = new LogLoader(logDir, topicPartition, config, mockTime.scheduler, mockTime,
                     failureChannel, false, segments, 0L, 0L, epochCache, stateManager,
                     new ConcurrentHashMap<>(), false);
-            try {
-                loader.load();
-            } catch (IOException e) {
-                failure = e;
-            }
+            assertThrows(IOException.class, loader::load, "Recovery must propagate storage errors");
             for (int i = 0; i < logFiles.size(); i++) {
                 assertTrue(Files.exists(logFiles.get(i)), "Recovery must preserve later log segments");
                 assertArrayEquals(originalBytes.get(i), Files.readAllBytes(logFiles.get(i)),
                         "Recovery must preserve valid record bytes");
             }
-            assertNotNull(failure, "Recovery must propagate storage errors");
         }
     }
 
