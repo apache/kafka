@@ -231,12 +231,12 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         long lastCommittedOffset
     ) {
         for (MutableRecordBatch batch : memoryRecords.batches()) {
-            boolean isControlBatch = batch.isControlBatch();
-            try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                while (iterator.hasNext()) {
-                    Record record = iterator.next();
-                    loadStats.numRecords++;
-                    if (isControlBatch) {
+            if (batch.isControlBatch()) {
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        loadStats.numRecords++;
+
                         ControlRecordType controlRecord = ControlRecordType.parse(record.key());
                         if (controlRecord == ControlRecordType.COMMIT) {
                             if (LOG.isTraceEnabled()) {
@@ -261,7 +261,14 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                                     TransactionResult.ABORT
                             );
                         }
-                    } else {
+                    }
+                }
+            } else {
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        loadStats.numRecords++;
+
                         Optional<T> coordinatorRecordOpt = Optional.empty();
                         try {
                             coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
