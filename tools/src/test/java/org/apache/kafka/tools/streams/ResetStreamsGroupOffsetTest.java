@@ -18,6 +18,7 @@ package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -45,6 +46,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -165,6 +167,113 @@ public class ResetStreamsGroupOffsetTest {
             assertTrue(exited.get());
         } finally {
             Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testResetInputTopicHelpExplainsInternalTopicDeletion() throws IOException {
+        var options = new StreamsGroupCommandOptions(new String[]{"--help"});
+        var help = new StringWriter();
+        options.parser.printHelpOn(help);
+
+        String helpText = help.toString().replaceAll("\\s+", " ");
+        assertTrue(helpText.contains("Internal topics are deleted only if you specify "
+            + "--delete-internal-topic or --delete-all-internal-topics with --execute."));
+    }
+
+    @ClusterTest
+    public void testResetInputTopicWithNewPartition(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        produceConsumeShutdown(cluster, appId, topic, generateRandomTopic(), RECORD_TOTAL * 4);
+
+        TopicPartition newPartition = new TopicPartition(topic, 2);
+        String[] args = {
+            "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+            "--input-topic", topic, "--to-earliest"
+        };
+        try (Admin admin = cluster.admin()) {
+            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(3))).all().get();
+            cluster.waitTopicCreation(topic, 3);
+            Map<TopicPartition, Long> originalOffsets = Map.of(
+                new TopicPartition(topic, 0), (long) RECORD_TOTAL,
+                new TopicPartition(topic, 1), (long) RECORD_TOTAL
+            );
+            assertEquals(originalOffsets, committedOffsets(admin, List.of(topic), appId));
+
+            Map<TopicPartition, Long> resetOffsets = Map.of(
+                new TopicPartition(topic, 0), 0L, new TopicPartition(topic, 1), 0L, newPartition, 0L
+            );
+            resetOffsetsAndAssert(admin, addTo(args, "--dry-run"), appId, List.of(topic), resetOffsets, originalOffsets);
+            resetOffsetsAndAssert(admin, addTo(args, "--execute"), appId, List.of(topic), resetOffsets, resetOffsets);
+
+            String unrelatedTopic = generateRandomTopic();
+            cluster.createTopic(unrelatedTopic, 1, (short) 1);
+            Set<String> internalTopics = getInternalTopics(admin, appId);
+            assertFalse(internalTopics.isEmpty());
+            String[] invalidArgs = {
+                "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+                "--input-topic", topic, "--input-topic", unrelatedTopic, "--to-latest",
+                "--execute", "--delete-all-internal-topics"
+            };
+            assertEquals(1, StreamsGroupCommand.execute(invalidArgs));
+            assertEquals(resetOffsets, committedOffsets(admin, List.of(topic, unrelatedTopic), appId));
+            assertEquals(internalTopics, getInternalTopics(admin, appId));
+        }
+    }
+
+    @ClusterTest
+    public void testResetInputTopicBeforeGroupStarts(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        cluster.createTopic(topic, 1, (short) 1);
+
+        String[] args = {
+            "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+            "--input-topic", topic, "--to-earliest", "--execute"
+        };
+        assertEquals(0, StreamsGroupCommand.execute(args));
+        try (Admin admin = cluster.admin()) {
+            assertEquals(Map.of(new TopicPartition(topic, 0), 0L), committedOffsets(admin, List.of(topic), appId));
+        }
+    }
+
+    @ClusterTest
+    public void testResetInputTopicToCurrentBeforeGroupStarts(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        cluster.createTopic(topic, 1, (short) 1);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.of(0),
+            List.of(new KeyValueTimestamp<>("key", "value", 0)));
+
+        String[] args = {
+            "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+            "--input-topic", topic, "--to-current", "--execute"
+        };
+        assertEquals(0, StreamsGroupCommand.execute(args));
+        try (Admin admin = cluster.admin()) {
+            assertEquals(Map.of(new TopicPartition(topic, 0), 1L), committedOffsets(admin, List.of(topic), appId));
+        }
+    }
+
+    @ClusterTest
+    public void testResetInputTopicRejectsConsumerGroup(ClusterInstance cluster) throws Exception {
+        String groupId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        cluster.createTopic(topic, 1, (short) 1);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.of(0),
+            List.of(new KeyValueTimestamp<>("key", "value", 0)));
+
+        TopicPartition partition = new TopicPartition(topic, 0);
+        try (Admin admin = cluster.admin()) {
+            admin.alterConsumerGroupOffsets(groupId, Map.of(partition, new OffsetAndMetadata(1))).all().get();
+
+            String[] args = {
+                "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", groupId,
+                "--input-topic", topic, "--to-earliest", "--execute"
+            };
+            assertEquals(1, StreamsGroupCommand.execute(args));
+            assertEquals(Map.of(partition, 1L), committedOffsets(admin, List.of(topic), groupId));
         }
     }
 

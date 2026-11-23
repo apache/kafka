@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
@@ -141,6 +142,7 @@ public class StreamsGroupCommand {
                     System.out.println(exported);
                 } else
                     printOffsetsToReset(offsetsToReset);
+                return offsetsToReset.values().stream().allMatch(Map::isEmpty) ? 1 : 0;
             } else if (opts.options.has(opts.deleteOpt)) {
                 streamsGroupService.deleteGroups();
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
@@ -520,12 +522,11 @@ public class StreamsGroupCommand {
 
         Map<TopicPartition, OffsetAndMetadata> getInputTopicOffsets(String groupId) {
             try {
-                var sourceTopics = adminClient.describeStreamsGroups(
+                var description = adminClient.describeStreamsGroups(
                     List.of(groupId),
                     withTimeoutMs(new DescribeStreamsGroupsOptions())
-                ).all().get().get(groupId).subtopologies().stream()
-                    .flatMap(subtopology -> subtopology.sourceTopics().stream())
-                    .collect(Collectors.toSet());
+                ).all().get().get(groupId);
+                Set<String> sourceTopics = inputTopics(description);
 
                 var allTopicPartitions = adminClient.listStreamsGroupOffsets(
                     Map.of(groupId, new ListStreamsGroupOffsetsSpec()),
@@ -539,20 +540,22 @@ public class StreamsGroupCommand {
             }
         }
 
-        private List<TopicPartition> filterExistingGroupTopics(String groupId, List<TopicPartition> topicPartitions) {
+        private static Set<String> inputTopics(StreamsGroupDescription description) {
+            return description.subtopologies().stream()
+                .flatMap(subtopology -> subtopology.sourceTopics().stream())
+                .collect(Collectors.toSet());
+        }
+
+        private boolean isConsumerGroup(String groupId) throws ExecutionException, InterruptedException {
             try {
-                var allTopicPartitions = adminClient.listStreamsGroupOffsets(
-                    Map.of(groupId, new ListStreamsGroupOffsetsSpec()),
-                    withTimeoutMs(new ListStreamsGroupOffsetsOptions())
-                ).partitionsToOffsetAndMetadata(groupId).get();
-                boolean allPresent = topicPartitions.stream().allMatch(allTopicPartitions::containsKey);
-                if (!allPresent) {
-                    printError("One or more topics are not part of the group '" + groupId + "'.", Optional.empty());
-                    return List.of();
+                adminClient.describeConsumerGroups(List.of(groupId), withTimeoutMs(new DescribeConsumerGroupsOptions()))
+                    .all().get();
+                return true;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof GroupIdNotFoundException) {
+                    return false;
                 }
-                return topicPartitions;
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+                throw e;
             }
         }
 
@@ -572,14 +575,15 @@ public class StreamsGroupCommand {
 
                 streamsGroups.forEach((groupId, groupDescription) -> {
                     try {
-                        String state = groupDescription.get().groupState().toString();
+                        StreamsGroupDescription description = groupDescription.get();
+                        String state = description.groupState().toString();
                         switch (state) {
                             case "Empty":
                             case "Dead":
-                                // reset offsets in source topics
-                                result.put(groupId, resetOffsetsForInactiveGroup(groupId, dryRun));
-                                // delete internal topics
-                                if (!dryRun) {
+                                Map<TopicPartition, OffsetAndMetadata> offsets =
+                                    resetOffsetsForInactiveGroup(groupId, Optional.of(description), dryRun);
+                                result.put(groupId, offsets);
+                                if (!dryRun && !offsets.isEmpty()) {
                                     List<String> internalTopics = getInternalTopicsToBeDeleted(groupId);
                                     if (!internalTopics.isEmpty()) {
                                         try {
@@ -609,7 +613,7 @@ public class StreamsGroupCommand {
                         throw new RuntimeException(ie);
                     } catch (ExecutionException ee) {
                         if (ee.getCause() instanceof GroupIdNotFoundException) {
-                            result.put(groupId, resetOffsetsForInactiveGroup(groupId, dryRun));
+                            result.put(groupId, resetOffsetsForInactiveGroup(groupId, Optional.empty(), dryRun));
                         } else {
                             throw new RuntimeException(ee);
                         }
@@ -957,11 +961,19 @@ public class StreamsGroupCommand {
             return groupToInternalTopics;
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId, boolean dryRun) {
+        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(
+            String groupId,
+            Optional<StreamsGroupDescription> description,
+            boolean dryRun
+        ) {
             try {
-                Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
-                Map<TopicPartition, OffsetAndMetadata> preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset);
-                if (!dryRun) {
+                Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId, description);
+                if (partitionsToReset.isEmpty() && !opts.options.has(opts.resetFromFileOpt)) {
+                    return Map.of();
+                }
+                Map<TopicPartition, OffsetAndMetadata> preparedOffsets =
+                    prepareOffsetsToReset(groupId, partitionsToReset, description.isPresent());
+                if (!dryRun && !preparedOffsets.isEmpty()) {
                     adminClient.alterStreamsGroupOffsets(
                         groupId,
                         preparedOffsets,
@@ -982,7 +994,10 @@ public class StreamsGroupCommand {
             }
         }
 
-        private Collection<TopicPartition> getPartitionsToReset(String groupId) throws ExecutionException, InterruptedException {
+        private Collection<TopicPartition> getPartitionsToReset(
+            String groupId,
+            Optional<StreamsGroupDescription> description
+        ) throws ExecutionException, InterruptedException {
             if (opts.options.has(opts.allInputTopicsOpt)) {
                 return getInputTopicOffsets(groupId).keySet();
             } else if (opts.options.has(opts.inputTopicOpt)) {
@@ -990,8 +1005,17 @@ public class StreamsGroupCommand {
 
                 List<TopicPartition> partitions = groupOffsetsResetter.parseTopicPartitionsToReset(topics);
                 groupOffsetsResetter.checkAllTopicPartitionsValid(partitions);
-                // if the user specified topics that do not belong to this group, we filter them out
-                partitions = filterExistingGroupTopics(groupId, partitions);
+                if (description.isPresent()) {
+                    Set<String> sourceTopics = inputTopics(description.get());
+                    if (partitions.stream().anyMatch(partition -> !sourceTopics.contains(partition.topic()))) {
+                        printError("One or more topics are not part of the group '" + groupId + "'.", Optional.empty());
+                        return List.of();
+                    }
+                } else if (!opts.options.has(opts.resetFromFileOpt) && isConsumerGroup(groupId)) {
+                    // DescribeStreamsGroups reports GROUP_ID_NOT_FOUND for existing consumer groups too.
+                    printError("Group '" + groupId + "' is not a streams group.", Optional.empty());
+                    return List.of();
+                }
                 return partitions;
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
@@ -1001,7 +1025,11 @@ public class StreamsGroupCommand {
             }
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(
+            String groupId,
+            Collection<TopicPartition> partitionsToReset,
+            boolean groupExists
+        ) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return groupOffsetsResetter.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -1009,7 +1037,7 @@ public class StreamsGroupCommand {
             } else if (opts.options.has(opts.resetToLatestOpt)) {
                 return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
-                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = groupExists ? getCommittedOffsets(groupId) : Map.of();
                 return groupOffsetsResetter.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
                 return groupOffsetsResetter.resetToDateTime(partitionsToReset);
@@ -1018,7 +1046,7 @@ public class StreamsGroupCommand {
             } else if (groupOffsetsResetter.resetPlanFromFile().isPresent()) {
                 return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
-                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = groupExists ? getCommittedOffsets(groupId) : Map.of();
                 return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
