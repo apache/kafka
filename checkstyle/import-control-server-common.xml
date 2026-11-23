@@ -95,7 +95,7 @@
         </subpackage>
 
         <subpackage name="mirror">
-            <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.common.mirror" />
         </subpackage>
 
         <subpackage name="network">

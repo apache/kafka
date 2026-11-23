@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.mirror;
 
-import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.common.mirror.LastMirror;
 
 import java.util.Objects;
 
@@ -26,7 +26,7 @@ import java.util.Objects;
  * @param state          The mirror partition state.
  * @param stateEpoch     The current state epoch for the partition, which tells when the cached metadata can be safely
  *                       updated.
- * @param lastMirror     The last mirror epoch and offset, or {@link #EMPTY_LAST_MIRROR} if not available.
+ * @param lastMirror     The last mirror offset and epoch, or {@link LastMirror#EMPTY} if not available.
  * @param errorMessage   The error message when in {@link MirrorPartitionState#FAILED} state, or null otherwise.
  * @param retryAttempt   The retry attempt count in {@link MirrorPartitionState#FAILED} state, 0 if not failed,
  *                       or {@link #NON_RETRYABLE_ERROR} if non-retryable.
@@ -36,7 +36,7 @@ import java.util.Objects;
 public record MirrorPartitionMetadata(
     MirrorPartitionState state,
     int stateEpoch,
-    OffsetAndEpoch lastMirror,
+    LastMirror lastMirror,
     String errorMessage,
     short retryAttempt,
     MirrorPartitionState previousState
@@ -47,15 +47,10 @@ public record MirrorPartitionMetadata(
     public static final short NON_RETRYABLE_ERROR = -1;
 
     /**
-     * The last mirror epoch and offset when they are not available.
-     */
-    public static final OffsetAndEpoch EMPTY_LAST_MIRROR = new OffsetAndEpoch(-1L, -1);
-
-    /**
      * The metadata of a partition with no recorded state, with the default value of every field.
      */
     public static final MirrorPartitionMetadata EMPTY = new MirrorPartitionMetadata(
-        MirrorPartitionState.UNKNOWN, 0, EMPTY_LAST_MIRROR, null, (short) 0, MirrorPartitionState.UNKNOWN);
+        MirrorPartitionState.UNKNOWN, 0, LastMirror.EMPTY, null, (short) 0, MirrorPartitionState.UNKNOWN);
 
     public MirrorPartitionMetadata {
         Objects.requireNonNull(state);
@@ -66,7 +61,7 @@ public record MirrorPartitionMetadata(
     public static class Builder {
         private MirrorPartitionState state;
         private int stateEpoch;
-        private OffsetAndEpoch lastMirror;
+        private LastMirror lastMirror;
         private String errorMessage;
         private short retryAttempt;
         private MirrorPartitionState previousState;
@@ -100,7 +95,7 @@ public record MirrorPartitionMetadata(
             return this;
         }
 
-        public Builder withLastMirror(OffsetAndEpoch lastMirror) {
+        public Builder withLastMirror(LastMirror lastMirror) {
             this.lastMirror = lastMirror;
             return this;
         }

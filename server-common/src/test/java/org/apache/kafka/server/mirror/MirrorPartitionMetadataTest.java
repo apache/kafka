@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.mirror;
 
-import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.common.mirror.LastMirror;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ class MirrorPartitionMetadataTest {
         MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
             .withState(MirrorPartitionState.FAILED)
             .withStateEpoch(7)
-            .withLastMirror(new OffsetAndEpoch(4_294_967_313L, 42))
+            .withLastMirror(new LastMirror(4_294_967_313L, 42))
             .withErrorMessage("error")
             .withRetryAttempt((short) 3)
             .withPreviousState(MirrorPartitionState.MIRRORING)
@@ -39,7 +39,7 @@ class MirrorPartitionMetadataTest {
 
         assertEquals(MirrorPartitionState.FAILED, metadata.state());
         assertEquals(7, metadata.stateEpoch());
-        assertEquals(new OffsetAndEpoch(4_294_967_313L, 42), metadata.lastMirror());
+        assertEquals(new LastMirror(4_294_967_313L, 42), metadata.lastMirror());
         assertEquals("error", metadata.errorMessage());
         assertEquals((short) 3, metadata.retryAttempt());
         assertEquals(MirrorPartitionState.MIRRORING, metadata.previousState());
@@ -51,8 +51,8 @@ class MirrorPartitionMetadataTest {
 
         assertEquals(MirrorPartitionState.UNKNOWN, empty.state());
         assertEquals(0, empty.stateEpoch());
-        assertEquals(new OffsetAndEpoch(-1L, -1), empty.lastMirror());
-        assertEquals(MirrorPartitionMetadata.EMPTY_LAST_MIRROR, empty.lastMirror());
+        assertEquals(new LastMirror(-1L, -1), empty.lastMirror());
+        assertEquals(LastMirror.EMPTY, empty.lastMirror());
         assertNull(empty.errorMessage());
         assertEquals((short) 0, empty.retryAttempt());
         assertEquals(MirrorPartitionState.UNKNOWN, empty.previousState());
@@ -79,7 +79,7 @@ class MirrorPartitionMetadataTest {
         MirrorPartitionMetadata mirroring = new MirrorPartitionMetadata.Builder()
             .withState(MirrorPartitionState.MIRRORING)
             .withStateEpoch(3)
-            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withLastMirror(new LastMirror(100L, 10))
             .build();
 
         MirrorPartitionMetadata failed = new MirrorPartitionMetadata.Builder(mirroring)
@@ -90,7 +90,7 @@ class MirrorPartitionMetadataTest {
             .withPreviousState(MirrorPartitionState.MIRRORING)
             .build();
 
-        assertEquals(new MirrorPartitionMetadata(MirrorPartitionState.FAILED, 4, new OffsetAndEpoch(100L, 10), "error",
+        assertEquals(new MirrorPartitionMetadata(MirrorPartitionState.FAILED, 4, new LastMirror(100L, 10), "error",
             (short) 1, MirrorPartitionState.MIRRORING), failed);
         assertEquals(mirroring, new MirrorPartitionMetadata.Builder(mirroring).build());
     }
@@ -120,14 +120,14 @@ class MirrorPartitionMetadataTest {
         MirrorPartitionMetadata metadata = new MirrorPartitionMetadata.Builder()
             .withState(MirrorPartitionState.STOPPED)
             .withStateEpoch(2)
-            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withLastMirror(new LastMirror(100L, 10))
             .withPreviousState(MirrorPartitionState.STOPPING)
             .build();
 
         assertEquals(metadata, new MirrorPartitionMetadata.Builder()
             .withState(MirrorPartitionState.STOPPED)
             .withStateEpoch(2)
-            .withLastMirror(new OffsetAndEpoch(100L, 10))
+            .withLastMirror(new LastMirror(100L, 10))
             .withPreviousState(MirrorPartitionState.STOPPING)
             .build());
         assertNotEquals(metadata, new MirrorPartitionMetadata.Builder(metadata).withStateEpoch(3).build());
