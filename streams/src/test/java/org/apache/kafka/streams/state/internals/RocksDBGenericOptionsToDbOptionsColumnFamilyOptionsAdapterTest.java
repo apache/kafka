@@ -364,7 +364,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             adapter.setMinWriteBufferNumberToMerge(5);
 
             assertTrue(appender.getMessages(Level.WARN).contains(
-                "Kafka Streams enables atomic flush in RocksDB. Setting min_write_buffer_number_to_merge to '5' will be overridden to 1 when the database is opened"));
+                "Kafka Streams enables atomic flush in RocksDB. Setting min_write_buffer_number_to_merge to '5' will be overridden to 1 when the store is opened"));
             assertEquals(5, adapter.minWriteBufferNumberToMerge());
         }
     }
