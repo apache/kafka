@@ -20,8 +20,6 @@ import java.util.Objects;
 
 /**
  * The last mirroring position of a partition before the mirroring stopped (failover).
- * <p>
- * This is a class rather than a record because the clients module is compiled for Java 11.
  */
 public final class LastMirror {
     /**
