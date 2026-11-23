@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -33,6 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,6 +109,26 @@ public class ConfigurationsImageTest {
         assertTrue(result.data().containsKey("foo"));
         assertTrue(result.data().containsKey("bar"));
         assertTrue(result.data().containsKey("baz"));
+    }
+
+    @Test
+    public void testReplayRemoveTopic() {
+        ConfigResource resource = new ConfigResource(TOPIC, "foo");
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY, SupportedConfigChecker.TRUE);
+        delta.replay(new RemoveTopicRecord(), "foo");
+        assertTrue(delta.changes().isEmpty());
+
+        delta.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("foo")
+            .setName("retention.ms").setValue("1000"));
+        delta.replay(new RemoveTopicRecord(), "foo");
+        assertFalse(delta.changes().containsKey(resource));
+        assertEquals(ConfigurationsImage.EMPTY, delta.apply());
+
+        ConfigurationsImage image = new ConfigurationsImage(Map.of(resource,
+            new ConfigurationImage(resource, Map.of("retention.ms", "1000"))));
+        delta = new ConfigurationsDelta(image, SupportedConfigChecker.TRUE);
+        delta.replay(new RemoveTopicRecord(), "foo");
+        assertEquals(ConfigurationsImage.EMPTY, delta.apply());
     }
 
     private static void testToImage(ConfigurationsImage image) {

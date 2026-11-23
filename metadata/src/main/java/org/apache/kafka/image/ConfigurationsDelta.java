@@ -78,6 +78,8 @@ public final class ConfigurationsDelta {
             ConfigurationDelta delta = changes.computeIfAbsent(resource,
                 __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
             delta.deleteAll();
+        } else {
+            changes.remove(resource);
         }
     }
 
