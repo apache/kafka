@@ -247,6 +247,17 @@ public class NetworkClientTest {
                 MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
     }
 
+    @Test
+    public void testClientInstanceIdIsPassedToSelector() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
+        assertEquals(clientInstanceId, selector.clientInstanceId());
+    }
+
     private static void assertGeneratedClientInstanceId(NetworkClient client) {
         // OffsetDelete v1 uses the v3 request header.
         Uuid clientInstanceId = client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)

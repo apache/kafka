@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.Uuid;
+
 import java.io.Closeable;
 
 /**
@@ -47,6 +49,16 @@ public interface ChannelMetadataRegistry extends Closeable {
      * Get the currently registered client information.
      */
     ClientInformation clientInformation();
+
+    /**
+     * Register the client instance ID of the client on this channel.
+     */
+    void registerClientInstanceId(Uuid clientInstanceId);
+
+    /**
+     * Get the registered client instance ID, or null if none has been registered.
+     */
+    Uuid clientInstanceId();
 
     /**
      * Unregister everything that has been registered and close the registry.

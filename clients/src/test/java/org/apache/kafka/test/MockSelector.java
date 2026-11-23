@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -51,6 +52,7 @@ public class MockSelector implements Selectable {
     private final List<DelayedReceive> delayedReceives = new ArrayList<>();
     private final Predicate<InetSocketAddress> canConnect;
     private final Set<String> ready = new HashSet<>();
+    private Uuid clientInstanceId;
 
     public MockSelector(Time time) {
         this(time, null);
@@ -233,6 +235,15 @@ public class MockSelector implements Selectable {
     @Override
     public boolean isChannelReady(String id) {
         return ready.contains(id);
+    }
+
+    @Override
+    public void clientInstanceId(Uuid clientInstanceId) {
+        this.clientInstanceId = clientInstanceId;
+    }
+
+    public Uuid clientInstanceId() {
+        return clientInstanceId;
     }
 
     public void reset() {

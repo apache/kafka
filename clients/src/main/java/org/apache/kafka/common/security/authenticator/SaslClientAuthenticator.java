@@ -19,13 +19,13 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
-import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
@@ -142,6 +142,7 @@ public class SaslClientAuthenticator implements Authenticator {
     private final String servicePrincipal;
     private final String host;
     private final String node;
+    private final Uuid clientInstanceId;
     private final String mechanism;
     private final TransportLayer transportLayer;
     private final SaslClient saslClient;
@@ -173,6 +174,7 @@ public class SaslClientAuthenticator implements Authenticator {
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
                                    String node,
+                                   Uuid clientInstanceId,
                                    Subject subject,
                                    String servicePrincipal,
                                    String host,
@@ -181,6 +183,7 @@ public class SaslClientAuthenticator implements Authenticator {
                                    Time time,
                                    LogContext logContext) {
         this.node = node;
+        this.clientInstanceId = clientInstanceId;
         this.subject = subject;
         this.callbackHandler = callbackHandler;
         this.host = host;
@@ -373,14 +376,12 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private RequestHeader nextRequestHeader(ApiKeys apiKey, short version) {
         String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-        short requestApiKey = apiKey.id;
         currentRequestHeader = new RequestHeader(
-            new RequestHeaderData().
-                setRequestApiKey(requestApiKey).
-                setRequestApiVersion(version).
-                setClientId(clientId).
-                setCorrelationId(nextCorrelationId()),
-            apiKey.requestHeaderVersion(version));
+            apiKey,
+            version,
+            clientId,
+            clientInstanceId,
+            nextCorrelationId());
         return currentRequestHeader;
     }
 

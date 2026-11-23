@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 
 import java.io.IOException;
@@ -126,4 +127,10 @@ public interface Selectable {
      * @param id The id for the connection
      */
     boolean isChannelReady(String id);
+
+    /**
+     * Set the client instance ID that SASL authentication sends on the connections this selector opens.
+     * @param clientInstanceId The client instance ID of the client that owns this selector
+     */
+    void clientInstanceId(Uuid clientInstanceId);
 }

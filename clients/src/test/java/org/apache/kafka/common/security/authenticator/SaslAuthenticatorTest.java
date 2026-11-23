@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
@@ -103,8 +104,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.AdditionalAnswers;
 import org.opentest4j.AssertionFailedError;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -148,6 +151,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
@@ -166,6 +172,7 @@ public class SaslAuthenticatorTest {
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
     private int nextCorrelationId;
+    private final ByteArrayOutputStream authenticatorWrites = new ByteArrayOutputStream();
 
     @BeforeEach
     public void setup() throws Exception {
@@ -1658,6 +1665,7 @@ public class SaslAuthenticatorTest {
               null,
               null,
               null,
+              null,
               "plain",
               null,
               null,
@@ -2121,6 +2129,30 @@ public class SaslAuthenticatorTest {
         return server;
     }
 
+    private NioEchoServer startServerWithSaslAuthenticateVersionCap(final SecurityProtocol securityProtocol, String saslMechanism,
+                                                                     short maxVersion) throws Exception {
+        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, Collections.emptyMap());
+        Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
+            ApiVersionCollection apiVersions = new ApiVersionCollection();
+            for (ApiVersion apiVersion : TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER).data().apiKeys()) {
+                ApiVersion copy = apiVersion.duplicate();
+                if (copy.apiKey() == ApiKeys.SASL_AUTHENTICATE.id)
+                    copy.setMaxVersion(maxVersion);
+                apiVersions.add(copy);
+            }
+            return new ApiVersionsResponse(new ApiVersionsResponseData().setApiKeys(apiVersions));
+        };
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER,
+                Collections.singletonMap(saslMechanism, jaasContext), securityProtocol, listenerName, false, saslMechanism,
+                credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
+        serverChannelBuilder.configure(saslServerConfigs);
+        server = new NioEchoServer(listenerName, securityProtocol, new TestSecurityConfig(saslServerConfigs),
+                "localhost", serverChannelBuilder, credentialCache, time);
+        server.start();
+        return server;
+    }
+
     private SaslChannelBuilder saslChannelBuilderWithoutHeader(
         final SecurityProtocol securityProtocol,
         final String saslMechanism,
@@ -2135,12 +2167,13 @@ public class SaslAuthenticatorTest {
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                        AuthenticateCallbackHandler callbackHandler,
                                                                        String id,
+                                                                       Uuid clientInstanceId,
                                                                        String serverHost,
                                                                        String servicePrincipal,
                                                                        TransportLayer transportLayer,
                                                                        Subject subject) {
 
-                return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject,
                         servicePrincipal, serverHost, saslMechanism,
                         transportLayer, time, new LogContext()) {
                     @Override
@@ -2180,12 +2213,13 @@ public class SaslAuthenticatorTest {
                 protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                            AuthenticateCallbackHandler callbackHandler,
                                                                            String id,
+                                                                           Uuid clientInstanceId,
                                                                            String serverHost,
                                                                            String servicePrincipal,
                                                                            TransportLayer transportLayer,
                                                                            Subject subject) {
 
-                    return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                    return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject,
                         servicePrincipal, serverHost, saslMechanism, transportLayer, time, new LogContext());
                 }
             };
@@ -2287,6 +2321,133 @@ public class SaslAuthenticatorTest {
         String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("DIGEST-MD5");
         saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                 TestDigestLoginModule.DigestServerCallbackHandler.class);
+    }
+
+    /**
+     * Tests that every SaslAuthenticate v3 request carries the client instance ID: both SCRAM rounds of the
+     * authentication and both rounds of the re-authentication.
+     */
+    @Test
+    public void testClientInstanceIdOnEverySaslAuthenticateV3() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        server = createEchoServer(securityProtocol);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        Uuid clientInstanceId = Uuid.randomUuid();
+
+        try {
+            createClientConnection(securityProtocol, "0", clientInstanceId);
+            checkClientConnection("0");
+            server.verifyAuthenticationMetrics(1, 0);
+            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+            server.verifyReauthenticationMetrics(0, 0);
+            checkClientConnection("0");
+            server.verifyReauthenticationMetrics(1, 0);
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
+
+        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
+        assertEquals(4, saslAuthenticate.size());
+        for (RequestHeader header : saslAuthenticate) {
+            assertEquals(3, header.apiVersion());
+            assertEquals(3, header.headerVersion());
+            assertEquals(clientInstanceId, header.clientInstanceId());
+        }
+    }
+
+    /**
+     * Tests that SaslAuthenticate v2, which uses the v2 request header, carries no client instance ID.
+     */
+    @Test
+    public void testNoClientInstanceIdOnSaslAuthenticateV2() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        server = startServerWithSaslAuthenticateVersionCap(securityProtocol, "PLAIN", (short) 2);
+
+        try {
+            createClientConnection(securityProtocol, "0", Uuid.randomUuid());
+            checkClientConnection("0");
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
+
+        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
+        assertEquals(1, saslAuthenticate.size());
+        assertEquals(2, saslAuthenticate.get(0).apiVersion());
+        assertEquals(2, saslAuthenticate.get(0).headerVersion());
+        assertEquals(Uuid.ZERO_UUID, saslAuthenticate.get(0).clientInstanceId());
+    }
+
+    private List<RequestHeader> authenticatorRequestHeaders(ApiKeys apiKey) {
+        List<RequestHeader> headers = new ArrayList<>();
+        ByteBuffer buffer = ByteBuffer.wrap(authenticatorWrites.toByteArray());
+        while (buffer.remaining() > 0) {
+            int size = buffer.getInt();
+            ByteBuffer frame = buffer.slice();
+            frame.limit(size);
+            buffer.position(buffer.position() + size);
+            RequestHeader header = RequestHeader.parse(frame);
+            if (header.apiKey() == apiKey)
+                headers.add(header);
+        }
+        return headers;
+    }
+
+    private TransportLayer recordingWrites(TransportLayer transportLayer) {
+        TransportLayer recording = mock(TransportLayer.class, AdditionalAnswers.delegatesTo(transportLayer));
+        try {
+            doAnswer(invocation -> {
+                ByteBuffer[] srcs = invocation.getArgument(0);
+                ByteBuffer[] copies = new ByteBuffer[srcs.length];
+                for (int i = 0; i < srcs.length; i++)
+                    copies[i] = srcs[i].duplicate();
+                long written = transportLayer.write(srcs);
+                long remaining = written;
+                for (ByteBuffer copy : copies) {
+                    int n = (int) Math.min(remaining, copy.remaining());
+                    byte[] bytes = new byte[n];
+                    copy.get(bytes);
+                    authenticatorWrites.write(bytes, 0, n);
+                    remaining -= n;
+                }
+                return written;
+            }).when(recording).write(any(ByteBuffer[].class));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return recording;
+    }
+
+    private void createClientConnection(SecurityProtocol securityProtocol, String node, Uuid clientInstanceId) throws Exception {
+        if (selector != null) {
+            selector.close();
+            selector = null;
+        }
+        authenticatorWrites.reset();
+        String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
+        Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism,
+            JaasContext.loadClientContext(Collections.emptyMap()));
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
+                securityProtocol, null, false, saslMechanism, null, null, null, time, new LogContext(), null) {
+            @Override
+            protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                       AuthenticateCallbackHandler callbackHandler,
+                                                                       String id,
+                                                                       Uuid clientInstanceId,
+                                                                       String serverHost,
+                                                                       String servicePrincipal,
+                                                                       TransportLayer transportLayer,
+                                                                       Subject subject) {
+                return super.buildClientAuthenticator(configs, callbackHandler, id, clientInstanceId, serverHost,
+                    servicePrincipal, recordingWrites(transportLayer), subject);
+            }
+        };
+        clientChannelBuilder.configure(saslClientConfigs);
+        this.channelBuilder = clientChannelBuilder;
+        this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
+        selector.clientInstanceId(clientInstanceId);
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
     }
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
@@ -2725,14 +2886,14 @@ public class SaslAuthenticatorTest {
 
         @Override
         protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
-                AuthenticateCallbackHandler callbackHandler, String id, String serverHost, String servicePrincipal,
-                TransportLayer transportLayer, Subject subject) {
+                AuthenticateCallbackHandler callbackHandler, String id, Uuid clientInstanceId, String serverHost,
+                String servicePrincipal, TransportLayer transportLayer, Subject subject) {
             if (++numInvocations == 1)
-                return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal, serverHost,
-                        "DIGEST-MD5", transportLayer, time, new LogContext());
+                return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject,
+                        servicePrincipal, serverHost, "DIGEST-MD5", transportLayer, time, new LogContext());
             else
-                return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal, serverHost,
-                        "PLAIN", transportLayer, time, new LogContext()) {
+                return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject,
+                        servicePrincipal, serverHost, "PLAIN", transportLayer, time, new LogContext()) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
                         return new SaslHandshakeRequest.Builder(

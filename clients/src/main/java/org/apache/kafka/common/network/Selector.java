@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -125,6 +126,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final MemoryPool memoryPool;
     private final long lowMemThreshold;
     private final int failedAuthenticationDelayMs;
+    private Uuid clientInstanceId;
 
     //indicates if the previous call to poll was able to make progress in reading already-buffered data.
     //this is used to prevent tight loops when memory is not available to read any more data
@@ -338,6 +340,7 @@ public class Selector implements Selectable, AutoCloseable {
         ChannelMetadataRegistry metadataRegistry = null;
         try {
             metadataRegistry = new SelectorChannelMetadataRegistry();
+            metadataRegistry.registerClientInstanceId(clientInstanceId);
             KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
             key.attach(channel);
             return channel;
@@ -985,6 +988,11 @@ public class Selector implements Selectable, AutoCloseable {
         return channel != null && channel.ready();
     }
 
+    @Override
+    public void clientInstanceId(Uuid clientInstanceId) {
+        this.clientInstanceId = clientInstanceId;
+    }
+
     private KafkaChannel openOrClosingChannelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)
@@ -1073,6 +1081,7 @@ public class Selector implements Selectable, AutoCloseable {
     class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
         private CipherInformation cipherInformation;
         private ClientInformation clientInformation;
+        private Uuid clientInstanceId;
 
         @Override
         public void registerCipherInformation(final CipherInformation cipherInformation) {
@@ -1109,6 +1118,16 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         @Override
+        public void registerClientInstanceId(final Uuid clientInstanceId) {
+            this.clientInstanceId = clientInstanceId;
+        }
+
+        @Override
+        public Uuid clientInstanceId() {
+            return clientInstanceId;
+        }
+
+        @Override
         public void close() {
             if (this.cipherInformation != null) {
                 sensors.connectionsByCipher.decrement(this.cipherInformation);
@@ -1119,6 +1138,8 @@ public class Selector implements Selectable, AutoCloseable {
                 sensors.connectionsByClient.decrement(this.clientInformation);
                 this.clientInformation = null;
             }
+
+            this.clientInstanceId = null;
         }
     }
 

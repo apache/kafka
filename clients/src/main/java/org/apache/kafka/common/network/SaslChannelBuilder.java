@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
@@ -232,6 +233,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
                         saslCallbackHandlers.get(clientSaslMechanism),
                         id,
+                        metadataRegistry.clientInstanceId(),
                         socket.getInetAddress().getHostName(),
                         loginManager.serviceName(),
                         finalTransportLayer,
@@ -286,10 +288,11 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                AuthenticateCallbackHandler callbackHandler,
                                                                String id,
+                                                               Uuid clientInstanceId,
                                                                String serverHost,
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) {
-        return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
+        return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject, servicePrincipal,
                 serverHost, clientSaslMechanism, transportLayer, time, logContext);
     }
 
