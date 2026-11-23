@@ -698,8 +698,8 @@ public class TransactionsTestHelper {
             var metadata = txnManager.getTransactionMetadata(transactionalId).orElseThrow();
             // EndTxn can return before the coordinator finishes the abort using the current epoch.
             TestUtils.waitForCondition(() -> metadata.inLock(() -> {
-                var state = TransactionState.parse(metadata.state().stateName());
-                if (state != TransactionState.COMPLETE_ABORT || metadata.pendingTransitionInProgress()) {
+                if (metadata.state() != org.apache.kafka.coordinator.transaction.TransactionState.COMPLETE_ABORT
+                        || metadata.pendingTransitionInProgress()) {
                     return false;
                 }
                 metadata.setProducerEpoch((short) (Short.MAX_VALUE - 2));
