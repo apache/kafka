@@ -3468,6 +3468,7 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testNeedsNewBatchResultHasNoExtensionBytes
 - testNextReadyCheckDelay
 - testPartialDrain
+- testPartitionAtBrokerDeduplicationWindowDoesNotStarveOtherPartitions
 - testProduceRequestResultAwaitAllDependents
 - testReadyAndDrainWhenABatchIsBeingRetried
 - testRecordsDrainedWhenTransactionCompleting
@@ -3523,6 +3524,8 @@ org.apache.kafka.clients.producer.internals.SenderTest:
 - testInitProducerIdWithMaxInFlightOne
 - testInvalidTxnStateIsAnAbortableError
 - testMetadataTopicExpiry
+- testNewBatchesAreHeldBackWhileOldestBatchIsStuckOnPreviousLeader
+- testNewBatchesAreHeldBackWhileOldestInFlightBatchCouldLeaveBrokerDeduplicationWindow
 - testNoBufferReuseWhenBatchExpires
 - testNoDoubleDeallocation
 - testNodeLatencyStats
@@ -3535,6 +3538,7 @@ org.apache.kafka.clients.producer.internals.SenderTest:
 - testResetNextBatchExpiry
 - testResetOfProducerStateShouldAllowQueuedBatchesToDrain
 - testRetries
+- testRetryOfOldestInFlightBatchIsNotHeldBackByBrokerDeduplicationWindow
 - testRetryWhenProducerIdChanges
 - testSendInOrder
 - testSenderMetricsTemplates
@@ -3543,6 +3547,7 @@ org.apache.kafka.clients.producer.internals.SenderTest:
 - testSequenceNumberIncrement
 - testShouldRaiseOutOfOrderSequenceExceptionToUserIfLogWasNotTruncated
 - testSimple
+- testSplitOfOldestBatchKeepsAcknowledgedBatchesInBrokerDeduplicationWindow
 - testTooLargeBatchesAreSafelyRemoved
 - testTransactionAbortableExceptionIsAnAbortableError
 - testTransactionAbortedExceptionOnAbortWithoutError
@@ -3578,6 +3583,8 @@ org.apache.kafka.clients.producer.internals.TransactionManagerTest:
 - testBasicTransaction
 - testBatchCompletedAfterProducerReset
 - testBatchFailureAfterProducerReset
+- testBatchesCompletedAheadOfOldestInflightBatchStayInBrokerDeduplicationWindow
+- testBrokerDeduplicationWindowIsTrackedPerPartition
 - testBumpEpochAfterTimeoutWithoutPendingInflightRequests
 - testBumpEpochAndResetSequenceNumbersAfterUnknownProducerId
 - testBumpTransactionalEpochOnAbortableError
@@ -3597,6 +3604,7 @@ org.apache.kafka.clients.producer.internals.TransactionManagerTest:
 - testDuplicateSequenceAfterProducerReset
 - testEndTxnNotSentIfIncompleteBatches
 - testEpochBumpAfterLastInFlightBatchFailsIdempotentProducer
+- testEpochBumpForgetsBatchesCompletedAheadOfOldestInflightBatch
 - testEpochUpdateAfterBumpFromEndTxnResponseInV2
 - testFailIfNotReadyForSendAfterAbortableError
 - testFailIfNotReadyForSendAfterFatalError
@@ -3606,6 +3614,7 @@ org.apache.kafka.clients.producer.internals.TransactionManagerTest:
 - testFailIfNotReadyForSendNoProducerId
 - testFailedInflightBatchAfterEpochBump
 - testFatalErrorWhenProduceResponseWithInvalidPidMapping
+- testFatallyFailedBatchShiftsBatchesCompletedAheadOfOldestInflightBatch
 - testFencedInstanceIdInTxnOffsetCommitByGroupMetadata
 - testFindCoordinatorAllowedInAbortableErrorState
 - testFlushPendingPartitionsOnCommit
@@ -3682,6 +3691,8 @@ org.apache.kafka.clients.producer.internals.TransactionManagerTest:
 - testSendOffsetsWithGroupMetadata
 - testSenderShutdownWithPendingTransactions
 - testSequenceNumberOverflow
+- testSplitBatchKeepsBatchesCompletedAheadOfItInBrokerDeduplicationWindow
+- testSplitOfBatchBehindOldestInflightBatchIsNotCountedTwiceInBrokerDeduplicationWindow
 - testTopicAuthorizationFailureInAddPartitions
 - testTransactionAbortableExceptionInAddOffsetsToTxn
 - testTransactionAbortableExceptionInAddPartitions
