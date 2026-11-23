@@ -731,7 +731,16 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         Map<TopicIdPartition, NodeAcknowledgements> acksToSend = acknowledgementsMap;
 
         if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
-            final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
+            final ShareFetch<K, V> fetch;
+            try {
+                fetch = fetchCollector.collect(fetchBuffer);
+            } catch (RuntimeException e) {
+                if (!acksToSend.isEmpty()) {
+                    sendShareAcknowledgeAsyncEvent(acksToSend);
+                }
+                throw e;
+            }
+
             if (fetch.isEmpty()) {
                 // Check for any acknowledgements which could have come from control records (GAP) and send them.
                 Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
