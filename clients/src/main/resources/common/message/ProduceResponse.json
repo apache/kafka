@@ -41,7 +41,9 @@
   //
   // Version 12 is the same as version 10 (KIP-890).
   // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
-  "validVersions": "3-13",
+  //
+  // Version 14 is the same as version 13 (KIP-1313).
+  "validVersions": "3-14",
   "flexibleVersions": "9+",
   "headerVersions": {
     "0-8": "0",
