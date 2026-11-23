@@ -14,34 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram.internals;
+package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-
-public class ScramCredentialUtilsTest {
+public class CredentialCacheTest {
 
     @Test
-    public void scramCredentialCache() throws Exception {
-        CredentialCache cache = new CredentialCache();
-        ScramCredentialUtils.createCache(cache, Arrays.asList("SCRAM-SHA-512", "PLAIN"));
-        assertNotNull(cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class), "Cache not created for enabled mechanism");
-        assertNull(cache.cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class), "Cache created for disabled mechanism");
+    public void testScramCredentialCache() throws Exception {
+        CredentialCache cache = new CredentialCache(List.of("SCRAM-SHA-512", "PLAIN"));
+        assertNotNull(cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName()), "Cache not created for enabled mechanism");
+        assertNull(cache.cache(ScramMechanism.SCRAM_SHA_256.mechanismName()), "Cache created for disabled mechanism");
+        assertNull(cache.cache("PLAIN"), "Cache created for non-SCRAM mechanism");
 
-        CredentialCache.Cache<ScramCredential> sha512Cache = cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class);
+        CredentialCache.Cache sha512Cache = cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName());
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
         ScramCredential credentialA = formatter.generateCredential("password", 4096);
         sha512Cache.put("userA", credentialA);
         assertEquals(credentialA, sha512Cache.get("userA"));
         assertNull(sha512Cache.get("userB"), "Invalid user credential");
+
+        assertEquals(credentialA, sha512Cache.remove("userA"));
+        assertNull(sha512Cache.get("userA"));
     }
 }

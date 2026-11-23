@@ -17,8 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -38,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,7 +54,8 @@ public class RequestContextTest {
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", correlationId);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
-        assertEquals(0, context.apiVersion());
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(0, context.effectiveApiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
         // the unknown version type as v0 which has an empty request body.
@@ -63,15 +64,42 @@ public class RequestContextTest {
         requestBuffer.putInt(29034);
         requestBuffer.flip();
 
+        verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
+    }
+
+    @Test
+    public void testSerdeUnsupportedApiVersionRequestWithUnknownHeaderFields() throws Exception {
+        int correlationId = 23423;
+        short apiVersion = (short) (ApiKeys.API_VERSIONS.latestVersion() + 1);
+
+        // A newer client may use a header version unknown to this broker, with fields after the client id which
+        // cannot be parsed. The header parser only reads the fields common to every header version, and the rest
+        // of the buffer is ignored since the request is treated as v0.
+        byte[] unknownBytes = new byte[24];
+        Arrays.fill(unknownBytes, (byte) 0xFF);
+        ByteBuffer requestBuffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, apiVersion,
+            correlationId, "client", unknownBytes);
+        RequestHeader header = RequestHeader.parse(requestBuffer);
+        assertEquals("client", header.clientId());
+        assertEquals(correlationId, header.correlationId());
+
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(0, context.effectiveApiVersion());
+
+        verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
+    }
+
+    private void verifyUnsupportedApiVersionsRequestSerde(RequestContext context, ByteBuffer requestBuffer,
+                                                          int correlationId) throws Exception {
         RequestAndSize requestAndSize = context.parseRequest(requestBuffer);
         assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
+        assertEquals(0, request.version());
 
-        Send send = context.buildResponseSend(new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setThrottleTimeMs(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
-            .setApiKeys(new ApiVersionCollection())));
+        Send send = context.buildResponseSend(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
 
@@ -79,14 +107,39 @@ public class RequestContextTest {
         responseBuffer.flip();
         responseBuffer.getInt(); // strip off the size
 
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-            ApiKeys.API_VERSIONS.responseHeaderVersion(header.apiVersion()));
+        verifyUnsupportedApiVersionsResponse(responseBuffer, correlationId);
+        verifyUnsupportedApiVersionsResponse(
+            context.buildResponseEnvelopePayload(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception())),
+            correlationId);
+    }
+
+    private void verifyUnsupportedApiVersionsResponse(ByteBuffer responseBuffer, int correlationId) {
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, (short) 0);
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
             new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
-        assertTrue(response.data().apiKeys().isEmpty());
+        assertEquals(ApiKeys.API_VERSIONS.latestVersion(),
+            response.data().apiKeys().find(ApiKeys.API_VERSIONS.id).maxVersion());
+        assertEquals(0, responseBuffer.remaining());
+    }
+
+    @Test
+    public void testParseRequestWithUnsupportedApiVersion() throws Exception {
+        short apiVersion = (short) (ApiKeys.FETCH.latestVersion() + 1);
+        byte[] unknownBytes = new byte[24];
+        Arrays.fill(unknownBytes, (byte) 0xFF);
+        ByteBuffer requestBuffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.FETCH, apiVersion,
+            5, "client", unknownBytes);
+        RequestHeader header = RequestHeader.parse(requestBuffer);
+
+        // The header is only partially parsed for unsupported versions, so the body must not be parsed.
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+        int position = requestBuffer.position();
+        assertThrows(UnsupportedVersionException.class, () -> context.parseRequest(requestBuffer));
+        assertEquals(position, requestBuffer.position());
     }
 
     @Test
@@ -108,6 +161,9 @@ public class RequestContextTest {
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
             KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
             ClientInformation.EMPTY, true);
+
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(header.apiVersion(), context.effectiveApiVersion());
 
         ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
         assertEquals(buffer.capacity(), buffer.limit(), "Buffer limit and capacity should be the same");

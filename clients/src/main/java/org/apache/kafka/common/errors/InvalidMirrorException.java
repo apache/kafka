@@ -14,24 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram.internals;
-
-import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
-
-import java.util.Collection;
+package org.apache.kafka.common.errors;
 
 /**
- * SCRAM credential utility functions.
+ * The request attempted to perform an operation on an invalid mirror.
+ * For example the mirror name is too long, contains invalid characters etc.
+ * This exception is not retriable because the operation won't suddenly become valid.
  */
-public final class ScramCredentialUtils {
+public class InvalidMirrorException extends InvalidConfigurationException {
+    private static final long serialVersionUID = 1L;
 
-    private ScramCredentialUtils() {}
-
-    public static void createCache(CredentialCache cache, Collection<String> mechanisms) {
-        for (String mechanism : ScramMechanism.mechanismNames()) {
-            if (mechanisms.contains(mechanism))
-                cache.createCache(mechanism, ScramCredential.class);
-        }
+    public InvalidMirrorException(String message) {
+        super(message);
     }
 }

@@ -63,6 +63,7 @@ public class ListConfigResourcesRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public ListConfigResourcesRequestData data() {
         return data;
     }

@@ -662,6 +662,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @return An immutable snapshot of the set of partitions currently assigned to this consumer
      */
+    @Override
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
     }
@@ -675,6 +676,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @return An immutable snapshot of the set of topics currently subscribed to
      */
+    @Override
     public Set<String> subscription() {
         return delegate.subscription();
     }
@@ -879,8 +881,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
      * <p>
      * If the consumer owns partitions assigned by the group, the rebalance listener is invoked to give them up
-     * ({@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}, or
-     * {@link ConsumerRebalanceListener#onPartitionsLost(Collection)}) as part of this call, without requiring a call
+     * ({@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)}, or
+     * {@link RebalanceListener#onPartitionsLost(Collection, RebalanceConsumer)}) as part of this call, without requiring a call
      * to {@link #poll(Duration)}.
      * <p>
      * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before

@@ -46,7 +46,7 @@ github:
     - mingyen066
     - muralibasani
     - nicktelford
-    - see-quick
+    - Russole
   enabled_merge_buttons:
     squash: true
     squash_commit_message: PR_TITLE_AND_DESC

@@ -279,6 +279,9 @@ public class GlobalStreamThread extends Thread {
         }
 
         public void close(final boolean wipeStateStore) throws IOException {
+            // Clear the interrupt status before closing the consumer. With the status set,
+            // the close gives up after one network poll and throws an InterruptException.
+            Thread.interrupted();
             try {
                 globalConsumer.close();
             } catch (final RuntimeException e) {
@@ -355,6 +358,9 @@ public class GlobalStreamThread extends Thread {
                 }
             }
         } catch (final InvalidOffsetException recoverableException) {
+            // Clear the interrupt status before invoking the handler, which may call
+            // addStreamThread() on this thread for SHUTDOWN_APPLICATION.
+            Thread.interrupted();
             wipeStateStore = true;
             log.error(
                 "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
@@ -366,6 +372,8 @@ public class GlobalStreamThread extends Thread {
             );
             this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
+            // Clear the interrupt status before invoking the handler, as above.
+            Thread.interrupted();
             log.error("Error happened while maintaining global state store. The streams application or client will now close to ERROR.", e);
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
