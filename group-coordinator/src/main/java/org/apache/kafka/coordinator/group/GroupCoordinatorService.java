@@ -2766,6 +2766,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return switch (apiError.error()) {
             case MESSAGE_TOO_LARGE, RECORD_LIST_TOO_LARGE ->
+                // Remap MESSAGE_TOO_LARGE and RECORD_LIST_TOO_LARGE to INVALID_COMMIT_OFFSET_SIZE,
+                // since the offsets of a commit are written in a single batch and these errors
+                // mean that the commit is too large.
                 handler.apply(Errors.INVALID_COMMIT_OFFSET_SIZE);
             default -> handleOperationException(
                 operationName,
