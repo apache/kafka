@@ -37637,6 +37637,9 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setEndpointInformationEpoch(0)
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")))
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
             result1.response().data()
@@ -37755,6 +37758,9 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")))
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
             result3.response().data()
@@ -37827,6 +37833,9 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setEndpointInformationEpoch(0)
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")))
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
             result1.response().data()
@@ -37989,6 +37998,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")))
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
             result4.response().data()
@@ -38212,6 +38224,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")))
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
             result.response().data()

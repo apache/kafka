@@ -5095,6 +5095,12 @@ public class GroupMetadataManager {
                     groupId, groupEpoch, assignor.name());
             }
 
+            returnedStatus.ifPresent(statusList -> statusList.add(
+                new Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment calculation is in progress.")
+            ));
+
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         } else {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
