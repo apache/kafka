@@ -144,6 +144,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -4356,6 +4357,28 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testModifyOffsetsTasksStillBeingRevoked() {
+        // Get the initial assignment
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        when(herder.connectorType(anyMap())).thenReturn(ConnectorType.SOURCE);
+        expectRebalance(1, List.of(), List.of(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
+        herder.tick();
+
+        // The connector is stopped and has no task configs, but another worker has not finished stopping the tasks
+        // that were revoked from it in the last rebalance
+        when(member.hasPendingTaskRevocation(CONN1)).thenReturn(true);
+
+        FutureCallback<Message> callback = new FutureCallback<>();
+        herder.resetConnectorOffsets(CONN1, callback);
+        herder.tick();
+        ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
+        assertInstanceOf(RebalanceNeededException.class, e.getCause());
+        verify(worker, never()).modifyConnectorOffsets(any(), any(), any(), any());
+    }
+
+    @Test
     public void testModifyOffsetsSourceConnectorExactlyOnceEnabled() throws Exception {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
@@ -4418,6 +4441,7 @@ public class DistributedHerderTest {
         // No zombie fencing request to the worker is expected in the second alter connector offsets request since we already
         // did a round of zombie fencing the first time and no new tasks came up in the meanwhile.
         verify(worker, times(1)).fenceZombies(eq(CONN1), eq(SNAPSHOT_STOPPED_CONN1.taskCountRecord(CONN1)), eq(CONN1_CONFIG));
+        verify(member, atLeastOnce()).hasPendingTaskRevocation(CONN1);
         verifyNoMoreInteractions(workerFencingFuture, herderFencingFuture, member, worker);
     }
 
@@ -4466,6 +4490,7 @@ public class DistributedHerderTest {
         // fencing list. The other is the callback passed from DistributedHerder::modifyConnectorOffsets in order to
         // queue up the actual reset offsets request if the zombie fencing succeeds.
         verify(herderFencingFuture, times(2)).whenComplete(any());
+        verify(member, atLeastOnce()).hasPendingTaskRevocation(CONN1);
         verifyNoMoreInteractions(workerFencingFuture, herderFencingFuture, member, worker);
     }
 

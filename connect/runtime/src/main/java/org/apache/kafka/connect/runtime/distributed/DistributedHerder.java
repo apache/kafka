@@ -1802,6 +1802,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     "for the specified connector by issuing a 'PUT' request to the '/connectors/" + connName + "/stop' endpoint"), null);
             return false;
         }
+
+        // With incremental cooperative rebalancing, the rebalance that follows a stop request only tells the owning workers
+        // to revoke the connector's tasks. Those workers stop the tasks afterwards and then rejoin the group. Until that
+        // happens, a source task may still be running and may commit offsets that overwrite the ones written by this request.
+        // Sink tasks do not need this check because their consumers are still members of the consumer group (see above).
+        if (isSourceConnector(connName) && member.hasPendingTaskRevocation(connName)) {
+            callback.onCompletion(new RebalanceNeededException("Request cannot be completed because the tasks of connector "
+                    + connName + " are still being stopped"), null);
+            return false;
+        }
         return true;
     }
 

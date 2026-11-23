@@ -181,7 +181,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 memberAssignments
         );
 
-        coordinator.leaderState(new LeaderState(memberConfigs, clusterAssignment.allAssignedConnectors(), clusterAssignment.allAssignedTasks()));
+        coordinator.leaderState(new LeaderState(memberConfigs, clusterAssignment.allAssignedConnectors(), clusterAssignment.allAssignedTasks(),
+                clusterAssignment.newlyRevokedTasks()));
 
         Map<String, ExtendedAssignment> assignments =
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
