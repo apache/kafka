@@ -37115,12 +37115,12 @@ public class GroupMetadataManagerTest {
 
         SimpleAssignor assignor = new SimpleAssignor();
 
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+        MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .buildCoordinatorMetadataImage();
+            .build();
 
         long groupMetadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
+            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))));
 
         ShareGroupMember member1 = new ShareGroupMember.Builder(memberId1)
             .setMemberEpoch(10)
@@ -37143,7 +37143,7 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withShareGroup(new ShareGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -37153,11 +37153,14 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(groupMetadataHash))
             .build();
 
-        // The share partitions are initialized.
+        // The share partitions are initialized. Partitions 6 and 7 do not exist yet, but are initialized now because the
+        // run only assigns share partitions that were initialized when it was scheduled. Otherwise, the run would not
+        // assign them even if it read the updated metadata image. Partitions initialized while the run is in flight are
+        // covered by testShareGroupAsyncTargetAssignmentWithPartitionInitialization.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
             groupId,
             Map.of(),
-            Map.of(fooTopicId, new InitMapValue(fooTopicName, Set.of(0, 1, 2, 3, 4, 5), 1)),
+            Map.of(fooTopicId, new InitMapValue(fooTopicName, Set.of(0, 1, 2, 3, 4, 5, 6, 7), 1)),
             Map.of()
         ));
 
@@ -37179,10 +37182,15 @@ public class GroupMetadataManagerTest {
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
 
         // The metadata image is updated.
-        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 3)
-            .buildCoordinatorMetadataImage();
-        context.groupMetadataManager.onMetadataUpdate(newMetadataImage.emptyDelta(), newMetadataImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(metadataImage)
+            .build();
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(6));
+        delta.replay(new PartitionRecord().setTopicId(fooTopicId).setPartitionId(7));
+        context.groupMetadataManager.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(delta),
+            new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY))
+        );
 
         // The target assignment is written, computed from the metadata image from when the run was scheduled.
         assertEquals(
