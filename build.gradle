@@ -557,7 +557,7 @@ subprojects {
   // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
-  def copyTestXml = tasks.register('copyTestXml') {
+  def copyTestXml = tasks.register('copyTestXml', Copy) {
     onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
     onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
     onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
@@ -570,15 +570,14 @@ subprojects {
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
-    doLast {
-      def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/${output}").get().asFile
-      println "Copy JUnit XML for ${project.name} to $dest"
-      ant.copy(todir: "$dest") {
-	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
-	  ant.include(name: "**/*.xml")
-	}
-      }
+    from(test.reports.junitXml.entryPoint) {
+      include "**/*.xml"
+    }
+    into(rootProject.layout.buildDirectory.dir("junit-xml/${projectToJUnitXmlPath(project)}/${output}"))
+
+    def projectName = project.name
+    doFirst {
+      println "Copy JUnit XML for ${projectName} to $destinationDir"
     }
   }
 
