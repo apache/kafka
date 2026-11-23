@@ -39285,7 +39285,7 @@ public class GroupMetadataManagerTest {
             new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY))
         );
 
-        // Member 1 heartbeats again. The topology is reconfigured.
+        // Member 1 heartbeats again. The configured topology is updated.
         context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -39295,7 +39295,7 @@ public class GroupMetadataManagerTest {
         assertEquals(8, context.groupMetadataManager.streamsGroup(groupId).configuredTopology().get()
             .subtopologies().get().get(subtopology).numberOfTasks());
 
-        // The target assignment is written, computed from the metadata image from when the run was scheduled.
+        // The target assignment is written, computed from the configured topology from when the run was scheduled.
         assertEquals(
             List.of(
                 new MockCoordinatorExecutor.ExecutorResult<>(
