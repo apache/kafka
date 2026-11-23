@@ -2753,14 +2753,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param exception         The exception to handle.
      * @param handler           A function which takes an Errors and builds the response.
      * @return The response built by the handler.
-     * @param <RequestData> The type of the request. It must be a toString'able object.
-     * @param <ResponseData> The type of the response.
+     * @param <T> The type of the request. It must be a toString'able object.
+     * @param <R> The type of the response.
      */
-    private <RequestData, ResponseData> ResponseData handleOffsetCommitException(
+    private <T, R> R handleOffsetCommitException(
         String operationName,
-        RequestData request,
+        T request,
         Throwable exception,
-        Function<Errors, ResponseData> handler
+        Function<Errors, R> handler
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
