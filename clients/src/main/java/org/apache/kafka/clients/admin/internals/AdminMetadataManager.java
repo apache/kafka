@@ -273,7 +273,7 @@ public class AdminMetadataManager {
 
     public void requestUpdate(boolean resetEquivalentResponseBackoff) {
         if (resetEquivalentResponseBackoff) {
-            this.equivalentResponseCount.set(0);
+            resetEquivalentResponseBackoff();
         }
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;

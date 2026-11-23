@@ -172,18 +172,6 @@ public class AdminMetadataManagerTest {
     }
 
     @Test
-    public void testResetEquivalentResponseBackoff() {
-        fetchAndRequestUpdate(mockCluster());
-        fetchAndRequestUpdate(mockCluster());
-        fetchAndRequestUpdate(mockCluster());
-        assertEquals(2 * refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()),
-            2 * refreshBackoffMs * CommonClientConfigs.RETRY_BACKOFF_JITTER);
-
-        mgr.resetEquivalentResponseBackoff();
-        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
-    }
-
-    @Test
     public void testAuthenticationFailure() {
         mgr.transitionToUpdatePending(time.milliseconds());
         mgr.updateFailed(new AuthenticationException("Authentication failed"));

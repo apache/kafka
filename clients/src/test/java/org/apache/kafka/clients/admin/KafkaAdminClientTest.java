@@ -146,6 +146,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
@@ -1350,6 +1351,24 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                 mockClient.respondToRequest(request, prepareMetadataResponse(cluster, Errors.NONE));
                 assertEquals(cluster.clusterResource().clusterId(), assertDoesNotThrow(() -> result.clusterId().get()));
             }
+        }
+    }
+
+    @Test
+    public void testPendingCallTimeoutResetsMetadataRefreshBackoff() throws Exception {
+        try (MockClient mockClient = new MockClient(Time.SYSTEM)) {
+            AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
+            doReturn(true).when(metadataManager).isReady();
+            // avoid sending fetchMetadata request
+            doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
+
+            try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), Time.SYSTEM)) {
+                // the broker is not in the metadata, so the call stays pending until it times out
+                DescribeLogDirsResult result = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(100));
+                TestUtils.assertFutureThrows(TimeoutException.class, result.allDescriptions());
+            }
+            verify(metadataManager).resetEquivalentResponseBackoff();
         }
     }
 
