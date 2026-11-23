@@ -37,10 +37,10 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -166,8 +166,7 @@ public class ImageDowngradeTest {
         MetadataDelta delta = new MetadataDelta.Builder().build();
         RecordTestUtils.replayAll(delta, expectedOutputs);
         TopicImage topic = delta.apply(MetadataProvenance.EMPTY).topics().getTopic(topicRecord.topicId());
-        assertNull(topic.mirrorName());
-        assertEquals(MirrorPartitionState.UNKNOWN.value(), topic.desiredMirrorState());
+        assertEquals(Optional.empty(), topic.mirror());
     }
 
     private static void writeWithExpectedLosses(

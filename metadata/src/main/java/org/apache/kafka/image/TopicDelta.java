@@ -32,7 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,8 +46,7 @@ public final class TopicDelta {
     private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
 
     private boolean mirrorRecordReplayed;
-    private String mirrorName;
-    private byte desiredMirrorState;
+    private Optional<TopicImage.Mirror> mirror = Optional.empty();
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -115,22 +114,16 @@ public final class TopicDelta {
             throw new IllegalArgumentException("desiredState must be UNKNOWN when mirrorName is null, got " + MirrorPartitionState.nameOf(record.desiredState()));
         }
         mirrorRecordReplayed = true;
-        mirrorName = record.mirrorName();
-        desiredMirrorState = record.desiredState();
+        mirror = record.mirrorName() == null ?
+            Optional.empty() :
+            Optional.of(new TopicImage.Mirror(record.mirrorName(), record.desiredState()));
     }
 
     /**
-     * Returns the mirror name after this delta is applied.
+     * Returns the mirror state after this delta is applied, or empty if the topic is not mirrored.
      */
-    public String mirrorName() {
-        return mirrorRecordReplayed ? mirrorName : image.mirrorName();
-    }
-
-    /**
-     * Returns the desired mirror state after this delta is applied.
-     */
-    public byte desiredMirrorState() {
-        return mirrorRecordReplayed ? desiredMirrorState : image.desiredMirrorState();
+    public Optional<TopicImage.Mirror> mirror() {
+        return mirrorRecordReplayed ? mirror : image.mirror();
     }
 
     /**
@@ -142,12 +135,12 @@ public final class TopicDelta {
      * state to make brokers re-process the mirror partitions (e.g. when recovering failed partitions).
      */
     LocalReplicaChanges.MirrorTopicState mirrorTopicStateChange(TopicImage prevImage) {
-        String prevMirrorName = prevImage == null ? null : prevImage.mirrorName();
-        byte prevDesiredMirrorState = prevImage == null ? MirrorPartitionState.UNKNOWN.value() : prevImage.desiredMirrorState();
-        if (!mirrorRecordReplayed && Objects.equals(prevMirrorName, mirrorName()) && prevDesiredMirrorState == desiredMirrorState()) {
+        Optional<TopicImage.Mirror> prevMirror = prevImage == null ? Optional.empty() : prevImage.mirror();
+        Optional<TopicImage.Mirror> newMirror = mirror();
+        if (!mirrorRecordReplayed && prevMirror.equals(newMirror)) {
             return null;
         }
-        return new LocalReplicaChanges.MirrorTopicState(mirrorName(), desiredMirrorState());
+        return new LocalReplicaChanges.MirrorTopicState(newMirror.orElse(null));
     }
 
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
@@ -199,7 +192,7 @@ public final class TopicDelta {
             }
         }
 
-        return new TopicImage(image.name(), image.id(), mirrorName(), desiredMirrorState(), newPartitions);
+        return new TopicImage(image.name(), image.id(), mirror().orElse(null), newPartitions);
     }
 
     /**
@@ -284,7 +277,7 @@ public final class TopicDelta {
     public String toString() {
         return "TopicDelta(" +
                 "partitionChanges=" + partitionChanges +
-                (mirrorRecordReplayed ? ", mirrorName=" + mirrorName + ", desiredMirrorState=" + desiredMirrorState : "") +
+                (mirrorRecordReplayed ? ", mirror=" + mirror : "") +
                 ')';
     }
 }
