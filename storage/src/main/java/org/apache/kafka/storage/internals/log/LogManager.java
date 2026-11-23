@@ -537,7 +537,12 @@ public class LogManager {
             Optional.empty(),
             numRemainingSegments,
             remoteStorageSystemEnable,
-            LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+            LogOffsetsListener.NO_OP_OFFSETS_LISTENER,
+            // The gauge names only contain the topic partition. A log that is not tracked below (a stray or
+            // to-be-deleted directory) must not register them: nothing would ever remove them, and they would
+            // collide with the gauges of a live replica of the same partition. They are registered only once
+            // the log is tracked.
+            false);
 
         if (logDir.getName().endsWith(UnifiedLog.DELETE_DIR_SUFFIX)) {
             addLogToBeDeleted(log);
@@ -565,6 +570,7 @@ public class LogManager {
                             "for this partition. It is recommended to delete the partition in the log directory that is known to have failed recently.");
                 }
             }
+            log.newMetrics();
         }
 
         return log;
