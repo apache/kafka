@@ -35,7 +35,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
@@ -43,7 +42,6 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -1046,12 +1044,10 @@ public class ShareGroupDLQStateManager {
         }
         List<SimpleRecord> simpleRecords = new ArrayList<>();
         for (MemoryRecords records : recordsList) {
-            for (RecordBatch batch : records.batches()) {
-                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                    while (iterator.hasNext()) {
-                        Record record = iterator.next();
-                        simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
-                    }
+            try (CloseableIterator<Record> iterator = records.records()) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
                 }
             }
         }
