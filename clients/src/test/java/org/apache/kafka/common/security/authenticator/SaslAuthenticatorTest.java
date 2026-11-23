@@ -1968,6 +1968,62 @@ public class SaslAuthenticatorTest {
         }
     }
 
+    /**
+     * Tests that every SaslAuthenticate v3 request carries the client instance ID: both SCRAM rounds of the
+     * authentication and both rounds of the re-authentication.
+     */
+    @Test
+    public void testClientInstanceIdOnEverySaslAuthenticateV3() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        server = startServerWithSaslAuthenticateVersionCap(securityProtocol, "SCRAM-SHA-256", (short) 3);
+        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
+        Uuid clientInstanceId = Uuid.randomUuid();
+
+        try {
+            createClientConnection(securityProtocol, "0", clientInstanceId);
+            checkClientConnection("0");
+            server.verifyAuthenticationMetrics(1, 0);
+            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+            server.verifyReauthenticationMetrics(0, 0);
+            checkClientConnection("0");
+            server.verifyReauthenticationMetrics(1, 0);
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
+
+        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
+        assertEquals(4, saslAuthenticate.size());
+        for (RequestHeader header : saslAuthenticate) {
+            assertEquals(3, header.apiVersion());
+            assertEquals(3, header.headerVersion());
+            assertEquals(clientInstanceId, header.clientInstanceId());
+        }
+    }
+
+    /**
+     * Tests that SaslAuthenticate v2, which uses the v2 request header, carries no client instance ID.
+     */
+    @Test
+    public void testNoClientInstanceIdOnSaslAuthenticateV2() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        server = startServerWithSaslAuthenticateVersionCap(securityProtocol, "PLAIN", (short) 2);
+
+        try {
+            createClientConnection(securityProtocol, "0", Uuid.randomUuid());
+            checkClientConnection("0");
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
+
+        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
+        assertEquals(1, saslAuthenticate.size());
+        assertEquals(2, saslAuthenticate.get(0).apiVersion());
+        assertEquals(2, saslAuthenticate.get(0).headerVersion());
+        assertEquals(Uuid.ZERO_UUID, saslAuthenticate.get(0).clientInstanceId());
+    }
+
     private void verifySslClientAuthForSaslSslListener(boolean useListenerPrefix,
                                                        SslClientAuth configuredClientAuth) throws Exception {
 
@@ -2323,62 +2379,6 @@ public class SaslAuthenticatorTest {
                 TestDigestLoginModule.DigestServerCallbackHandler.class);
     }
 
-    /**
-     * Tests that every SaslAuthenticate v3 request carries the client instance ID: both SCRAM rounds of the
-     * authentication and both rounds of the re-authentication.
-     */
-    @Test
-    public void testClientInstanceIdOnEverySaslAuthenticateV3() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
-        server = createEchoServer(securityProtocol);
-        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        Uuid clientInstanceId = Uuid.randomUuid();
-
-        try {
-            createClientConnection(securityProtocol, "0", clientInstanceId);
-            checkClientConnection("0");
-            server.verifyAuthenticationMetrics(1, 0);
-            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-            server.verifyReauthenticationMetrics(0, 0);
-            checkClientConnection("0");
-            server.verifyReauthenticationMetrics(1, 0);
-        } finally {
-            closeClientConnectionIfNecessary();
-        }
-
-        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
-        assertEquals(4, saslAuthenticate.size());
-        for (RequestHeader header : saslAuthenticate) {
-            assertEquals(3, header.apiVersion());
-            assertEquals(3, header.headerVersion());
-            assertEquals(clientInstanceId, header.clientInstanceId());
-        }
-    }
-
-    /**
-     * Tests that SaslAuthenticate v2, which uses the v2 request header, carries no client instance ID.
-     */
-    @Test
-    public void testNoClientInstanceIdOnSaslAuthenticateV2() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
-        server = startServerWithSaslAuthenticateVersionCap(securityProtocol, "PLAIN", (short) 2);
-
-        try {
-            createClientConnection(securityProtocol, "0", Uuid.randomUuid());
-            checkClientConnection("0");
-        } finally {
-            closeClientConnectionIfNecessary();
-        }
-
-        List<RequestHeader> saslAuthenticate = authenticatorRequestHeaders(ApiKeys.SASL_AUTHENTICATE);
-        assertEquals(1, saslAuthenticate.size());
-        assertEquals(2, saslAuthenticate.get(0).apiVersion());
-        assertEquals(2, saslAuthenticate.get(0).headerVersion());
-        assertEquals(Uuid.ZERO_UUID, saslAuthenticate.get(0).clientInstanceId());
-    }
-
     private List<RequestHeader> authenticatorRequestHeaders(ApiKeys apiKey) {
         List<RequestHeader> headers = new ArrayList<>();
         ByteBuffer buffer = ByteBuffer.wrap(authenticatorWrites.toByteArray());
@@ -2427,7 +2427,7 @@ public class SaslAuthenticatorTest {
         authenticatorWrites.reset();
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism,
-            JaasContext.loadClientContext(Collections.emptyMap()));
+                JaasContext.loadClientContext(Collections.emptyMap()));
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, null, false, saslMechanism, null, null, null, time, new LogContext(), null) {
             @Override
@@ -2440,7 +2440,7 @@ public class SaslAuthenticatorTest {
                                                                        TransportLayer transportLayer,
                                                                        Subject subject) {
                 return super.buildClientAuthenticator(configs, callbackHandler, id, clientInstanceId, serverHost,
-                    servicePrincipal, recordingWrites(transportLayer), subject);
+                        servicePrincipal, recordingWrites(transportLayer), subject);
             }
         };
         clientChannelBuilder.configure(saslClientConfigs);
