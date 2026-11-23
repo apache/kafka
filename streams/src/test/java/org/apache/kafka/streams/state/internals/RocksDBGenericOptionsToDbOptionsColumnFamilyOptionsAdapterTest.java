@@ -68,6 +68,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
@@ -356,6 +357,31 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
                 walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
             }
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenSettingMinWriteBufferNumberToMergeAboveOne() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                 new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+            adapter.setMinWriteBufferNumberToMerge(5);
+
+            assertTrue(appender.getMessages("WARN").contains(
+                "Kafka Streams enables atomic flush in RocksDB. Setting min_write_buffer_number_to_merge to '5' will be overridden to 1 when the store is opened"));
+            assertEquals(5, adapter.minWriteBufferNumberToMerge());
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenSettingMinWriteBufferNumberToMergeToOne() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                 new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+            adapter.setMinWriteBufferNumberToMerge(1);
+
+            assertTrue(appender.getMessages("WARN").isEmpty());
+            assertEquals(1, adapter.minWriteBufferNumberToMerge());
         }
     }
 

@@ -1133,6 +1133,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setMinWriteBufferNumberToMerge(final int minWriteBufferNumberToMerge) {
+        if (minWriteBufferNumberToMerge != 1) {
+            log.warn("Kafka Streams enables atomic flush in RocksDB. Setting min_write_buffer_number_to_merge to '{}' will be overridden to 1 when the store is opened",
+                minWriteBufferNumberToMerge);
+        }
         columnFamilyOptions.setMinWriteBufferNumberToMerge(minWriteBufferNumberToMerge);
         return this;
     }
