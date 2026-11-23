@@ -37,14 +37,14 @@ public class CoordinatorOperationExceptionHelper {
      *                          transform the error depending on the context.
      * @param log               The logger.
      * @return The output built by the handler.
-     * @param <IN> The type of the operation input. It must be a toString'able object.
-     * @param <OUT> The type of the value returned by handler.
+     * @param <Input> The type of the operation input. It must be a toString'able object.
+     * @param <Output> The type of the value returned by handler.
      */
-    public static <IN, OUT> OUT handleOperationException(
+    public static <Input, Output> Output handleOperationException(
         String operationName,
-        IN operationInput,
+        Input operationInput,
         Throwable exception,
-        BiFunction<Errors, String, OUT> handler,
+        BiFunction<Errors, String, Output> handler,
         Logger log
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
