@@ -138,7 +138,9 @@ org.apache.kafka.server.common.MetadataVersionTest:
 - testAssignReplicasToDirsRequestHeaderVersion
 - testControllerRegistrationRequestHeaderVersion
 - testDirectoryAssignmentSupported
+- testEnvelopeRequestHeaderVersion
 - testFeatureLevels
+- testFetchRequestVersion
 - testFromShortVersionString
 - testFromVersionString
 - testFromVersionStringUnstableDisabled
@@ -150,6 +152,7 @@ org.apache.kafka.server.common.MetadataVersionTest:
 - testPartitionChangeRecordVersion
 - testPartitionRecordVersion
 - testPrevious
+- testProduceRequestHeaderVersion
 - testProductionMetadataDontUseUnstableApiVersion
 - testRegisterBrokerRecordVersion
 - testShortVersion

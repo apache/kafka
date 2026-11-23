@@ -314,6 +314,7 @@ org.apache.kafka.server.ForwardingManagerTest:
 - testForwardingManagerMetricsOnTimeout
 - testForwardingTimeoutAfterRetry
 - testForwardingTimeoutWaitingForControllerDiscovery
+- testRequestVersionFollowsRequestHeaderVersionChange
 - testResponseCorrelationIdMismatch
 - testUnsupportedVersionFromNetworkClient
 - testUnsupportedVersions
@@ -357,6 +358,7 @@ org.apache.kafka.server.KRaftTopicCreatorTest:
 - testEnvelopeResponseSuccessfulParsing
 - testEnvelopeResponseWithEnvelopeError
 - testEnvelopeResponseWithTopicErrors
+- testRequestVersionFollowsRequestHeaderVersionChange
 - testTimeoutException
 - testUnexpectedResponseType
 - testVersionMismatchException
@@ -676,6 +678,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - testUncompressedBatchStopsMidBatchOnceBudgetReached
 - testWantedBatchAfterOutOfOrderBatchIsStillCollected
 org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
+- testCoalesceProduceRequestsBuildsTopicIdVersionForRequestHeaderVersion
 - testCoalesceProduceRequestsDefersHandlersThatExceedPartitionBudget
 - testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate
 - testCoalesceProduceRequestsMergesPartitionsForSameDlqTopic
@@ -724,7 +727,10 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqProduceFatalErrorFailsFuture
 - testDlqProduceNotLeaderOrFollowerExhaustsAndRecordsFailure
 - testDlqProducePartialFailuresThenSucceeds
+- testDlqProduceRequestVersionFollowsRequestHeaderVersion
+- testDlqProduceRequestVersionFollowsRequestHeaderVersionChange
 - testDlqProduceRetriesExhaustedFailsWithNetworkException
+- testDlqProduceUsesLatestVersionSupportedByLeader
 - testDlqRecordCopyFirstProduceRoundGoesOutBeforeLaterRoundResolves
 - testDlqRecordCopyRetryOfSameRoundDoesNotRefetchButNewRoundDoes
 - testDlqRecordCopyRoundBudgetResetAcrossMultipleProduceRounds

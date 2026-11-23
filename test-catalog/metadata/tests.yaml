@@ -740,6 +740,7 @@ org.apache.kafka.metadata.DelegationTokenDataTest:
 - testToString
 - testValues
 org.apache.kafka.metadata.KafkaConfigSchemaTest:
+- testEveryConfigSourceHasWireRepresentation
 - testGetConfigValueDefault
 - testIsSensitive
 - testIsSplittable

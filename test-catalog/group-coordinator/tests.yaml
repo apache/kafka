@@ -1898,6 +1898,8 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupMemberTest:
 - testAsStreamsGroupDescribeMember
 - testAsStreamsGroupDescribeMemberSortsTaskOffsetsByTaskId
 - testAsStreamsGroupDescribeMemberWithEmptyOrNullTaskOffsets
+- testAsStreamsGroupDescribeMemberWithOnlyTasksPendingRevocation
+- testAsStreamsGroupDescribeMemberWithSameSubtopologyPendingRevocation
 - testAsStreamsGroupDescribeWithTargetAssignmentNull
 - testBuilderMaybeUpdateMember
 - testBuilderNewMember

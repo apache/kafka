@@ -4889,6 +4889,9 @@ org.apache.kafka.common.requests.DescribeAclsResponseTest:
 - shouldRoundTripV1
 - shouldThrowIfUnknown
 - testAclBindings
+org.apache.kafka.common.requests.DescribeConfigsResponseTest:
+- testConfigSourceIdsMatchDeclarationOrder
+- testUnknownConfigSourceIdMapsToUnknown
 org.apache.kafka.common.requests.DescribeGroupsRequestTest:
 - testGetErrorDescribedGroupList
 org.apache.kafka.common.requests.EndTxnRequestTest:
