@@ -1794,6 +1794,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
         // produce some messages
         ClientState prodState = new ClientState();
+        AtomicBoolean stopProducing = new AtomicBoolean(false);
         final Set<String> produced = new HashSet<>();
         service.execute(() -> {
                 int i = 0;
@@ -1801,7 +1802,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
                 ))) {
-                    while (!prodState.done().get()) {
+                    while (!stopProducing.get()) {
                         String key = "key-" + (i++);
                         ProducerRecord<String, String> record = new ProducerRecord<>(
                             tpMulti.topic(),
@@ -1820,6 +1821,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                             // ignore
                         }
                     }
+                } finally {
+                    prodState.done().set(true);
                 }
             }
         );
@@ -1838,7 +1841,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                         ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
                         consState.count().addAndGet(records.count());
                         records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
-                        if (prodState.done().get() && records.count() == 0) {
+                        if (prodState.done().get() && consumed.size() >= prodState.count().get()) {
                             consState.done().set(true);
                         }
                     }
@@ -1885,15 +1888,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             }, 5L, TimeUnit.SECONDS
         );
 
-        // top the producer after some time (but after coordinator shutdown)
-        // The consumer stops at its first empty poll after the producer stops, so the producer must not
-        // stop before the consumer receives its assignment. In the worst case this can take more than
-        // 10 seconds:
-        //   Heartbeat 1 at +0 seconds sends the subscription and triggers an assignor run.
-        //     multipart is not yet ready, so the assignor returns an empty assignment.
-        //   Heartbeat 2 at +5 seconds triggers another assignor run now that multipart is assignable.
-        //   Heartbeat 3 at +10 seconds receives the assignment with multipart.
-        service.schedule(() -> prodState.done().set(true), 20L, TimeUnit.SECONDS);
+        // stop the producer after some time (but after coordinator shutdown)
+        service.schedule(() -> stopProducing.set(true), 10L, TimeUnit.SECONDS);
 
         // wait for both producer and consumer to finish
         TestUtils.waitForCondition(
