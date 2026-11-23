@@ -1807,6 +1807,8 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
  
+ > **Note:** Two topic configs are derived from the state store and are not overridden by the `topic.` prefix: `retention.ms` for window and session store changelog topics (the store's retention plus `windowstore.changelog.additional.retention.ms`), and `min.compaction.lag.ms` for versioned store changelog topics (the store's history retention plus 24 hours). To set them, pass the config for the store's changelog with `withLoggingEnabled(Map)`. A per-store value is used as is.
+ 
  #### group.instance.id {#group-instance-id}
 
  `group.instance.id` is a consumer configuration that enables static membership. For Kafka Streams, it is configured at the Kafka Streams client level, and the configured value must be unique to each `KafkaStreams` instance. Internally, Kafka Streams appends the 1-based stream thread index to the configured `group.instance.id` to ensure that each stream thread's main consumer uses a unique value. For example, a configured value of `ks-client-A` results in `ks-client-A-1`, `ks-client-A-2`, and so on. Static membership is supported with both `group.protocol=classic` and `group.protocol=streams`. With `group.protocol=streams`, static membership requires clients and brokers running Kafka 4.4 or newer; older brokers reject `group.instance.id` on the streams group heartbeat and the Kafka Streams client shuts down with a fatal error.

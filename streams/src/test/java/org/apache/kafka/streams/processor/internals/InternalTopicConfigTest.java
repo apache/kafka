@@ -18,11 +18,14 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -137,5 +140,74 @@ public class InternalTopicConfigTest {
         final Map<String, String> properties = topicConfig.properties(Collections.emptyMap(), 0);
         assertEquals("1000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("LogAppendTime", properties.get(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
+    }
+
+    @Test
+    public void shouldIgnoreGlobalRetentionMsAndWarnForWindowedChangelog() {
+        final WindowedChangelogTopicConfig topicConfig = new WindowedChangelogTopicConfig("name", Collections.emptyMap(), 10);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(WindowedChangelogTopicConfig.class)) {
+            final Map<String, String> properties =
+                topicConfig.properties(Map.of(TopicConfig.RETENTION_MS_CONFIG, "1000", TopicConfig.SEGMENT_BYTES_CONFIG, "2000"), 20);
+
+            assertEquals("30", properties.get(TopicConfig.RETENTION_MS_CONFIG));
+            // other global configs are still applied
+            assertEquals("2000", properties.get(TopicConfig.SEGMENT_BYTES_CONFIG));
+            assertEquals(
+                List.of("Topic config 'topic.retention.ms' does not apply to changelog topic name. User setting (1000) will be ignored " +
+                    "and the value derived from the store retention and windowstore.changelog.additional.retention.ms (30) will be used. " +
+                    "To set retention.ms for this topic, use withLoggingEnabled(Map)."),
+                appender.getMessages(Level.WARN));
+        }
+    }
+
+    @Test
+    public void shouldUsePerTopicRetentionMsWithoutWarningForWindowedChangelog() {
+        final WindowedChangelogTopicConfig topicConfig =
+            new WindowedChangelogTopicConfig("name", Map.of(TopicConfig.RETENTION_MS_CONFIG, "500"), 10);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(WindowedChangelogTopicConfig.class)) {
+            final Map<String, String> properties =
+                topicConfig.properties(Map.of(TopicConfig.RETENTION_MS_CONFIG, "1000"), 20);
+
+            // the per-topic value is used as is, without the additional retention
+            assertEquals("500", properties.get(TopicConfig.RETENTION_MS_CONFIG));
+            assertEquals(List.of(), appender.getMessages(Level.WARN));
+        }
+    }
+
+    @Test
+    public void shouldIgnoreGlobalMinCompactionLagMsAndWarnForVersionedChangelog() {
+        final VersionedChangelogTopicConfig topicConfig = new VersionedChangelogTopicConfig("name", Collections.emptyMap(), 12);
+        final long expectedCompactionLagMs = 12 + 24 * 60 * 60 * 1000L;
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(VersionedChangelogTopicConfig.class)) {
+            final Map<String, String> properties =
+                topicConfig.properties(Map.of(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "1000", TopicConfig.SEGMENT_BYTES_CONFIG, "2000"), 20);
+
+            assertEquals(Long.toString(expectedCompactionLagMs), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+            // other global configs are still applied
+            assertEquals("2000", properties.get(TopicConfig.SEGMENT_BYTES_CONFIG));
+            assertEquals(
+                List.of("Topic config 'topic.min.compaction.lag.ms' does not apply to changelog topic name. User setting (1000) will be ignored " +
+                    "and the value derived from the store history retention (" + expectedCompactionLagMs + ") will be used. " +
+                    "To set min.compaction.lag.ms for this topic, use withLoggingEnabled(Map)."),
+                appender.getMessages(Level.WARN));
+        }
+    }
+
+    @Test
+    public void shouldUsePerTopicMinCompactionLagMsWithoutWarningForVersionedChangelog() {
+        final VersionedChangelogTopicConfig topicConfig =
+            new VersionedChangelogTopicConfig("name", Map.of(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "500"), 12);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(VersionedChangelogTopicConfig.class)) {
+            final Map<String, String> properties =
+                topicConfig.properties(Map.of(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, "1000"), 20);
+
+            // the per-topic value is used as is, without the additional compaction lag
+            assertEquals("500", properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+            assertEquals(List.of(), appender.getMessages(Level.WARN));
+        }
     }
 }

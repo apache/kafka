@@ -66,7 +66,9 @@ The following settings apply to the default configuration for internal topics:
   * For internal repartition topics, the compaction policy is `delete` and the retention time is `-1` (infinite).
   * For internal changelog topics for key-value stores, the compaction policy is `compact`.
   * For internal changelog topics for windowed key-value stores, the compaction policy is `delete,compact`. The retention time is set to 24 hours plus your setting for the windowed store.
-  * For internal changelog topics for versioned state stores, the cleanup policy is `compact`, and `min.compaction.lag.ms` is set to 24 hours plus the store's historyRetentionMs` value.
+  * For internal changelog topics for versioned state stores, the cleanup policy is `compact`, and `min.compaction.lag.ms` is set to 24 hours plus the store's `historyRetentionMs` value.
+
+The `retention.ms` of window and session store changelog topics and the `min.compaction.lag.ms` of versioned store changelog topics are derived from the store, so the global `topic.` prefix configs do not override them. To change them, set the config for the store's changelog with `withLoggingEnabled(Map)`.
 
 
 
