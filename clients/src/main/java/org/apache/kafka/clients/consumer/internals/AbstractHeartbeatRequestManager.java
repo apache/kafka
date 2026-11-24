@@ -153,6 +153,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      *     to Long.MAX_VALUE, as there's no need to send a heartbeat.</li>
      *     <li>If the member cannot send a heartbeat due to either exponential backoff, it will
      *     return the remaining time left on the backoff timer.</li>
+     *     <li>If a heartbeat request is in flight and the heartbeat timer has expired, it will
+     *     return the retry backoff.</li>
      *     <li>If the member's heartbeat timer has not expired, It will return the remaining time
      *     left on the heartbeat timer.</li>
      *     <li>If the member can send a heartbeat, the timer is set to the current heartbeat interval.</li>
