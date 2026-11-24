@@ -26,6 +26,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
 import scala.jdk.CollectionConverters._
@@ -49,6 +50,41 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
   @ClusterTest
   def testTxnOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(false)
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, value = "1000")
+    )
+  )
+  def testTxnOffsetCommitExceedingMaxMessageSize(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val transactionalId = "txn"
+    val groupId = "group"
+
+    // Creates the __consumer_offsets and __transaction_state topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+    createTransactionStateTopic()
+
+    createTopic(topic, 1)
+
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion()) {
+      // Verify TXN_OFFSET_COMMIT request failed with metadata larger than message.max.bytes.
+      verifyTxnCommitAndFetch(
+        topic = topic,
+        partition = partition,
+        transactionalId = transactionalId,
+        groupId = groupId,
+        memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+        generationId = JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        offset = 100 + version,
+        metadata = "m" * 2000,
+        version = version.toShort,
+        expectedTxnCommitError = Errors.INVALID_COMMIT_OFFSET_SIZE
+      )
+    }
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
@@ -153,6 +189,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     memberId: String,
     generationId: Int,
     offset: Long,
+    metadata: String = "",
     version: Short,
     expectedTxnCommitError: Errors
   ): Unit = {
@@ -190,6 +227,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       topic = topic,
       partition = partition,
       offset = offset,
+      metadata = metadata,
       expectedError = expectedTxnCommitError,
       version = version
     )
