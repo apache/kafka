@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -47,7 +46,6 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -471,7 +469,6 @@ public abstract class TopologyTestDriverTest {
         assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
-        assertFalse(stateDirectory().exists());
     }
 
     @Test
@@ -490,38 +487,10 @@ public abstract class TopologyTestDriverTest {
         assertThrows(IllegalStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
-        assertFalse(stateDirectory().exists());
     }
 
     @Test
-    public void shouldWipeStateDirectoryWhenFirstStateStoreIsCorrupted() {
-        final Topology topology = new Topology();
-        topology.addSource("source", SOURCE_TOPIC_1);
-        topology.addProcessor("corruptedProcessor", new MockProcessorSupplier(), "source");
-        topology.addStateStore(
-            Stores.keyValueStoreBuilder(
-                // fails as a RocksDB store that is found corrupted when it is opened, before any store is registered
-                storeSupplier(() -> new InMemoryKeyValueStore("corruptedStore") {
-                    @Override
-                    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-                        throw new TaskCorruptedException(Set.of(stateStoreContext.taskId()));
-                    }
-                }),
-                Serdes.String(),
-                Serdes.Long()),
-            "corruptedProcessor");
-        topology.addProcessor("persistentProcessor", new MockProcessorSupplier(), "source");
-        topology.addStateStore(
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("persistentStore"), Serdes.String(), Serdes.Long()),
-            "persistentProcessor");
-
-        assertThrows(TaskCorruptedException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
-
-        assertFalse(stateDirectory().exists());
-    }
-
-    @Test
-    public void shouldWipeStateDirectoryWhenGlobalStateStoreFailsToClose() {
+    public void shouldSuppressFailureToCloseGlobalStateStoreWhenProcessorFailsToInitialize() {
         final Topology topology = new Topology();
         topology.addGlobalStore(
             Stores.keyValueStoreBuilder(
@@ -557,13 +526,6 @@ public abstract class TopologyTestDriverTest {
         assertEquals(1, exception.getSuppressed().length);
         assertInstanceOf(ProcessorStateException.class, exception.getSuppressed()[0]);
         assertFalse(store.isOpen());
-        assertFalse(stateDirectory().exists());
-    }
-
-    private File stateDirectory() {
-        return new File(
-            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
-            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
     }
 
     private static KeyValueBytesStoreSupplier storeSupplier(final Supplier<KeyValueStore<Bytes, byte[]>> store) {

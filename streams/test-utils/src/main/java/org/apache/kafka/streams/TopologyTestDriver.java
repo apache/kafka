@@ -394,8 +394,6 @@ public class TopologyTestDriver implements Closeable {
         if (globalStateManager != null) {
             closeAndSuppress(globalStateManager::close, cause);
         }
-        // as close() does, so that no state is left behind, whatever made the construction fail
-        closeAndSuppress(stateDirectory::clean, cause);
     }
 
     // a step that fails does not keep the next ones from running
