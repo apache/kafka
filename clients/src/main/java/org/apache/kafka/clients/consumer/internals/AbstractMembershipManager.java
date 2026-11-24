@@ -474,6 +474,22 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse, S ex
                     "won't attempt to rejoin.", memberId, memberEpoch);
             return;
         }
+        if (state == MemberState.STALE) {
+            log.debug("Member {} with epoch {} got fenced while already STALE after its poll " +
+                    "timer expired, so the fence error for its in-flight heartbeat is ignored " +
+                    "and the member will rejoin when the poll timer resets.", memberId, memberEpoch);
+            return;
+        }
+        if (state == MemberState.FATAL) {
+            log.debug("Member {} with epoch {} got fenced while in the terminal FATAL state, so " +
+                    "the fence error for its in-flight heartbeat is ignored.", memberId, memberEpoch);
+            return;
+        }
+        if (state == MemberState.FENCED) {
+            log.debug("Member {} with epoch {} got fenced while already FENCED, so the duplicate " +
+                    "fence error is ignored to avoid scheduling onPartitionsLost twice.", memberId, memberEpoch);
+            return;
+        }
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
