@@ -2221,6 +2221,37 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testUnattachedObserverDoesNotBusyPollAfterElectionTimeout(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int epoch = 0;
+        Set<Integer> voters = Set.of(localId + 1, localId + 2);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .toList();
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.pollUntilRequest();
+        context.assertSentFetchRequest();
+
+        // No voter responds, so the initial election timeout expires. Observers never act on it
+        // and keep retrying the bootstrap servers.
+        context.time.sleep(2L * context.electionTimeoutMs());
+        context.pollUntilRequest();
+        context.assertSentFetchRequest();
+        context.assertUnknownLeaderAndNoVotedCandidate(epoch);
+
+        // With a fetch in flight, the next poll waits for it instead of returning immediately.
+        context.poll();
+        assertEquals(OptionalLong.of(context.requestTimeoutMs()), context.messageQueue.lastPollTimeoutMs());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testObserverFollowerSendFetchToBestNode(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -3177,6 +3208,43 @@ class KafkaRaftClientTest {
         );
         context.poll();
 
+        context.assertElectedLeader(epoch, leaderId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testObserverDoesNotBusyPollAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherNodeId = localId + 2;
+        int epoch = 5;
+        Set<Integer> voters = Set.of(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .toList();
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.discoverLeaderAsObserver(leaderId, epoch, context.client.highWatermark());
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest.destination().id());
+
+        // No voter responds, so the fetch timeout expires. Observers stay followers of the
+        // last known leader and keep retrying the bootstrap servers.
+        context.time.sleep(context.fetchTimeoutMs);
+        context.pollUntilRequest();
+        context.assertSentFetchRequest();
+        context.assertElectedLeader(epoch, leaderId);
+
+        // With a fetch in flight, the next poll waits for it instead of returning immediately.
+        context.poll();
+        assertEquals(OptionalLong.of(context.requestTimeoutMs()), context.messageQueue.lastPollTimeoutMs());
         context.assertElectedLeader(epoch, leaderId);
     }
 
