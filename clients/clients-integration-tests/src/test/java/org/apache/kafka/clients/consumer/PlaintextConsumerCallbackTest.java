@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -30,19 +31,23 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -455,6 +460,89 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
+    public void testClassicConsumerAwarePositionOnPartitionsLost() throws InterruptedException {
+        testConsumerAwarePositionOnPartitionsLost(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwarePositionOnPartitionsLost() throws InterruptedException {
+        testConsumerAwarePositionOnPartitionsLost(CONSUMER);
+    }
+
+    private void testConsumerAwarePositionOnPartitionsLost(GroupProtocol groupProtocol) throws InterruptedException {
+        triggerOnPartitionsLostConsumerAware(tp, groupProtocol, "group-" + groupProtocol, true, null, () -> true,
+            (rebalanceConsumer, partitions) ->
+                assertEquals(0L, rebalanceConsumer.position(tp, Duration.ofSeconds(5))));
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareCommitOnPartitionsLost() throws InterruptedException {
+        triggerOnPartitionsLostConsumerAware(tp, CLASSIC, "group-classic", true, null, () -> true, (rebalanceConsumer, partitions) -> {
+            assertThrows(CommitFailedException.class, rebalanceConsumer::commitSync);
+            assertThrows(CommitFailedException.class,
+                () -> rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
+        });
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareCommitOnPartitionsLostWithOtherMembers() throws InterruptedException {
+        var groupId = "group-consumer";
+        try (Consumer<byte[], byte[]> otherMember = cluster.consumer(Map.of(
+                GROUP_PROTOCOL_CONFIG, CONSUMER.name().toLowerCase(Locale.ROOT),
+                GROUP_ID_CONFIG, groupId,
+                ENABLE_AUTO_COMMIT_CONFIG, "false"))) {
+            triggerOnPartitionsLostConsumerAware(tp, CONSUMER, groupId, true, otherMember, () -> true, (rebalanceConsumer, partitions) -> {
+                assertThrows(CommitFailedException.class, rebalanceConsumer::commitSync);
+                assertThrows(CommitFailedException.class,
+                    () -> rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
+            });
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareCommitAsyncOnPartitionsLost() throws InterruptedException {
+        testConsumerAwareCommitAsyncOnPartitionsLost(CLASSIC, "group-classic", null);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareCommitAsyncOnPartitionsLostWithOtherMembers() throws InterruptedException {
+        var groupId = "group-consumer";
+        try (Consumer<byte[], byte[]> otherMember = cluster.consumer(Map.of(
+                GROUP_PROTOCOL_CONFIG, CONSUMER.name().toLowerCase(Locale.ROOT),
+                GROUP_ID_CONFIG, groupId,
+                ENABLE_AUTO_COMMIT_CONFIG, "false"))) {
+            testConsumerAwareCommitAsyncOnPartitionsLost(CONSUMER, groupId, otherMember);
+        }
+    }
+
+    private void testConsumerAwareCommitAsyncOnPartitionsLost(
+            GroupProtocol groupProtocol,
+            String groupId,
+            Consumer<byte[], byte[]> otherMember
+    ) throws InterruptedException {
+        var commitErrors = new CopyOnWriteArrayList<Exception>();
+        triggerOnPartitionsLostConsumerAware(tp, groupProtocol, groupId, true, otherMember, () -> commitErrors.size() == 2,
+            (rebalanceConsumer, partitions) -> {
+                rebalanceConsumer.commitAsync((offsets, exception) -> commitErrors.add(exception));
+                rebalanceConsumer.commitAsync(Map.of(tp, new OffsetAndMetadata(3L)),
+                    (offsets, exception) -> commitErrors.add(exception));
+            });
+        assertEquals(2, commitErrors.size());
+        commitErrors.forEach(exception -> assertInstanceOf(CommitFailedException.class, exception));
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareCommitOnPartitionsLostWithoutOtherMembers() throws Exception {
+        var groupId = "group-consumer";
+        triggerOnPartitionsLostConsumerAware(tp, CONSUMER, groupId, true, null, () -> true, (rebalanceConsumer, partitions) ->
+            rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
+        try (Admin admin = cluster.admin()) {
+            var committed = admin.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata().get();
+            assertEquals(3L, committed.get(tp).offset());
+        }
+    }
+
+    @ClusterTest
     public void testClassicRebalanceConsumerExpiredAfterAssignedCallback() throws InterruptedException {
         testRebalanceConsumerExpiredAfterAssignedCallback(CLASSIC);
     }
@@ -706,10 +794,23 @@ public class PlaintextConsumerCallbackTest {
             GroupProtocol protocol,
             BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
     ) throws InterruptedException {
+        triggerOnPartitionsLostConsumerAware(tp, protocol, "group-" + protocol, false, null, () -> true, execute);
+    }
+
+    private void triggerOnPartitionsLostConsumerAware(
+            TopicPartition tp,
+            GroupProtocol protocol,
+            String groupId,
+            boolean initializePosition,
+            Consumer<byte[], byte[]> otherMember,
+            Supplier<Boolean> afterLostCondition,
+            BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
+    ) throws InterruptedException {
         var partitionsAssigned = new AtomicBoolean(false);
         var partitionsLost = new AtomicBoolean(false);
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
                 GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
+                GROUP_ID_CONFIG, groupId,
                 ENABLE_AUTO_COMMIT_CONFIG, "false",
                 ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "3000"))) {
             consumer.setRebalanceListener(new RebalanceListener() {
@@ -738,10 +839,21 @@ public class PlaintextConsumerCallbackTest {
                     partitionsAssigned::get,
                     "Timed out before expected rebalance completed"
             );
+            if (initializePosition) {
+                consumer.position(tp);
+            }
+            if (otherMember != null) {
+                otherMember.subscribe(List.of(topic));
+                ClientsTestUtils.pollUntilTrue(
+                        otherMember,
+                        () -> otherMember.groupMetadata().generationId() > 0,
+                        "Timed out before the other member joined the group"
+                );
+            }
             Thread.sleep(8000);
             ClientsTestUtils.pollUntilTrue(
                     consumer,
-                    partitionsLost::get,
+                    () -> partitionsLost.get() && afterLostCondition.get(),
                     "Timed out before onPartitionsLost was invoked"
             );
         }
