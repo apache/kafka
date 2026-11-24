@@ -21090,6 +21090,76 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupJoiningMemberGetsWarmupForMovedStatefulTask() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        String changelogTopicName = "changelog";
+        // Only a task with a changelog can be warmed up, so the subtopology has to be stateful for the refiner to
+        // hold anything back.
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId(subtopology1)
+                .setSourceTopics(List.of(fooTopicName))
+                .setStateChangelogTopics(List.of(new TopicInfo().setName(changelogTopicName)))
+        ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), fooTopicName, 3)
+            .addTopic(Uuid.randomUuid(), changelogTopicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        // memberA runs all three tasks. The target assignment computed when memberB joins moves 0_2 to memberB.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        assignor.prepareGroupAssignment(Map.of(
+            memberA, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
+            memberB, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 2))
+        ));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withStreamsGroupAssignmentRefiner(new AssignmentRefinerImpl())
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberA)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setProcessId(DEFAULT_PROCESS_ID)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTargetAssignment(memberA, mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage),
+                    changelogTopicName, computeTopicHash(changelogTopicName, metadataImage)
+                )))
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .build();
+        // A warm-up task is only planted once the coordinator has heard from every member since it loaded the group.
+        context.streamsGroupHeartbeat(heartbeatOfMemberA(groupId, memberA, 10));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeatOfIdleMemberB(groupId, memberB, 0).setTopology(topology));
+
+        // The refiner has to see memberB, which the new target assignment is keyed by. memberB is then handed a
+        // warm-up task for 0_2, which keeps running on memberA until the warm-up has caught up.
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(mkResponseTasks(subtopology1, 2), result.response().data().warmupTasks());
+        assertEquals(List.of(), result.response().data().activeTasks());
+        assertEquals(
+            Map.of(
+                memberA, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)),
+                memberB, mkTasksTuple(TaskRole.WARMUP, TaskAssignmentTestUtil.mkTasks(subtopology1, 2))
+            ),
+            group.refinedAssignment(group.assignmentEpoch())
+        );
+    }
+
+    @Test
     public void testStreamsGroupGrantsATaskAtOnceToAVersion0MemberInsteadOfWarmingItUp() {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();

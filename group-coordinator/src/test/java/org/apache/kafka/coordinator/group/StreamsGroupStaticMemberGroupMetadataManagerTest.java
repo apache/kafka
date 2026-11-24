@@ -92,6 +92,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1743,6 +1744,103 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         ));
 
         assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+    }
+
+    @Test
+    public void testStaticMemberRejoinFromNewProcessKeepsStatefulTaskWithWarmupsEnabled() {
+        String groupId = "fooup";
+        String oldMemberId = Uuid.randomUuid().toString();
+        String rejoinMemberId = Uuid.randomUuid().toString();
+        String instanceId = Uuid.randomUuid().toString();
+        TasksTuple targetAssignment = mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0));
+
+        // The new process ID bumps the group epoch, so the target assignment is computed and refined in the
+        // rejoining heartbeat.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        assignor.prepareGroupAssignment(Map.of(rejoinMemberId, targetAssignment));
+        GroupMetadataManagerTestContext context =
+            streamsGroupWithLeftStaticMemberRunningStatefulTask(groupId, oldMemberId, instanceId, assignor);
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, "new-process-id")
+        );
+
+        // The refiner has to see the replacing member, which the target assignment is keyed by. Otherwise it keeps
+        // the task on the replaced member, which no client runs, and the replacing member gets nothing.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(mkResponseTasks("subtopology1", 0), result.response().data().activeTasks());
+        assertEquals(Map.of(rejoinMemberId, targetAssignment), streamsGroup.refinedAssignment(streamsGroup.assignmentEpoch()));
+    }
+
+    @Test
+    public void testStaticMemberRejoinWithoutCachedIntermediateAssignmentKeepsStatefulTask() {
+        String groupId = "fooup";
+        String oldMemberId = Uuid.randomUuid().toString();
+        String rejoinMemberId = Uuid.randomUuid().toString();
+        String instanceId = Uuid.randomUuid().toString();
+        TasksTuple targetAssignment = mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0));
+
+        GroupMetadataManagerTestContext context = streamsGroupWithLeftStaticMemberRunningStatefulTask(
+            groupId, oldMemberId, instanceId, new MockTaskAssignor("sticky"));
+
+        // No intermediate assignment is cached for the epoch, as after a coordinator failover, so the rejoining
+        // heartbeat refines the relabelled target assignment of the unchanged epoch.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        assertNull(streamsGroup.refinedAssignment(DEFAULT_GROUP_EPOCH));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, DEFAULT_PROCESS_ID)
+        );
+
+        assertEquals(mkResponseTasks("subtopology1", 0), result.response().data().activeTasks());
+        assertEquals(Map.of(rejoinMemberId, targetAssignment), streamsGroup.refinedAssignment(DEFAULT_GROUP_EPOCH));
+    }
+
+    /**
+     * A streams group at the default epoch with one stateful task, whose static member has left the group with
+     * epoch -2. Warm-up tasks are enabled, as by default, and the real refiner is used.
+     */
+    private static GroupMetadataManagerTestContext streamsGroupWithLeftStaticMemberRunningStatefulTask(
+        String groupId,
+        String memberId,
+        String instanceId,
+        MockTaskAssignor assignor
+    ) {
+        // Only a task with a changelog can be warmed up, so the subtopology has to be stateful for the refiner to
+        // hold anything back.
+        StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology()
+            .setSubtopologies(List.of(
+                new StreamsGroupHeartbeatRequestData.Subtopology()
+                    .setSubtopologyId("subtopology1")
+                    .setSourceTopics(List.of("foo"))
+                    .setStateChangelogTopics(List.of(new StreamsGroupHeartbeatRequestData.TopicInfo().setName("changelog")))
+            ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .addTopic(Uuid.randomUuid(), "changelog", 1)
+            .buildCoordinatorMetadataImage();
+
+        return new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withStreamsGroupAssignmentRefiner(new AssignmentRefinerImpl())
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, DEFAULT_GROUP_EPOCH)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId, instanceId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(DEFAULT_GROUP_EPOCH)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 0, TaskAssignmentTestUtil.mkTasks("subtopology1", 0)))
+                    .build())
+                .withTargetAssignment(memberId, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology1", 0)))
+                .withTargetAssignmentEpoch(DEFAULT_GROUP_EPOCH)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    "foo", computeTopicHash("foo", metadataImage),
+                    "changelog", computeTopicHash("changelog", metadataImage)
+                )))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
     }
 
     @Test
