@@ -223,6 +223,77 @@ public class ResetStreamsGroupOffsetTest {
     }
 
     @ClusterTest
+    public void testResetAllInputTopicsWithNewPartition(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        String otherInput = generateRandomTopic();
+        List<String> inputTopics = List.of(topic, otherInput);
+        produceConsumeShutdown(cluster, appId, topic, otherInput, RECORD_TOTAL * 4);
+
+        String[] args = {
+            "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+            "--all-input-topics"
+        };
+        try (Admin admin = cluster.admin()) {
+            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(3))).all().get();
+            cluster.waitTopicCreation(topic, 3);
+            Map<TopicPartition, Long> originalOffsets = Map.of(
+                new TopicPartition(topic, 0), (long) RECORD_TOTAL,
+                new TopicPartition(topic, 1), (long) RECORD_TOTAL,
+                new TopicPartition(otherInput, 0), (long) RECORD_TOTAL,
+                new TopicPartition(otherInput, 1), (long) RECORD_TOTAL
+            );
+            assertEquals(originalOffsets, committedOffsets(admin, inputTopics, appId));
+
+            Map<TopicPartition, Long> resetOffsets = Map.of(
+                new TopicPartition(topic, 0), 0L, new TopicPartition(topic, 1), 0L, new TopicPartition(topic, 2), 0L,
+                new TopicPartition(otherInput, 0), 0L, new TopicPartition(otherInput, 1), 0L
+            );
+            Map<TopicPartition, Long> shiftedOffsets = originalOffsets.keySet().stream()
+                .collect(Collectors.toMap(partition -> partition, partition -> RECORD_TOTAL - 1L));
+            resetOffsetsAndAssert(admin, addTo(args, "--shift-by", "-1", "--dry-run"),
+                appId, inputTopics, shiftedOffsets, originalOffsets);
+
+            resetOffsetsAndAssert(admin, addTo(args, "--to-earliest", "--dry-run"),
+                appId, inputTopics, resetOffsets, originalOffsets);
+            resetOffsetsAndAssert(admin, addTo(args, "--to-earliest", "--execute"),
+                appId, inputTopics, resetOffsets, resetOffsets);
+        }
+    }
+
+    @ClusterTest
+    public void testResetAllInputTopicsWithDeletedSourceTopic(ClusterInstance cluster) throws Exception {
+        String appId = generateRandomAppId();
+        String topic = generateRandomTopic();
+        String deletedTopic = generateRandomTopic();
+        produceConsumeShutdown(cluster, appId, topic, deletedTopic, RECORD_TOTAL * 4);
+
+        String[] args = {
+            "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--group", appId,
+            "--all-input-topics", "--dry-run"
+        };
+        TopicPartition firstPartition = new TopicPartition(topic, 0);
+        TopicPartition secondPartition = new TopicPartition(topic, 1);
+        File file = TestUtils.tempFile("reset-existing-source", ".csv");
+        writeContentToFile(file, topic + ",0,5\n");
+
+        try (Admin admin = cluster.admin()) {
+            admin.deleteTopics(List.of(deletedTopic)).all().get();
+            cluster.waitTopicDeletion(deletedTopic);
+            TestUtils.waitForCondition(() -> committedOffsets(admin, List.of(deletedTopic), appId).isEmpty(),
+                "Offsets for the deleted topic should be removed");
+
+            Map<TopicPartition, Long> originalOffsets = Map.of(
+                firstPartition, (long) RECORD_TOTAL, secondPartition, (long) RECORD_TOTAL
+            );
+            resetOffsetsAndAssert(admin, addTo(args, "--from-file", file.getCanonicalPath()), appId, List.of(topic),
+                Map.of(firstPartition, 5L), originalOffsets);
+            resetOffsetsAndAssert(admin, addTo(args, "--shift-by", "-1"), appId, List.of(topic),
+                Map.of(firstPartition, RECORD_TOTAL - 1L, secondPartition, RECORD_TOTAL - 1L), originalOffsets);
+        }
+    }
+
+    @ClusterTest
     public void testResetInputTopicBeforeGroupStarts(ClusterInstance cluster) throws Exception {
         String appId = generateRandomAppId();
         String topic = generateRandomTopic();

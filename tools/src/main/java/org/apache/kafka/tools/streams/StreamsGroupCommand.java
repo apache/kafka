@@ -999,7 +999,11 @@ public class StreamsGroupCommand {
             Optional<StreamsGroupDescription> description
         ) throws ExecutionException, InterruptedException {
             if (opts.options.has(opts.allInputTopicsOpt)) {
-                return getInputTopicOffsets(groupId).keySet();
+                if (description.isEmpty() || opts.options.has(opts.resetShiftByOpt) || opts.options.has(opts.resetFromFileOpt)) {
+                    // Preserve the offset lookup for missing groups, shifts, and CSV imports.
+                    return getInputTopicOffsets(groupId).keySet();
+                }
+                return groupOffsetsResetter.parseTopicPartitionsToReset(List.copyOf(inputTopics(description.get())));
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
@@ -1028,7 +1032,7 @@ public class StreamsGroupCommand {
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(
             String groupId,
             Collection<TopicPartition> partitionsToReset,
-            boolean groupExists
+            boolean hasStreamsGroupDescription
         ) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return groupOffsetsResetter.resetToOffset(partitionsToReset);
@@ -1037,7 +1041,7 @@ public class StreamsGroupCommand {
             } else if (opts.options.has(opts.resetToLatestOpt)) {
                 return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
-                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = groupExists ? getCommittedOffsets(groupId) : Map.of();
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = hasStreamsGroupDescription ? getCommittedOffsets(groupId) : Map.of();
                 return groupOffsetsResetter.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
                 return groupOffsetsResetter.resetToDateTime(partitionsToReset);
@@ -1046,7 +1050,7 @@ public class StreamsGroupCommand {
             } else if (groupOffsetsResetter.resetPlanFromFile().isPresent()) {
                 return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
-                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = groupExists ? getCommittedOffsets(groupId) : Map.of();
+                Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = hasStreamsGroupDescription ? getCommittedOffsets(groupId) : Map.of();
                 return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
