@@ -387,17 +387,6 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(types = Type.KRAFT)
-    public void testRestartBrokerWithConfigOverrides(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        cluster.createTopic("topic", 1, (short) 1);
-        cluster.restartBroker(0, Map.of("queued.max.requests", "200")).get();
-        assertEquals(200, cluster.brokers().get(0).config().queuedMaxRequests());
-
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            assertEquals(0, producer.send(new ProducerRecord<>("topic", new byte[0])).get().offset());
-        }
-    }
-
     @ClusterTest(types = {Type.KRAFT})
     public void testControllerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {

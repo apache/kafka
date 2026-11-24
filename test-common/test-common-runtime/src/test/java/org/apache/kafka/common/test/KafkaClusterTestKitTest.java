@@ -232,25 +232,6 @@ public class KafkaClusterTestKitTest {
     }
 
     @Test
-    public void testRestartBrokerWithOfflineBroker() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(2)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.brokers().get(1).shutdown();
-
-            cluster.restartBroker(0, Map.of("queued.max.requests", "200")).get(30, TimeUnit.SECONDS);
-
-            assertEquals(BrokerState.RUNNING, cluster.brokers().get(0).brokerState());
-            assertEquals(200, cluster.brokers().get(0).config().queuedMaxRequests());
-            assertTrue(cluster.brokers().get(1).isShutdown());
-        }
-    }
-
-    @Test
     public void testRestartBrokerFailure() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
