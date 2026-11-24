@@ -73,7 +73,20 @@ public interface Time {
      *
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before the condition is satisfied
      */
-    void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException;
+    default void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
+        synchronized (obj) {
+            while (true) {
+                if (condition.get())
+                    return;
+
+                long currentTimeMs = milliseconds();
+                if (currentTimeMs >= deadlineMs)
+                    throw new org.apache.kafka.common.errors.TimeoutException("Condition not satisfied before deadline");
+
+                obj.wait(deadlineMs - currentTimeMs);
+            }
+        }
+    }
 
     /**
      * Get a timer which is bound to this time instance and expires after the given timeout

@@ -24,8 +24,7 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.logger.RuntimeLoggerManager
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
@@ -58,6 +57,7 @@ import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, AuthHelper, EnvelopeUtils, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.logger.RuntimeLoggerManager
 import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.javaapi.OptionConverters
@@ -108,6 +108,7 @@ class ControllerApis(
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
+        case ApiKeys.UNREGISTER_CONTROLLER => handleUnregisterController(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
@@ -203,7 +204,7 @@ class ControllerApis(
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
-      request.context.apiVersion,
+      deleteTopicsRequest.version,
       authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, true, false, 1),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names, (n: String) => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names, (n: String) => n))
@@ -464,7 +465,7 @@ class ControllerApis(
         requestThrottleMs => apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception))
     } else {
       requestHelper.sendResponseMaybeThrottle(request,
-        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4))
+        requestThrottleMs => apiVersionManager.apiVersionResponse(requestThrottleMs, apiVersionRequest.version < 4))
     }
     CompletableFuture.completedFuture[Unit](())
   }
@@ -490,6 +491,8 @@ class ControllerApis(
         } else {
           new ApiError(GROUP_AUTHORIZATION_FAILED)
         }
+      case ConfigResource.Type.CLUSTER_MIRROR =>
+        new ApiError(UNSUPPORTED_VERSION, "Cluster mirror configs are not supported yet.")
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }
   }
@@ -656,6 +659,27 @@ class ControllerApis(
     }
   }
 
+  def handleUnregisterController(request: Request): CompletableFuture[Unit] = {
+    val unregisterRequest = request.body(classOf[UnregisterControllerRequest])
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.unregisterController(context, unregisterRequest.data.controllerId).handle[Unit] { (_, e) =>
+      def createResponseCallback(requestThrottleMs: Int,
+                                 e: Throwable): UnregisterControllerResponse = {
+        if (e != null) {
+          unregisterRequest.getErrorResponse(requestThrottleMs, e)
+        } else {
+          new UnregisterControllerResponse(new UnregisterControllerResponseData().
+            setThrottleTimeMs(requestThrottleMs))
+        }
+      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, e))
+    }
+  }
+
   private def handleBrokerRegistration(request: Request): CompletableFuture[Unit] = {
     val registrationRequest = request.body(classOf[BrokerRegistrationRequest])
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
@@ -686,7 +710,7 @@ class ControllerApis(
     request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): CompletableFuture[Unit] = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
     val future = raftManager
       .handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
       .toCompletableFuture
@@ -721,7 +745,7 @@ class ControllerApis(
     val alterConfigsRequest = request.body(classOf[IncrementalAlterConfigsRequest])
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
-    val duplicateResources = new util.HashSet[ConfigResource]
+    val invalidResources = new util.HashSet[ConfigResource]
     val configChanges = new util.HashMap[ConfigResource,
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
@@ -749,18 +773,29 @@ class ControllerApis(
           setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
           setResourceName(resource.resourceName()).
           setResourceType(resource.resourceType()))
-      } else if (!duplicateResources.contains(configResource)) {
+      } else if (!invalidResources.contains(configResource)) {
         val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-        resource.configs.forEach { config =>
-          altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-            AlterConfigOp.OpType.forId(config.configOperation), config.value))
+        val configs = resource.configs.iterator()
+        var apiError = ApiError.NONE
+        while (configs.hasNext && !apiError.isFailure) {
+          val config = configs.next()
+          val opType = AlterConfigOp.OpType.forId(config.configOperation)
+          if (opType == null) {
+            apiError = new ApiError(INVALID_REQUEST, s"Unknown operation type ${config.configOperation}")
+          } else {
+            altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+              opType, config.value))
+          }
         }
-        if (configChanges.put(configResource, altersByName) != null) {
-          duplicateResources.add(configResource)
+        if (apiError.isSuccess && configChanges.put(configResource, altersByName) != null) {
+          apiError = new ApiError(INVALID_REQUEST, "Duplicate resource.")
+        }
+        if (apiError.isFailure) {
+          invalidResources.add(configResource)
           configChanges.remove(configResource)
           response.responses().add(new AlterConfigsResourceResponse().
-            setErrorCode(INVALID_REQUEST.code()).
-            setErrorMessage("Duplicate resource.").
+            setErrorCode(apiError.error().code()).
+            setErrorMessage(apiError.message()).
             setResourceName(resource.resourceName()).
             setResourceType(resource.resourceType()))
         }
@@ -933,14 +968,14 @@ class ControllerApis(
 
     if (!allowTokenRequests(request)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(createTokenRequest.version, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
     } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(createTokenRequest.version, requestThrottleMs,
           Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
         CompletableFuture.completedFuture[Unit](())
     } else {
@@ -953,7 +988,7 @@ class ControllerApis(
         .thenApply[Unit] { response =>
            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
              CreateDelegationTokenResponse.prepareResponse(
-               request.context.requestVersion,
+               createTokenRequest.version,
                requestThrottleMs,
                Errors.forCode(response.errorCode()),
                new KafkaPrincipal(response.principalType(), response.principalName()),

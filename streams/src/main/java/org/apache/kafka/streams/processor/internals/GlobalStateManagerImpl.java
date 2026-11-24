@@ -70,6 +70,7 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLE
 import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
@@ -214,7 +215,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             if (store.persistent()) {
                 for (final TopicPartition partition : metadata.changelogPartitions) {
                     final Long offset = store.committedOffset(partition);
-                    if (offset != null) {
+                    if (offset != null && offset != OFFSET_UNKNOWN) {
                         currentOffsets.put(partition, offset);
                     }
                 }
@@ -325,14 +326,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
-            globalConsumer.assign(Collections.singletonList(topicPartition));
+            globalConsumer.assign(List.of(topicPartition));
             long offset;
             final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
             } else {
-                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                globalConsumer.seekToBeginning(List.of(topicPartition));
                 offset = getGlobalConsumerOffset(topicPartition);
             }
             final Long highWatermark = storeMetadata.highWatermarks.get(topicPartition);
@@ -467,14 +468,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : storeMetadata.changelogPartitions) {
             long currentDeadline = NO_DEADLINE;
 
-            globalConsumer.assign(Collections.singletonList(topicPartition));
+            globalConsumer.assign(List.of(topicPartition));
             long offset;
             final Long checkpoint = currentOffsets.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
                 offset = checkpoint;
             } else {
-                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                globalConsumer.seekToBeginning(List.of(topicPartition));
                 offset = getGlobalConsumerOffset(topicPartition);
             }
 
@@ -579,6 +580,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             }
         }
         return total;
+    }
+
+    @Override
+    public long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Optional<StateStore> entry : globalStores.values()) {
+            if (entry.isPresent()) {
+                max = Math.max(max, entry.get().approximateNumUncommittedBytes());
+            }
+        }
+        return max;
     }
 
     @Override

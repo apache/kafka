@@ -45,7 +45,6 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.utils.internals.Exit;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -391,6 +390,13 @@ public class ConfigCommandTest {
             "--describe"
         ));
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "cluster-mirrors",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
@@ -431,29 +437,31 @@ public class ConfigCommandTest {
     public void testOptionEntityTypeNames() {
         List<String> connectOpts = List.of("--bootstrap-server", "localhost:9092");
 
-        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
-        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT_METRICS.value()), List.of("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.USER.value(), ConfigType.CLIENT.value()), List.of("A", ""), connectOpts,
+        testExpectedEntityTypeNames(List.of("topics"), List.of("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of("ips"), List.of("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
+        testExpectedEntityTypeNames(List.of("client-metrics"), List.of("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of("groups"), List.of("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of("cluster-mirrors"), List.of("A"), connectOpts, "--entity-type", "cluster-mirrors", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of("users", "clients"), List.of("A", ""), connectOpts,
             "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
-        testExpectedEntityTypeNames(List.of(ConfigType.USER.value(), ConfigType.CLIENT.value()), List.of("", "B"), connectOpts,
+        testExpectedEntityTypeNames(List.of("users", "clients"), List.of("", "B"), connectOpts,
             "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients");
-        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of("A"), connectOpts, "--topic", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
-        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of("A"), connectOpts, "--group", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("B", "A"), connectOpts, "--client", "B", "--user", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("B", ""), connectOpts, "--client", "B", "--user-defaults");
-        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("A"), connectOpts,
+        testExpectedEntityTypeNames(List.of("topics"), List.of("A"), connectOpts, "--topic", "A");
+        testExpectedEntityTypeNames(List.of("ips"), List.of("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
+        testExpectedEntityTypeNames(List.of("groups"), List.of("A"), connectOpts, "--group", "A");
+        testExpectedEntityTypeNames(List.of("cluster-mirrors"), List.of("A"), connectOpts, "--cluster-mirror", "A");
+        testExpectedEntityTypeNames(List.of("clients", "users"), List.of("B", "A"), connectOpts, "--client", "B", "--user", "A");
+        testExpectedEntityTypeNames(List.of("clients", "users"), List.of("B", ""), connectOpts, "--client", "B", "--user-defaults");
+        testExpectedEntityTypeNames(List.of("clients", "users"), List.of("A"), connectOpts,
             "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A");
-        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of(), connectOpts, "--entity-type", "topics");
-        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of(), connectOpts, "--entity-type", "ips");
-        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of(), connectOpts, "--entity-type", "groups");
-        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT_METRICS.value()), List.of(), connectOpts, "--entity-type", "client-metrics");
-        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
-        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of("0"), connectOpts, "--broker", "0");
-        testExpectedEntityTypeNames(List.of(ConfigType.USER.value()), List.of(), connectOpts, "--entity-type", "users");
-        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of(), connectOpts, "--entity-type", "brokers");
+        testExpectedEntityTypeNames(List.of("topics"), List.of(), connectOpts, "--entity-type", "topics");
+        testExpectedEntityTypeNames(List.of("ips"), List.of(), connectOpts, "--entity-type", "ips");
+        testExpectedEntityTypeNames(List.of("groups"), List.of(), connectOpts, "--entity-type", "groups");
+        testExpectedEntityTypeNames(List.of("client-metrics"), List.of(), connectOpts, "--entity-type", "client-metrics");
+        testExpectedEntityTypeNames(List.of("brokers"), List.of("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
+        testExpectedEntityTypeNames(List.of("brokers"), List.of("0"), connectOpts, "--broker", "0");
+        testExpectedEntityTypeNames(List.of("users"), List.of(), connectOpts, "--entity-type", "users");
+        testExpectedEntityTypeNames(List.of("brokers"), List.of(), connectOpts, "--entity-type", "brokers");
     }
 
     @Test
@@ -500,9 +508,9 @@ public class ConfigCommandTest {
 
     private Entry<List<String>, Map<String, String>> argsAndExpectedEntity(Optional<String> entityName, String entityType) {
         String command = switch (entityType) {
-            case ClientQuotaEntity.USER -> ConfigType.USER.value();
-            case ClientQuotaEntity.CLIENT_ID -> ConfigType.CLIENT.value();
-            case ClientQuotaEntity.IP -> ConfigType.IP.value();
+            case ClientQuotaEntity.USER -> "users";
+            case ClientQuotaEntity.CLIENT_ID -> "clients";
+            case ClientQuotaEntity.IP -> "ips";
             default -> throw new IllegalArgumentException("Unknown command: " + entityType);
         };
 
@@ -890,7 +898,7 @@ public class ConfigCommandTest {
     @Test
     public void testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.BROKER.value(),
+            "--entity-type", "brokers",
             "--describe"
         };
 
@@ -900,7 +908,7 @@ public class ConfigCommandTest {
     @Test
     public void testDescribeAllBrokerConfig() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.BROKER.value(),
+            "--entity-type", "brokers",
             "--entity-name", "1",
             "--describe",
             "--all"};
@@ -911,7 +919,7 @@ public class ConfigCommandTest {
     @Test
     public void testDescribeAllTopicConfig() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.TOPIC.value(),
+            "--entity-type", "topics",
             "--entity-name", "foo",
             "--describe",
             "--all"};
@@ -1294,6 +1302,132 @@ public class ConfigCommandTest {
         };
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
         verify(alterResult).all();
+    }
+
+    @Test
+    public void shouldAlterClusterMirrorConfig() throws Exception {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--alter",
+            "--delete-config", "a",
+            "--add-config", "b=c"));
+        alterOpts.checkArgs();
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                assertEquals(Map.of(new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, "mirror"), List.of(
+                    new AlterConfigOp(new ConfigEntry("a", ""), AlterConfigOp.OpType.DELETE),
+                    new AlterConfigOp(new ConfigEntry("b", "c"), AlterConfigOp.OpType.SET)
+                )), configs);
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        verify(alterResult).all();
+    }
+
+    @Test
+    public void shouldPropagateUnsupportedVersionWhenAlteringClusterMirrorConfig() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--alter",
+            "--add-config", "b=c"));
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.completeExceptionally(new UnsupportedVersionException("Cluster mirror configs are not supported yet."));
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                return alterResult;
+            }
+        };
+        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class,
+            () -> ConfigCommand.alterConfig(mockAdminClient, alterOpts));
+        assertEquals("Cluster mirror configs are not supported yet.", exception.getMessage());
+    }
+
+    @Test
+    public void shouldDescribeClusterMirrorConfig() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-name", "mirror",
+            "--describe"));
+        describeOpts.checkArgs();
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.CLUSTER_MIRROR, "mirror");
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(
+            new ConfigEntry("a", "b", ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG, false, false, List.of(), ConfigEntry.ConfigType.STRING, null),
+            new ConfigEntry("c", "d", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, List.of(), ConfigEntry.ConfigType.STRING, null))));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.values()).thenReturn(Map.of(resource, future));
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertEquals(List.of(resource), List.copyOf(resources));
+                return describeResult;
+            }
+        };
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        assertTrue(output.contains("WARNING: Cannot check whether the cluster-mirror 'mirror' exists, since cluster mirrors cannot be listed yet."), output);
+        assertTrue(output.contains("Dynamic configs for cluster-mirror mirror are:"), output);
+        assertTrue(output.contains("a=b"), output);
+        // without --all, only dynamic cluster mirror configs are shown
+        assertFalse(output.contains("c=d"), output);
+    }
+
+    @Test
+    public void shouldNotDescribeClusterMirrorConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--describe"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("An entity name must be specified with --describe of cluster-mirrors", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotAlterClusterMirrorConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--alter",
+            "--add-config", "a=b"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("An entity name must be specified with --alter of cluster-mirrors", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotAlterClusterMirrorConfigWithEntityDefault() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "cluster-mirrors",
+            "--entity-default",
+            "--alter",
+            "--add-config", "a=b"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("An entity name must be specified with --alter of cluster-mirrors", exception.getMessage());
     }
 
     @Test

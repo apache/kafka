@@ -26,6 +26,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.AuthorizerNotReadyException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.resource.PatternType;
@@ -695,6 +696,23 @@ public class StandardAuthorizerTest {
     }
 
     @Test
+    public void testAclsTotalCountMetric() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        KafkaMetric aclsTotalCount = metrics.metric(metrics.metricName("acls-total-count", "plugins", "", Map.of()));
+        assertEquals(0, aclsTotalCount.metricValue());
+
+        List<StandardAclWithId> acls = List.of(
+                withId(new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", READ, ALLOW)),
+                withId(new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", "*", READ, ALLOW)),
+                withId(new StandardAcl(TOPIC, "baz", LITERAL, "User:alice", "*", WRITE, ALLOW)));
+        acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
+        assertEquals(3, aclsTotalCount.metricValue());
+
+        authorizer.removeAcl(acls.get(0).id());
+        assertEquals(2, aclsTotalCount.metricValue());
+    }
+
+    @Test
     public void testAclWithCidrHost() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
 
@@ -874,5 +892,33 @@ public class StandardAuthorizerTest {
         assertEquals(List.of(ALLOWED),
             authorizer.authorize(aliceInBroadOnly, List.of(newAction(READ, TOPIC, "foo"))),
             "Client in only the broad ALLOW /8 should be allowed");
+    }
+
+    @Test
+    public void testAuthorizeByResourceTypeWithCidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId cidrAcl = withId(new StandardAcl(
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "192.168.1.0/24", WRITE, ALLOW));
+        authorizer.addAcl(cidrAcl.id(), cidrAcl.acl());
+
+        // Client within the CIDR range should be allowed
+        AuthorizableRequestContext bobInRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("192.168.1.50"))
+            .build();
+        assertEquals(ALLOWED,
+            authorizer.authorizeByResourceType(bobInRange, WRITE, TOPIC),
+            "Client within CIDR range should be allowed by authorizeByResourceType");
+
+        // Client outside the CIDR range should be denied
+        AuthorizableRequestContext bobOutOfRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("10.0.0.1"))
+            .build();
+        assertEquals(DENIED,
+            authorizer.authorizeByResourceType(bobOutOfRange, WRITE, TOPIC),
+            "Client outside CIDR range should be denied by authorizeByResourceType");
     }
 }

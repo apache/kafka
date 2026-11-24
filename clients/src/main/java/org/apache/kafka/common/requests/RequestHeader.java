@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.RequestHeaderData;
@@ -36,12 +37,21 @@ public class RequestHeader implements AbstractRequestResponse {
     private int size = SIZE_NOT_INITIALIZED;
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(new RequestHeaderData().
+        this(requestApiKey, requestVersion, clientId, null, correlationId);
+    }
+
+    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, Uuid clientInstanceId,
+                         int correlationId) {
+        this.headerVersion = requestApiKey.requestHeaderVersion(requestVersion);
+        this.data = new RequestHeaderData().
                 setRequestApiKey(requestApiKey.id).
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
-                setCorrelationId(correlationId),
-            requestApiKey.requestHeaderVersion(requestVersion));
+                setCorrelationId(correlationId);
+        // The client instance ID is a tagged field from header version 3, so writing it at an older version fails.
+        // We only set it from header version 3. Otherwise, the header leaves the ID unset as its default, `Uuid.ZERO_UUID`.
+        if (clientInstanceId != null && headerVersion >= 3)
+            this.data.setClientInstanceId(clientInstanceId);
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
@@ -69,6 +79,14 @@ public class RequestHeader implements AbstractRequestResponse {
         return data.correlationId();
     }
 
+    /**
+     * Returns {@link Uuid#ZERO_UUID} if the header predates v3 or the client sent no ID.
+     */
+    public Uuid clientInstanceId() {
+        return data.clientInstanceId();
+    }
+
+    @Override
     public RequestHeaderData data() {
         return data;
     }
@@ -116,10 +134,21 @@ public class RequestHeader implements AbstractRequestResponse {
         return apiKey().isVersionDeprecated(apiVersion());
     }
 
-    public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(data.correlationId(), apiKey().responseHeaderVersion(apiVersion()));
-    }
-
+    /**
+     * Parses a request header from the given buffer. For a supported request API version, the buffer is positioned
+     * at the start of the request body on return.
+     * <p>
+     * If the request API version is not supported by this node, the corresponding header version may also be unknown.
+     * In this case, the header is parsed using version 1, which contains only the fields common to all header versions:
+     * API key, API version, correlation ID, and client ID. Any remaining header bytes, including tagged fields,
+     * are left unread. The returned header has {@link #isApiVersionSupported()} set to false, and the caller is
+     * expected to check it before parsing the rest of the bytes in the request, since the buffer is not positioned
+     * at the start of the request body.
+     *
+     * @param buffer the buffer containing the request header
+     * @return the parsed request header
+     * @throws InvalidRequestException if the api key is unknown or the header cannot be parsed
+     */
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKeyId = -1;
         try {
@@ -135,7 +164,8 @@ public class RequestHeader implements AbstractRequestResponse {
             if (!apiKey.hasValidVersion())
                 throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
 
-            short headerVersion = apiKey.requestHeaderVersion(apiVersion);
+            // If the api version is unsupported, the header is parsed with header version 1
+            short headerVersion = apiKey.isVersionSupported(apiVersion) ? apiKey.requestHeaderVersion(apiVersion) : (short) 1;
             buffer.position(bufferStartPositionForHeader);
             final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
             // Due to a quirk in the protocol, client ID is marked as nullable.
@@ -165,6 +195,7 @@ public class RequestHeader implements AbstractRequestResponse {
         return "RequestHeader(apiKey=" + apiKey() +
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
+                ", clientInstanceId=" + clientInstanceId() +
                 ", correlationId=" + correlationId() +
                 ", headerVersion=" + headerVersion +
                 ")";

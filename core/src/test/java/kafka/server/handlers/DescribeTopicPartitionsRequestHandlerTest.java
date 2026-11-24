@@ -79,9 +79,8 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
@@ -111,7 +110,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id);
 
     @Test
-    void testDescribeTopicPartitionsRequest() {
+    void testDescribeTopicPartitionsRequest() throws Exception {
         // 1. Set up authorizer
         Authorizer authorizer = mock(Authorizer.class);
         Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
@@ -202,13 +201,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                     new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic)
                 ))
         );
-        Request request;
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        Request request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         DescribeTopicPartitionsResponseData response = handler.handleDescribeTopicPartitionsRequest(request);
         List<DescribeTopicPartitionsResponseTopic> topics = response.topics().valuesList();
         assertEquals(2, topics.size());
@@ -232,12 +225,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
         );
 
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         response = handler.handleDescribeTopicPartitionsRequest(request);
         topics = response.topics().valuesList();
         assertEquals(2, topics.size());
@@ -254,12 +242,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.3 Fetch all topics
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData());
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         response = handler.handleDescribeTopicPartitionsRequest(request);
         topics = response.topics().valuesList();
         assertEquals(1, topics.size());
@@ -273,12 +256,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
             new DescribeTopicPartitionsRequestData().setCursor(
                 new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1)));
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         response = handler.handleDescribeTopicPartitionsRequest(request);
         topics = response.topics().valuesList();
         assertEquals(1, topics.size());
@@ -292,12 +270,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
                 new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
         );
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         response = handler.handleDescribeTopicPartitionsRequest(request);
         topics = response.topics().valuesList();
         assertEquals(1, topics.size());
@@ -311,7 +284,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
     }
 
     @Test
-    void testDescribeTopicPartitionsRequestWithEdgeCases() {
+    void testDescribeTopicPartitionsRequestWithEdgeCases() throws Exception {
         // 1. Set up authorizer
         Authorizer authorizer = mock(Authorizer.class);
         Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
@@ -401,13 +374,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
         );
 
-        Request request;
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        Request request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         DescribeTopicPartitionsResponseData response = handler.handleDescribeTopicPartitionsRequest(request);
         List<DescribeTopicPartitionsResponseTopic> topics = response.topics().valuesList();
         assertEquals(2, topics.size());
@@ -432,12 +399,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic2).setPartitionIndex(0))
         );
 
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            fail(e.getMessage());
-            return;
-        }
+        request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         response = handler.handleDescribeTopicPartitionsRequest(request);
         topics = response.topics().valuesList();
         assertEquals(1, topics.size());
@@ -456,11 +418,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("Non-existing").setPartitionIndex(0))
         );
 
-        try {
-            handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
-        } catch (Exception e) {
-            assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
-        }
+        Request nonExistingTopicCursorRequest = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        assertThrows(InvalidRequestException.class,
+            () -> handler.handleDescribeTopicPartitionsRequest(nonExistingTopicCursorRequest));
 
         // 3.4 With cursor point to a negative partition id. Exception should be thrown if not querying all the topics.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
@@ -471,11 +431,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(-1))
         );
 
-        try {
-            handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
-        } catch (Exception e) {
-            assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
-        }
+        Request negativePartitionCursorRequest = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        assertThrows(InvalidRequestException.class,
+            () -> handler.handleDescribeTopicPartitionsRequest(negativePartitionCursorRequest));
     }
 
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {

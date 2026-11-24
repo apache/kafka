@@ -303,6 +303,26 @@ public class ClusterToolTest {
     }
 
     @Test
+    public void testUnregisterController() throws Exception {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(true).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ClusterTool.unregisterControllerCommand(new PrintStream(stream), adminClient, 0);
+        assertEquals("Controller 0 is no longer registered.\n", stream.toString());
+    }
+
+    @Test
+    public void testLegacyModeClusterCannotUnregisterController() throws Exception {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(false).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ClusterTool.unregisterControllerCommand(new PrintStream(stream), adminClient, 0);
+        assertEquals("The target cluster does not support the controller unregistration API.\n", stream.toString());
+    }
+
+    @Test
     public void testLegacyModeClusterCannotUnregisterBroker() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
                 usingRaftController(false).

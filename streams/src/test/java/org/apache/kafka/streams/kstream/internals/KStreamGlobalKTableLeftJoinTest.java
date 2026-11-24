@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -52,10 +53,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamGlobalKTableLeftJoinTest {
     private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -105,7 +104,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         stream.leftJoin(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
 
         processor = supplier.theCapturedProcessor();
 
@@ -158,7 +157,7 @@ public class KStreamGlobalKTableLeftJoinTest {
             return tokens.length > 1 ? tokens[1] : null;
         };
         stream.leftJoin(table, keyMapper, joiner).process(supplier);
-        driver = new TopologyTestDriver(builder.build(), StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String()));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
         processor = supplier.theCapturedProcessor();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
@@ -178,7 +177,7 @@ public class KStreamGlobalKTableLeftJoinTest {
             return tokens.length > 1 ? tokens[1] : null;
         };
         stream.leftJoin(table, keyMapper, joiner).process(supplier);
-        driver = new TopologyTestDriver(builder.build(), StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String()));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
         processor = supplier.theCapturedProcessor();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
@@ -324,7 +323,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(3, "XXX3+null", 3)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -335,8 +335,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -359,7 +358,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(3, "XXX3+null", 3)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -370,8 +370,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -421,7 +420,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(1, "FKey1|1|X1,FKey1|Y1", 1)
         );
 
-        assertThat(
+        assertEquals(
+            1.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -432,8 +432,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(1.0)
+                .metricValue()
         );
     }
 
@@ -480,7 +479,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(1, "null|1|XXX1|null", 1)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -491,8 +491,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -505,9 +504,9 @@ public class KStreamGlobalKTableLeftJoinTest {
         stream.leftJoin(
             table,
             (KeyValueMapper<Integer, String, String>) (k, v) -> v,
-            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>) (mk, sk, v1, v2) -> v1 + v2,
+            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>) (streamKey, mappedKey, v1, v2) -> v1 + v2,
             Named.as("left-join-table"));
 
-        assertThat(builder.build().describe().toString(), containsString("Processor: left-join-table"));
+        assertTrue(builder.build().describe().toString().contains("Processor: left-join-table"));
     }
 }

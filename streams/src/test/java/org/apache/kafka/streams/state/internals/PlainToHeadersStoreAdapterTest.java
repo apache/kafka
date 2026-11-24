@@ -66,6 +66,18 @@ public class PlainToHeadersStoreAdapterTest {
         return new PlainToHeadersStoreAdapter(mockStore);
     }
 
+    private void assertConvertsPlainToHeaders(final KeyValueIterator<Bytes, byte[]> result) {
+        final Bytes key = new Bytes("k".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        when(mockIterator.hasNext()).thenReturn(true);
+        when(mockIterator.next()).thenReturn(KeyValue.pair(key, plainValue));
+
+        assertTrue(result.hasNext());
+        final KeyValue<Bytes, byte[]> entry = result.next();
+        assertEquals(key, entry.key);
+        assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), entry.value);
+    }
+
     @Test
     public void shouldThrowIfStoreIsNotPersistent() {
         when(mockStore.persistent()).thenReturn(false);
@@ -180,7 +192,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.range(from, to);
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result);
     }
 
     @Test
@@ -193,7 +205,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseRange(from, to);
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result);
     }
 
     @Test
@@ -204,7 +216,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.all();
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result);
     }
 
     @Test
@@ -215,7 +227,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseAll();
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result);
     }
 
     @Test
@@ -226,7 +238,7 @@ public class PlainToHeadersStoreAdapterTest {
         final KeyValueIterator<Bytes, byte[]> result = adapter.prefixScan("prefix", (topic, data) -> data.getBytes());
 
         assertNotNull(result);
-        assertTrue(result instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result);
     }
 
     @Test
@@ -297,7 +309,7 @@ public class PlainToHeadersStoreAdapterTest {
 
         assertTrue(result.isSuccess());
         assertNotNull(result.getResult());
-        assertTrue(result.getResult() instanceof PlainToHeadersIteratorAdapter);
+        assertConvertsPlainToHeaders(result.getResult());
     }
 
     @Test

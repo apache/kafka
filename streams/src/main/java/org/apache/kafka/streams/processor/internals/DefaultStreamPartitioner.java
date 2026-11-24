@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -32,9 +32,15 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         this.keySerializer = keySerializer;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
-        final byte[] keyBytes = keySerializer.serialize(topic, key);
+        throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+    }
+
+    @Override
+    public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final Headers headers, final int numPartitions) {
+        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
 
         // if the key bytes are not available, we just return empty optional to let the producer decide
         // which partition to send internally; otherwise stick with the same built-in partitioner
@@ -42,7 +48,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         if (keyBytes == null) {
             return Optional.empty();
         } else {
-            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
+            return Optional.of(Set.of(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
         }
     }
 }

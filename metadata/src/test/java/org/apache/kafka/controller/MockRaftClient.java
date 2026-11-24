@@ -30,6 +30,7 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
@@ -422,6 +423,11 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     private KRaftVersion lastKRaftVersion;
 
     /**
+     * The latest voter set used by this raft client.
+     */
+    private volatile VoterSet latestVoterSet = VoterSet.empty();
+
+    /**
      * Whether this raft client has been shut down.
      */
     private boolean shutdown = false;
@@ -799,6 +805,15 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     @Override
     public KRaftVersion kraftVersion() {
         return lastKRaftVersion;
+    }
+
+    @Override
+    public VoterSet latestVoterSet() {
+        return latestVoterSet;
+    }
+
+    public void setLatestVoterSet(VoterSet voterSet) {
+        this.latestVoterSet = voterSet;
     }
 
     @Override

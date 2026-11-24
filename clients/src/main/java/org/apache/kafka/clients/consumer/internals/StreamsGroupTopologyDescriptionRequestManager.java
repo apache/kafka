@@ -166,6 +166,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 break;
 
             case STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED:
+            case STREAMS_INVALID_TOPOLOGY_EPOCH:
             case INVALID_REQUEST:
             case UNSUPPORTED_VERSION:
             case GROUP_ID_NOT_FOUND:

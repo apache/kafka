@@ -111,6 +111,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
         }
     }
 
+    // Keep in sync with ConfigEntry.ConfigSource. Ids must be contiguous and in declaration order, since forId looks them up by index.
     public enum ConfigSource {
         UNKNOWN((byte) 0, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.UNKNOWN),
         TOPIC_CONFIG((byte) 1, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG),
@@ -120,7 +121,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         DEFAULT_CONFIG((byte) 5, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DEFAULT_CONFIG),
         DYNAMIC_BROKER_LOGGER_CONFIG((byte) 6, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG),
         CLIENT_METRICS_CONFIG((byte) 7, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG),
-        GROUP_CONFIG((byte) 8, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG);
+        GROUP_CONFIG((byte) 8, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG),
+        CLUSTER_MIRROR_CONFIG((byte) 9, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG);
 
         final byte id;
         private final org.apache.kafka.clients.admin.ConfigEntry.ConfigSource source;
@@ -251,8 +253,4 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return new DescribeConfigsResponse(new DescribeConfigsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

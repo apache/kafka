@@ -631,7 +631,7 @@ class RequestQuotaTest extends BaseRequestTest {
             Topic.CLUSTER_METADATA_TOPIC_PARTITION))
 
         case ApiKeys.ALTER_PARTITION =>
-          new AlterPartitionRequest.Builder(new AlterPartitionRequestData())
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.latestVersion))
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
@@ -646,7 +646,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val embedRequestData = new AlterClientQuotasRequest.Builder(util.List.of, false).build()
             .serializeWithHeader(requestHeader)
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
-            InetAddress.getByName("192.168.1.1").getAddress)
+            InetAddress.getByName("192.168.1.1").getAddress, ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion))
 
         case ApiKeys.DESCRIBE_CLUSTER =>
           new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
@@ -666,6 +666,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.UNREGISTER_BROKER =>
           new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
+        case ApiKeys.UNREGISTER_CONTROLLER =>
+          new UnregisterControllerRequest.Builder(new UnregisterControllerRequestData())
+
         case ApiKeys.DESCRIBE_TRANSACTIONS =>
           new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
             .setTransactionalIds(util.List.of("test-transactional-id")))
@@ -674,7 +677,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
-          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData(), ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion))
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
@@ -689,7 +692,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new PushTelemetryRequest.Builder(new PushTelemetryRequestData())
 
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
-          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData())
+          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(),
+            ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion))
 
         case ApiKeys.LIST_CONFIG_RESOURCES =>
           new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData())
@@ -738,19 +742,19 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData())
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), ApiKeys.INITIALIZE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.INITIALIZE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData())
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), ApiKeys.READ_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData())
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), ApiKeys.WRITE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData())
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), ApiKeys.DELETE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.DELETE_SHARE_GROUP_STATE.latestVersion))
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData())
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.requestHeaderVersion(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion))
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())

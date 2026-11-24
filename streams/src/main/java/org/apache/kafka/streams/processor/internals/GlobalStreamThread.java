@@ -198,6 +198,7 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -210,6 +211,8 @@ public class GlobalStreamThread extends Thread {
                               final StateRestoreListener stateRestoreListener,
                               final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
+        // explicitly non-daemon so the JVM doesn't exit while this thread is still restoring/serving global state
+        setDaemon(false);
         this.time = time;
         this.config = config;
         this.topology = topology;
@@ -270,7 +273,14 @@ public class GlobalStreamThread extends Thread {
             return stateMaintainer.approximateNumUncommittedBytes();
         }
 
+        long maxStoreUncommittedBytes() {
+            return stateMaintainer.maxStoreUncommittedBytes();
+        }
+
         public void close(final boolean wipeStateStore) throws IOException {
+            // Clear the interrupt status before closing the consumer. With the status set,
+            // the close gives up after one network poll and throws an InterruptException.
+            Thread.interrupted();
             try {
                 globalConsumer.close();
             } catch (final RuntimeException e) {
@@ -313,8 +323,9 @@ public class GlobalStreamThread extends Thread {
                 stateConsumer.pollAndUpdate();
 
                 final long uncommittedLimit = maxUncommittedBytes;
+                // stores commit one at a time, and a commit can need extra memory up to the size of the store's uncommitted data
                 if (uncommittedLimit > 0
-                        && stateConsumer.approximateNumUncommittedBytes() > uncommittedLimit) {
+                        && stateConsumer.approximateNumUncommittedBytes() + stateConsumer.maxStoreUncommittedBytes() > uncommittedLimit) {
                     log.debug("Committing global state: uncommitted bytes exceeded {}", uncommittedLimit);
                     stateConsumer.flushState();
                 }
@@ -346,6 +357,9 @@ public class GlobalStreamThread extends Thread {
                 }
             }
         } catch (final InvalidOffsetException recoverableException) {
+            // Clear the interrupt status before invoking the handler, which may call
+            // addStreamThread() on this thread for SHUTDOWN_APPLICATION.
+            Thread.interrupted();
             wipeStateStore = true;
             log.error(
                 "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
@@ -357,6 +371,8 @@ public class GlobalStreamThread extends Thread {
             );
             this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
+            // Clear the interrupt status before invoking the handler, as above.
+            Thread.interrupted();
             log.error("Error happened while maintaining global state store. The streams application or client will now close to ERROR.", e);
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {

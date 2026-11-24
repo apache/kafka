@@ -68,8 +68,4 @@ public class AlterConfigsResponse extends AbstractResponse {
         return new AlterConfigsResponse(new AlterConfigsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

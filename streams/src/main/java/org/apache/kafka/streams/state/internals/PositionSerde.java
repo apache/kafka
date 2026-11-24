@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.streams.query.Position;
 
 import java.nio.ByteBuffer;
@@ -39,6 +40,7 @@ public final class PositionSerde {
         switch (version) {
             case (byte) 0: // actual position, v0
                 final int nTopics = buffer.getInt();
+                validateCount(nTopics, 2 * Integer.BYTES, buffer, "topic");
                 final Map<String, Map<Integer, Long>> position = new HashMap<>(nTopics);
                 for (int i = 0; i < nTopics; i++) {
                     final int topicNameLength = buffer.getInt();
@@ -46,6 +48,7 @@ public final class PositionSerde {
                     final String topic = new String(topicNameBytes, StandardCharsets.UTF_8);
 
                     final int numPairs = buffer.getInt();
+                    validateCount(numPairs, Integer.BYTES + Long.BYTES, buffer, "partition offset pair");
                     final Map<Integer, Long> partitionOffsets = new HashMap<>(numPairs);
                     for (int j = 0; j < numPairs; j++) {
                         partitionOffsets.put(buffer.getInt(), buffer.getLong());
@@ -60,13 +63,25 @@ public final class PositionSerde {
         }
     }
 
+    private static void validateCount(final int count,
+                                      final int minBytesPerEntry,
+                                      final ByteBuffer buffer,
+                                      final String entryType) {
+        if (count < 0 || (long) count * minBytesPerEntry > buffer.remaining()) {
+            throw new SerializationException(
+                    "Invalid " + entryType + " count " + count + " when deserializing Position: only "
+                            + buffer.remaining() + " bytes remain in the buffer"
+            );
+        }
+    }
+
     public static ByteBuffer serialize(final Position position) {
         final byte version = (byte) 0;
 
-        int arraySize = Byte.SIZE; // version
+        int arraySize = Byte.BYTES; // version
 
         final int nTopics = position.getTopics().size();
-        arraySize += Integer.SIZE;
+        arraySize += Integer.BYTES;
 
         final ArrayList<String> entries =
                 new ArrayList<>(position.getTopics());
@@ -76,12 +91,12 @@ public final class PositionSerde {
             final String topic = entries.get(i);
             final byte[] topicBytes = topic.getBytes(StandardCharsets.UTF_8);
             topics[i] = topicBytes;
-            arraySize += Integer.SIZE; // topic name length
+            arraySize += Integer.BYTES; // topic name length
             arraySize += topicBytes.length; // topic name itself
 
             final Map<Integer, Long> partitionOffsets = position.getPartitionPositions(topic);
-            arraySize += Integer.SIZE; // Number of PartitionOffset pairs
-            arraySize += (Integer.SIZE + Long.SIZE)
+            arraySize += Integer.BYTES; // Number of PartitionOffset pairs
+            arraySize += (Integer.BYTES + Long.BYTES)
                     * partitionOffsets.size(); // partitionOffsets themselves
         }
 

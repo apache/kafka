@@ -47,11 +47,10 @@ import java.util.function.Function;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WindowKeySchemaTest {
 
@@ -201,7 +200,7 @@ public class WindowKeySchemaTest {
                 results.add(iterator.next().value);
             }
 
-            assertThat(results, equalTo(asList(1, 2, 3, 4, 5, 6)));
+            assertEquals(List.of(1, 2, 3, 4, 5, 6), results);
         }
     }
     
@@ -212,34 +211,18 @@ public class WindowKeySchemaTest {
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[] {0xA, 0xB, 0xC}), Long.MAX_VALUE);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
-            upper.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA},
-                    Long.MAX_VALUE,
-                    Integer.MAX_VALUE
-                )
-            ) >= 0
-        );
+        assertTrue(
+            upper.compareTo(toStoreKeyBinary.apply(new byte[] {0xA}, Long.MAX_VALUE, Integer.MAX_VALUE)) >= 0,
+            "shorter key with max timestamp should be in range");
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
-            upper.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA, 0xB},
-                    Long.MAX_VALUE,
-                    Integer.MAX_VALUE
-                )
-            ) >= 0
-        );
+        assertTrue(
+            upper.compareTo(toStoreKeyBinary.apply(new byte[] {0xA, 0xB}, Long.MAX_VALUE, Integer.MAX_VALUE)) >= 0,
+            "shorter key with max timestamp should be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, Long.MAX_VALUE, Integer.MAX_VALUE), upper);
         } else {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{0xA}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA}, Long.MAX_VALUE, Integer.MAX_VALUE), upper);
         }
     }
 
@@ -250,24 +233,14 @@ public class WindowKeySchemaTest {
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[] {0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
-            upper.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA, (byte) 0x8F},
-                    Long.MAX_VALUE,
-                    Integer.MAX_VALUE
-                )
-            ) >= 0
-        );
+        assertTrue(
+            upper.compareTo(toStoreKeyBinary.apply(new byte[] {0xA, (byte) 0x8F}, Long.MAX_VALUE, Integer.MAX_VALUE)) >= 0,
+            "shorter key with max timestamp should be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, Long.MAX_VALUE, Integer.MAX_VALUE), upper);
         } else {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}, Long.MAX_VALUE,
-                    Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}, Long.MAX_VALUE, Integer.MAX_VALUE), upper);
         }
     }
 
@@ -278,23 +251,15 @@ public class WindowKeySchemaTest {
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[] {0xC, 0xC, 0x9}), 0x0AffffffffffffffL);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
-        assertThat(
-            "shorter key with customized timestamp should be in range",
-            upper.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xC, 0xC},
-                    0x0AffffffffffffffL,
-                    Integer.MAX_VALUE
-                )
-            ) >= 0
-        );
+        assertTrue(
+            upper.compareTo(toStoreKeyBinary.apply(new byte[] {0xC, 0xC}, 0x0AffffffffffffffL, Integer.MAX_VALUE)) >= 0,
+            "shorter key with customized timestamp should be in range");
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, 0x0AffffffffffffffL, Integer.MAX_VALUE)));
+            assertEquals(
+                toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, 0x0AffffffffffffffL, Integer.MAX_VALUE),
+                upper);
         } else {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{0xC, 0xC}, 0x0AffffffffffffffL,
-                    Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xC, 0xC}, 0x0AffffffffffffffL, Integer.MAX_VALUE), upper);
         }
     }
 
@@ -306,11 +271,9 @@ public class WindowKeySchemaTest {
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(
-                toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, 0x0L, Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, 0x0L, Integer.MAX_VALUE), upper);
         } else {
-            assertThat(upper,
-                equalTo(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, Integer.MAX_VALUE)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, Integer.MAX_VALUE), upper);
         }
     }
 
@@ -320,16 +283,9 @@ public class WindowKeySchemaTest {
         setup(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[] {0xA, 0xB, 0xC}), 0);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
-        assertThat(
-            "Larger key prefix should be in range.",
-            lower.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA, 0xB, 0xC, 0x0},
-                    0L,
-                    0
-                )
-            ) < 0
-        );
+        assertTrue(
+            lower.compareTo(toStoreKeyBinary.apply(new byte[] {0xA, 0xB, 0xC, 0x0}, 0L, 0)) < 0,
+            "Larger key prefix should be in range.");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
             final Bytes expected = Bytes.wrap(ByteBuffer.allocate(1 + 8 + 3)
@@ -337,9 +293,9 @@ public class WindowKeySchemaTest {
                 .putLong(0)
                 .put(new byte[] {0xA, 0xB, 0xC})
                 .array());
-            assertThat(lower, equalTo(expected));
+            assertEquals(expected, lower);
         } else {
-            assertThat(lower, equalTo(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0), lower);
         }
     }
 
@@ -350,16 +306,7 @@ public class WindowKeySchemaTest {
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[] {0xA, 0xB, 0xC}), 42);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
-        assertThat(
-            "Larger timestamp should be in range",
-            lower.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA, 0xB, 0xC, 0x0},
-                    43L,
-                    0
-                )
-            ) < 0
-        );
+        assertTrue(lower.compareTo(toStoreKeyBinary.apply(new byte[] {0xA, 0xB, 0xC, 0x0}, 43L, 0)) < 0, "Larger timestamp should be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
             final Bytes expected = Bytes.wrap(ByteBuffer.allocate(1 + 8 + 3)
@@ -367,9 +314,9 @@ public class WindowKeySchemaTest {
                 .putLong(42)
                 .put(new byte[] {0xA, 0xB, 0xC})
                 .array());
-            assertThat(lower, equalTo(expected));
+            assertEquals(expected, lower);
         } else {
-            assertThat(lower, equalTo(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0), lower);
         }
     }
 
@@ -380,25 +327,21 @@ public class WindowKeySchemaTest {
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[] {0xA, 0xB, 0xC}), Long.MAX_VALUE - 1);
         final TriFunction<byte[], Long, Integer, Bytes> toStoreKeyBinary = getToStoreKeyBinaryBytesParam();
 
-        assertThat(
-            "appending zeros to key should still be in range",
-            lower.compareTo(
-                toStoreKeyBinary.apply(
-                    new byte[] {0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-                    Long.MAX_VALUE - 1,
-                    0
-                )
-            ) < 0
-        );
+        assertTrue(
+            lower.compareTo(toStoreKeyBinary.apply(
+                new byte[] {0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+                Long.MAX_VALUE - 1,
+                0)) < 0,
+            "appending zeros to key should still be in range");
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
             final Bytes expected = Bytes.wrap(ByteBuffer.allocate(1 + 8 + 3)
                 .put((byte) 0x0)
                 .putLong(Long.MAX_VALUE - 1)
                 .put(new byte[] {0xA, 0xB, 0xC})
                 .array());
-            assertThat(lower, equalTo(expected));
+            assertEquals(expected, lower);
         } else {
-            assertThat(lower, equalTo(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0)));
+            assertEquals(toStoreKeyBinary.apply(new byte[]{0xA, 0xB, 0xC}, 0L, 0), lower);
         }
     }
 
@@ -455,7 +398,7 @@ public class WindowKeySchemaTest {
             results.add(resultWindow.end() - resultWindow.start());
         }
 
-        assertThat(results, equalTo(asList(1L, 10L, 20L)));
+        assertEquals(List.of(1L, 10L, 20L), results);
     }
 
     @EnumSource(SchemaType.class)

@@ -21,6 +21,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 /**
  * CoordinatorShard is basically a replicated state machine managed by the
  * {@link CoordinatorRuntime}.
+ *
+ * @param <U> The type of the record.
  */
 public interface CoordinatorShard<U> {
 
@@ -54,6 +56,7 @@ public interface CoordinatorShard<U> {
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        The record to replay.
+     * @throws RuntimeException if the record cannot be applied.
      */
     void replay(
         long offset,
@@ -68,7 +71,7 @@ public interface CoordinatorShard<U> {
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param result        The result of the transaction.
-     * @throws RuntimeException if the transaction can not be completed.
+     * @throws RuntimeException if the transaction cannot be completed.
      */
     default void replayEndTransactionMarker(
         long producerId,

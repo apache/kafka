@@ -36,6 +36,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -51,7 +52,12 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -74,6 +80,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -93,8 +100,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>It builds a KIP-1271 {@code WithHeaders} store, writes records (with headers) into it through a processor,
  * and queries it through IQv2. Covers {@link TimestampedKeyWithHeadersQuery},
- * {@link TimestampedRangeWithHeadersQuery}, and {@link TimestampedWindowKeyWithHeadersQuery}; the remaining
- * KIP-1356 headers query type (window range / session) is expected to extend this class as it lands.
+ * {@link TimestampedRangeWithHeadersQuery}, {@link TimestampedWindowKeyWithHeadersQuery}, and
+ * {@link TimestampedWindowRangeWithHeadersQuery} (both its window-store {@code withWindowStartRange}
+ * form and its session-store {@code withKey} form) -- all four KIP-1356 headers query types.
  */
 @Tag("integration")
 public class IQv2HeadersStoreIntegrationTest {
@@ -114,6 +122,13 @@ public class IQv2HeadersStoreIntegrationTest {
     private static final long EVENT_TIME_OFFSET_MS = 3L;
     private static final Duration WINDOW_SIZE = Duration.ofMillis(WINDOW_SIZE_MS);
     private static final Duration RETENTION = Duration.ofMinutes(1);
+
+    // Session-store test parameters (used by the session (window-range withKey) headers query tests).
+    // Each produced record becomes its own session spanning [timestamp, timestamp + SESSION_LENGTH_MS].
+    private static final long SESSION_LENGTH_MS = 10L;
+    // Inactivity gap used by the merging session processor: records for a key within this many ms of an
+    // existing session are merged into one (variable-length) session, mirroring session-window aggregation.
+    private static final long SESSION_MERGE_GAP_MS = 50L;
 
     private String inputStream;
     private String outputStream;
@@ -539,6 +554,196 @@ public class IQv2HeadersStoreIntegrationTest {
         assertWindowedRecord(records.get(0), 1, baseTimestamp, "one", new RecordHeaders());
     }
 
+    @Test
+    public void shouldHandleTimestampedWindowRangeWithHeadersQuery() throws Exception {
+        startStreamsWithWindowHeadersStore();
+
+        final long window0 = baseTimestamp;
+        final long window1 = baseTimestamp + 100;
+        final long window2 = baseTimestamp + 200;
+
+        // key 1 across two windows: headers, then empty headers.
+        produceDataToTopicWithHeaders(inputStream, window0, HEADERS, KeyValue.pair(1, "v0"));
+        produceDataToTopicWithHeaders(inputStream, window1, new RecordHeaders(), KeyValue.pair(1, "v1"));
+        // Noise key 2: a live entry inside the queried range, a tombstone that must not affect key 1's
+        // data, and a live entry outside the queried range (window2), which must be excluded.
+        produceDataToTopicWithHeaders(inputStream, window0, HEADERS, KeyValue.pair(2, "o0"));
+        produceDataToTopicWithHeaders(inputStream, window1, HEADERS, KeyValue.pair(2, "o1"), KeyValue.pair(2, null));
+        produceDataToTopicWithHeaders(inputStream, window2, HEADERS, KeyValue.pair(2, "o2"));
+
+        // Range [window0, window1]: every key's windows in that start range.
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records =
+                windowRangeQuery(Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window1));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> key1Records = recordsForKey(records, 1);
+        assertEquals(List.of(window0, window1), windowStarts(key1Records));
+        assertWindowedRecord(key1Records.get(0), 1, window0, "v0", HEADERS);
+        assertWindowedRecord(key1Records.get(1), 1, window1, "v1", new RecordHeaders());
+
+        // key 2's window0 survives, window1 is tombstoned, window2 is excluded by the range bound.
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> key2Records = recordsForKey(records, 2);
+        assertEquals(List.of(window0), windowStarts(key2Records));
+        assertWindowedRecord(key2Records.get(0), 2, window0, "o0", HEADERS);
+    }
+
+    @Test
+    public void shouldNotSeeUnflushedWriteInWindowRangeQueryWhenCachingEnabled() throws Exception {
+        // Like the window key query, a window range query bypasses the record cache: CachingWindowStore
+        // does not intercept IQv2 queries, so the query is served straight from the persistent store.
+        // That store's Position only advances on writes that reach it, so a query bound on the input
+        // position never catches up while the write lives only in the cache.
+        commitIntervalMs = Duration.ofMinutes(10).toMillis();
+        startStreamsWithWindowHeadersStore(true);
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "v0"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+                inStore(STORE_NAME)
+                        .withQuery(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withWindowStartRange(
+                                Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp)))
+                        .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result = kafkaStreams.query(request);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isFailure(), "A window range query bound on the input position must not catch up while the write is cache-only");
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, onlyResult.getFailureReason());
+    }
+
+    @Test
+    public void shouldFailWithUnknownQueryTypeForWindowRangeQueryAgainstNonHeadersStore() throws Exception {
+        startStreamsWithWindowNonHeadersStore();
+        assertUnknownQueryType(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withWindowStartRange(
+                Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp + 1)));
+    }
+
+    @Test
+    public void shouldThrowForTimestampedWindowRangeWithHeadersQueryOnPlainSupplier() throws Exception {
+        // A WithHeaders window builder over a plain (non-timestamped) window supplier: entries come back
+        // with timestamp = -1. The query succeeds, but iterating throws because -1 cannot be a ReadOnlyRecord.
+        startStreamsWithWindowPlainSupplierStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withWindowStartRange(
+                    Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp + 1)))
+                .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = onlyResult.getResult()) {
+            final StreamsException e = assertThrows(StreamsException.class, iterator::next);
+            assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                "unexpected message: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedWindowRangeWithHeadersQueryOnAdapterStore() throws Exception {
+        // A WithHeaders window builder over a plain *timestamped* window supplier keeps timestamps but
+        // drops headers via TimestampedToHeadersWindowStoreAdapter. A window range query reads the
+        // underlying store directly, so headers come back empty (never null), even though they were written.
+        startStreamsWithWindowAdapterStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records =
+                windowRangeQuery(Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp));
+        assertEquals(1, records.size());
+        assertWindowedRecord(records.get(0), 1, baseTimestamp, "one", new RecordHeaders());
+    }
+
+    @Test
+    public void shouldFailWithUnknownQueryTypeWhenWithKeySubmittedToWindowStore() throws Exception {
+        startStreamsWithWindowHeadersStore();
+        assertUnknownQueryTypeWithMessageFragment(
+            TimestampedWindowRangeWithHeadersQuery.<Integer, String>withKey(1),
+            "WindowStores only supports TimestampedWindowRangeWithHeadersQuery.withWindowStartRange");
+    }
+
+    @Test
+    public void shouldHandleTimestampedWindowRangeWithHeadersQueryOnSessionStore() throws Exception {
+        // Session windows are variable-length and grow by merging (unlike fixed-size window-store windows).
+        // Feed several records for key 1 within the inactivity gap so they collapse into one session
+        // spanning [base, base+55], then a distant record that forms a second, zero-length session. The
+        // query must return both variable-length sessions with the merged value and the last writer's headers.
+        startStreamsWithSessionHeadersStoreMerging();
+
+        // key 1: three records within SESSION_MERGE_GAP_MS merge into one session [base, base+55] = "abc";
+        // the merged session's headers come from the last record folded in (base+55, HEADERS).
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a"));
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp + 30, new RecordHeaders(), KeyValue.pair(1, "b"));
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp + 55, HEADERS, KeyValue.pair(1, "c"));
+        // A distant record (> gap away) starts a separate, zero-length session [base+500, base+500] = "d".
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp + 500, new RecordHeaders(), KeyValue.pair(1, "d"));
+        // Noise key 2: a session written then tombstoned -- must not leak into key 1's query nor survive its own.
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(2, "o"));
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, new RecordHeaders(), KeyValue.pair(2, null));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records = sortedByWindowStart(sessionRangeQuery(1));
+        assertEquals(2, records.size());
+        // Merged, variable-length session (length 55, not a fixed size), value concatenated in arrival order.
+        assertSessionRecord(records.get(0), 1, baseTimestamp, baseTimestamp + 55, "abc", HEADERS);
+        // A separate zero-length session -- proves the end round-trips from the raw result, not a fixed size.
+        assertSessionRecord(records.get(1), 1, baseTimestamp + 500, baseTimestamp + 500, "d", new RecordHeaders());
+
+        // key 2's only session was tombstoned -> empty result; a never-written key is likewise empty.
+        assertTrue(sessionRangeQuery(2).isEmpty(), "expected key 2's tombstoned session to be excluded");
+        assertTrue(sessionRangeQuery(999).isEmpty(), "expected no records for a never-written key");
+    }
+
+    @Test
+    public void shouldNotSeeUnflushedWriteInWindowRangeQueryOnSessionStoreWhenCachingEnabled() throws Exception {
+        // A session range query bypasses the record cache the same way the window-store form does:
+        // CachingSessionStore does not intercept IQv2 queries. A query bound on the input position never
+        // catches up while the write lives only in the cache.
+        commitIntervalMs = Duration.ofMinutes(10).toMillis();
+        startStreamsWithSessionHeadersStore(true);
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "v0"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+                inStore(STORE_NAME)
+                        .withQuery(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withKey(1))
+                        .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result = kafkaStreams.query(request);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isFailure(), "A session range query bound on the input position must not catch up while the write is cache-only");
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, onlyResult.getFailureReason());
+    }
+
+    @Test
+    public void shouldFailWithUnknownQueryTypeForWindowRangeQueryAgainstNonHeadersSessionStore() throws Exception {
+        startStreamsWithSessionNonHeadersStore();
+        assertUnknownQueryType(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withKey(1));
+    }
+
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedWindowRangeWithHeadersQueryOnSessionAdapterStore() throws Exception {
+        // A WithHeaders session builder over a plain persistent session supplier keeps sessions but drops
+        // headers via SessionToHeadersStoreAdapter.
+        startStreamsWithSessionAdapterStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records = sessionRangeQuery(1);
+        assertEquals(1, records.size());
+        assertSessionRecord(records.get(0), 1, baseTimestamp, "one", new RecordHeaders());
+    }
+
+    @Test
+    public void shouldFailWithUnknownQueryTypeWhenWithWindowStartRangeSubmittedToSessionStore() throws Exception {
+        startStreamsWithSessionHeadersStore();
+        assertUnknownQueryTypeWithMessageFragment(
+            TimestampedWindowRangeWithHeadersQuery.<Integer, String>withWindowStartRange(
+                Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp + 1)),
+            "SessionStores only support TimestampedWindowRangeWithHeadersQuery.withKey");
+    }
+
     private void startStreams(final StoreBuilder<?> storeBuilder,
                               final ProcessorSupplier<Integer, String, Integer, String> processorSupplier) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -652,6 +857,55 @@ public class IQv2HeadersStoreIntegrationTest {
             WindowHeadersStoreWriterProcessor::new);
     }
 
+    private void startStreamsWithSessionHeadersStore() throws Exception {
+        // Caching disabled: every IQv2 query is forced down to the persistent
+        // RocksDBSessionStoreWithHeaders layer.
+        startStreamsWithSessionHeadersStore(false);
+    }
+
+    private void startStreamsWithSessionHeadersStore(final boolean cachingEnabled) throws Exception {
+        final StoreBuilder<SessionStoreWithHeaders<Integer, String>> storeBuilder =
+            Stores.sessionStoreWithHeadersBuilder(
+                Stores.persistentSessionStoreWithHeaders(STORE_NAME, RETENTION),
+                Serdes.Integer(),
+                Serdes.String());
+        startStreams(
+            cachingEnabled ? storeBuilder.withCachingEnabled() : storeBuilder.withCachingDisabled(),
+            SessionHeadersStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithSessionHeadersStoreMerging() throws Exception {
+        final StoreBuilder<SessionStoreWithHeaders<Integer, String>> storeBuilder =
+            Stores.sessionStoreWithHeadersBuilder(
+                Stores.persistentSessionStoreWithHeaders(STORE_NAME, RETENTION),
+                Serdes.Integer(),
+                Serdes.String());
+        startStreams(storeBuilder.withCachingDisabled(), SessionMergingHeadersStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithSessionNonHeadersStore() throws Exception {
+        // A plain (non-WithHeaders) session store: the headers-aware query types are unsupported here.
+        startStreams(
+            Stores.sessionStoreBuilder(
+                Stores.persistentSessionStore(STORE_NAME, RETENTION),
+                Serdes.Integer(),
+                Serdes.String()),
+            SessionPlainStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithSessionAdapterStore() throws Exception {
+        // A WithHeaders session builder over a plain persistent session supplier: sessions persist, but
+        // headers are dropped via SessionToHeadersStoreAdapter. Unlike window/key-value stores, session
+        // stores have no timestamped/non-timestamped distinction, so there is no plain-supplier
+        // (negative-timestamp) variant to cover here.
+        startStreams(
+            Stores.sessionStoreWithHeadersBuilder(
+                Stores.persistentSessionStore(STORE_NAME, RETENTION),
+                Serdes.Integer(),
+                Serdes.String()).withCachingDisabled(),
+            SessionHeadersStoreWriterProcessor::new);
+    }
+
     private <R> void assertUnknownQueryTypeAgainstNonHeadersStore(final Query<R> query) throws Exception {
         startStreamsWithKeyValueNonHeadersStore();
         assertUnknownQueryType(query);
@@ -666,6 +920,23 @@ public class IQv2HeadersStoreIntegrationTest {
 
         assertTrue(result.getOnlyPartitionResult().isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getOnlyPartitionResult().getFailureReason());
+    }
+
+    // Like assertUnknownQueryType, but also asserts the failure message contains messageFragment -- used
+    // for the cross-form rejection tests (e.g. TimestampedWindowRangeWithHeadersQuery.withKey submitted
+    // to a window store, or withWindowStartRange submitted to a session store).
+    private <R> void assertUnknownQueryTypeWithMessageFragment(final Query<R> query, final String messageFragment) {
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
+
+        final StateQueryRequest<R> request =
+            inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<R> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<R> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, onlyResult.getFailureReason());
+        assertTrue(onlyResult.getFailureMessage().contains(messageFragment),
+            "unexpected message: " + onlyResult.getFailureMessage());
     }
 
     private ReadOnlyRecord<Integer, String> keyQuery(final int key) {
@@ -728,6 +999,60 @@ public class IQv2HeadersStoreIntegrationTest {
         return records;
     }
 
+    private List<ReadOnlyRecord<Windowed<Integer>, String>> windowRangeQuery(final Instant timeFrom,
+                                                                              final Instant timeTo) {
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withWindowStartRange(timeFrom, timeTo))
+                .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records = new ArrayList<>();
+        try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = result.getOnlyPartitionResult().getResult()) {
+            while (iterator.hasNext()) {
+                records.add(iterator.next());
+            }
+        }
+        return records;
+    }
+
+    private List<ReadOnlyRecord<Windowed<Integer>, String>> sessionRangeQuery(final int key) {
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedWindowRangeWithHeadersQuery.<Integer, String>withKey(key))
+                .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records = new ArrayList<>();
+        try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = result.getOnlyPartitionResult().getResult()) {
+            while (iterator.hasNext()) {
+                records.add(iterator.next());
+            }
+        }
+        return records;
+    }
+
+    // The raw window-range result is ordered key-major (by serialized key bytes) then by window start
+    // within each key, not globally by window start across keys -- so tests that mix multiple keys
+    // filter down to one key's sub-list before asserting window-start order.
+    private static List<ReadOnlyRecord<Windowed<Integer>, String>> recordsForKey(
+            final List<ReadOnlyRecord<Windowed<Integer>, String>> records, final int key) {
+        return records.stream().filter(r -> r.key().key() == key).collect(Collectors.toList());
+    }
+
+    private static List<Long> windowStarts(final List<ReadOnlyRecord<Windowed<Integer>, String>> records) {
+        return records.stream().map(r -> r.key().window().start()).collect(Collectors.toList());
+    }
+
+    // Session range results aren't guaranteed to come back in window-start order, so sort explicitly
+    // before asserting on them.
+    private static List<ReadOnlyRecord<Windowed<Integer>, String>> sortedByWindowStart(
+            final List<ReadOnlyRecord<Windowed<Integer>, String>> records) {
+        return records.stream()
+            .sorted(Comparator.comparingLong(r -> r.key().window().start()))
+            .collect(Collectors.toList());
+    }
+
     private void assertWindowedRecord(final ReadOnlyRecord<Windowed<Integer>, String> record,
                                       final int key,
                                       final long windowStart,
@@ -738,6 +1063,34 @@ public class IQv2HeadersStoreIntegrationTest {
         assertEquals(windowStart + WINDOW_SIZE_MS, record.key().window().end());
         // timestamp() is the stored event-time, distinct from the window's start and end.
         assertEquals(windowStart + EVENT_TIME_OFFSET_MS, record.timestamp());
+        assertEquals(value, record.value());
+        assertEquals(expectedHeaders, record.headers());
+        // The IQ result is a read-only snapshot: neither add nor remove is allowed.
+        assertThrows(IllegalStateException.class, () -> record.headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> record.headers().remove("source"));
+    }
+
+    private void assertSessionRecord(final ReadOnlyRecord<Windowed<Integer>, String> record,
+                                     final int key,
+                                     final long sessionStart,
+                                     final String value,
+                                     final Headers expectedHeaders) {
+        // Fixed-length sessions (one record == one session of SESSION_LENGTH_MS).
+        assertSessionRecord(record, key, sessionStart, sessionStart + SESSION_LENGTH_MS, value, expectedHeaders);
+    }
+
+    private void assertSessionRecord(final ReadOnlyRecord<Windowed<Integer>, String> record,
+                                     final int key,
+                                     final long sessionStart,
+                                     final long sessionEnd,
+                                     final String value,
+                                     final Headers expectedHeaders) {
+        assertEquals(Integer.valueOf(key), record.key().key());
+        assertEquals(sessionStart, record.key().window().start());
+        assertEquals(sessionEnd, record.key().window().end());
+        // timestamp() is sourced from the session window's end (AggregationWithHeaders carries no
+        // timestamp of its own), unlike the window-store form's stored event-time.
+        assertEquals(sessionEnd, record.timestamp());
         assertEquals(value, record.value());
         assertEquals(expectedHeaders, record.headers());
         // The IQ result is a read-only snapshot: neither add nor remove is allowed.
@@ -877,6 +1230,104 @@ public class IQv2HeadersStoreIntegrationTest {
                 record.key(),
                 ValueAndTimestamp.make(record.value(), record.timestamp()),
                 record.timestamp());
+            context.forward(record);
+        }
+    }
+
+    private static class SessionHeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+        private ProcessorContext<Integer, String> context;
+        private SessionStoreWithHeaders<Integer, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Integer, String> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // Each record becomes its own session, spanning [timestamp, timestamp + SESSION_LENGTH_MS].
+            // A null value tombstones that session -- via put(..., null), not remove(): unlike put(),
+            // remove() does not advance the store's IQv2 Position (AbstractRocksDBSegmentedBytesStore
+            // only calls StoreQueryUtils.updatePosition from put()), so a query bound on the input
+            // position would never catch up past a tombstone written via remove().
+            final Windowed<Integer> sessionKey =
+                new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp() + SESSION_LENGTH_MS));
+            store.put(sessionKey, record.value() == null ? null : AggregationWithHeaders.make(record.value(), record.headers()));
+            context.forward(record);
+        }
+    }
+
+    // Emulates session-window aggregation: each record is merged into any existing session for its key
+    // within SESSION_MERGE_GAP_MS on either side, producing a single variable-length session spanning
+    // [min(starts), max(ends)] whose value is the concatenation of the merged values. This is how real
+    // session aggregation (KStreamSessionWindowAggregate) grows and merges sessions, so it exercises the
+    // headers query against genuinely variable-length, merged sessions rather than fixed-size ones.
+    private static class SessionMergingHeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+        private ProcessorContext<Integer, String> context;
+        private SessionStoreWithHeaders<Integer, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Integer, String> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            final long ts = record.timestamp();
+            final List<KeyValue<Windowed<Integer>, AggregationWithHeaders<String>>> overlapping = new ArrayList<>();
+            try (final KeyValueIterator<Windowed<Integer>, AggregationWithHeaders<String>> sessions =
+                     store.findSessions(record.key(), ts - SESSION_MERGE_GAP_MS, ts + SESSION_MERGE_GAP_MS)) {
+                while (sessions.hasNext()) {
+                    overlapping.add(sessions.next());
+                }
+            }
+
+            if (record.value() == null) {
+                // Tombstone every overlapping session. Use put(..., null) (not remove()) so the store's
+                // IQv2 Position still advances -- remove() does not update Position.
+                for (final KeyValue<Windowed<Integer>, AggregationWithHeaders<String>> existing : overlapping) {
+                    store.put(existing.key, null);
+                }
+                context.forward(record);
+                return;
+            }
+
+            long mergedStart = ts;
+            long mergedEnd = ts;
+            final StringBuilder mergedValue = new StringBuilder();
+            for (final KeyValue<Windowed<Integer>, AggregationWithHeaders<String>> existing : overlapping) {
+                mergedStart = Math.min(mergedStart, existing.key.window().start());
+                mergedEnd = Math.max(mergedEnd, existing.key.window().end());
+                mergedValue.append(existing.value.aggregation());
+                store.remove(existing.key); // superseded by the merged window written below
+            }
+            mergedValue.append(record.value());
+            store.put(
+                new Windowed<>(record.key(), new SessionWindow(mergedStart, mergedEnd)),
+                AggregationWithHeaders.make(mergedValue.toString(), record.headers()));
+            context.forward(record);
+        }
+    }
+
+    private static class SessionPlainStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+        private ProcessorContext<Integer, String> context;
+        private SessionStore<Integer, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Integer, String> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // See SessionHeadersStoreWriterProcessor: tombstone via put(..., null), not remove(), so the
+            // store's IQv2 Position advances.
+            final Windowed<Integer> sessionKey =
+                new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp() + SESSION_LENGTH_MS));
+            store.put(sessionKey, record.value());
             context.forward(record);
         }
     }

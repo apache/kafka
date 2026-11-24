@@ -70,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -153,13 +152,13 @@ public class ProcessorContextImplTest {
 
         mockProcessorNodeWithLocalKeyValueStore();
         doTest("GlobalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
-            checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
-            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent()");
-            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
-            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
+            checkThrowsUnsupportedOperation(store::flush, "flush()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
             assertEquals((Long) VALUE, store.get(KEY));
             assertEquals(rangeIter, store.range("one", "two"));
@@ -184,13 +183,13 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("GlobalTimestampedKeyValueStore", (Consumer<TimestampedKeyValueStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
-            checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 2L)), "put()");
-            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", ValueAndTimestamp.make(1L, 2L)), "putIfAbsent()");
-            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
-            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
+            checkThrowsUnsupportedOperation(store::flush, "flush()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 2L)), "put()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", ValueAndTimestamp.make(1L, 2L)), "putIfAbsent()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
             assertEquals(VALUE_AND_TIMESTAMP, store.get(KEY));
             assertEquals(timestampedRangeIter, store.range("one", "two"));
@@ -217,10 +216,10 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
-            checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
+            checkThrowsUnsupportedOperation(store::flush, "flush()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -248,10 +247,10 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("GlobalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
-            checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put() [with timestamp]");
+            checkThrowsUnsupportedOperation(store::flush, "flush()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put() [with timestamp]", AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
             assertEquals(timestampedIters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -279,11 +278,11 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("GlobalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
-            checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove()");
-            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put()");
+            checkThrowsUnsupportedOperation(store::flush, "flush()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
+            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put()", AbstractReadOnlyDecorator.ERROR_MESSAGE);
 
             assertEquals(iters.get(3), store.findSessions(KEY, 1L, 2L));
             assertEquals(iters.get(4), store.findSessions(KEY, KEY, 1L, 2L));
@@ -309,7 +308,7 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("LocalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadWriteDecorator.ERROR_MESSAGE);
 
             store.flush();
 
@@ -350,7 +349,7 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("LocalTimestampedKeyValueStore", (Consumer<TimestampedKeyValueStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadWriteDecorator.ERROR_MESSAGE);
 
             store.flush();
 
@@ -396,7 +395,7 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("LocalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadWriteDecorator.ERROR_MESSAGE);
 
             store.flush();
 
@@ -437,7 +436,7 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("LocalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadWriteDecorator.ERROR_MESSAGE);
 
             store.flush();
 
@@ -483,7 +482,7 @@ public class ProcessorContextImplTest {
         mockProcessorNodeWithLocalKeyValueStore();
 
         doTest("LocalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
-            verifyStoreCannotBeInitializedOrClosed(store);
+            verifyStoreCannotBeInitializedOrClosed(store, AbstractReadWriteDecorator.ERROR_MESSAGE);
 
             store.flush();
 
@@ -920,21 +919,18 @@ public class ProcessorContextImplTest {
         processor.init((ProcessorContext) context);
     }
 
-    private void verifyStoreCannotBeInitializedOrClosed(final StateStore store) {
+    private void verifyStoreCannotBeInitializedOrClosed(final StateStore store, final String expectedMessage) {
         assertEquals(STORE_NAME, store.name());
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
-        checkThrowsUnsupportedOperation(store::close, "close()");
+        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()", expectedMessage);
+        checkThrowsUnsupportedOperation(store::close, "close()", expectedMessage);
     }
 
-    private void checkThrowsUnsupportedOperation(final Runnable check, final String name) {
-        try {
-            check.run();
-            fail(name + " should throw exception");
-        } catch (final UnsupportedOperationException e) {
-            //ignore.
-        }
+    private void checkThrowsUnsupportedOperation(final Runnable check, final String name, final String expectedMessage) {
+        final UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class, check::run,
+            name + " should throw exception");
+        assertEquals(expectedMessage, e.getMessage(), name + " threw an unexpected message");
     }
 }

@@ -1433,8 +1433,10 @@ public interface KStream<K, V> {
      * or the {@code KStreams} input record's key for a left-join result.
      * If you need read access to the {@code KStream} key or the {@link GlobalKTable} key (which is the same as the
      * join key extracted by {@code keySelector}), use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}.
-     * If a {@code KStream} input record's value is {@code null} or if the provided {@link KeyValueMapper keySelector}
-     * returns {@code null}, the input record will be dropped, and no join computation is triggered.
+     * If a {@code KStream} input record's value is {@code null}, the input record will be dropped,
+     * and no join computation is triggered.
+     * If the provided {@link KeyValueMapper keySelector} returns {@code null}, the record will be treated as a non-match
+     * and {@link ValueJoiner} will be called with a {@code null} value for the global table record.
      * Note, that {@code null} keys for {@code KStream} input records are supported (in contrast to
      * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner join}) resulting in a left join result.
      * If a {@link GlobalKTable} input record's key is {@code null} the input record will be dropped, and the table

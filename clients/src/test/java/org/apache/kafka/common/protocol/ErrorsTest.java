@@ -86,6 +86,8 @@ public class ErrorsTest {
         assertNull(exceptionName);
         exceptionName = Errors.INVALID_TOPIC_EXCEPTION.exceptionName();
         assertEquals("org.apache.kafka.common.errors.InvalidTopicException", exceptionName);
+        exceptionName = Errors.INVALID_MIRROR.exceptionName();
+        assertEquals("org.apache.kafka.common.errors.InvalidMirrorException", exceptionName);
     }
 
 }

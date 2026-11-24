@@ -18,10 +18,13 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -39,15 +42,33 @@ public abstract class KafkaTopicBasedBackingStore {
 
     Consumer<TopicAdmin> topicInitializer(String topic, NewTopic topicDescription, WorkerConfig config, Time time) {
         return admin -> {
-            log.debug("Creating Connect internal topic for {}", getTopicPurpose());
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = createTopics(topicDescription, admin, config, time);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
+            if (config.internalTopicsCreationEnabled()) {
+                log.debug("Creating Connect internal topic for {}", getTopicPurpose());
+                // Create the topic if it doesn't exist
+                Set<String> newTopics = createTopics(topicDescription, admin, config, time);
+                if (!newTopics.contains(topic)) {
+                    verifyTopicConfig(topic, admin);
+                }
+            } else {
+                log.debug("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
+                Map<String, TopicDescription> existing = admin.describeTopics(topic);
+                if (existing.isEmpty()) {
+                    String msg = String.format("Topic '%s' specified via the '%s' property is missing." +
+                                    " The config '%s' is set to '%s', so automatic creation of internal topics is disabled." +
+                                    " Either enable automatic creation or create the topics manually.",
+                            topic, getTopicConfig(), DistributedConfig.INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG, config.internalTopicsCreationEnabled());
+                    throw new ConnectException(msg);
+                }
+
+                verifyTopicConfig(topic, admin);
             }
         };
+    }
+
+    private void verifyTopicConfig(String topic, TopicAdmin admin) {
+        // It already existed, so check that the topic cleanup policy is compact only and not delete
+        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+        admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
     }
 
     private Set<String> createTopics(NewTopic topicDescription, TopicAdmin admin, WorkerConfig config, Time time) {

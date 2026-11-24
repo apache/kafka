@@ -38,7 +38,6 @@ import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -52,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -92,16 +92,19 @@ public class ProcessorStateManager implements StateManager {
         // applied to the store used for both restoration (active and standby tasks restored offset) and
         // normal processing that update stores (written offset); could be null (when initialized)
         //
-        // the offset is updated in three ways:
+        // the offset is updated in four ways:
         //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
         //      directory lock and have registered all the state store; it is only one-time
         //   2. when updating with restore records (by both restoring active and standby),
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
+        // 4. when restoration reaches the end offset (the limit offset for standbys) with no further
+        //    records to apply, update to next offset to fetch minus one (last-applied); never moves backwards
         private Long offset;
 
-        // Will be updated on batch restored
+        // the last offset of the changelog, -1 for an empty changelog; set on each restored batch, and for a standby
+        // task once its restore consumer reaches the end of the changelog; null while unknown
         private Long endOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
@@ -136,22 +139,11 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
-            this.retentionPeriod = extractRetentionPeriod(stateStore);
+            this.retentionPeriod = WithRetentionPeriod.resolveRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
-        }
-
-        private static long extractRetentionPeriod(final StateStore stateStore) {
-            StateStore current = stateStore;
-            while (current instanceof WrappedStateStore) {
-                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-            }
-            if (current instanceof WithRetentionPeriod) {
-                return ((WithRetentionPeriod) current).retentionPeriod();
-            }
-            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
@@ -358,7 +350,7 @@ public class ProcessorStateManager implements StateManager {
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
                                 "before re-bootstrapping", store.stateStore.name(), taskId);
 
-                        throw new TaskCorruptedException(Collections.singleton(taskId));
+                        throw new TaskCorruptedException(Set.of(taskId));
                     } else {
                         log.info("State store {} did not find checkpoint offset, hence would " +
                                         "default to the starting offset at changelog {}",
@@ -369,7 +361,7 @@ public class ProcessorStateManager implements StateManager {
         }
 
         try {
-            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+            stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
         } catch (final RuntimeException e) {
             throw new ProcessorStateException(format("%sError updating state directory offsets when creating the state manager",
                 logPrefix), e);
@@ -455,10 +447,18 @@ public class ProcessorStateManager implements StateManager {
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
+        return changelogOffsets(storeMetadata -> true);
+    }
+
+    private Map<TopicPartition, Long> persistentChangelogOffsets() {
+        return changelogOffsets(storeMetadata -> storeMetadata.stateStore.persistent());
+    }
+
+    private Map<TopicPartition, Long> changelogOffsets(final Predicate<StateStoreMetadata> storeFilter) {
         // return the current offsets for those logged stores
         final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (storeMetadata.changelogPartition != null) {
+            if (storeMetadata.changelogPartition != null && storeFilter.test(storeMetadata)) {
                 // for changelog whose offset is unknown, use 0L indicating earliest offset
                 // otherwise return the current offset + 1 as the next offset to fetch
                 changelogOffsets.put(
@@ -532,8 +532,33 @@ public class ProcessorStateManager implements StateManager {
                 storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
 
-            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+            stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
         }
+    }
+
+    /**
+     * Advances the store's restored offset once restoration has reached the end offset (the limit
+     * offset for standbys): {@code nextOffsetToFetch} is a next offset to fetch (exclusive end),
+     * stored as last-applied {@code nextOffsetToFetch - 1} (KAFKA-14302). Never moves backwards;
+     * a non-positive value is a no-op, so the stored offset stays non-negative.
+     */
+    void advanceRestoredOffsetTo(final StateStoreMetadata storeMetadata, final long nextOffsetToFetch) {
+        if (!stores.containsValue(storeMetadata)) {
+            throw new IllegalStateException("Advancing offset for " + storeMetadata + " which is not registered in this state manager, " +
+                "this should not happen.");
+        }
+        if (nextOffsetToFetch <= 0L) {
+            return;
+        }
+        final long lastAppliedOffset = nextOffsetToFetch - 1L;
+        final Long currentOffset = storeMetadata.offset();
+        if (currentOffset != null && currentOffset >= lastAppliedOffset) {
+            return;
+        }
+        storeMetadata.setOffset(lastAppliedOffset);
+        log.debug("State store {} restored offset advanced to {} at changelog {} (next fetch {})",
+            storeMetadata.stateStore.name(), storeMetadata.offset, storeMetadata.changelogPartition, nextOffsetToFetch);
+        stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
     }
 
     /**
@@ -648,6 +673,14 @@ public class ProcessorStateManager implements StateManager {
         return total;
     }
 
+    long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            max = Math.max(max, metadata.stateStore.approximateNumUncommittedBytes());
+        }
+        return max;
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.
@@ -756,7 +789,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+        stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
     }
 
     // Commit a sentinel value when the changelog offset is not yet initialized/known

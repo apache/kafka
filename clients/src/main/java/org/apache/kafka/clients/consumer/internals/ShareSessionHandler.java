@@ -41,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -94,10 +93,6 @@ public class ShareSessionHandler {
         return sessionPartitions;
     }
 
-    public Collection<TopicIdPartition> sessionPartitions() {
-        return Set.copyOf(sessionPartitions.values());
-    }
-
     public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
         nextPartitions.put(topicIdPartition.topicPartition(), topicIdPartition);
         if (partitionAcknowledgements != null) {
@@ -111,6 +106,10 @@ public class ShareSessionHandler {
 
     public boolean isNewSession() {
         return nextMetadata.isNewSession();
+    }
+
+    public boolean isSessionEmpty() {
+        return sessionPartitions.isEmpty();
     }
 
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, ShareFetchConfig shareFetchConfig, boolean canSkipIfRequestEmpty) {
@@ -190,7 +189,7 @@ public class ShareSessionHandler {
         nextAcknowledgements = new LinkedHashMap<>();
 
         // If there are no changes to the share session and no acknowledgements, we can sometimes skip sending an empty request
-        if (added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
+        if (added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty() && !nextMetadata.isFinalEpoch()) {
             // If the share session is empty, there are no partitions to fetch from and we can always skip
             if (sessionPartitions.isEmpty()) {
                 log.debug("Skipping sending empty ShareFetch because share partitions empty");

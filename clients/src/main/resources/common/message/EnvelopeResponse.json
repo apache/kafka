@@ -18,8 +18,13 @@
   "type": "response",
   "name": "EnvelopeResponse",
   // Response struct for forwarding.
-  "validVersions": "0",
+  //
+  // Version 1 is the same as version 0 (KIP-1313).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "ResponseData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
       "zeroCopy": true, "default": "null",

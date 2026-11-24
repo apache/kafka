@@ -57,7 +57,7 @@ import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
  *
  * This class is not thread safe and external synchronization must be used when modifying it
  */
-public final class ProducerBatch {
+public class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
@@ -68,7 +68,7 @@ public final class ProducerBatch {
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
-    private final MemoryRecordsBuilder recordsBuilder;
+    protected final MemoryRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
@@ -116,11 +116,13 @@ public final class ProducerBatch {
     void maybeUpdateLeaderEpoch(OptionalInt latestLeaderEpoch) {
         if (latestLeaderEpoch.isPresent()
             && (currentLeaderEpoch.isEmpty() || currentLeaderEpoch.getAsInt() < latestLeaderEpoch.getAsInt())) {
-            log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
-                this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+            if (log.isTraceEnabled()) {
+                log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
+                    this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
+            }
             attemptsWhenLeaderLastChanged = attempts();
             currentLeaderEpoch = latestLeaderEpoch;
-        } else {
+        } else if (log.isTraceEnabled()) {
             log.trace("For {}, leader wasn't updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
                 this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
         }
@@ -138,6 +140,25 @@ public final class ProducerBatch {
         return attempts == attemptsWhenLeaderLastChanged;
     }
 
+
+    /**
+     * Return this batch's buffer memory to the pool. The default single-buffer batch returns
+     * the pooled buffer at its initial capacity; {@link ChunkedProducerBatch} overrides this
+     * to return its remaining chunks (fully-unused chunks are released earlier, at close).
+     */
+    protected void deallocateBuffer(BufferPool pool) {
+        pool.deallocate(buffer(), initialCapacity());
+    }
+
+    /**
+     * Credit this batch's memory back to the pool when it is unexpectedly still inflight
+     * (KAFKA-19012): the buffer can't be touched (the network may still be reading it), so the
+     * default donates a fresh same-capacity buffer. {@link ChunkedProducerBatch} instead returns
+     * the actual chunks (safe — inflight bytes live in the separate flattened buffer).
+     */
+    protected void deallocateInflightBuffer(BufferPool pool) {
+        pool.deallocate(ByteBuffer.allocate(initialCapacity()));
+    }
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
@@ -546,10 +567,6 @@ public final class ProducerBatch {
 
     public int initialCapacity() {
         return recordsBuilder.initialCapacity();
-    }
-
-    public boolean isWritable() {
-        return !recordsBuilder.isClosed();
     }
 
     public byte magic() {

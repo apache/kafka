@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.ConfigException;
 
@@ -35,15 +34,15 @@ public class AdminClientConfigTest {
     public void testDefaultMetadataRecoveryStrategy() {
         Map<String, Object> configs = new HashMap<>();
         final AdminClientConfig adminClientConfig = new AdminClientConfig(configs);
-        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, adminClientConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, adminClientConfig.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
 
     }
 
     @Test
     public void testInvalidMetadataRecoveryStrategy() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        configs.put(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
         ConfigException ce = assertThrows(ConfigException.class, () -> new AdminClientConfig(configs));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertTrue(ce.getMessage().contains(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 }

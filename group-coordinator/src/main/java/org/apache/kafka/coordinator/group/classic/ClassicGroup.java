@@ -257,6 +257,7 @@ public class ClassicGroup implements Group {
     /**
      * @return the group id.
      */
+    @Override
     public String groupId() {
         return this.groupId;
     }
@@ -514,9 +515,10 @@ public class ClassicGroup implements Group {
                 for (ClassicGroupMember member : members.values()) {
                     if (member.isAwaitingJoin()) {
                         leaderId = Optional.of(member.memberId());
-                        log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
+                        log.info("[GroupId {}] Group leader [memberId: {}, groupInstanceId: {}] " +
                                 "failed to join before the rebalance timeout. Member {} " +
                                 "was elected as the new leader.",
+                            groupId,
                             currentLeader.memberId(),
                             currentLeader.groupInstanceId().orElse("None"),
                             member
@@ -524,10 +526,11 @@ public class ClassicGroup implements Group {
                         return true;
                     }
                 }
-                log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
+                log.info("[GroupId {}] Group leader [memberId: {}, groupInstanceId: {}] " +
                         "failed to join before the rebalance timeout and the " +
                         "group couldn't proceed to the next generation because " +
                         "no member joined.",
+                    groupId,
                     currentLeader.memberId(),
                     currentLeader.groupInstanceId().orElse("None")
                 );
@@ -639,7 +642,7 @@ public class ClassicGroup implements Group {
     public boolean addPendingSyncMember(String memberId) {
         if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending sync member " + memberId +
-                " which is already a stable member of the group.");
+                " which is not a member of the group.");
         }
 
         return pendingSyncMembers.add(memberId);
@@ -653,8 +656,8 @@ public class ClassicGroup implements Group {
      */
     public boolean removePendingSyncMember(String memberId) {
         if (!hasMember(memberId)) {
-            throw new IllegalStateException("Attempt to add pending member " + memberId +
-                " which is already a stable member of the group.");
+            throw new IllegalStateException("Attempt to remove pending sync member " + memberId +
+                " which is not a member of the group.");
         }
         return pendingSyncMembers.remove(memberId);
     }
@@ -805,9 +808,9 @@ public class ClassicGroup implements Group {
             if (existingMemberId == null) {
                 throw Errors.UNKNOWN_MEMBER_ID.exception();
             } else if (!existingMemberId.equals(memberId)) {
-                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                log.info("[GroupId {}] Request memberId={} for static member with groupInstanceId={} " +
                          "is fenced by existing memberId={} during operation {}",
-                    memberId, groupInstanceId, existingMemberId, operation);
+                    groupId, memberId, groupInstanceId, existingMemberId, operation);
                 throw Errors.FENCED_INSTANCE_ID.exception();
             }
         }
@@ -847,7 +850,7 @@ public class ClassicGroup implements Group {
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
-            validateMember(memberId, groupInstanceId, isTransactional ? "offset-commit" : "txn-offset-commit");
+            validateMember(memberId, groupInstanceId, isTransactional ? "txn-offset-commit" : "offset-commit");
 
             if (generationId != this.generationId) {
                 throw Errors.ILLEGAL_GENERATION.exception();
@@ -1138,6 +1141,7 @@ public class ClassicGroup implements Group {
      *
      * @return whether the group is subscribed to the topic.
      */
+    @Override
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
             .orElse(usesConsumerGroupProtocol());
@@ -1168,9 +1172,10 @@ public class ClassicGroup implements Group {
             try {
                 Set<String> allSubscribedTopics = new HashSet<>();
                 members.values().forEach(member -> {
-                    // The consumer protocol is parsed with V0 which is the based prefix of all versions.
-                    // This way the consumer group manager does not depend on any specific existing or
-                    // future versions of the consumer protocol. VO must prefix all new versions.
+                    // The consumer protocol is parsed with V0 which is the base prefix of all
+                    // versions. This way the consumer group manager does not depend on any specific
+                    // existing or future versions of the consumer protocol. V0 must prefix all new
+                    // versions.
                     ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
                     ConsumerProtocol.deserializeVersion(buffer);
                     allSubscribedTopics.addAll(new HashSet<>(
@@ -1179,8 +1184,8 @@ public class ClassicGroup implements Group {
                 });
                 return Optional.of(allSubscribedTopics);
             } catch (SchemaException e) {
-                log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
-                        ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), groupId, e);
+                log.warn("[GroupId {}] Failed to parse Consumer Protocol {}:{}. Consumer group coordinator is not aware of the subscribed topics.",
+                        groupId, ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), e);
             }
         }
 
@@ -1228,9 +1233,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         JoinGroupResponseData response
     ) {
-        if (member.isAwaitingJoin()) {
-            member.awaitingJoinFuture().complete(response);
-            member.setAwaitingJoinFuture(null);
+        if (member.completeJoinFuture(response)) {
             numMembersAwaitingJoinResponse--;
             return true;
         }
@@ -1238,7 +1241,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Complete all the awaiting join future with the given error.
+     * Complete all the awaiting join futures with the given error.
      *
      * @param error  the error to complete the future with.
      */
@@ -1264,16 +1267,11 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         SyncGroupResponseData response
     ) {
-        if (member.isAwaitingSync()) {
-            member.awaitingSyncFuture().complete(response);
-            member.setAwaitingSyncFuture(null);
-            return true;
-        }
-        return false;
+        return member.completeSyncFuture(response);
     }
 
     /**
-     * Complete all the awaiting sync future with the give error.
+     * Complete all the awaiting sync futures with the given error.
      *
      * @param error  the error to complete the future with.
      */
@@ -1326,6 +1324,7 @@ public class ClassicGroup implements Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -1418,7 +1417,7 @@ public class ClassicGroup implements Group {
             // The serializing version should align with that of the member's JoinGroupRequestProtocol.
             String memberId = classicGroupMember.memberId();
             if (joiningMember != null && memberId.equals(joiningMember.memberId())) {
-                // If the downgraded is triggered by the joining static member replacing
+                // If the downgrade is triggered by the joining static member replacing
                 // the leaving static member, the joining member should take the assignment
                 // of the leaving one.
                 ConsumerGroupMember replacedMember = consumerGroup.staticMember(joiningMember.instanceId());
@@ -1481,7 +1480,7 @@ public class ClassicGroup implements Group {
 
     @Override
     public String toString() {
-        return "ClassicGroupMetadata(" +
+        return "ClassicGroup(" +
             "groupId=" + groupId + ", " +
             "generation=" + generationId + ", " +
             "protocolType=" + protocolType + ", " +

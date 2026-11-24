@@ -51,6 +51,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -765,6 +766,49 @@ public final class KafkaRaftClientSnapshotTest {
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(topicPartition).get();
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(response.errorCode()));
+    }
+
+    @Test
+    public void testFetchSnapshotRequestWithoutTopics() throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
+            .build();
+
+        context.unattachedToLeader();
+        context.deliverRequest(new FetchSnapshotRequestData());
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testFetchSnapshotRequestWithoutPartitions() throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
+            .build();
+
+        context.unattachedToLeader();
+
+        // FetchSnapshot is invalid for a topic that doesn't contain any partition.
+        context.deliverRequest(
+            new FetchSnapshotRequestData()
+                .setTopics(
+                    List.of(
+                        new FetchSnapshotRequestData.TopicSnapshot()
+                            .setName(context.metadataPartition.topic())
+                    )
+                )
+        );
+
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
     }
 
     @ParameterizedTest

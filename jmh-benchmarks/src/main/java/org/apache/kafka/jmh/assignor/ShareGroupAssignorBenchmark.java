@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -115,7 +116,11 @@ public class ShareGroupAssignorBenchmark {
 
     private List<String> allTopicNames = List.of();
 
+    private CoordinatorMetadataImage metadataImage;
+
     private TopicIds.TopicResolver topicResolver;
+
+    private Map<Uuid, InitMapValue> initializedTopics;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
@@ -126,7 +131,13 @@ public class ShareGroupAssignorBenchmark {
         setupTopics();
 
         Map<String, ShareGroupMember> members = createMembers();
-        this.groupSpec = AssignorBenchmarkUtils.createShareGroupSpec(members, subscriptionType, topicResolver);
+        this.groupSpec = AssignorBenchmarkUtils.createShareGroupSpec(
+            metadataImage,
+            members,
+            subscriptionType,
+            topicResolver,
+            initializedTopics
+        );
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance();
@@ -136,8 +147,18 @@ public class ShareGroupAssignorBenchmark {
     private void setupTopics() {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
-        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
+        metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
         topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
+
+        initializedTopics = new HashMap<>();
+        for (Uuid topicId : metadataImage.topicIds()) {
+            CoordinatorMetadataImage.TopicMetadata topicMetadata = metadataImage.topicMetadata(topicId).get();
+            Set<Integer> partitions = new HashSet<>();
+            for (int partition = 0; partition < topicMetadata.partitionCount(); partition++) {
+                partitions.add(partition);
+            }
+            initializedTopics.put(topicId, new InitMapValue(topicMetadata.name(), partitions, 0L));
+        }
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
@@ -171,8 +192,6 @@ public class ShareGroupAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
-
         Map<String, MemberSubscriptionAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
 
         for (String memberId : groupSpec.memberIds()) {
@@ -203,10 +222,11 @@ public class ShareGroupAssignorBenchmark {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ShareGroupSpec(
+            metadataImage,
             updatedMemberSpec,
             subscriptionType,
-            invertedTargetAssignment
+            initializedTopics
         );
     }
 

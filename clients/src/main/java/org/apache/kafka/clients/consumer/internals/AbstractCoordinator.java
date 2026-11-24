@@ -308,7 +308,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     timer.sleep(retryBackoff.backoff(attempts++));
-                    client.awaitMetadataUpdate(timer);
+                    client.awaitMetadataUpdate(timer, disableWakeup);
                 } else {
                     fatalException = future.exception();
                     log.info("FindCoordinator request hit fatal exception", fatalException);
@@ -1571,6 +1571,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } catch (AuthenticationException e) {
                 log.error("An authentication error occurred in the heartbeat thread", e);
                 setFailureCause(e);
+                requestRejoin("authentication error in heartbeat thread");
             } catch (GroupAuthorizationException e) {
                 log.error("A group authorization error occurred in the heartbeat thread", e);
                 setFailureCause(e);

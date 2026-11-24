@@ -59,8 +59,4 @@ public class BrokerHeartbeatResponse extends AbstractResponse {
         return new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
 }

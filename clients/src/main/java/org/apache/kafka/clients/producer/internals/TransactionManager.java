@@ -275,7 +275,7 @@ public class TransactionManager {
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
-     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
+     *     <li>{@link Producer#commitTransaction()} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
      *     </li>
      *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
@@ -348,7 +348,10 @@ public class TransactionManager {
                     .setEnable2Pc(enable2PC)
                     .setKeepPreparedTxn(keepPreparedTxn);
 
-            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
+            // Use unstable API version when 2PC features are enabled (requires InitProducerId v6)
+            boolean enableUnstableLastVersion = enable2PC || keepPreparedTxn;
+            InitProducerIdHandler handler = new InitProducerIdHandler(
+                    new InitProducerIdRequest.Builder(requestData, enableUnstableLastVersion),
                     isEpochBump);
             enqueueRequest(handler);
             return handler.result;
@@ -851,6 +854,15 @@ public class TransactionManager {
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
         return txnPartitionMap.getOrCreate(topicPartition).hasInflightBatches();
+    }
+
+    /**
+     * Returns true if sending another new batch to the partition could push its oldest in-flight batch out of the
+     * broker's deduplication window. Every batch sent after the oldest in-flight batch may be appended before that
+     * batch is retried, so at most {@code RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1} of them may exist at any time.
+     */
+    synchronized boolean wouldExceedBrokerDeduplicationWindow(TopicPartition topicPartition) {
+        return txnPartitionMap.numBatchesAheadOfOldestInflight(topicPartition) >= RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER - 1;
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
@@ -1566,6 +1578,9 @@ public class TransactionManager {
                         initProducerIdResponse.data().ongoingTxnProducerId(),
                         initProducerIdResponse.data().ongoingTxnProducerEpoch()
                     );
+                    // Set transactionStarted to true because there is an ongoing transaction
+                    // on the server that needs to be completed with EndTxn.
+                    transactionStarted = true;
                 } else {
                     transitionTo(State.READY);
                 }

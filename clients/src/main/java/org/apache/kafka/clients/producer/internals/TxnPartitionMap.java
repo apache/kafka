@@ -121,6 +121,11 @@ class TxnPartitionMap {
         return TxnPartitionEntry.NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
+    int numBatchesAheadOfOldestInflight(TopicPartition topicPartition) {
+        TxnPartitionEntry entry = topicPartitions.get(topicPartition);
+        return entry == null ? 0 : entry.numBatchesAheadOfOldestInflight();
+    }
+
     ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
         return get(topicPartition).nextBatchBySequence();
     }

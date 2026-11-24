@@ -32,6 +32,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
@@ -80,10 +81,6 @@ import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyAllWindowedKeyValues;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -153,8 +150,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final RocksDBTimestampedWindowStore innerWrong = mock(RocksDBTimestampedWindowStore.class);
         final Exception e = assertThrows(IllegalArgumentException.class,
             () -> new TimeOrderedCachingWindowStore(innerWrong, WINDOW_SIZE, SEGMENT_INTERVAL));
-        assertThat(e.getMessage(),
-            containsString("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store"));
+        assertTrue(e.getMessage().contains("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store"));
 
         final RocksDBTimeOrderedWindowStore<?> inner = mock(RocksDBTimeOrderedWindowStore.class);
         // Nothing happens
@@ -197,7 +193,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                         }
                     }
 
-                    assertThat(count, equalTo(0));
+                    assertEquals(0, count);
                 }
 
                 @Override
@@ -211,7 +207,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                         }
                     }
 
-                    assertThat(count, equalTo(numRecordsProcessed));
+                    assertEquals(numRecordsProcessed, count);
 
                     store.put(record.value(), ValueAndTimestamp.make(record.value(), record.timestamp()), record.timestamp());
 
@@ -228,7 +224,10 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000L);
 
         final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
+        final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
+            .withConfig(streamsConfiguration)
+            .withInitialWallClockTime(initialWallClockTime)
+            .build();
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
             new StringSerializer(),
@@ -265,10 +264,10 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
-        assertThat(cachingStore.fetch(bytesKey("a"), 10), equalTo(bytesValue("a")));
-        assertThat(cachingStore.fetch(bytesKey("b"), 10), equalTo(bytesValue("b")));
-        assertThat(cachingStore.fetch(bytesKey("c"), 10), equalTo(null));
-        assertThat(cachingStore.fetch(bytesKey("a"), 0), equalTo(null));
+        assertArrayEquals(bytesValue("a"), cachingStore.fetch(bytesKey("a"), 10));
+        assertArrayEquals(bytesValue("b"), cachingStore.fetch(bytesKey("b"), 10));
+        assertNull(cachingStore.fetch(bytesKey("c"), 10));
+        assertNull(cachingStore.fetch(bytesKey("a"), 0));
 
         try (final WindowStoreIterator<byte[]> a = cachingStore.fetch(bytesKey("a"), ofEpochMilli(10), ofEpochMilli(10));
              final WindowStoreIterator<byte[]> b = cachingStore.fetch(bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10))) {
@@ -328,8 +327,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private void verifyKeyValue(final KeyValue<Long, byte[]> next,
                                 final long expectedKey,
                                 final String expectedValue) {
-        assertThat(next.key, equalTo(expectedKey));
-        assertThat(next.value, equalTo(bytesValue(expectedValue)));
+        assertEquals(expectedKey, next.key);
+        assertArrayEquals(bytesValue(expectedValue), next.value);
     }
 
     private static byte[] bytesValue(final String value) {
@@ -1194,13 +1193,11 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                " This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 
@@ -1218,13 +1215,11 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                " This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 

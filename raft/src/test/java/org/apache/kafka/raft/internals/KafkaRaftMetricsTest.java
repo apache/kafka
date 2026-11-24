@@ -86,7 +86,7 @@ public class KafkaRaftMetricsTest {
             localDirectoryId,
             mockPartitionState,
             voterSet.listeners(localId),
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),

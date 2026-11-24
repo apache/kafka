@@ -191,6 +191,7 @@ public class JmxReporter implements MetricsReporter {
         return mBeanName.toString();
     }
 
+    @Override
     public void close() {
         synchronized (LOCK) {
             for (KafkaMbean mbean : this.mbeans.values())

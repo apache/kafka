@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -35,7 +36,10 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -245,9 +249,10 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
     }
 
     /**
-     * End-to-end query behavior of {@link TimestampedWindowKeyWithHeadersQuery} against a real store
-     * built by the builder over each supported build path. Caching is disabled: a window key query reads
-     * the underlying store directly (it never consults the cache), so writes must be store-served.
+     * End-to-end query behavior of {@link TimestampedWindowKeyWithHeadersQuery} and the window-store
+     * ({@code withWindowStartRange}) form of {@link TimestampedWindowRangeWithHeadersQuery} against a real
+     * store built by the builder over each supported build path. Caching is disabled: these queries read
+     * the underlying store directly (they never consult the cache), so writes must be store-served.
      */
     @Nested
     class QueryTests {
@@ -316,6 +321,15 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
             return store.query(
                 TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
                     "k", Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+        }
+
+        private QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> windowRangeQuery(
+                final TimestampedWindowStoreWithHeaders<String, String> store) {
+            return store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                    Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION)),
                 PositionBound.unbounded(),
                 new QueryConfig(false));
         }
@@ -449,6 +463,13 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                         info.contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName())
                             && info.contains(MeteredTimestampedWindowStoreWithHeaders.class.getName()),
                         "execution info missing an entry: " + info);
+                    // The metered handler reports the serdes it went through for a locally-handled query
+                    // (only the metered layer emits "with serdes"; the native store's entry does not).
+                    assertTrue(info.contains("with serdes"), "metered entry missing serdes detail: " + info);
+                    // The metered entry's duration is measured with the injected (frozen MockTime) clock,
+                    // so it reads a deterministic 0ns; the native store still times with System.nanoTime(),
+                    // so only the metered entry can read " in 0ns". This pins timing to the injected clock.
+                    assertTrue(info.contains(" in 0ns"), "metered timing not from injected clock: " + info);
                 }
             } finally {
                 store.close();
@@ -472,8 +493,166 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
             }
         }
 
+        @ParameterizedTest
+        @CsvSource({"NATIVE", "IN_MEMORY"})
+        public void shouldReturnHeadersForTimestampedWindowRangeWithHeadersQueryOnHeaderPersistingStore(final StoreType storeType) {
+            // Mirrors the window-key case: the native and in-memory builds persist headers (native in its
+            // headers column family, in-memory via the value-with-headers marker); the adapter build drops them.
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(storeType);
+            try {
+                final Headers headers = headersWith("h", "x");
+                store.put("k", ValueTimestampHeaders.make("v", 1_005L, headers), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = windowRangeQuery(store);
+
+                assertTrue(result.isSuccess(), "Expected TimestampedWindowRangeWithHeadersQuery to succeed");
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    assertTrue(iterator.hasNext());
+                    final ReadOnlyRecord<Windowed<String>, String> record = iterator.next();
+                    assertEquals("k", record.key().key());
+                    assertEquals(WINDOW_START, record.key().window().start());
+                    assertEquals(WINDOW_START + WINDOW_SIZE, record.key().window().end());
+                    assertEquals("v", record.value());
+                    assertEquals(1_005L, record.timestamp());
+                    assertEquals(headers, record.headers());
+                    // The IQ result is a read-only snapshot: its headers are immutable (neither add nor remove).
+                    assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]));
+                    assertThrows(IllegalStateException.class, () -> record.headers().remove("h"));
+                    assertFalse(iterator.hasNext());
+                }
+                assertNotNull(result.getPosition(), "Expected position to be set");
+            } finally {
+                store.close();
+            }
+        }
+
         @Test
-        public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores() {
+        public void shouldReturnEmptyHeadersForTimestampedWindowRangeWithHeadersQueryOnAdapterStore() {
+            // The timestamped adapter keeps the timestamp but drops headers on write, so the record comes
+            // back with empty (never null) headers while value and timestamp still round-trip.
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER);
+            try {
+                store.put("k", ValueTimestampHeaders.make("v", 1_005L, headersWith("h", "x")), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = windowRangeQuery(store);
+
+                assertTrue(result.isSuccess());
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    assertTrue(iterator.hasNext());
+                    final ReadOnlyRecord<Windowed<String>, String> record = iterator.next();
+                    assertEquals("k", record.key().key());
+                    assertEquals(WINDOW_START, record.key().window().start());
+                    assertEquals("v", record.value());
+                    assertEquals(1_005L, record.timestamp());
+                    assertEquals(new RecordHeaders(), record.headers());
+                    // Even the empty headers are a read-only snapshot: neither add nor remove is allowed.
+                    assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]));
+                    assertThrows(IllegalStateException.class, () -> record.headers().remove("h"));
+                    assertFalse(iterator.hasNext());
+                }
+                assertNotNull(result.getPosition(), "Expected position to be set");
+            } finally {
+                store.close();
+            }
+        }
+
+        @Test
+        public void shouldThrowForTimestampedWindowRangeWithHeadersQueryOnPlainSupplier() {
+            // A plain (non-timestamped) window supplier surfaces every entry with timestamp = -1, which
+            // cannot be represented as a ReadOnlyRecord. The query succeeds, but iterating throws.
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.PLAIN_ADAPTER);
+            try {
+                store.put("k", ValueTimestampHeaders.make("v", 1_005L, headersWith("h", "x")), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = windowRangeQuery(store);
+
+                assertTrue(result.isSuccess(), "The query itself succeeds; the failure surfaces while iterating");
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    final StreamsException e = assertThrows(StreamsException.class, iterator::next,
+                        "An entry with ts=-1 cannot be represented as a ReadOnlyRecord");
+                    assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                        "unexpected message: " + e.getMessage());
+                }
+            } finally {
+                store.close();
+            }
+        }
+
+        @Test
+        public void shouldThrowForNegativeStoredTimestampForTimestampedWindowRangeWithHeadersQuery() {
+            // A caller can store a negative timestamp directly on a native (header-persisting) store.
+            // The query succeeds, but the lazily-evaluated iterator throws while advancing (a ReadOnlyRecord
+            // timestamp must be non-negative).
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE);
+            try {
+                store.put("k", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = windowRangeQuery(store);
+
+                assertTrue(result.isSuccess());
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    final StreamsException e = assertThrows(StreamsException.class, iterator::next);
+                    assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                        "unexpected message: " + e.getMessage());
+                }
+            } finally {
+                store.close();
+            }
+        }
+
+        @Test
+        public void shouldCollectExecutionInfoForTimestampedWindowRangeWithHeadersQueryWhenRequested() {
+            // With execution info enabled, the result must carry both the wrapped (native) store's entry
+            // and the metered handler's entry.
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE);
+            try {
+                store.put("k", ValueTimestampHeaders.make("v", 1_005L, headersWith("h", "x")), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+                    TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                        Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION)),
+                    PositionBound.unbounded(),
+                    new QueryConfig(true));
+
+                assertTrue(result.isSuccess());
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    final String info = String.join("\n", result.getExecutionInfo());
+                    assertTrue(
+                        info.contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName())
+                            && info.contains(MeteredTimestampedWindowStoreWithHeaders.class.getName()),
+                        "execution info missing an entry: " + info);
+                    // The metered handler reports the serdes it went through for a locally-handled query
+                    // (only the metered layer emits "with serdes"; the native store's entry does not).
+                    assertTrue(info.contains("with serdes"), "metered entry missing serdes detail: " + info);
+                    // The metered entry's duration is measured with the injected (frozen MockTime) clock,
+                    // so it reads a deterministic 0ns; the native store still times with System.nanoTime(),
+                    // so only the metered entry can read " in 0ns". This pins timing to the injected clock.
+                    assertTrue(info.contains(" in 0ns"), "metered timing not from injected clock: " + info);
+                }
+            } finally {
+                store.close();
+            }
+        }
+
+        @Test
+        public void shouldNotCollectExecutionInfoForTimestampedWindowRangeWithHeadersQueryWhenNotRequested() {
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE);
+            try {
+                store.put("k", ValueTimestampHeaders.make("v", 1_005L, headersWith("h", "x")), WINDOW_START);
+
+                final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = windowRangeQuery(store);
+
+                assertTrue(result.isSuccess());
+                try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+                    assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info: " + result.getExecutionInfo());
+                }
+            } finally {
+                store.close();
+            }
+        }
+
+        @Test
+        public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStoresForWindowKeyQuery() {
             // Build-path parity for the existing (header-stripped) WindowKeyQuery: KIP-1356 makes the native
             // store serve it exactly as the adapter build already did.
             final ValueTimestampHeaders<String> v1 = ValueTimestampHeaders.make("v1", 1_005L, headersWith("h", "1"));
@@ -513,6 +692,53 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
             }
         }
 
+        @Test
+        public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStoresForWindowRangeQuery() {
+            // Build-path parity for the existing (header-stripped) WindowRangeQuery.withWindowStartRange:
+            // KIP-1356 makes the native store serve it exactly as the adapter build already did. Unlike
+            // WindowKeyQuery, withWindowStartRange has no key filter, so an interleaved "other" (noise) key
+            // is returned too -- both builds must yield every key, ordered by window-start then key.
+            final ValueTimestampHeaders<String> v1 = ValueTimestampHeaders.make("v1", 1_005L, headersWith("h", "1"));
+            final ValueTimestampHeaders<String> v2 = ValueTimestampHeaders.make("v2", 3_005L, headersWith("h", "2"));
+            final ValueTimestampHeaders<String> v3 = ValueTimestampHeaders.make("v3", 5_005L, headersWith("h", "3"));
+            final ValueTimestampHeaders<String> o1 = ValueTimestampHeaders.make("o1", 2_005L, headersWith("h", "o"));
+            final ValueTimestampHeaders<String> o2 = ValueTimestampHeaders.make("o2", 4_005L, headersWith("h", "o"));
+
+            final TimestampedWindowStoreWithHeaders<String, String> nativeStore = buildAndInitStore(StoreType.NATIVE);
+            final TimestampedWindowStoreWithHeaders<String, String> adapterStore = buildAndInitStore(StoreType.ADAPTER);
+            try {
+                // ascending window-start insertion order, interleaved with a noise key at shared windows
+                nativeStore.put("other", o1, WINDOW_START);
+                nativeStore.put("k", v1, WINDOW_START);
+                nativeStore.put("k", v2, WINDOW_START + 2_000L);
+                nativeStore.put("other", o2, WINDOW_START + 2_000L);
+                nativeStore.put("k", v3, WINDOW_START + 4_000L);
+                // descending window-start insertion order (same windows reversed), plus the noise key
+                adapterStore.put("k", v3, WINDOW_START + 4_000L);
+                adapterStore.put("other", o2, WINDOW_START + 2_000L);
+                adapterStore.put("k", v2, WINDOW_START + 2_000L);
+                adapterStore.put("k", v1, WINDOW_START);
+                adapterStore.put("other", o1, WINDOW_START);
+
+                // withWindowStartRange returns every key, ordered by key then window-start (all of "k"
+                // ascending, then all of "other" ascending) -- identical across both build paths.
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<String>>> expected = List.of(
+                    KeyValue.pair(windowedKey("k", WINDOW_START), ValueAndTimestamp.make("v1", 1_005L)),
+                    KeyValue.pair(windowedKey("k", WINDOW_START + 2_000L), ValueAndTimestamp.make("v2", 3_005L)),
+                    KeyValue.pair(windowedKey("k", WINDOW_START + 4_000L), ValueAndTimestamp.make("v3", 5_005L)),
+                    KeyValue.pair(windowedKey("other", WINDOW_START), ValueAndTimestamp.make("o1", 2_005L)),
+                    KeyValue.pair(windowedKey("other", WINDOW_START + 2_000L), ValueAndTimestamp.make("o2", 4_005L)));
+
+                assertEquals(expected, plainWindowRangeResults(nativeStore),
+                    "native WindowRangeQuery should return every key in (key, window-start) order");
+                assertEquals(expected, plainWindowRangeResults(adapterStore),
+                    "adapter WindowRangeQuery should return every key in (key, window-start) order");
+            } finally {
+                nativeStore.close();
+                adapterStore.close();
+            }
+        }
+
         // Drains the (header-stripped) plain WindowKeyQuery, which yields the window-start timestamp keyed
         // to a ValueAndTimestamp -- used to compare native and adapter build paths.
         private List<KeyValue<Long, ValueAndTimestamp<String>>> plainWindowKeyResults(
@@ -521,6 +747,26 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                 WindowKeyQuery.withKeyAndWindowStartRange("k", Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION));
             final List<KeyValue<Long, ValueAndTimestamp<String>>> out = new ArrayList<>();
             try (WindowStoreIterator<ValueAndTimestamp<String>> iterator =
+                     store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+                while (iterator.hasNext()) {
+                    out.add(iterator.next());
+                }
+            }
+            return out;
+        }
+
+        private Windowed<String> windowedKey(final String key, final long windowStart) {
+            return new Windowed<>(key, new TimeWindow(windowStart, windowStart + WINDOW_SIZE));
+        }
+
+        // Drains the (header-stripped) plain WindowRangeQuery.withWindowStartRange, keeping the full
+        // windowed key and ValueAndTimestamp -- used to compare native and adapter build paths.
+        private List<KeyValue<Windowed<String>, ValueAndTimestamp<String>>> plainWindowRangeResults(
+                final TimestampedWindowStoreWithHeaders<String, String> store) {
+            final WindowRangeQuery<String, ValueAndTimestamp<String>> query =
+                WindowRangeQuery.withWindowStartRange(Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION));
+            final List<KeyValue<Windowed<String>, ValueAndTimestamp<String>>> out = new ArrayList<>();
+            try (KeyValueIterator<Windowed<String>, ValueAndTimestamp<String>> iterator =
                      store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
                 while (iterator.hasNext()) {
                     out.add(iterator.next());
