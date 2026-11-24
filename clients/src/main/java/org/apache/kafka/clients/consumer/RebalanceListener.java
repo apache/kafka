@@ -277,27 +277,26 @@ public interface RebalanceListener {
      *   <li>{@link RebalanceConsumer#position(org.apache.kafka.common.TopicPartition) position()} and
      *       {@link RebalanceConsumer#seek(org.apache.kafka.common.TopicPartition, long) seek()} can
      *       still be used for the lost partitions since they are still in the assignment.
-     *       <ul>
-     *         <li>Consumer protocol: if a lost partition does not have a position yet,
-     *             {@code position()} blocks until the timeout and throws a
-     *             {@link org.apache.kafka.common.errors.TimeoutException}, since the consumer does not
-     *             fetch a position for it during this callback. Calling {@code seek()} first avoids this.</li>
-     *       </ul>
-     *   </li>
+     *       If a lost partition is pending revocation and does not have a position yet,
+     *       {@code position()} blocks until the timeout and throws a
+     *       {@link org.apache.kafka.common.errors.TimeoutException}, since the consumer does not
+     *       fetch a position for partitions pending revocation. Calling {@code seek()} first avoids this.</li>
      *   <li>{@link RebalanceConsumer#commitSync() commitSync()}/{@link RebalanceConsumer#commitAsync() commitAsync()}
      *       and {@link RebalanceConsumer#commitSync(java.util.Map) commitSync(offsets)}
      *       /{@link RebalanceConsumer#commitAsync(java.util.Map, OffsetCommitCallback) commitAsync(offsets)}
-     *       will usually be rejected, since the consumer is no longer an active member of the group.
+     *       will usually be rejected with a {@link CommitFailedException}, since the consumer is no
+     *       longer an active member of the group. {@code commitSync()} throws the exception, and
+     *       {@code commitAsync()} passes it to the {@link OffsetCommitCallback}.
      *       <ul>
-     *         <li>Classic protocol: rejected on the client with a {@link CommitFailedException}.</li>
-     *         <li>Consumer protocol: rejected by the broker with a {@link CommitFailedException},
-     *             unless no other members remain in the group, in which case the commit succeeds.</li>
+     *         <li>Classic protocol: rejected on the client.</li>
+     *         <li>Consumer protocol: rejected by the broker, unless no other members remain in the
+     *             group, in which case the commit succeeds.</li>
      *       </ul>
      *   </li>
      * </ul>
      * <p>
-     * The {@link RebalanceConsumer} does not add guardrails against these operations on lost
-     * partitions. Users should not rely on committing offsets for lost partitions in this callback.
+     * The {@link RebalanceConsumer} does not prevent commits for lost partitions. Users should not
+     * rely on committing offsets for lost partitions in this callback.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now have been reassigned
      *                   to other consumers. With both the Classic and Consumer protocols, this will always include
