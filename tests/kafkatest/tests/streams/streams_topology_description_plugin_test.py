@@ -24,7 +24,7 @@ from kafkatest.services.streams import (
     INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
     StreamsTopologyDescriptionPluginService,
 )
-from kafkatest.version import DEV_BRANCH, LATEST_4_3, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_4_2, LATEST_4_3, KafkaVersion
 
 
 class StreamsTopologyDescriptionPluginTest(Test):
@@ -59,13 +59,11 @@ class StreamsTopologyDescriptionPluginTest(Test):
             num_nodes=1,
             zk=None,
             topics=self.topics,
-            use_streams_groups=True,
             server_prop_overrides=server_prop_overrides,
         )
         if broker_version is not None:
             self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
-        self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
@@ -169,16 +167,18 @@ class StreamsTopologyDescriptionPluginTest(Test):
         processor.stop()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_topology_description_not_stored_with_pre_kip_1331_broker(self, metadata_quorum):
+    @matrix(broker_version=[str(LATEST_4_2), str(LATEST_4_3)],
+            metadata_quorum=[quorum.combined_kraft])
+    def test_topology_description_not_stored_with_pre_kip_1331_broker(self, broker_version, metadata_quorum):
         """
         Test the situation when a streams client built from this branch (topology description
         push enabled by default) talks to a broker that predates KIP-1331. Such a broker only
         negotiates StreamsGroupHeartbeat down to version 0, which carries no
         topologyDescriptionRequired field, so it can never solicit a push and the client must
-        never attempt one.
+        never attempt one. 4.2 and 4.3 are the two released lines that speak the streams
+        rebalance protocol but predate KIP-1331.
         """
-        self.setup_kafka(plugin_enabled=False, broker_version=str(LATEST_4_3))
+        self.setup_kafka(plugin_enabled=False, broker_version=broker_version)
 
         processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
         with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
@@ -191,13 +191,13 @@ class StreamsTopologyDescriptionPluginTest(Test):
             "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(solicited).strip()) == 0, \
-            "Client saw a topology push solicitation from a broker that predates KIP-1331"
+            "Client saw a topology push solicitation from a %s broker, which predates KIP-1331" % broker_version
 
         sent = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(sent).strip()) == 0, \
-            "Client sent a topology description to a broker that predates KIP-1331"
+            "Client sent a topology description to a %s broker, which predates KIP-1331" % broker_version
         processor.stop()
 
     @cluster(num_nodes=1)

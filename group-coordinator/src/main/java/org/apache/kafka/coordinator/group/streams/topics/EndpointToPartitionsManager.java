@@ -67,11 +67,7 @@ public class EndpointToPartitionsManager {
                                                                                               final StreamsGroup streamsGroup,
                                                                                               final CoordinatorMetadataImage metadataImage) {
         StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-        Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasksWithEpochs().entrySet().stream()
-            .collect(java.util.stream.Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().keySet()
-            ));
+        Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasks();
         // Warm-up tasks are executed as standby tasks on the client, so they are reported as standby partitions, as in the classic protocol.
         Map<String, Set<Integer>> standbyAndWarmupTasks = streamsGroupMember.assignedTasks().standbyAndWarmupTasks();
         endpointToPartitions.setUserEndpoint(responseEndpoint);

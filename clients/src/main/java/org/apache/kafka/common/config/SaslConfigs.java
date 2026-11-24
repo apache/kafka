@@ -157,7 +157,7 @@ public class SaslConfigs {
         + "<p>The built-in <code>JwtValidator</code> implementations are:</p>"
         + "<ul>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator</code></li>"
-        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code></li>"
+        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code> (clients only, it does not verify JWT signatures and cannot be used on brokers)</li>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code></li>"
         + "</ul>";
 

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.invocation.Invocation;
@@ -64,6 +65,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -346,14 +348,36 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
                 final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
 
-                final Set<String> logMessages = appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(LogCaptureAppender.Event::getMessage)
-                    .collect(Collectors.toSet());
+                final List<String> logMessages = appender.getMessages(Level.WARN);
 
                 walOptions.forEach(option -> assertTrue(logMessages.contains(
                     String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
             }
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenSettingMinWriteBufferNumberToMergeAboveOne() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                 new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+            adapter.setMinWriteBufferNumberToMerge(5);
+
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Kafka Streams enables atomic flush in RocksDB. Setting min_write_buffer_number_to_merge to '5' will be overridden to 1 when the store is opened"));
+            assertEquals(5, adapter.minWriteBufferNumberToMerge());
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenSettingMinWriteBufferNumberToMergeToOne() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                 new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+            adapter.setMinWriteBufferNumberToMerge(1);
+
+            assertTrue(appender.getMessages(Level.WARN).isEmpty());
+            assertEquals(1, adapter.minWriteBufferNumberToMerge());
         }
     }
 
@@ -365,10 +389,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             try (RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
                          new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
                 adapter.setAtomicFlush(false);
-                final Set<String> logMessages = appender.getEvents().stream()
-                        .filter(e -> e.getLevel().equals("WARN"))
-                        .map(LogCaptureAppender.Event::getMessage)
-                        .collect(Collectors.toSet());
+                final List<String> logMessages = appender.getMessages(Level.WARN);
                 assertTrue(logMessages.contains(
                     "AtomicFlush is explicitly set to True by Streams in RocksDB. Setting this option to 'false' will be ignored"));
             }

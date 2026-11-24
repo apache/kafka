@@ -92,7 +92,7 @@ class RoundTripFaultTest(Test):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         time.sleep(2)
         stop1_spec = ProcessStopFaultSpec(0, TaskSpec.MAX_DURATION_MS, [self.kafka.nodes[0]],
-                                           self.kafka.java_class_name())
+                                            "kafka.Kafka")
         stop1 = self.trogdor.create_task("stop1", stop1_spec)
         workload1.wait_for_done(timeout_sec=600)
         stop1.stop()

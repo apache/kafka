@@ -21,12 +21,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.test.MockInternalProcessorContext;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.Properties;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest.getDroppedRecordsRateMetric;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest.getDroppedRecordsTotalMetric;
@@ -782,6 +785,25 @@ public class SubscriptionSendProcessorSupplierTest {
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));
+    }
+
+    @Test
+    public void shouldUseTaskPartitionAsPrimaryPartitionWhenRecordMetadataIsUndefined() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context =
+            new MockInternalProcessorContext<>(new Properties(), new TaskId(0, 3), null);
+        leftJoinProcessor.init(context);
+        // the record context of a punctuation
+        context.setRecordMetadata(null, -1, -1L);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        assertEquals(1, context.forwarded().size());
+        assertEquals(
+            new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 3), 0),
+            context.forwarded().get(0).record()
+        );
     }
 
     private static class LeftValueSerializer implements Serializer<LeftValue> {

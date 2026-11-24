@@ -35,6 +35,7 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -139,6 +140,6 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), TIME);
+                new TestSecurityConfig(saslServerConfigs), new CredentialCache(ScramMechanism.mechanismNames()), TIME);
     }
 }

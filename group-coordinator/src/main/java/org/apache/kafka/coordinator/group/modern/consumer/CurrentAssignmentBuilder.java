@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.UnionSet;
+import org.apache.kafka.coordinator.group.util.UnionSet;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -248,7 +248,7 @@ public class CurrentAssignmentBuilder {
                 // best option is to fence the member to force it to rejoin the group
                 // without any partitions and to reconcile it again from scratch.
                 if (ownedTopicPartitions == null || !ownedTopicPartitions.isEmpty()) {
-                    throw new FencedMemberEpochException("The consumer group member is in a unknown state. "
+                    throw new FencedMemberEpochException("The consumer group member is in an unknown state. "
                         + "The member must abandon all its partitions and rejoin.");
                 }
 

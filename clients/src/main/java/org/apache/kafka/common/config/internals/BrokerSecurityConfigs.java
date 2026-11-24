@@ -133,6 +133,10 @@ public class BrokerSecurityConfigs {
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = "sasl.mechanism.inter.broker.protocol";
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = "SASL mechanism used for inter-broker communication. Default is GSSAPI.";
 
+    public static final String SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG = "sasl.mechanism.mirror.admin.protocol";
+    public static final String SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_DOC = "SASL mechanism used for mirror admin communication on destination cluster. " +
+            "If this is unset, it defaults to the value of " + SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG + ".";
+
     // The allowlist of the SASL OAUTHBEARER endpoints
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.urls";
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT = "";
@@ -174,6 +178,7 @@ public class BrokerSecurityConfigs {
 
             // Sasl Configuration
             .define(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, MEDIUM, BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC)
+            .defineInternal(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG, STRING, null, null, MEDIUM, BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_DOC)
             .define(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, LIST, BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC)
             .define(BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC)
             .define(BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG, LIST, BrokerSecurityConfigs.DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC)

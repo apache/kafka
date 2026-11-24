@@ -435,7 +435,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings({"unchecked", "rawtypes", "resource"})
     public static <V> Function<byte[], V> deserializeValue(final StateSerdes<?, V> serdes, final StateStore wrapped) {
         final Serde<V> valueSerde = serdes.valueSerde();
-        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped) || isAdapter(wrapped);
+        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped);
         final Deserializer<V> deserializer;
         if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
             final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
@@ -446,17 +446,6 @@ public final class StoreQueryUtils {
         }
         // deserializeValue() is only used via IQ, so it's ok to not pass any headers
         return byteArray -> deserializer.deserialize(serdes.topic(), new RecordHeaders(), byteArray);
-    }
-
-    @SuppressWarnings("rawtypes")
-    public static boolean isAdapter(final StateStore stateStore) {
-        if (stateStore instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
-            return true;
-        } else if (stateStore instanceof WrappedStateStore) {
-            return isAdapter(((WrappedStateStore) stateStore).wrapped());
-        } else {
-            return false;
-        }
     }
 
     @SuppressWarnings("resource")

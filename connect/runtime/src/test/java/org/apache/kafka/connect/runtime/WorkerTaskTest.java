@@ -18,20 +18,24 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.TaskStatus.Listener;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -67,20 +71,20 @@ public class WorkerTaskTest {
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
     @Mock private StatusBackingStore statusBackingStore;
-    private ConnectMetrics metrics;
+    private final MockConnectMetrics metrics = new MockConnectMetrics();
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private RetryWithToleranceOperator<Object> retryWithToleranceOperator;
     @Mock private TransformationChain<Object, SourceRecord> transformationChain;
     @Mock private Supplier<List<ErrorReporter<Object>>> errorReportersSupplier;
-
-    @BeforeEach
-    public void setup() {
-        metrics = new MockConnectMetrics();
-    }
+    @Mock private Task task;
+    @Mock private Converter keyConverter;
+    @Mock private Converter valueConverter;
+    @Mock private HeaderConverter headerConverter;
+    @Mock private Plugins plugins;
 
     @AfterEach
     public void tearDown() {
-        if (metrics != null) metrics.stop();
+        metrics.stop();
     }
 
     @Test
@@ -221,7 +225,6 @@ public class WorkerTaskTest {
     @Test
     public void updateMetricsOnListenerEventsForStartupPauseResumeAndShutdown() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-        ConnectMetrics metrics = new MockConnectMetrics();
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
 
         group.onStartup(taskId);
@@ -242,7 +245,6 @@ public class WorkerTaskTest {
     @Test
     public void updateMetricsOnListenerEventsForStartupPauseResumeAndFailure() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-        MockConnectMetrics metrics = new MockConnectMetrics();
         MockTime time = metrics.time();
         ConnectException error = new ConnectException("error");
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
@@ -286,6 +288,22 @@ public class WorkerTaskTest {
         double runningTimeRatio = (double) (2000L + 4000L + 6000L) / totalTime;
         assertEquals(pauseTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "pause-ratio"), 0.000001d);
         assertEquals(runningTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "running-ratio"), 0.000001d);
+    }
+
+    @Test
+    public void testConnectorTypeMetricIsString() {
+        assertConnectorTypeMetric(SampleSinkConnector.class, "sink");
+        assertConnectorTypeMetric(SampleSourceConnector.class, "source");
+    }
+
+    private void assertConnectorTypeMetric(Class<? extends Connector> connectorClass, String expectedType) {
+        ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
+        TaskPluginsMetadata pluginsMetadata = new TaskPluginsMetadata(connectorClass, task, keyConverter,
+                valueConverter, headerConverter, List.of(), plugins);
+        TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener, pluginsMetadata);
+
+        assertEquals(expectedType, metrics.currentMetricValueAsString(group.metricGroup(), "connector-type"));
+        group.close();
     }
 
     private abstract static class TestSinkTask extends SinkTask {

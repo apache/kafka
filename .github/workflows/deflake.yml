@@ -57,23 +57,25 @@ jobs:
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
       - name: Test
-        timeout-minutes: 60
+        # Allow the shell timeout to finish and record the exit code before the step is terminated.
+        timeout-minutes: 65
         id: junit-test
         env:
+          TIMEOUT_MINUTES: 60
           TEST_REPEAT: ${{ inputs.test-repeat }}
           TEST_MODULE: ${{ inputs.test-module }}
           TEST_PATTERN: ${{ inputs.test-pattern }}
         run: |
           set +e
           ./.github/scripts/thread-dump.sh &
-          timeout 60m ./gradlew --info --build-cache --scan --continue \
+          timeout "${TIMEOUT_MINUTES}m" ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -Pkafka.cluster.test.repeat=$TEST_REPEAT \
           -PmaxTestRetries=$TEST_REPEAT -PmaxTestRetryFailures=0 \
           ${TEST_MODULE}:test --tests $TEST_PATTERN
           exitcode="$?"
-          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          echo "gradle-exitcode=$exitcode" >> "$GITHUB_OUTPUT"
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
@@ -99,7 +101,7 @@ jobs:
         if: steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
-          name: junit-thread-dumps-${{ env.job-variation }}
+          name: junit-thread-dumps
           path: |
             thread-dumps/*
           compression-level: 9

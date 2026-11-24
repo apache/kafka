@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,13 +30,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.slf4j.event.Level;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-
-import jakarta.ws.rs.core.Response;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -73,9 +71,7 @@ public class LoggingResourceTest {
         final LoggerLevel expectedLevel = new LoggerLevel(Level.WARN.toString(), 976L);
         when(herder.loggerLevel(logger)).thenReturn(expectedLevel);
 
-        Response response = loggingResource.getLogger(logger);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        LoggerLevel actualLevel = (LoggerLevel) response.getEntity();
+        LoggerLevel actualLevel = loggingResource.getLogger(logger);
 
         assertEquals(
                 expectedLevel,
@@ -126,7 +122,6 @@ public class LoggingResourceTest {
         testSetLevelWorkerScope("worker", false);
     }
 
-    @SuppressWarnings("unchecked")
     private void testSetLevelWorkerScope(String scope, boolean expectWarning) {
         final String logger = "org.apache.kafka.connect";
         final String level = "TRACE";
@@ -138,12 +133,8 @@ public class LoggingResourceTest {
 
         List<String> actualLoggers;
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(LoggingResource.class)) {
-            Response response = loggingResource.setLevel(logger, Map.of("level", level), scope);
-            assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-            actualLoggers = (List<String>) response.getEntity();
-            long warningMessages = logCaptureAppender.getEvents().stream()
-                    .filter(e -> "WARN".equals(e.getLevel()))
-                    .count();
+            actualLoggers = loggingResource.setLevel(logger, Map.of("level", level), scope);
+            int warningMessages = logCaptureAppender.getMessages(Level.WARN).size();
             if (expectWarning) {
                 assertEquals(1, warningMessages);
             } else {
@@ -159,10 +150,9 @@ public class LoggingResourceTest {
         final String logger = "org.apache.kafka.connect";
         final String level = "TRACE";
 
-        Response response = loggingResource.setLevel(logger, Map.of("level", level), "cluster");
+        List<String> result = loggingResource.setLevel(logger, Map.of("level", level), "cluster");
 
-        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
-        assertNull(response.getEntity());
+        assertNull(result);
 
         verify(herder).setClusterLoggerLevel(logger, level);
     }

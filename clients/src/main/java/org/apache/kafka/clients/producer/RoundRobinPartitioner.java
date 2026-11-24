@@ -70,5 +70,6 @@ public class RoundRobinPartitioner implements Partitioner {
         return counter.getAndIncrement();
     }
 
+    @Override
     public void close() {}
 }

@@ -21,10 +21,11 @@ import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
+import kafka.server.metadata.DynamicConfigPublisher
 
 import scala.collection.immutable
 import kafka.utils.Logging
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -46,7 +47,6 @@ import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
@@ -61,7 +61,7 @@ import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -101,7 +101,6 @@ class ControllerServer(
   @volatile var quorumControllerMetrics: QuorumControllerMetrics = _
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
@@ -235,8 +234,6 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
-        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
-
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.brokerSessionTimeoutMs)
 
         new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
@@ -250,7 +247,7 @@ class ControllerServer(
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
-          setMaxIdleIntervalNs(maxIdleIntervalNs).
+          setMaxIdleIntervalNs(config.metadataMaxIdleIntervalNs).
           setMetrics(quorumControllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.toJava).
           setAlterConfigPolicy(alterConfigPolicy.toJava).
@@ -285,7 +282,6 @@ class ControllerServer(
         metrics,
         time,
         s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizerPlugin,
         quotaManagers,
@@ -332,9 +328,9 @@ class ControllerServer(
       metadataPublishers.add(new DynamicConfigPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
-        immutable.Map[ConfigType, ConfigHandler](
+        immutable.Map[ConfigResource.Type, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers)
+          ConfigResource.Type.BROKER -> new BrokerConfigHandler(config, quotaManagers)
         ),
         "controller"))
 
@@ -351,7 +347,8 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager
+        quotaManagers.userClientQuotaUpdaters(),
+        (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala)
       ))
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.

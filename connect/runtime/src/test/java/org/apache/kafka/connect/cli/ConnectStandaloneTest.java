@@ -85,7 +85,7 @@ public class ConnectStandaloneTest {
         CreateConnectorRequest requestToWrite = new CreateConnectorRequest(
             CONNECTOR_NAME,
             CONNECTOR_CONFIG,
-            CreateConnectorRequest.InitialState.STOPPED
+            CreateConnectorRequest.InitialState.STOPPED, null
         );
 
         try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {
@@ -107,7 +107,7 @@ public class ConnectStandaloneTest {
         }
 
         CreateConnectorRequest parsedRequest = connectStandalone.parseConnectorConfigurationFile(connectorConfigurationFile.getAbsolutePath());
-        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null);
+        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null, null);
         assertEquals(expectedRequest, parsedRequest);
     }
 
@@ -123,7 +123,7 @@ public class ConnectStandaloneTest {
         }
 
         CreateConnectorRequest parsedRequest = connectStandalone.parseConnectorConfigurationFile(connectorConfigurationFile.getAbsolutePath());
-        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null);
+        CreateConnectorRequest expectedRequest = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null, null);
         assertEquals(expectedRequest, parsedRequest);
     }
 }

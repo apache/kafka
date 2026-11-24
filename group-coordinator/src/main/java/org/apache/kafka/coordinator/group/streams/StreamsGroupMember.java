@@ -80,7 +80,7 @@ public record StreamsGroupMember(String memberId,
     /**
      * A builder that facilitates the creation of a new member or the update of an existing one.
      * <p>
-     * Please refer to the javadoc of {{@link StreamsGroupMember}} for the definition of the fields.
+     * Please refer to the javadoc of {@link StreamsGroupMember} for the definition of the fields.
      */
     public static class Builder {
 
@@ -385,14 +385,23 @@ public record StreamsGroupMember(String memberId,
                 .setWarmupTasks(taskIdsFromMap(targetAssignment.warmupTasks()));
         }
 
+        // The assignment includes both assigned tasks and tasks pending
+        // revocation because the member is still responsible for the latter until
+        // revocation is complete.
+        // When an active task is demoted to standby on the same member, Describe can
+        // list it as both active and standby until the member acknowledges revocation
+        // of the active task.
+        final TasksTupleWithEpochs assignedTasksWithPendingRevocation = tasksPendingRevocation.isEmpty() ?
+            assignedTasks :
+            assignedTasks.merge(tasksPendingRevocation);
         return new StreamsGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasks.activeTasksWithEpochs()))
-                    .setStandbyTasks(taskIdsFromMap(assignedTasks.standbyTasks()))
-                    .setWarmupTasks(taskIdsFromMap(assignedTasks.warmupTasks())))
+                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasksWithPendingRevocation.activeTasksWithEpochs()))
+                    .setStandbyTasks(taskIdsFromMap(assignedTasksWithPendingRevocation.standbyTasks()))
+                    .setWarmupTasks(taskIdsFromMap(assignedTasksWithPendingRevocation.warmupTasks())))
             .setTargetAssignment(describedTargetAssignment)
             .setClientHost(clientHost)
             .setClientId(clientId)

@@ -17,42 +17,39 @@
 
 package kafka.server
 
-import java.{lang, util}
-import java.util.{Optional, Properties, Map => JMap}
-import java.util.concurrent.{CompletionStage, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketServer}
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
+import org.apache.kafka.server.telemetry._
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogManager, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.{anySet, anyString}
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
-import org.mockito.Mockito.{mock, never, times, verify, verifyNoMoreInteractions, when}
 
-import scala.jdk.CollectionConverters._
+import java.util.concurrent.CompletionStage
+import java.util.{Optional, Properties, Map => JMap}
+import java.{lang, util}
 import scala.collection.Set
+import scala.jdk.CollectionConverters._
 
 class DynamicBrokerConfigTest {
 
@@ -749,153 +746,6 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testDynamicLogLocalRetentionMsConfig(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
-    val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
-
-    val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2160000000")
-    // update default config
-    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
-    config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(2160000000L, config.remoteLogManagerConfig.logLocalRetentionMs)
-
-    // update per broker config
-    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
-    config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(2150000000L, config.remoteLogManagerConfig.logLocalRetentionMs)
-  }
-
-  @Test
-  def testDynamicLogLocalRetentionSizeConfig(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "4294967296")
-    val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
-
-    val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967295")
-    // update default config
-    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
-    config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(4294967295L, config.remoteLogManagerConfig.logLocalRetentionBytes)
-
-    // update per broker config
-    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
-    config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(4294967294L, config.remoteLogManagerConfig.logLocalRetentionBytes)
-  }
-
-  @Test
-  def testDynamicLogLocalRetentionSkipsOnInvalidConfig(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
-    val config = KafkaConfig(props)
-    config.dynamicConfig.initialize(None)
-
-    // Check for invalid localRetentionMs < -2
-    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP -> "-3"))
-    // Check for invalid localRetentionBytes < -2
-    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP -> "-3"))
-  }
-
-  @Test
-  def testDynamicLogLocalRetentionThrowsOnIncorrectConfig(): Unit = {
-    // Check for incorrect case of logLocalRetentionMs > retentionMs
-    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, 2, 100)
-    // Check for incorrect case of logLocalRetentionBytes > retentionBytes
-    verifyIncorrectLogLocalRetentionProps(500L, 1000L, 200, 100)
-    // Check for incorrect case of logLocalRetentionMs (-1 viz unlimited) > retentionMs,
-    verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
-    // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
-    verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
-  }
-
-  @Test
-  def testDynamicLogRemoteCopyLagConfig(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
-    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS, config.remoteLogManagerConfig.logRemoteCopyLagMs)
-    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, config.remoteLogManagerConfig.logRemoteCopyLagBytes)
-
-    // update default config
-    val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, "100")
-    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "200")
-    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
-    config.dynamicConfig.updateDefaultConfig(newProps)
-    assertEquals(100L, config.remoteLogManagerConfig.logRemoteCopyLagMs())
-    assertEquals(200L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
-
-    // update per broker config
-    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "300")
-    config.dynamicConfig.updateBrokerConfig(0, newProps)
-    assertEquals(300L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
-  }
-
-  @Test
-  def testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
-    // log remote copy lag ms cannot exceed effective log local retention ms
-    verifyIncorrectLogRemoteCopyLagProps(
-      retentionMs = 1000L,
-      logLocalRetentionMs = -2L,
-      logRemoteCopyLagMs = 1001L,
-      retentionBytes = 1000L,
-      logLocalRetentionBytes = -2L,
-      logRemoteCopyLagBytes = 100L
-    )
-
-    // log remote copy lag bytes cannot exceed effective log local retention bytes
-    verifyIncorrectLogRemoteCopyLagProps(
-      retentionMs = 1000L,
-      logLocalRetentionMs = -2L,
-      logRemoteCopyLagMs = 100L,
-      retentionBytes = 1000L,
-      logLocalRetentionBytes = -2L,
-      logRemoteCopyLagBytes = 1001L
-    )
-
-  }
-
-  def verifyIncorrectLogRemoteCopyLagProps(retentionMs: Long,
-                                           logLocalRetentionMs: Long,
-                                           logRemoteCopyLagMs: Long,
-                                           retentionBytes: Long,
-                                           logLocalRetentionBytes: Long,
-                                           logRemoteCopyLagBytes: Long): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
-    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
-    val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
-
-    val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
-    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs.toString)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
-    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes.toString)
-    // validate default config
-    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = false))
-    // validate per broker config
-    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = true))
-  }
-
-  @Test
   def testDynamicRemoteFetchMaxWaitMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     val config = KafkaConfig(props)
@@ -1107,12 +957,8 @@ class DynamicBrokerConfigTest {
   def testEnableFollowerFetchLastTieredOffset(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 9092)
     val config = KafkaConfig.fromProps(props)
-    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
-
-    Mockito.when(serverMock.config).thenReturn(config)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
 
     assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
       config.followerFetchLastTieredOffsetEnable)
@@ -1126,141 +972,6 @@ class DynamicBrokerConfigTest {
     props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, "false")
     config.dynamicConfig.updateBrokerConfig(0, props)
     assertFalse(config.followerFetchLastTieredOffsetEnable)
-  }
-
-  def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
-                                            retentionMs: Long,
-                                            logLocalRetentionBytes: Long,
-                                            retentionBytes: Long): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
-    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
-    val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
-
-    val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
-    // validate default config
-    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = false))
-    // validate per broker config
-    assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = true))
-  }
-
-  class DynamicLogConfigContext(origProps: Properties) {
-    val config = KafkaConfig(origProps)
-    val serverMock = Mockito.mock(classOf[BrokerServer])
-    val logManagerMock = Mockito.mock(classOf[LogManager])
-    val directoryEventHandler = Mockito.mock(classOf[DirectoryEventHandler])
-
-    Mockito.when(serverMock.config).thenReturn(config)
-    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
-    Mockito.when(logManagerMock.allLogs).thenReturn(util.Set.of)
-    Mockito.when(logManagerMock.directoryId(ArgumentMatchers.anyString())).thenAnswer(_ => Optional.of(Uuid.randomUuid()))
-
-    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
-    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
-    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
-      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
-
-    config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, directoryEventHandler))
-  }
-
-  @Test
-  def testDynamicLogConfigHandlesSynonymsCorrectly(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
-    origProps.put(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, "1")
-    val ctx = new DynamicLogConfigContext(origProps)
-    assertEquals(TimeUnit.MINUTES.toMillis(1), ctx.config.logRetentionTimeMillis)
-
-    val props = new Properties()
-    props.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "12345678")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
-    assertEquals(TimeUnit.MINUTES.toMillis(1), ctx.currentDefaultLogConfig.get().retentionMs)
-  }
-
-  @Test
-  def testDynamicLogConfigCordonedLogDirs(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, logDirCount = 2)
-    val ctx = new DynamicLogConfigContext(origProps)
-    assertTrue(ctx.config.cordonedLogDirs.isEmpty)
-    val logDirs = ctx.config.logDirs()
-    verify(ctx.directoryEventHandler, never()).handleCordoned(anySet)
-
-    // Cordoning 1 new log dir, so 1 new handleCordoned invocation
-    val props = new Properties()
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, logDirs.get(0))
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-
-    // When using *, no other entries must be specified, so no new invocations
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*,/invalid/log/dir")
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-
-    // Invalid log dir, so no new invocations
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/invalid/log/dir")
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-
-    // * cordons the 2nd log dir, so 1 new handleCordoned invocation
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*")
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(logDirs, ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
-
-    // same value so no new invocations
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*")
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(logDirs, ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
-
-    // clearing all cordoned log dirs, so 1 new handleCordoned invocation
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "")
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertTrue(ctx.config.cordonedLogDirs.isEmpty)
-    verify(ctx.directoryEventHandler, times(3)).handleCordoned(anySet)
-
-    // * cordons all log dirs, so 1 new handleCordoned invocation
-    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, String.join(",", logDirs))
-    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
-    assertEquals(logDirs, ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(4)).handleCordoned(anySet)
-  }
-
-  @Test
-  def testLogRetentionTimeMinutesIsNotDynamicallyReconfigurable(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
-    origProps.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "1")
-    val ctx = new DynamicLogConfigContext(origProps)
-    assertEquals(TimeUnit.HOURS.toMillis(1), ctx.config.logRetentionTimeMillis)
-
-    val props = new Properties()
-    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, "3")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
-    assertEquals(TimeUnit.HOURS.toMillis(1), ctx.config.logRetentionTimeMillis)
-    assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG))
-  }
-
-  @Test
-  def testAdvertisedListenersIsNotDynamicallyReconfigurable(): Unit = {
-    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
-    val ctx = new DynamicLogConfigContext(origProps)
-
-    // update advertised listeners should not work
-    val props = new Properties()
-    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SASL_PLAINTEXT://localhost:8181")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
-    ctx.config.effectiveAdvertisedBrokerListeners.foreach(e =>
-      assertEquals(SecurityProtocol.PLAINTEXT.name, e.listener)
-    )
-    assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG))
   }
 
   @Test

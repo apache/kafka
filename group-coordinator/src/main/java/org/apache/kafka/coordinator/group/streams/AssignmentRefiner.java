@@ -69,6 +69,15 @@ public interface AssignmentRefiner {
      *        The latest changelog offsets/end-offsets reported by the members via heartbeats, from which the lag
      *        of a warm-up task is derived. Not populated for a member that has not reported any offsets yet, for
      *        example right after a coordinator failover.
+     * @param heartbeatVersions
+     *        The version of the latest heartbeat of each member, keyed by member ID. A member that is missing from the
+     *        map has an unknown version. A member that heartbeats with version 0 does not report its task offsets, so
+     *        its restore progress cannot be observed and it could never be promoted from warm-up to active. An
+     *        implementation must not newly place a warm-up task on a member that is not known to report them, but a
+     *        member of unknown version may keep a warm-up task that its process already holds.
+     * @param keepActiveTasks
+     *        Whether every active task has to stay with the member that holds it. If set, the intermediate assignment
+     *        moves no active task from one member to another.
      * @param subtopologies
      *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
      *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator
@@ -88,6 +97,8 @@ public interface AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
+        Map<String, Integer> heartbeatVersions,
+        boolean keepActiveTasks,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -97,7 +108,8 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {
-        return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+        return targetAssignment == refinedAssignment
+            || countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
     }
 
     private static int countActiveTasks(Map<String, TasksTuple> assignment) {

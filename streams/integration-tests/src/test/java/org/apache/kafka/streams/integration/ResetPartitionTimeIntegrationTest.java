@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -128,7 +129,7 @@ public class ResetPartitionTimeIntegrationTest {
             assertEquals(-1L, lastRecordedTimestamp);
             lastRecordedTimestamp = -2L;
 
-            kafkaStreams.close();
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
             assertEquals(KafkaStreams.State.NOT_RUNNING, kafkaStreams.state());
 
             kafkaStreams = getStartedStreams(streamsConfig, builder, true);

@@ -115,7 +115,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @BeforeEach
-    public void beforeEach() throws InterruptedException {
+    public void beforeEach() {
         cluster.createTopic(ClientsTestUtils.BaseConsumerTestcase.TOPIC, 2, (short) ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT);
     }
 

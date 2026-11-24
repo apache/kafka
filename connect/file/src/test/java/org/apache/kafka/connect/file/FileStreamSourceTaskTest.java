@@ -20,15 +20,15 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -45,7 +45,9 @@ public class FileStreamSourceTaskTest {
 
     private static final String TOPIC = "test";
 
-    private File tempFile;
+    @TempDir
+    private Path tempDir;
+    private Path tempFile;
     private Map<String, String> config;
     private OffsetStorageReader offsetStorageReader;
     private SourceTaskContext context;
@@ -53,9 +55,9 @@ public class FileStreamSourceTaskTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        tempFile = File.createTempFile("file-stream-source-task-test", null);
+        tempFile = Files.createFile(tempDir.resolve("file-stream-source-task-test.tmp"));
         config = new HashMap<>();
-        config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
+        config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.toAbsolutePath().toString());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
         task = new FileStreamSourceTask(2);
@@ -64,18 +66,13 @@ public class FileStreamSourceTaskTest {
         task.initialize(context);
     }
 
-    @AfterEach
-    public void teardown() throws IOException {
-        Files.deleteIfExists(tempFile.toPath());
-    }
-
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
 
         task.start(config);
 
-        OutputStream os = Files.newOutputStream(tempFile.toPath());
+        OutputStream os = Files.newOutputStream(tempFile);
         assertNull(task.poll());
         os.write("partial line".getBytes());
         os.flush();
@@ -86,7 +83,7 @@ public class FileStreamSourceTaskTest {
         assertEquals(1, records.size());
         assertEquals(TOPIC, records.get(0).topic());
         assertEquals("partial line finished", records.get(0).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(0).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 22L), records.get(0).sourceOffset());
         assertNull(task.poll());
 
@@ -97,16 +94,16 @@ public class FileStreamSourceTaskTest {
         records = task.poll();
         assertEquals(4, records.size());
         assertEquals("line1", records.get(0).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(0).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 28L), records.get(0).sourceOffset());
         assertEquals("line2", records.get(1).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(1).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(1).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 35L), records.get(1).sourceOffset());
         assertEquals("line3", records.get(2).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(2).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(2).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 41L), records.get(2).sourceOffset());
         assertEquals("line4", records.get(3).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(3).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(3).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 47L), records.get(3).sourceOffset());
 
         os.write("subsequent text".getBytes());
@@ -114,7 +111,7 @@ public class FileStreamSourceTaskTest {
         records = task.poll();
         assertEquals(1, records.size());
         assertEquals("", records.get(0).value());
-        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.toAbsolutePath().toString()), records.get(0).sourcePartition());
         assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
 
         os.close();
@@ -130,7 +127,7 @@ public class FileStreamSourceTaskTest {
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
 
-        OutputStream os = Files.newOutputStream(tempFile.toPath());
+        OutputStream os = Files.newOutputStream(tempFile);
         writeTimesAndFlush(os, 10_000,
                 "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes()
         );
@@ -157,7 +154,7 @@ public class FileStreamSourceTaskTest {
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
         task.start(config);
 
-        OutputStream os = Files.newOutputStream(tempFile.toPath());
+        OutputStream os = Files.newOutputStream(tempFile);
 
         assertEquals(2, task.bufferSize());
         writeAndAssertBufferSize(batchSize, os, "1\n".getBytes(), 2);

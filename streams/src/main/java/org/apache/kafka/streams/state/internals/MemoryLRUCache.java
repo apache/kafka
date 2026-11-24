@@ -100,17 +100,21 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
                 // do the locking per record so readers can interleave between records, and update
                 // the position under its own lock afterwards (position may briefly trail the data,
                 // which IQ bound checks treat conservatively).
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    put(Bytes.wrap(record.key()), record.value());
-                    synchronized (position) {
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                // finally: keep the flag exception-safe, else a mid-batch failure suppresses eviction forever.
+                try {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(Bytes.wrap(record.key()), record.value());
+                        synchronized (position) {
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
+                } finally {
+                    restoring = false;
                 }
-                restoring = false;
             }
         );
         this.context = stateStoreContext;
