@@ -34,7 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +42,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
@@ -64,7 +66,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogLocalRetentionMsConfig() {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000");
         KafkaConfig config = new KafkaConfig(props);
         DynamicLogConfig dynamicLogConfig = new DynamicLogConfig(mock(LogManager.class), mock(DirectoryEventHandler.class));
@@ -87,7 +89,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogLocalRetentionSizeConfig() {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "4294967296");
         KafkaConfig config = new KafkaConfig(props);
         DynamicLogConfig dynamicLogConfig = new DynamicLogConfig(mock(LogManager.class), mock(DirectoryEventHandler.class));
@@ -110,7 +112,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogLocalRetentionSkipsOnInvalidConfig() {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000");
         props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024");
         KafkaConfig config = new KafkaConfig(props);
@@ -146,7 +148,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogRemoteCopyLagConfig() {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         KafkaConfig config = new KafkaConfig(props);
         DynamicLogConfig dynamicLogConfig = new DynamicLogConfig(mock(LogManager.class), mock(DirectoryEventHandler.class));
         config.dynamicConfig().initialize(Option.empty());
@@ -195,7 +197,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogConfigHandlesSynonymsCorrectly() {
-        Properties origProps = createBrokerConfig();
+        Map<String, String> origProps = createBrokerConfig();
         origProps.put(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, "1");
         DynamicLogConfigContext ctx = new DynamicLogConfigContext(origProps);
         assertEquals(TimeUnit.MINUTES.toMillis(1), ctx.config.logRetentionTimeMillis());
@@ -208,7 +210,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogConfigCordonedLogDirs() {
-        Properties origProps = createBrokerConfig(2);
+        Map<String, String> origProps = createBrokerConfig(2);
         DynamicLogConfigContext ctx = new DynamicLogConfigContext(origProps);
         assertTrue(ctx.config.cordonedLogDirs().isEmpty());
         List<String> logDirs = ctx.config.logDirs();
@@ -260,8 +262,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testDynamicLogConfigRelativeCordonedLogDir() {
-        // createBrokerConfig uses a mix of relative and absolute log dirs when logDirCount is greater than one.
-        Properties origProps = createBrokerConfig(2);
+        Map<String, String> origProps = createBrokerConfig(2);
         DynamicLogConfigContext ctx = new DynamicLogConfigContext(origProps);
         String relativeLogDir = ctx.config.logDirs().stream()
             .filter(dir -> !new File(dir).isAbsolute())
@@ -290,7 +291,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testLogRetentionTimeMinutesIsNotDynamicallyReconfigurable() {
-        Properties origProps = createBrokerConfig();
+        Map<String, String> origProps = createBrokerConfig();
         origProps.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "1");
         DynamicLogConfigContext ctx = new DynamicLogConfigContext(origProps);
         assertEquals(TimeUnit.HOURS.toMillis(1), ctx.config.logRetentionTimeMillis());
@@ -304,7 +305,7 @@ public class DynamicLogConfigTest {
 
     @Test
     public void testAdvertisedListenersIsNotDynamicallyReconfigurable() {
-        Properties origProps = createBrokerConfig();
+        Map<String, String> origProps = createBrokerConfig();
         DynamicLogConfigContext ctx = new DynamicLogConfigContext(origProps);
 
         // update advertised listeners should not work
@@ -318,7 +319,7 @@ public class DynamicLogConfigTest {
 
     private static void verifyConfigUpdateWithInvalidConfig(
         KafkaConfig config,
-        Properties origProps,
+        Map<String, String> origProps,
         Map<String, String> validProps,
         Map<String, String> invalidProps
     ) {
@@ -346,7 +347,7 @@ public class DynamicLogConfigTest {
         long logLocalRetentionBytes,
         long logRemoteCopyLagBytes
     ) {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, Long.toString(retentionMs));
         props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, Long.toString(retentionBytes));
         KafkaConfig config = new KafkaConfig(props);
@@ -371,7 +372,7 @@ public class DynamicLogConfigTest {
         long logLocalRetentionBytes,
         long retentionBytes
     ) {
-        Properties props = createBrokerConfig();
+        Map<String, String> props = createBrokerConfig();
         props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, Long.toString(retentionMs));
         props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, Long.toString(retentionBytes));
         KafkaConfig config = new KafkaConfig(props);
@@ -388,32 +389,28 @@ public class DynamicLogConfigTest {
         assertThrows(ConfigException.class, () -> config.dynamicConfig().validate(newProps, true));
     }
 
-    private static Properties createBrokerConfig() {
+    private static Map<String, String> createBrokerConfig() {
         return createBrokerConfig(1);
     }
 
-    private static Properties createBrokerConfig(int logDirCount) {
-        Properties props = new Properties();
-        props.put(KRaftConfigs.NODE_ID_CONFIG, "0");
-        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
-        props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
-        props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0");
-        props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:8181");
-        props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:8181");
-        props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT");
+    private static Map<String, String> createBrokerConfig(int logDirCount) {
+        // Alternate absolute and relative log directories, starting with an absolute path.
+        String logDirs = IntStream.range(0, logDirCount)
+            .mapToObj(i -> i % 2 == 0
+                ? TestUtils.tempDirectory().getAbsolutePath()
+                : TestUtils.tempRelativeDir("data").getPath())
+            .collect(Collectors.joining(","));
 
-        if (logDirCount > 1) {
-            List<String> logDirs = new ArrayList<>();
-            for (int i = 0; i < logDirCount; i++) {
-                logDirs.add(i % 2 == 0
-                    ? TestUtils.tempRelativeDir("data").getPath()
-                    : TestUtils.tempDirectory().getAbsolutePath());
-            }
-            props.put(ServerLogConfigs.LOG_DIRS_CONFIG, String.join(",", logDirs));
-        } else {
-            props.put(ServerLogConfigs.LOG_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        }
-        return props;
+        return new HashMap<>(Map.of(
+            KRaftConfigs.NODE_ID_CONFIG, "0",
+            KRaftConfigs.PROCESS_ROLES_CONFIG, "broker",
+            KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER",
+            QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0",
+            SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:8181",
+            SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:8181",
+            SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT",
+            ServerLogConfigs.LOG_DIRS_CONFIG, logDirs
+        ));
     }
 
     private static class DynamicLogConfigContext {
@@ -422,7 +419,7 @@ public class DynamicLogConfigTest {
         private final DirectoryEventHandler directoryEventHandler;
         private final AtomicReference<LogConfig> currentDefaultLogConfig;
 
-        private DynamicLogConfigContext(Properties origProps) {
+        private DynamicLogConfigContext(Map<String, String> origProps) {
             config = new KafkaConfig(origProps);
             logManagerMock = mock(LogManager.class);
             directoryEventHandler = mock(DirectoryEventHandler.class);
