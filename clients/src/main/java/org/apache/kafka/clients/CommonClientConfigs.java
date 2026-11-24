@@ -274,6 +274,18 @@ public class CommonClientConfigs {
             "rebootstrapping is disabled by setting the configuration <code>metadata.recovery.strategy=none</code>. If the client " +
             "is connecting to a broker older than Apache Kafka 4.4, no checking is performed and this configuration has no effect.";
 
+    public static final String CLIENT_FRAMEWORK_NAME_CONFIG = "client.framework.name";
+    public static final String CLIENT_FRAMEWORK_NAME_DOC = "For a client embedded in a framework, the name of the framework. User applications should " +
+            "not set this configuration directly.";
+
+    public static final String CLIENT_FRAMEWORK_VERSION_CONFIG = "client.framework.version";
+    public static final String CLIENT_FRAMEWORK_VERSION_DOC = "For a client embedded in a framework, the version of the framework. User applications should " +
+            "not set this configuration directly.";
+
+    public static final String CLIENT_FRAMEWORK_ID_CONFIG = "client.framework.id";
+    public static final String CLIENT_FRAMEWORK_ID_DOC = "For a client embedded in a framework, an optional framework-specific ID. User applications should " +
+            "not set this configuration directly.";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.
