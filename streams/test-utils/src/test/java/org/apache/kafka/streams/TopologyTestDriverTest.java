@@ -470,10 +470,25 @@ public abstract class TopologyTestDriverTest {
         assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
-        final File applicationDirectory = new File(
-            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
-            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
-        assertTrue(new File(applicationDirectory, "0_0").exists());
+        assertTrue(taskDirectory().exists());
+    }
+
+    @Test
+    public void shouldKeepStateOfOpenDriverWhenConstructionOfAnotherDriverFails() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
+            "processor");
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+        testDriver.<String, Long>getKeyValueStore("store").put("key", 1L);
+
+        // the store of the open driver holds the lock of RocksDB
+        assertThrows(ProcessorStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertTrue(taskDirectory().exists());
+        assertEquals(1L, testDriver.<String, Long>getKeyValueStore("store").get("key"));
     }
 
     @Test
@@ -534,9 +549,18 @@ public abstract class TopologyTestDriverTest {
             StreamsException.class,
             () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
         assertEquals(1, exception.getSuppressed().length);
         assertInstanceOf(ProcessorStateException.class, exception.getSuppressed()[0]);
         assertFalse(globalStore.get().isOpen());
+    }
+
+    // the only task of the TopologyTestDriver is 0_0
+    private File taskDirectory() {
+        final File applicationDirectory = new File(
+            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
+            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
+        return new File(applicationDirectory, "0_0");
     }
 
     private static KeyValueBytesStoreSupplier storeSupplier(final Supplier<KeyValueStore<Bytes, byte[]>> store) {
