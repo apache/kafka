@@ -5952,7 +5952,9 @@ org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnF
 - shouldForwardAllColumnFamilyCalls
 - shouldForwardAllDbOptionsCalls
 - shouldLogWarningWhenSettingAtomicFlushOption
+- shouldLogWarningWhenSettingMinWriteBufferNumberToMergeAboveOne
 - shouldLogWarningWhenSettingWalOptions
+- shouldNotLogWarningWhenSettingMinWriteBufferNumberToMergeToOne
 - shouldOverwriteAllOptionsMethods
 org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeadersTest:
 - commitShouldMergePendingIntoCommittedPosition
@@ -5989,6 +5991,8 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily
+- shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily
 - shouldMatchPositionAfterPut
 - shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
@@ -6095,6 +6099,8 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingWindowStoreWithHeadersT
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily
+- shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily
 - shouldIterateOverBothColumnFamiliesInUpgradeMode
 - shouldMatchPositionAfterPut
 - shouldMatchPositionAfterPutAll
@@ -6283,6 +6289,8 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily
+- shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily
 - shouldMatchPositionAfterPut
 - shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
@@ -6822,6 +6830,8 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldHandleDeletesOnRestoreAll
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily
+- shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily
 - shouldMatchPositionAfterPut
 - shouldMatchPositionAfterPutAll
 - shouldMigrateDataFromDefaultToTimestampColumnFamily
@@ -6933,6 +6943,8 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldHandleRangeQuery
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
+- shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily
+- shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily
 - shouldMatchPositionAfterPut
 - shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile

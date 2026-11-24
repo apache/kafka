@@ -1409,7 +1409,6 @@ kafka.server.DescribeUserScramCredentialsRequestTest:
 - testDescribeWithNull
 - testUnknownUser
 kafka.server.DynamicBrokerConfigTest:
-- testAdvertisedListenersIsNotDynamicallyReconfigurable
 - testAssignmentIntervalClampAppliesToEffectiveConfig
 - testAuthorizerConfig
 - testClientTelemetryExporter
@@ -1421,15 +1420,6 @@ kafka.server.DynamicBrokerConfigTest:
 - testConnectionRateQuota
 - testDynamicGroupCoordinatorConfig
 - testDynamicListenerConfig
-- testDynamicLogConfigCordonedLogDirs
-- testDynamicLogConfigHandlesSynonymsCorrectly
-- testDynamicLogConfigRelativeCordonedLogDir
-- testDynamicLogLocalRetentionMsConfig
-- testDynamicLogLocalRetentionSizeConfig
-- testDynamicLogLocalRetentionSkipsOnInvalidConfig
-- testDynamicLogLocalRetentionThrowsOnIncorrectConfig
-- testDynamicLogRemoteCopyLagConfig
-- testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig
 - testDynamicRemoteFetchMaxWaitMsConfig
 - testDynamicRemoteListOffsetsRequestTimeoutMsConfig
 - testDynamicRemoteLogManagerFollowerThreadPoolSizeConfig
@@ -1437,7 +1427,6 @@ kafka.server.DynamicBrokerConfigTest:
 - testEnableFollowerFetchLastTieredOffset
 - testImproperConfigsAreRemoved
 - testIsolatedControllerAuthorizerConfig
-- testLogRetentionTimeMinutesIsNotDynamicallyReconfigurable
 - testMetricReportersAreConfiguredWithBothIdConfigs
 - testReconfigurableValidation
 - testRemoteLogDynamicThreadPoolWithInvalidValues
@@ -1495,6 +1484,18 @@ kafka.server.DynamicConfigChangeUnitTest:
 - shouldParseWildcardReplicationQuotaProperties
 - testEnableRemoteLogStorageOnTopic
 - testEnableRemoteLogStorageOnTopicOnAlreadyEnabledTopic
+kafka.server.DynamicLogConfigTest:
+- testAdvertisedListenersIsNotDynamicallyReconfigurable
+- testDynamicLogConfigCordonedLogDirs
+- testDynamicLogConfigHandlesSynonymsCorrectly
+- testDynamicLogConfigRelativeCordonedLogDir
+- testDynamicLogLocalRetentionMsConfig
+- testDynamicLogLocalRetentionSizeConfig
+- testDynamicLogLocalRetentionSkipsOnInvalidConfig
+- testDynamicLogLocalRetentionThrowsOnIncorrectConfig
+- testDynamicLogRemoteCopyLagConfig
+- testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig
+- testLogRetentionTimeMinutesIsNotDynamicallyReconfigurable
 kafka.server.EdgeCaseRequestTest:
 - testHeaderOnlyRequest
 - testInvalidApiKeyRequest
