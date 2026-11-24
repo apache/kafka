@@ -509,6 +509,7 @@ public abstract class TopologyTestDriverTest {
             ProcessorStateException.class,
             () -> new TopologyTestDriverBuilder(failingTopology).withConfig(config).build());
 
+        assertTrue(storeDirectory("store").exists());
         // RocksDB lets a store be opened again only once it has been closed
         testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
     }
@@ -522,13 +523,11 @@ public abstract class TopologyTestDriverTest {
             Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
             "processor");
         testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
-        testDriver.<String, Long>getKeyValueStore("store").put("key", 1L);
 
         // the store of the open driver holds the lock of RocksDB
         assertThrows(ProcessorStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
-        assertTrue(taskDirectory().exists());
-        assertEquals(1L, testDriver.<String, Long>getKeyValueStore("store").get("key"));
+        assertTrue(storeDirectory("store").exists());
     }
 
     @Test
@@ -601,6 +600,10 @@ public abstract class TopologyTestDriverTest {
             config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
         return new File(applicationDirectory, "0_0");
+    }
+
+    private File storeDirectory(final String storeName) {
+        return new File(taskDirectory(), "rocksdb" + File.separator + storeName);
     }
 
     private static KeyValueBytesStoreSupplier storeSupplier(final Supplier<KeyValueStore<Bytes, byte[]>> store) {
