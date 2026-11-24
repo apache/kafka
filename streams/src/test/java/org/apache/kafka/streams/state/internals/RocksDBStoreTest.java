@@ -221,6 +221,41 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily() throws Exception {
+        context = getProcessorContext(RecordingLevel.INFO);
+        rocksDBStore.init(context, rocksDBStore);
+        final RocksDBStore.SingleColumnFamilyAccessor accessor =
+            (RocksDBStore.SingleColumnFamilyAccessor) rocksDBStore.cfAccessor;
+
+        assertEquals(
+            rocksDBStore.db.getOptions(accessor.columnFamily()).maxWriteBufferNumber(),
+            rocksDBStore.db.getOptions(accessor.offsetColumnFamilyHandle()).maxWriteBufferNumber()
+        );
+    }
+
+    @Test
+    public void shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily() throws Exception {
+        context = getProcessorContext(RecordingLevel.INFO, RocksDBConfigSetterWithCustomMaxWriteBufferNumber.class);
+        rocksDBStore.init(context, rocksDBStore);
+        final RocksDBStore.SingleColumnFamilyAccessor accessor =
+            (RocksDBStore.SingleColumnFamilyAccessor) rocksDBStore.cfAccessor;
+
+        assertEquals(10, rocksDBStore.db.getOptions(accessor.columnFamily()).maxWriteBufferNumber());
+        assertEquals(10, rocksDBStore.db.getOptions(accessor.offsetColumnFamilyHandle()).maxWriteBufferNumber());
+    }
+
+    public static class RocksDBConfigSetterWithCustomMaxWriteBufferNumber implements RocksDBConfigSetter {
+        @Override
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setMaxWriteBufferNumber(10);
+        }
+
+        @Override
+        public void close(final String storeName, final Options options) {
+        }
+    }
+
+    @Test
     public void shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
