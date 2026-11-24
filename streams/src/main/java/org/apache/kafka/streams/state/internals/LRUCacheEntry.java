@@ -102,13 +102,16 @@ class LRUCacheEntry {
             return false;
         }
         final LRUCacheEntry that = (LRUCacheEntry) o;
-        return size() == that.size() &&
+        return sizeBytes == that.sizeBytes &&
             isDirty() == that.isDirty() &&
             Objects.equals(record, that.record);
     }
 
+    /**
+     * See {@link ContextualRecord#hashCode()}. The entry also has mutable dirty state.
+     */
     @Override
     public int hashCode() {
-        return Objects.hash(record, size(), isDirty());
+        throw new UnsupportedOperationException("LRUCacheEntry is unsafe for use in hash collections");
     }
 }

@@ -50,6 +50,19 @@ public class ThreadCacheTest {
     private final byte[] rawValue = new byte[]{0};
 
     @Test
+    public void entryEqualityIgnoresRetainedRawRecordCharge() {
+        final LRUCacheEntry retained = new LRUCacheEntry(bytes[0], new RecordHeaders(), true, 1L, 1L, 1, "", rawKey, rawValue);
+        final LRUCacheEntry released = new LRUCacheEntry(bytes[0], new RecordHeaders(), true, 1L, 1L, 1, "", rawKey, rawValue);
+
+        // The downstream sink cleared the context, but the cache has not yet released its retained charge.
+        retained.context().freeRawRecord();
+        released.freeRawRecord();
+
+        assertEquals(rawKey.length + rawValue.length, retained.size() - released.size());
+        assertEquals(retained, released);
+    }
+
+    @Test
     public void basicPutGet() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
             new KeyValue<>("K1", "V1"),
