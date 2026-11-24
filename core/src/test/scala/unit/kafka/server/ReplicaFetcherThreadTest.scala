@@ -116,7 +116,7 @@ class ReplicaFetcherThreadTest {
     val testingVersion = MetadataVersion.latestTesting
     assertEquals(
       ApiKeys.FETCH.latestVersion(true),
-      testingVersion.fetchRequestVersion
+      testingVersion.fetchRequestVersion(true)
     )
     assertEquals(
       ApiKeys.LIST_OFFSETS.latestVersion(true),

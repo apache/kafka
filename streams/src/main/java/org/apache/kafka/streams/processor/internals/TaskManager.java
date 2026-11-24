@@ -654,7 +654,7 @@ public class TaskManager {
         updateInputPartitions(futuresForUpdatingInputPartitions, newInputPartitions, failedTasks);
         addToActiveTasksToRecycle(futuresForActiveTasksToRecycle, standbyInputPartitions, tasksToRecycle, failedTasks);
         addToStandbyTasksToRecycle(futuresForStandbyTasksToRecycle, activeInputPartitions, tasksToRecycle, failedTasks);
-        addToTasksToClose(futuresForTasksToClose, tasksToCloseCleanFromStateUpdater, tasksToCloseDirtyFromStateUpdater);
+        addToTasksToClose(futuresForTasksToClose, tasksToCloseCleanFromStateUpdater, tasksToCloseDirtyFromStateUpdater, false);
     }
 
     private void updateInputPartitions(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
@@ -686,7 +686,7 @@ public class TaskManager {
     private Stream<Task> getNonFailedTasks(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                            final Map<TaskId, RuntimeException> failedTasks) {
         return futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue(), false))
             .filter(Objects::nonNull)
             .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
             .filter(Objects::nonNull);
@@ -695,9 +695,10 @@ public class TaskManager {
 
     private void addToTasksToClose(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                    final Set<Task> tasksToCloseCleanFromStateUpdater,
-                                   final Set<Task> tasksToCloseDirtyFromStateUpdater) {
+                                   final Set<Task> tasksToCloseDirtyFromStateUpdater,
+                                   final boolean interruptExpected) {
         futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue(), interruptExpected))
             .filter(Objects::nonNull)
             .forEach(removedTaskResult -> {
                 if (removedTaskResult.exception().isPresent()) {
@@ -719,8 +720,19 @@ public class TaskManager {
         return task;
     }
 
+    /**
+     * Waits for the removal of a task from the state updater.
+     *
+     * @param interruptExpected whether the caller handles an interrupt of the wait. If {@code false}, an
+     *                          interrupt is logged as an error that indicates a bug.
+     * @return the removal result, or {@code null} if the removal failed and the task was added to the
+     *         failed tasks of the state updater
+     * @throws IllegalStateException with an {@link InterruptedException} as cause if the wait is interrupted;
+     *                               the interrupt status is restored before throwing
+     */
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
-                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
+                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future,
+                                                         final boolean interruptExpected) {
         try {
             long minutesWaited = 0L;
             while (true) {
@@ -742,10 +754,14 @@ public class TaskManager {
                     "failed task in the state updater: ",
                 taskId, executionException);
             return null;
-        } catch (final InterruptedException shouldNotHappen) {
+        } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+            if (interruptExpected) {
+                throw new IllegalStateException("Interrupted while waiting for the removal of task " + taskId
+                    + " from the state updater.", interrupted);
+            }
+            log.error(INTERRUPTED_ERROR_MESSAGE, interrupted);
+            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, interrupted);
         }
     }
 
@@ -1262,7 +1278,7 @@ public class TaskManager {
             }
         }
 
-        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty, false);
         for (final Task task : tasksToCloseClean) {
             closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
         }
@@ -1568,7 +1584,7 @@ public class TaskManager {
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
         try {
-            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty, true);
         } catch (final IllegalStateException interruptedDuringRemoval) {
             if (!(interruptedDuringRemoval.getCause() instanceof InterruptedException)) {
                 // waitForFuture throws this without a cause when a task is not found in the state

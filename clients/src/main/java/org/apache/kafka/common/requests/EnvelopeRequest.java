@@ -30,10 +30,19 @@ public class EnvelopeRequest extends AbstractRequest {
 
         private final EnvelopeRequestData data;
 
+        /**
+         * @param requestData          the embedded request header and data
+         * @param serializedPrincipal  the serialized principal of the original client
+         * @param clientAddress        the original client's address in bytes
+         * @param requestHeaderVersion the latest request header version which may be used
+         */
         public Builder(ByteBuffer requestData,
                        byte[] serializedPrincipal,
-                       byte[] clientAddress) {
-            super(ApiKeys.ENVELOPE);
+                       byte[] clientAddress,
+                       short requestHeaderVersion) {
+            super(ApiKeys.ENVELOPE,
+                ApiKeys.ENVELOPE.oldestVersion(),
+                ApiKeys.ENVELOPE.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = new EnvelopeRequestData()
                             .setRequestData(requestData)
                             .setRequestPrincipal(serializedPrincipal)

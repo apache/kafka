@@ -577,7 +577,7 @@ public class ReplicaVerificationTool {
             }
 
             FetchRequest.Builder fetchRequestBuilder = FetchRequest.Builder.forReplica(
-                ApiKeys.FETCH.latestVersion(),
+                ApiKeys.FETCH.latestVersion(false),
                 FetchRequest.DEBUGGING_CONSUMER_ID,
                 -1,
                 maxWait,
@@ -597,7 +597,7 @@ public class ReplicaVerificationTool {
             }
 
             if (fetchResponse != null) {
-                fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion()).forEach((tp, partitionData) ->
+                fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion(false)).forEach((tp, partitionData) ->
                     replicaBuffer.addFetchedData(tp, sourceBroker.id(), partitionData));
             } else {
                 for (TopicPartition topicAndPartition : topicPartitions) {

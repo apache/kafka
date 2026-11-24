@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -865,6 +866,20 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testListGroupRequestV5FailsWithRequireCommittedOffsets() {
+        ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 5));
+    }
+
+    @Test
+    public void testListGroupRequestV4FailsWithRequireCommittedOffsetsAndDowngradableTypes() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setTypesFilter(List.of(GroupType.CLASSIC.toString(), GroupType.CONSUMER.toString()))
+                .setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 4));
+    }
+
+    @Test
     public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
         testInvalidCase("apache-kafka-java", "0.0.0@java");
@@ -1646,7 +1661,8 @@ public class RequestResponseTest {
         return new EnvelopeRequest.Builder(
                 ByteBuffer.wrap("data".getBytes(StandardCharsets.UTF_8)),
                 "principal".getBytes(StandardCharsets.UTF_8),
-                "address".getBytes(StandardCharsets.UTF_8))
+                "address".getBytes(StandardCharsets.UTF_8),
+                ApiKeys.ENVELOPE.requestHeaderVersion(version))
                 .build(version);
     }
 
@@ -2360,6 +2376,8 @@ public class RequestResponseTest {
         ListGroupsRequestData data = new ListGroupsRequestData();
         if (version >= 4)
             data.setStatesFilter(singletonList("Stable"));
+        if (version >= 6)
+            data.setRequireCommittedOffsets(true);
         return new ListGroupsRequest.Builder(data).build(version);
     }
 

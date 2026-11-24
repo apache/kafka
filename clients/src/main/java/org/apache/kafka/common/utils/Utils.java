@@ -1018,15 +1018,15 @@ public final class Utils {
     }
 
     public static void swallow(final SwallowAction code) {
-        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+        swallow(log, Level.WARN, "Exception while executing the action", code, null);
     }
 
     public static void swallow(final Logger log, final SwallowAction code) {
-        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+        swallow(log, Level.WARN, "Exception while executing the action", code, null);
     }
 
     public static void swallow(final Logger log, final Level level, final SwallowAction code) {
-        swallow(log, level, "Exception while execution the action", code, null);
+        swallow(log, level, "Exception while executing the action", code, null);
     }
 
     public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code) {
