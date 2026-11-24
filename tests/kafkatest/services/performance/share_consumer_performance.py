@@ -73,6 +73,9 @@ class ShareConsumerPerformanceService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
+    def java_class_name(self):
+        return "org.apache.kafka.tools.ShareConsumerPerformance"
+
     def args(self, version):
         """Dictionary of arguments used to start the Share Consumer Performance script."""
         args = {
