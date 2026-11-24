@@ -71,8 +71,7 @@ public class ListOffsetsIntegrationTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
-        clusterInstance.waitForReadyBrokers();
+    public void setup() {
         clusterInstance.createTopic(TOPIC, PARTITION, REPLICAS);
         adminClient = clusterInstance.admin();
     }

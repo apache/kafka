@@ -278,8 +278,6 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
-        clusterInstance.waitForReadyBrokers();
-
         // Remove broker id 0
         clusterInstance.shutdownBroker(0);
         Assertions.assertFalse(clusterInstance.aliveBrokers().containsKey(0));
@@ -386,6 +384,17 @@ public class ClusterTestExtensionsTest {
 
             RecordMetadata recordMetadata0 = producer.send(new ProducerRecord<>(topicName, 0, "key 0", "value 0")).get();
             assertEquals(0, recordMetadata0.offset());
+        }
+    }
+
+    @ClusterTest(types = Type.KRAFT)
+    public void testRestartBrokerWithConfigOverrides(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+        cluster.createTopic("topic", 1, (short) 1);
+        cluster.restartBroker(0, Map.of("queued.max.requests", "200")).get();
+        assertEquals(200, cluster.brokers().get(0).config().queuedMaxRequests());
+
+        try (Producer<byte[], byte[]> producer = cluster.producer()) {
+            assertEquals(0, producer.send(new ProducerRecord<>("topic", new byte[0])).get().offset());
         }
     }
 

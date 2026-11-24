@@ -382,8 +382,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       // persisted ratchet: neither a leftover back-off window from the original solicitation
       // nor a transient-failure back-off window would survive the restart.
       val brokerId = cluster.brokerIds().iterator().next()
-      cluster.restartBroker(brokerId, java.util.Collections.emptyMap())
-      cluster.waitForReadyBrokers()
+      cluster.restartBroker(brokerId, java.util.Collections.emptyMap()).get()
 
       val heartbeatAfterRestart = streamsGroupHeartbeat(
         groupId = groupId,

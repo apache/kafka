@@ -34,8 +34,6 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
-import org.junit.jupiter.api.BeforeEach;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -65,11 +63,6 @@ public class AdminClientWithPoliciesIntegrationTest {
 
     AdminClientWithPoliciesIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
-    }
-
-    @BeforeEach
-    public void setup() throws InterruptedException {
-        clusterInstance.waitForReadyBrokers();
     }
 
     @ClusterTest

@@ -137,8 +137,7 @@ public class AllocateProducerIdsRequestTest {
         var previous = allocateProducerIds(controllerId, brokerId, oldBrokerEpoch);
         assertSuccessfulAllocation(previous);
 
-        cluster.restartBroker(brokerId, Map.of());
-        cluster.waitForReadyBrokers();
+        cluster.restartBroker(brokerId, Map.of()).get();
         var restartedBroker = (BrokerServer) cluster.brokers().get(brokerId);
         long newBrokerEpoch = restartedBroker.lifecycleManager().brokerEpoch();
         assertTrue(newBrokerEpoch > oldBrokerEpoch, "The restarted broker must have a new epoch");

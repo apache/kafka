@@ -70,7 +70,6 @@ public class ConcurrentListOffsetsRequestTest {
 
     @BeforeEach
     public void setup() throws Exception {
-        clusterInstance.waitForReadyBrokers();
         clusterInstance.createTopic(TOPIC, PARTITION, REPLICAS);
         Map<String, Object> props = Map.of(
                 "default.api.timeout.ms", TIMEOUT,

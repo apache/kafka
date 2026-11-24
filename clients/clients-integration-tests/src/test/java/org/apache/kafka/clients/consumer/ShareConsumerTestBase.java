@@ -107,7 +107,6 @@ public abstract class ShareConsumerTestBase {
     @BeforeEach
     public void setup() {
         try {
-            this.cluster.waitForReadyBrokers();
             tpId = createTopic("topic");
             createTopic("topic2");
             sgsTopicPartitions = IntStream.range(0, 3)

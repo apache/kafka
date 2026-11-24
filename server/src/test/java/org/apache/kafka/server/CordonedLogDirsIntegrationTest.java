@@ -218,8 +218,7 @@ public class CordonedLogDirsIntegrationTest {
             .orElseThrow();
         assertFalse(Path.of(relativeLogDir).isAbsolute());
 
-        clusterInstance.restartBroker(brokerId, Map.of(LOG_DIRS_CONFIG, relativeLogDir));
-        clusterInstance.waitForReadyBrokers();
+        clusterInstance.restartBroker(brokerId, Map.of(LOG_DIRS_CONFIG, relativeLogDir)).get();
         assertEquals(List.of(relativeLogDir), clusterInstance.brokers().get(brokerId).config().logDirs());
 
         String absoluteLogDir = new File(relativeLogDir).getAbsolutePath();
@@ -489,8 +488,7 @@ public class CordonedLogDirsIntegrationTest {
             // Physically decommission the log dir: restart the
             // broker without it in its static log.dirs config
             Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", remainingLogDirs), CORDONED_LOG_DIRS_CONFIG, "");
-            clusterInstance.restartBroker(brokerId, propOverrides);
-            clusterInstance.waitForReadyBrokers();
+            clusterInstance.restartBroker(brokerId, propOverrides).get();
 
             // The broker restarted with the reduced set of log dirs, and no longer reports the removed one
             assertEquals(remainingLogDirs, clusterInstance.brokers().get(brokerId).config().logDirs());

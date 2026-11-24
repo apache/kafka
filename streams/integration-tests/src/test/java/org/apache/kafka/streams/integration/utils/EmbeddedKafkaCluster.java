@@ -237,9 +237,8 @@ public class EmbeddedKafkaCluster {
      * Shuts the broker down and starts it back up with the same identity, and waits for it to be ready again.
      */
     public void restartBroker(final int nodeId) {
-        cluster.restartBroker(nodeId, Map.of());
         try {
-            cluster.waitForReadyBrokers();
+            cluster.restartBroker(nodeId, Map.of()).get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }

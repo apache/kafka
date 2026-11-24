@@ -687,36 +687,43 @@ public class KafkaClusterTestKit implements AutoCloseable {
      *
      * @param nodeId         The ID of the broker to restart.
      * @param propOverrides  Configs to override in the broker's static configuration.
+     * @return a future that completes when the broker is ready to process requests,
+     *         or exceptionally if the restart fails.
      */
-    public void restartBroker(int nodeId, Map<String, Object> propOverrides) {
+    public CompletableFuture<Void> restartBroker(int nodeId, Map<String, Object> propOverrides) {
         BrokerServer broker = brokers.get(nodeId);
         if (broker == null) {
             throw new IllegalArgumentException("Unknown broker ID " + nodeId);
         }
-        if (!broker.isShutdown()) {
-            broker.shutdown();
+        try {
+            if (!broker.isShutdown()) {
+                broker.shutdown();
+            }
+            broker.awaitShutdown();
+
+            Map<String, Object> props = new HashMap<>(broker.config().originals());
+            props.putAll(propOverrides);
+            KafkaConfig newConfig = new KafkaConfig(props, false);
+
+            SharedServer sharedServer = new SharedServer(
+                newConfig,
+                broker.sharedServer().metaPropsEnsemble(),
+                Time.SYSTEM,
+                new Metrics(),
+                CompletableFuture.completedFuture(
+                    QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
+                QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
+                faultHandlerFactory,
+                socketFactoryManager.getOrCreateSocketFactory(nodeId)
+            );
+            BrokerServer restartedBroker = new BrokerServer(sharedServer);
+            brokers.put(nodeId, restartedBroker);
+
+            restartedBroker.startup();
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
-        broker.awaitShutdown();
-
-        Map<String, Object> props = new HashMap<>(broker.config().originals());
-        props.putAll(propOverrides);
-        KafkaConfig newConfig = new KafkaConfig(props, false);
-
-        SharedServer sharedServer = new SharedServer(
-            newConfig,
-            broker.sharedServer().metaPropsEnsemble(),
-            Time.SYSTEM,
-            new Metrics(),
-            CompletableFuture.completedFuture(
-                QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
-            QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
-            faultHandlerFactory,
-            socketFactoryManager.getOrCreateSocketFactory(nodeId)
-        );
-        broker = new BrokerServer(sharedServer);
-        brokers.put(nodeId, broker);
-
-        broker.startup();
     }
 
     /**

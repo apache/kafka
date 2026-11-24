@@ -91,8 +91,7 @@ class MirrorCoordinatorRecordSerdeIntegrationTest {
             }
         }
 
-        cluster.restartBroker(cluster.brokerIds().iterator().next(), Map.of());
-        cluster.waitForReadyBrokers();
+        cluster.restartBroker(cluster.brokerIds().iterator().next(), Map.of()).get();
 
         MirrorCoordinatorRecordSerde reader = new MirrorCoordinatorRecordSerde();
         List<CoordinatorRecord> actual = new ArrayList<>();

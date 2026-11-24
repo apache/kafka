@@ -85,7 +85,6 @@ public class LeaderElectionCommandTest {
             allTopicPartitionsTopicPartition
         );
 
-        cluster.waitForReadyBrokers();
         try (Admin client = cluster.admin()) {
             cluster.createTopicWithAssignment(topicPartitionTopic, Map.of(partition, assignment));
             cluster.createTopicWithAssignment(jsonFileTopic, Map.of(partition, assignment));
@@ -208,7 +207,6 @@ public class LeaderElectionCommandTest {
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
 
-        cluster.waitForReadyBrokers();
         try (Admin client = cluster.admin()) {
             Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
             partitionAssignment.put(partition, assignment);
@@ -255,7 +253,6 @@ public class LeaderElectionCommandTest {
         List<Integer> assignment0 = List.of(broker2, broker3);
         List<Integer> assignment1 = List.of(broker3, broker2);
 
-        cluster.waitForReadyBrokers();
         TopicPartition topicPartition0;
         TopicPartition topicPartition1;
         try (Admin client = cluster.admin()) {
