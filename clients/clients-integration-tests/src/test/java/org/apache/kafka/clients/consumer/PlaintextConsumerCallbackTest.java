@@ -446,7 +446,7 @@ public class PlaintextConsumerCallbackTest {
 
     private void testConsumerAwareSeekAndPositionOnPartitionsLost(GroupProtocol groupProtocol) throws InterruptedException {
         sendRecords(cluster, tp, 10);
-        triggerOnPartitionsLostConsumerAware(tp, groupProtocol, (rebalanceConsumer, partitions) -> {
+        triggerOnPartitionsLost(tp, groupProtocol, (rebalanceConsumer, partitions) -> {
             assertTrue(rebalanceConsumer.assignment().contains(tp));
             rebalanceConsumer.seek(tp, 3L);
             assertEquals(3L, rebalanceConsumer.position(tp));
@@ -456,7 +456,7 @@ public class PlaintextConsumerCallbackTest {
     @ClusterTest
     public void testAsyncConsumerAwarePositionWithoutInitialPositionOnPartitionsLost() throws InterruptedException {
         sendRecords(cluster, tp, 10);
-        triggerOnPartitionsLostConsumerAware(tp, CONSUMER, (rebalanceConsumer, partitions) ->
+        triggerOnPartitionsLost(tp, CONSUMER, (rebalanceConsumer, partitions) ->
             assertThrows(TimeoutException.class, () -> rebalanceConsumer.position(tp, Duration.ofSeconds(1))));
     }
 
@@ -471,14 +471,14 @@ public class PlaintextConsumerCallbackTest {
     }
 
     private void testConsumerAwarePositionOnPartitionsLost(GroupProtocol groupProtocol) throws InterruptedException {
-        triggerOnPartitionsLostWithPositionConsumerAware(tp, groupProtocol, "group-" + groupProtocol, null,
+        triggerOnPartitionsLostWithPosition(tp, groupProtocol, "group-" + groupProtocol, null,
             (rebalanceConsumer, partitions) ->
                 assertEquals(0L, rebalanceConsumer.position(tp, Duration.ofSeconds(5))));
     }
 
     @ClusterTest
     public void testClassicConsumerAwareCommitOnPartitionsLost() throws InterruptedException {
-        triggerOnPartitionsLostWithPositionConsumerAware(tp, CLASSIC, "group-classic", null, (rebalanceConsumer, partitions) -> {
+        triggerOnPartitionsLostWithPosition(tp, CLASSIC, "group-classic", null, (rebalanceConsumer, partitions) -> {
             assertThrows(CommitFailedException.class, rebalanceConsumer::commitSync);
             assertThrows(CommitFailedException.class,
                 () -> rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
@@ -489,7 +489,7 @@ public class PlaintextConsumerCallbackTest {
     public void testAsyncConsumerAwareCommitOnPartitionsLostWithOtherMembers() throws InterruptedException {
         var groupId = "group-consumer";
         try (Consumer<byte[], byte[]> otherMember = createOtherMember(groupId)) {
-            triggerOnPartitionsLostWithPositionConsumerAware(tp, CONSUMER, groupId, otherMember, (rebalanceConsumer, partitions) -> {
+            triggerOnPartitionsLostWithPosition(tp, CONSUMER, groupId, otherMember, (rebalanceConsumer, partitions) -> {
                 assertThrows(CommitFailedException.class, rebalanceConsumer::commitSync);
                 assertThrows(CommitFailedException.class,
                     () -> rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
@@ -516,7 +516,7 @@ public class PlaintextConsumerCallbackTest {
             Consumer<byte[], byte[]> otherMember
     ) throws InterruptedException {
         var commitErrors = new CopyOnWriteArrayList<Exception>();
-        triggerOnPartitionsLostWithPositionConsumerAware(tp, groupProtocol, groupId, otherMember, () -> commitErrors.size() == 2,
+        triggerOnPartitionsLostWithPosition(tp, groupProtocol, groupId, otherMember, () -> commitErrors.size() == 2,
             (rebalanceConsumer, partitions) -> {
                 rebalanceConsumer.commitAsync((offsets, exception) -> commitErrors.add(exception));
                 rebalanceConsumer.commitAsync(Map.of(tp, new OffsetAndMetadata(3L)),
@@ -529,7 +529,7 @@ public class PlaintextConsumerCallbackTest {
     @ClusterTest
     public void testAsyncConsumerAwareCommitOnPartitionsLostWithoutOtherMembers() throws Exception {
         var groupId = "group-consumer";
-        triggerOnPartitionsLostWithPositionConsumerAware(tp, CONSUMER, groupId, null, (rebalanceConsumer, partitions) ->
+        triggerOnPartitionsLostWithPosition(tp, CONSUMER, groupId, null, (rebalanceConsumer, partitions) ->
             rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L))));
         try (Admin admin = cluster.admin()) {
             var committed = admin.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata().get();
@@ -784,25 +784,25 @@ public class PlaintextConsumerCallbackTest {
         assertTrue(partitionsRevoked.get());
     }
 
-    private void triggerOnPartitionsLostConsumerAware(
+    private void triggerOnPartitionsLost(
             TopicPartition tp,
             GroupProtocol protocol,
             BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
     ) throws InterruptedException {
-        triggerOnPartitionsLost(tp, protocol, "group-" + protocol, false, null, () -> true, execute);
+        triggerOnPartitionsLostInternal(tp, protocol, "group-" + protocol, false, null, () -> true, execute);
     }
 
-    private void triggerOnPartitionsLostWithPositionConsumerAware(
+    private void triggerOnPartitionsLostWithPosition(
             TopicPartition tp,
             GroupProtocol protocol,
             String groupId,
             Consumer<byte[], byte[]> otherMember,
             BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
     ) throws InterruptedException {
-        triggerOnPartitionsLostWithPositionConsumerAware(tp, protocol, groupId, otherMember, () -> true, execute);
+        triggerOnPartitionsLostWithPosition(tp, protocol, groupId, otherMember, () -> true, execute);
     }
 
-    private void triggerOnPartitionsLostWithPositionConsumerAware(
+    private void triggerOnPartitionsLostWithPosition(
             TopicPartition tp,
             GroupProtocol protocol,
             String groupId,
@@ -810,7 +810,7 @@ public class PlaintextConsumerCallbackTest {
             Supplier<Boolean> afterLostCondition,
             BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
     ) throws InterruptedException {
-        triggerOnPartitionsLost(tp, protocol, groupId, true, otherMember, afterLostCondition, execute);
+        triggerOnPartitionsLostInternal(tp, protocol, groupId, true, otherMember, afterLostCondition, execute);
     }
 
     private Consumer<byte[], byte[]> createOtherMember(String groupId) {
@@ -820,7 +820,7 @@ public class PlaintextConsumerCallbackTest {
                 ENABLE_AUTO_COMMIT_CONFIG, "false"));
     }
 
-    private void triggerOnPartitionsLost(
+    private void triggerOnPartitionsLostInternal(
             TopicPartition tp,
             GroupProtocol protocol,
             String groupId,

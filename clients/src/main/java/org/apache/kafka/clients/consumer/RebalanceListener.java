@@ -277,10 +277,9 @@ public interface RebalanceListener {
      *   <li>{@link RebalanceConsumer#position(org.apache.kafka.common.TopicPartition) position()} and
      *       {@link RebalanceConsumer#seek(org.apache.kafka.common.TopicPartition, long) seek()} can
      *       still be used for the lost partitions since they are still in the assignment.
-     *       If a lost partition is pending revocation and does not have a position yet,
-     *       {@code position()} blocks until the timeout and throws a
-     *       {@link org.apache.kafka.common.errors.TimeoutException}, since the consumer does not
-     *       fetch a position for partitions pending revocation. Calling {@code seek()} first avoids this.</li>
+     *       If a lost partition does not have a position yet, {@code position()} may block until the
+     *       timeout and throw a {@link org.apache.kafka.common.errors.TimeoutException}. Calling
+     *       {@code seek()} first avoids this.</li>
      *   <li>{@link RebalanceConsumer#commitSync() commitSync()}/{@link RebalanceConsumer#commitAsync() commitAsync()}
      *       and {@link RebalanceConsumer#commitSync(java.util.Map) commitSync(offsets)}
      *       /{@link RebalanceConsumer#commitAsync(java.util.Map, OffsetCommitCallback) commitAsync(offsets)}
