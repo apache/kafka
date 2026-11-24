@@ -142,7 +142,6 @@ public class TopicsImageTest {
 
         // baz - new topic associated with a cluster mirror. This is kept out of the shared fixtures
         // because they are also written at metadata versions which do not support cluster mirroring.
-        // TODO: consider adding this to TestImageFixtures when MV stabilizes.
         topicRecords.add(
             new ApiMessageAndVersion(
                 new MirrorTopicStateChangeRecord()
