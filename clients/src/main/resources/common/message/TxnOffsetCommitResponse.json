@@ -45,6 +45,7 @@
   // - UNSUPPORTED_FOR_MESSAGE_FORMAT (version 0+)
   // - UNKNOWN_TOPIC_OR_PARTITION (version 0+)
   // - OFFSET_METADATA_TOO_LARGE (version 0+)
+  // - INVALID_COMMIT_OFFSET_SIZE (version 0+)
   // - ILLEGAL_GENERATION (version 3+)
   // - UNKNOWN_MEMBER_ID (version 3+)
   // - FENCED_INSTANCE_ID (version 3+)

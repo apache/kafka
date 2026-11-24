@@ -210,6 +210,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topicId: Uuid,
     partition: Int,
     offset: Long,
+    metadata: String = "",
     expectedError: Errors,
     version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
@@ -230,6 +231,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
+                .setCommittedMetadata(metadata)
             ).asJava)
         ).asJava)
     ).build(version)
@@ -261,6 +263,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      topicId: Uuid,
      partition: Int,
      offset: Long,
+     metadata: String = "",
      expectedError: Errors,
      version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
   ): Unit = {
@@ -280,6 +283,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
               new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
+                .setCommittedMetadata(metadata)
             ).asJava)
         ).asJava),
       true
