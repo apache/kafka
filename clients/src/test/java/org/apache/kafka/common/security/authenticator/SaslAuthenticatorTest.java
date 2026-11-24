@@ -800,8 +800,8 @@ public class SaslAuthenticatorTest {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), (short) 0);
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(ApiVersionsRequest.FALLBACK_VERSION));
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), ApiVersionsRequest.FALLBACK_VERSION);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
         ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
