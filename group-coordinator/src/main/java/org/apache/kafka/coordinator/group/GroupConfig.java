@@ -669,13 +669,13 @@ public final class GroupConfig extends AbstractConfig {
         if (dlqTopicName != null && !dlqTopicName.isEmpty()) {
             if (dlqTopicName.startsWith("__")) {
                 throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
-                    " - DLQ topic name must not start with '__'");
+                    ": DLQ topic name must not start with '__'");
             }
             try {
                 Topic.validate(dlqTopicName);
             } catch (InvalidTopicException invalidTopicException) {
                 throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
-                    " - DLQ topic name is not valid: " + invalidTopicException.getMessage());
+                    ": DLQ topic name is not valid - " + invalidTopicException.getMessage());
             }
         }
     }
