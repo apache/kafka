@@ -78,7 +78,9 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     /**
      * Reverts the last written offset. This also reverts the snapshot
      * registry to this offset. All the changes applied after the offset
-     * are lost.
+     * are lost. The coordinator is notified via
+     * {@link CoordinatorShard#onLastWrittenOffsetReverted(long)} so that it
+     * can restore state which is not covered by the snapshot registry.
      *
      * @param offset The offset to revert to.
      */
@@ -93,6 +95,13 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
         log.debug("Revert last written offset of {} to {}.", tp, offset);
         lastWrittenOffset = offset;
         snapshotRegistry.revertToSnapshot(offset);
+
+        // The snapshot registry restores the timeline-backed state, but
+        // state which lives outside the snapshot registry (e.g. timers
+        // canceled while the write operation was building its records) is
+        // not covered by any snapshot. The coordinator gets the chance to
+        // restore such state from the reverted in-memory state.
+        coordinator.onLastWrittenOffsetReverted(offset);
     }
 
     /**

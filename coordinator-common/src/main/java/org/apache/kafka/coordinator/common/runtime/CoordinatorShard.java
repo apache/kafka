@@ -50,6 +50,19 @@ public interface CoordinatorShard<U> {
     default void onUnloaded() {}
 
     /**
+     * The last written offset has been reverted to the provided offset
+     * following a failed write operation (see
+     * {@link SnapshottableCoordinator#revertLastWrittenOffset(long)}).
+     * The snapshot registry restores the timeline-backed state, but state
+     * which lives outside the snapshot registry (e.g. coordinator timers)
+     * is not reverted. Implementations can use this callback to restore
+     * such state from the reverted in-memory state.
+     *
+     * @param offset The offset the state was reverted to.
+     */
+    default void onLastWrittenOffsetReverted(long offset) {}
+
+    /**
      * Replay a record to update the state machine.
      *
      * @param offset        The offset of the record in the log.

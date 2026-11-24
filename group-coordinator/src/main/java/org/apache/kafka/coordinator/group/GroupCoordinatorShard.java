@@ -1274,6 +1274,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         cancelGroupSizeCounter();
     }
 
+    @Override
+    public void onLastWrittenOffsetReverted(long offset) {
+        groupMetadataManager.onLastWrittenOffsetReverted(offset);
+    }
+
     /**
      * A new metadata image is available.
      *

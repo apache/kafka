@@ -7381,6 +7381,76 @@ public class GroupMetadataManager {
     }
 
     /**
+     * The last written offset has been reverted to the provided offset
+     * following a failed write operation.
+     *
+     * The snapshot registry restores the timeline-backed group state, but
+     * the coordinator timers are not covered by the snapshot registry. The
+     * fence/leave paths cancel the timers of the departing members eagerly,
+     * while building their records, before the records are durably
+     * appended, so a member resurrected by the revert would otherwise stay
+     * in the group without a session timeout and could never be fenced or
+     * timed out again. Re-arm the session timeout of every member which is
+     * present in the reverted state, mirroring what {@link #onLoaded()}
+     * does when loading the group. Timers which were not canceled keep
+     * their original deadlines; the rebalance, join and sync timers of a
+     * restored member are re-established by its next heartbeat.
+     *
+     * @param offset The offset the state was reverted to.
+     */
+    public void onLastWrittenOffsetReverted(long offset) {
+        groups.forEach((groupId, group) -> {
+            if (group instanceof ConsumerGroup consumerGroup) {
+                log.info("[GroupId {}] Re-armed the timers of {} member(s) after the state was reverted to offset {}.",
+                    groupId, consumerGroup.members().size(), offset);
+                consumerGroup.members().keySet().forEach(memberId ->
+                    scheduleConsumerGroupSessionTimeoutIfAbsent(groupId, memberId)
+                );
+            } else if (group instanceof StreamsGroup streamsGroup) {
+                log.info("[GroupId {}] Re-armed the timers of {} member(s) after the state was reverted to offset {}.",
+                    groupId, streamsGroup.members().size(), offset);
+                streamsGroup.members().keySet().forEach(memberId ->
+                    scheduleStreamsGroupSessionTimeoutIfAbsent(groupId, memberId)
+                );
+            }
+        });
+    }
+
+    /**
+     * Schedules the session timeout for the consumer group member only if
+     * it is not already scheduled.
+     */
+    private void scheduleConsumerGroupSessionTimeoutIfAbsent(
+        String groupId,
+        String memberId
+    ) {
+        timer.scheduleIfAbsent(
+            groupSessionTimeoutKey(groupId, memberId),
+            consumerGroupSessionTimeoutMs(groupId),
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expired")
+        );
+    }
+
+    /**
+     * Schedules the session timeout for the streams group member only if it
+     * is not already scheduled.
+     */
+    private void scheduleStreamsGroupSessionTimeoutIfAbsent(
+        String groupId,
+        String memberId
+    ) {
+        timer.scheduleIfAbsent(
+            groupSessionTimeoutKey(groupId, memberId),
+            streamsGroupSessionTimeoutMs(groupId),
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired")
+        );
+    }
+
+    /**
      * The coordinator has been loaded. Session timeouts are registered
      * for all members.
      */

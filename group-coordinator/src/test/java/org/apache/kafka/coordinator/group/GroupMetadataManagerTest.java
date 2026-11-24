@@ -1335,6 +1335,107 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testOnLastWrittenOffsetRevertedReArmsSessionTimeouts() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .addRacks()
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))))
+        ));
+
+        // A member joins the group and its session timeout is armed.
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of(fooTopicName))
+                .setServerAssignor("range")
+                .setTopicPartitions(List.of())
+        );
+        context.assertSessionTimeout(groupId, memberId, 45000);
+
+        // Simulate the state left behind by a failed fence/leave write
+        // operation: the runtime reverts the state machine, which restores
+        // the member, but the timers canceled while the leave records were
+        // built stay canceled because they live outside the snapshot
+        // registry.
+        context.timer.cancel(groupSessionTimeoutKey(groupId, memberId));
+        assertTrue(context.groupMetadataManager.consumerGroup(groupId).members().containsKey(memberId));
+        context.assertNoSessionTimeout(groupId, memberId);
+
+        // The revert callback re-arms the session timeout of the member
+        // restored by the revert.
+        context.groupMetadataManager.onLastWrittenOffsetReverted(0L);
+        context.assertSessionTimeout(groupId, memberId, 45000);
+    }
+
+    @Test
+    public void testOnLastWrittenOffsetRevertedDoesNotResurrectRemovedMembers() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .addRacks()
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))))
+        ));
+
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of(fooTopicName))
+                .setServerAssignor("range")
+                .setTopicPartitions(List.of())
+        );
+        context.assertSessionTimeout(groupId, memberId, 45000);
+
+        // The member leaves; its records are replayed so the member is gone
+        // from the state and its timers were canceled while the leave
+        // records were built.
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+        );
+        context.assertNoSessionTimeout(groupId, memberId);
+
+        // The revert callback must not resurrect the timers of members
+        // which are no longer part of the group.
+        context.groupMetadataManager.onLastWrittenOffsetReverted(0L);
+        context.assertNoSessionTimeout(groupId, memberId);
+    }
+
+    @Test
     public void testTopicHashIsRemoveFromCacheIfNoGroupSubscribesIt() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
