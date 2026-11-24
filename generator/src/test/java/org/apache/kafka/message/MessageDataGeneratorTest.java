@@ -25,6 +25,7 @@ import java.io.StringWriter;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -138,6 +139,24 @@ public class MessageDataGeneratorTest {
         int occurrences = source.split("if \\(arrayLength > MessageUtil.maxArrayLength\\(\\)\\) \\{", -1).length - 1;
         assertEquals(3, occurrences,
                 "Expected the cap check for all 3 array fields (Foo, Bar, Value), but found " + occurrences);
+    }
+
+    @Test
+    public void testOnlyResponseCollectionsUseResponseProbeLimit() throws Exception {
+        String fields = "  \"fields\": [ { \"name\": \"Bar\", \"type\": \"[]Baz\", \"versions\": \"0+\", \"fields\": [" +
+            " { \"name\": \"Key\", \"type\": \"string\", \"versions\": \"0+\", \"mapKey\": true } ]} ]";
+        String response = generateMessageSource(parseSpec(
+                "{",
+                "  \"type\": \"response\", \"name\": \"ProbeTestResponse\", \"validVersions\": \"0\", \"flexibleVersions\": \"none\", \"headerVersions\": { \"0+\": \"0\" },",
+                fields,
+                "}"));
+        String request = generateMessageSource(parseSpec(
+                "{",
+                "  \"type\": \"request\", \"name\": \"ProbeTestRequest\", \"validVersions\": \"0\", \"flexibleVersions\": \"none\", \"headerVersions\": { \"0+\": \"1\" },",
+                fields,
+                "}"));
+        assertStringContains("return RESPONSE_MAX_PROBE_LENGTH;", response);
+        assertFalse(request.contains("maxProbeLength"), "Request collections should keep the default probe limit");
     }
 
     @Test

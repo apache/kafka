@@ -47,7 +47,13 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      * The maximum number of slots probed when adding an element. Elements with equal keys are not
      * deduplicated, so they all end up in one probe run, and this bounds the cost of each add.
      */
-    static final int MAX_PROBE_LENGTH = 1000;
+    protected static final int MAX_PROBE_LENGTH = 1000;
+
+    /**
+     * The larger limit used by response collections. Clients must be able to read any response that
+     * the broker builds, so both sides use this limit.
+     */
+    protected static final int RESPONSE_MAX_PROBE_LENGTH = 10_000;
 
     public ImplicitLinkedHashMultiCollection() {
         super(0);
@@ -61,6 +67,12 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
         super(iter);
     }
 
+    /**
+     * Returns the maximum number of slots probed when adding an element.
+     */
+    protected int maxProbeLength() {
+        return MAX_PROBE_LENGTH;
+    }
 
     /**
      * Adds a new element to the appropriate place in the elements array.
@@ -73,7 +85,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
     @Override
     int addInternal(Element newElement, Element[] addElements) {
         int slot = slot(addElements, newElement);
-        int maxProbe = Math.min(addElements.length, MAX_PROBE_LENGTH);
+        int maxProbe = Math.min(addElements.length, maxProbeLength());
         for (int seen = 0; seen < maxProbe; seen++) {
             Element element = addElements[slot];
             if (element == null) {
@@ -83,7 +95,9 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
             if (element == newElement) {
                 return INVALID_INDEX;
             }
-            slot = (slot + 1) % addElements.length;
+            if (++slot == addElements.length) {
+                slot = 0;
+            }
         }
         throw new RuntimeException("Unable to add a new element: the probe sequence exceeded " + maxProbe + " slots.");
     }

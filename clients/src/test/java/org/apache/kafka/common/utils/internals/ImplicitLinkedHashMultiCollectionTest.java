@@ -111,6 +111,20 @@ public class ImplicitLinkedHashMultiCollectionTest {
     }
 
     @Test
+    public void testResistsIdenticalKeyFloodWithResponseProbeLimit() {
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>() {
+            @Override
+            protected int maxProbeLength() {
+                return RESPONSE_MAX_PROBE_LENGTH;
+            }
+        };
+        for (int i = 0; i < ImplicitLinkedHashMultiCollection.RESPONSE_MAX_PROBE_LENGTH; i++) {
+            assertTrue(multiSet.add(new TestElement(1)));
+        }
+        assertThrows(RuntimeException.class, () -> multiSet.add(new TestElement(1)));
+    }
+
+    @Test
     public void testAddsManyKeysWithSimilarHashCodes() {
         int count = 50_000;
         ImplicitLinkedHashMultiCollection<CollidingElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
