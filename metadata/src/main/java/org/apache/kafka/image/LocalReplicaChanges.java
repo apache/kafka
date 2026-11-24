@@ -23,8 +23,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 public final class LocalReplicaChanges {
@@ -40,8 +38,8 @@ public final class LocalReplicaChanges {
     private final Map<String, Uuid> topicIds;
     // partitions for which directory id changes or newly added to the broker
     private final Map<TopicIdPartition, Uuid> directoryIds;
-    // topic id -> mirror topic state map
-    private final Map<Uuid, MirrorTopicState> mirrorTopicStates;
+    // topic id -> mirror map
+    private final Map<Uuid, TopicImage.Mirror> mirrorTopicStates;
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
@@ -50,7 +48,7 @@ public final class LocalReplicaChanges {
         Map<TopicPartition, PartitionInfo> followers,
         Map<String, Uuid> topicIds,
         Map<TopicIdPartition, Uuid> directoryIds,
-        Map<Uuid, MirrorTopicState> mirrorTopicStates
+        Map<Uuid, TopicImage.Mirror> mirrorTopicStates
     ) {
         this.deletes = deletes;
         this.electedLeaders = electedLeaders;
@@ -85,7 +83,7 @@ public final class LocalReplicaChanges {
         return directoryIds;
     }
 
-    public Map<Uuid, MirrorTopicState> mirrorTopicStates() {
+    public Map<Uuid, TopicImage.Mirror> mirrorTopicStates() {
         return mirrorTopicStates;
     }
 
@@ -104,43 +102,5 @@ public final class LocalReplicaChanges {
     }
 
     public record PartitionInfo(Uuid topicId, PartitionRegistration partition) {
-    }
-
-    /**
-     * The mirror state of a topic after a delta is applied.
-     */
-    public static final class MirrorTopicState {
-        private final TopicImage.Mirror mirror;
-
-        /**
-         * @param mirror The mirror state, or null if the topic is no longer associated with a mirror.
-         */
-        public MirrorTopicState(TopicImage.Mirror mirror) {
-            this.mirror = mirror;
-        }
-
-        /**
-         * Returns the mirror state, or empty if the topic is no longer associated with a mirror.
-         */
-        public Optional<TopicImage.Mirror> mirror() {
-            return Optional.ofNullable(mirror);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof MirrorTopicState other)) return false;
-            return Objects.equals(mirror, other.mirror);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hashCode(mirror);
-        }
-
-        @Override
-        public String toString() {
-            return "MirrorTopicState(mirror=" + mirror + ")";
-        }
     }
 }

@@ -46,7 +46,7 @@ public final class TopicDelta {
     private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
 
     private boolean mirrorRecordReplayed;
-    private Optional<TopicImage.Mirror> mirror = Optional.empty();
+    private TopicImage.Mirror mirror;
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -115,32 +115,34 @@ public final class TopicDelta {
         }
         mirrorRecordReplayed = true;
         mirror = record.mirrorName() == null ?
-            Optional.empty() :
-            Optional.of(new TopicImage.Mirror(record.mirrorName(), record.desiredState()));
+            new TopicImage.NoMirror() :
+            new TopicImage.ActiveMirror(record.mirrorName(), record.desiredState());
     }
 
     /**
-     * Returns the mirror state after this delta is applied, or empty if the topic is not mirrored.
+     * Returns the mirror state after this delta is applied, or {@link TopicImage.NoMirror} if the topic is not mirrored.
      */
-    public Optional<TopicImage.Mirror> mirror() {
+    public TopicImage.Mirror mirror() {
         return mirrorRecordReplayed ? mirror : image.mirror();
     }
 
     /**
      * Returns the mirror topic state after this delta is applied if a mirror topic state change record was replayed,
-     * or if the state differs from the state in the given image. Returns null otherwise. A null image is treated as a
+     * or if the state differs from the state in the given image. Returns empty otherwise. A null image is treated as a
      * topic that is not associated with a mirror.
+     *
      * <p>
      * A replayed record is reported even if it doesn't change the state, because the controller re-writes the current
      * state to make brokers re-process the mirror partitions (e.g. when recovering failed partitions).
+     * </p>
      */
-    LocalReplicaChanges.MirrorTopicState mirrorTopicStateChange(TopicImage prevImage) {
-        Optional<TopicImage.Mirror> prevMirror = prevImage == null ? Optional.empty() : prevImage.mirror();
-        Optional<TopicImage.Mirror> newMirror = mirror();
+    Optional<TopicImage.Mirror> mirrorTopicStateChange(TopicImage prevImage) {
+        TopicImage.Mirror prevMirror = prevImage == null ? new TopicImage.NoMirror() : prevImage.mirror();
+        TopicImage.Mirror newMirror = mirror();
         if (!mirrorRecordReplayed && prevMirror.equals(newMirror)) {
-            return null;
+            return Optional.empty();
         }
-        return new LocalReplicaChanges.MirrorTopicState(newMirror.orElse(null));
+        return Optional.of(newMirror);
     }
 
     private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
@@ -192,7 +194,7 @@ public final class TopicDelta {
             }
         }
 
-        return new TopicImage(image.name(), image.id(), mirror().orElse(null), newPartitions);
+        return new TopicImage(image.name(), image.id(), mirror(), newPartitions);
     }
 
     /**
@@ -222,12 +224,9 @@ public final class TopicDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
-        Map<Uuid, LocalReplicaChanges.MirrorTopicState> mirrorTopicChanges = new HashMap<>();
+        Map<Uuid, TopicImage.Mirror> mirrorTopicChanges = new HashMap<>();
 
-        LocalReplicaChanges.MirrorTopicState mirrorTopicState = mirrorTopicStateChange(image);
-        if (mirrorTopicState != null) {
-            mirrorTopicChanges.put(id(), mirrorTopicState);
-        }
+        mirrorTopicStateChange(image).ifPresent(mirror -> mirrorTopicChanges.put(id(), mirror));
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {

@@ -106,7 +106,7 @@ public class MetadataImageTest {
         TopicImage mirrorTopic = TopicsImageFixtures.newTopicImage(
             "mirror-topic",
             Uuid.fromString("Kz4eV9sJTi6oEcxW1bnK3A"),
-            new TopicImage.Mirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
+            new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()),
             new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).
                 setDirectories(DirectoryId.migratingArray(3)).
                 setIsr(new int[] {1, 2, 3}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

@@ -71,7 +71,7 @@ public class TopicImageTest {
             build();
 
     private static final TopicImage MIRRORED_TOPIC = new TopicImage("foo", TOPIC_ID,
-            new TopicImage.Mirror("test-mirror", MirrorPartitionState.MIRRORING.value()), Map.of(0, PARTITION0, 1, PARTITION1));
+            new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.MIRRORING.value()), Map.of(0, PARTITION0, 1, PARTITION1));
 
     private static final TopicImage DISASSOCIATED_TOPIC = new TopicImage("foo", TOPIC_ID,
             Map.of(0, PARTITION0, 1, PARTITION1));
@@ -94,8 +94,8 @@ public class TopicImageTest {
         if (withMirrorRecord) {
             records.add(new ApiMessageAndVersion(new MirrorTopicStateChangeRecord().
                     setTopicName(image.name()).
-                    setMirrorName(image.mirror().orElseThrow().name()).
-                    setDesiredState(image.mirror().orElseThrow().desiredState()), (short) 0));
+                    setMirrorName(((TopicImage.ActiveMirror) image.mirror()).name()).
+                    setDesiredState(((TopicImage.ActiveMirror) image.mirror()).desiredState()), (short) 0));
         }
         image.partitions().forEach((partitionId, partition) ->
                 records.add(partition.toRecord(image.id(), partitionId, options)));

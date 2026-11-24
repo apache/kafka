@@ -122,7 +122,7 @@ public final class TopicsImageFixtures {
                             setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build())));
 
     public static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
-        return newTopicImage(name, id, (TopicImage.Mirror) null, partitions);
+        return newTopicImage(name, id, new TopicImage.NoMirror(), partitions);
     }
 
     public static TopicImage newTopicImage(String name, Uuid id, TopicImage.Mirror mirror, PartitionRegistration... partitions) {

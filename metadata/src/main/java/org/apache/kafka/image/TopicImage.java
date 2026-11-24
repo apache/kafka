@@ -29,7 +29,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Optional;
 
 
 /**
@@ -37,97 +36,67 @@ import java.util.Optional;
  *
  * This class is thread-safe.
  */
-public final class TopicImage {
+public record TopicImage(String name, Uuid id, Mirror mirror, Map<Integer, PartitionRegistration> partitions) {
+
+    public sealed interface Mirror permits ActiveMirror, NoMirror {
+
+    }
 
     /**
      * The mirror state of a mirrored topic.
      *
-     * @param name          The name of the mirror. Never null.
-     * @param desiredState  The desired mirror partition state.
+     * @param name         The name of the mirror. Never null.
+     * @param desiredState The desired mirror partition state.
      */
-    public record Mirror(String name, byte desiredState) {
-        public Mirror {
+    public record ActiveMirror(String name, byte desiredState) implements Mirror {
+        public ActiveMirror {
             Objects.requireNonNull(name, "mirror name must not be null");
         }
     }
 
-    private final String name;
-    private final Uuid id;
-    private final Mirror mirror;
-    private final Map<Integer, PartitionRegistration> partitions;
+    /**
+     * The mirror state when no mirror exists on a topic.
+     */
+    public record NoMirror() implements Mirror {
+    }
 
     /**
      * Creates an image of a topic which is not associated with a mirror.
      */
     public TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
-        this(name, id, null, partitions);
+        this(name, id, new NoMirror(), partitions);
     }
 
     /**
      * Creates an image of a topic.
      *
-     * @param mirror The mirror state, or null if the topic is not associated with a mirror.
+     * @param mirror The mirror state. Must not be null; use {@link NoMirror} if the topic is not
+     *               associated with a mirror.
      */
-    public TopicImage(String name, Uuid id, Mirror mirror, Map<Integer, PartitionRegistration> partitions) {
-        this.name = name;
-        this.id = id;
-        this.mirror = mirror;
-        this.partitions = Collections.unmodifiableMap(partitions);
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public Uuid id() {
-        return id;
-    }
-
-    /**
-     * Returns the mirror state, or empty if the topic is not associated with a mirror.
-     */
-    public Optional<Mirror> mirror() {
-        return Optional.ofNullable(mirror);
-    }
-
-    public Map<Integer, PartitionRegistration> partitions() {
-        return partitions;
+    public TopicImage {
+        Objects.requireNonNull(mirror);
+        partitions = Collections.unmodifiableMap(partitions);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
         writer.write(0, new TopicRecord().
-            setName(name).
-            setTopicId(id));
-        mirror().ifPresent(m -> {
+                setName(name).
+                setTopicId(id));
+        if (mirror instanceof ActiveMirror activeMirror) {
             if (!options.metadataVersion().isClusterMirroringSupported()) {
                 options.handleLoss("cluster mirror topic state change");
             } else {
                 writer.write(0, new MirrorTopicStateChangeRecord().
                         setTopicName(name).
-                        setMirrorName(m.name()).
-                        setDesiredState(m.desiredState()));
+                        setMirrorName(activeMirror.name()).
+                        setDesiredState(activeMirror.desiredState()));
             }
-        });
+        }
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
             writer.write(partition.toRecord(id, partitionId, options));
         }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof TopicImage other)) return false;
-        return Objects.equals(name, other.name) &&
-            Objects.equals(id, other.id) &&
-            Objects.equals(mirror, other.mirror) &&
-            Objects.equals(partitions, other.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, id, mirror, partitions);
     }
 
     @Override
