@@ -664,7 +664,7 @@ public final class GroupConfig extends AbstractConfig {
         );
 
         // DLQ validation (KIP-1191)
-        // DLQ topic name is a valid topic name and must not start with "__" (reserved for internal topics)
+        // DLQ topic name must not start with "__" (reserved for internal topics) and must be a valid topic name.
         String dlqTopicName = (String) parsed.get(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
         if (dlqTopicName != null && !dlqTopicName.isEmpty()) {
             if (dlqTopicName.startsWith("__")) {
