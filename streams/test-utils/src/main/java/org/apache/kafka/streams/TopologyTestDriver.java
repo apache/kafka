@@ -41,9 +41,9 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
-import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -335,8 +335,7 @@ public class TopologyTestDriver implements Closeable {
     TopologyTestDriver(final InternalTopologyBuilder builder,
                        final Properties config,
                        final long initialWallClockTimeMs) {
-        final Properties configCopy = new Properties();
-        configCopy.putAll(config);
+        final Map<String, Object> configCopy = Utils.propsToMap(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         // provide randomized dummy app-id if it's not specified
         configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
@@ -470,7 +469,7 @@ public class TopologyTestDriver implements Closeable {
                 globalTopology,
                 globalProcessorContext,
                 globalStateManager,
-                new LogAndContinueExceptionHandler(),
+                streamsConfig.deserializationExceptionHandler(),
                 processingExceptionHandler,
                 mockWallClockTime,
                 streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
