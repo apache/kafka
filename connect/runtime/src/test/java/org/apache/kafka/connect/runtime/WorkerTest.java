@@ -109,7 +109,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
-import org.slf4j.event.Level;
 
 import java.lang.management.ManagementFactory;
 import java.util.Collection;
@@ -769,7 +768,7 @@ public class WorkerTest {
         boolean warningLogged;
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Worker.class)) {
             assertTrue(worker.startSinkTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
-            warningLogged = appender.getMessages(Level.WARN.name()).stream().anyMatch(message -> message.contains("group.protocol=CONSUMER")
+            warningLogged = appender.getMessages(Level.WARN).stream().anyMatch(message -> message.contains("group.protocol=CONSUMER")
                     && message.contains("not been fully tested for production")
                     && message.contains(TASK_ID.toString()));
         }
