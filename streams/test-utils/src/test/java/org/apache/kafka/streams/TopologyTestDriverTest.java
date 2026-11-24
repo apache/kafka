@@ -80,6 +80,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -458,7 +459,7 @@ public abstract class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldCloseStateStoreWhenProcessorFailsToInitialize() {
+    public void shouldCloseStateStoreAndKeepTaskDirectoryWhenProcessorFailsToInitialize() {
         final Topology topology = new Topology();
         topology.addSource("source", SOURCE_TOPIC_1);
         topology.addProcessor("processor", failingProcessorSupplier("store"), "source");
@@ -469,6 +470,10 @@ public abstract class TopologyTestDriverTest {
         assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
 
         assertFalse(store.isOpen());
+        final File applicationDirectory = new File(
+            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
+            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
+        assertTrue(new File(applicationDirectory, "0_0").exists());
     }
 
     @Test
@@ -490,18 +495,11 @@ public abstract class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldSuppressFailureToCloseGlobalStateStoreWhenProcessorFailsToInitialize() {
+    public void shouldCloseGlobalStateStoreWhenStateStoreFailsToClose() {
+        final AtomicReference<StateStore> globalStore = new AtomicReference<>();
         final Topology topology = new Topology();
         topology.addGlobalStore(
-            Stores.keyValueStoreBuilder(
-                storeSupplier(() -> new InMemoryKeyValueStore("globalStore") {
-                    @Override
-                    public void close() {
-                        throw new ProcessorStateException("failed to close");
-                    }
-                }),
-                Serdes.String(),
-                Serdes.Long())
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("globalStore"), Serdes.String(), Serdes.Long())
                 .withLoggingDisabled(),
             "globalSource",
             new StringDeserializer(),
@@ -510,13 +508,26 @@ public abstract class TopologyTestDriverTest {
             "globalProcessor",
             () -> new Processor<String, Long, Void, Void>() {
                 @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    globalStore.set(context.getStateStore("globalStore"));
+                }
+
+                @Override
                 public void process(final Record<String, Long> record) {
                 }
             });
         topology.addSource("source", SOURCE_TOPIC_1);
         topology.addProcessor("processor", failingProcessorSupplier("store"), "source");
         topology.addStateStore(
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
+            Stores.keyValueStoreBuilder(
+                storeSupplier(() -> new InMemoryKeyValueStore("store") {
+                    @Override
+                    public void close() {
+                        throw new ProcessorStateException("failed to close");
+                    }
+                }),
+                Serdes.String(),
+                Serdes.Long()),
             "processor");
 
         final StreamsException exception = assertThrows(
@@ -525,7 +536,7 @@ public abstract class TopologyTestDriverTest {
 
         assertEquals(1, exception.getSuppressed().length);
         assertInstanceOf(ProcessorStateException.class, exception.getSuppressed()[0]);
-        assertFalse(store.isOpen());
+        assertFalse(globalStore.get().isOpen());
     }
 
     private static KeyValueBytesStoreSupplier storeSupplier(final Supplier<KeyValueStore<Bytes, byte[]>> store) {

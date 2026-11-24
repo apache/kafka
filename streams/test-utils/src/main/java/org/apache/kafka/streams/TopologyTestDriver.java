@@ -381,15 +381,15 @@ public class TopologyTestDriver implements Closeable {
             setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
         } catch (final Throwable e) {
             // the caller gets no driver to close
-            closeDirty(e);
+            closeStateManagers(e);
             throw e;
         }
     }
 
-    private void closeDirty(final Throwable cause) {
+    private void closeStateManagers(final Throwable cause) {
         if (task != null) {
-            closeAndSuppress(task::suspend, cause);
-            closeAndSuppress(task::closeDirty, cause);
+            // not the task, as its dirty close deletes the task directory under exactly-once
+            closeAndSuppress(task.stateManager()::close, cause);
         }
         if (globalStateManager != null) {
             closeAndSuppress(globalStateManager::close, cause);
