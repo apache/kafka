@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1014,5 +1015,61 @@ public class GroupConfigTest {
         GroupConfig config = new GroupConfig(configs);
 
         assertEquals("", config.errorsDLQTopicName());
+    }
+
+    @Test
+    public void testDLQTopicNameMaxLength() {
+        // Topic names are limited to 249 characters.
+        Map<String, String> validConfigs = new HashMap<>();
+        validConfigs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "a".repeat(249));
+        assertDoesNotThrow(() ->
+            GroupConfig.validate(validConfigs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+
+        Map<String, String> invalidConfigs = new HashMap<>();
+        invalidConfigs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "a".repeat(250));
+        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+            GroupConfig.validate(invalidConfigs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertTrue(exception.getMessage().contains("DLQ topic name is not valid"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"my dlq", "my/dlq", "my:dlq", ".", ".."})
+    public void testDLQTopicNameWithInvalidTopicName(String topicName) {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, topicName);
+
+        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertTrue(exception.getMessage().contains("DLQ topic name is not valid"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"my-dlq", "my_dlq.topic-1", "A"})
+    public void testDLQTopicNameWithValidTopicName(String topicName) {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, topicName);
+
+        assertDoesNotThrow(() ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
+    public void testDLQEmptyTopicNameIsAcceptedByValidate() {
+        // Setting the topic name to "" (the default) means no DLQ and must remain valid.
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "");
+
+        assertDoesNotThrow(() ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
+    public void testDLQTopicNameNotValidatedWhenAbsent() {
+        // Altering an unrelated config must not trigger DLQ topic name validation.
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        assertDoesNotThrow(() ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 }
