@@ -1608,6 +1608,118 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testFromClassicGroupAfterTopicRecreatedWithFewerPartitions() {
+        MockTime time = new MockTime();
+        LogContext logContext = new LogContext();
+        String groupId = "group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        // Topic foo was re-created with 2 partitions.
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 2)
+            .buildCoordinatorMetadataImage();
+
+        ClassicGroup classicGroup = new ClassicGroup(
+            logContext,
+            groupId,
+            STABLE,
+            time,
+            10,
+            Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.of("range"),
+            Optional.empty(),
+            Optional.of(time.milliseconds())
+        );
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(List.of(
+            new JoinGroupRequestData.JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    List.of(fooTopicName)
+                ))))
+        ).iterator());
+
+        // The members were assigned the 4 partitions of foo before foo was re-created.
+        ClassicGroupMember member1 = new ClassicGroupMember(
+            memberId1,
+            Optional.empty(),
+            "client-id",
+            "client-host",
+            5000,
+            500,
+            ConsumerProtocol.PROTOCOL_TYPE,
+            protocols,
+            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(fooTopicName, 0),
+                new TopicPartition(fooTopicName, 1)
+            ))))
+        );
+        ClassicGroupMember member2 = new ClassicGroupMember(
+            memberId2,
+            Optional.empty(),
+            "client-id",
+            "client-host",
+            5000,
+            500,
+            ConsumerProtocol.PROTOCOL_TYPE,
+            protocols,
+            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
+                new TopicPartition(fooTopicName, 2),
+                new TopicPartition(fooTopicName, 3)
+            ))))
+        );
+        classicGroup.add(member1);
+        classicGroup.add(member2);
+
+        ConsumerGroup consumerGroup = ConsumerGroup.fromClassicGroup(
+            logContext,
+            new SnapshotRegistry(logContext),
+            classicGroup,
+            new HashMap<>(),
+            metadataImage
+        );
+
+        // The partitions that do not exist in foo are dropped from the assignments.
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(classicGroup.generationId())
+            .setState(MemberState.STABLE)
+            .setPreviousMemberEpoch(classicGroup.generationId())
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client-id")
+            .setClientHost("client-host")
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)), classicGroup.generationId()))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(500)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
+            .build();
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(expectedMember1, memberId2)
+            .setAssignedPartitions(Map.of())
+            .build();
+        assertEquals(
+            Map.of(
+                memberId1, expectedMember1,
+                memberId2, expectedMember2
+            ),
+            consumerGroup.members()
+        );
+        assertEquals(
+            Map.of(
+                memberId1, new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))),
+                memberId2, new Assignment(Map.of())
+            ),
+            consumerGroup.targetAssignment()
+        );
+    }
+
+    @Test
     public void testSubscribedRegularExpressionCount() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
