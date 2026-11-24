@@ -114,7 +114,6 @@ class BrokerMetadataPublisherTest {
     try {
       cluster.format()
       cluster.startup()
-      cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
       val publisher = newMockDynamicConfigPublisher(broker, cluster.nonFatalFaultHandler())
 
@@ -160,7 +159,6 @@ class BrokerMetadataPublisherTest {
     try {
       cluster.format()
       cluster.startup()
-      cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
       TestUtils.retry(60000) {
         assertNotNull(broker.brokerMetadataPublisher)

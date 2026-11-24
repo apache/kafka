@@ -238,7 +238,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    clusterTestKit.waitForReadyBrokers();
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start Raft server", e);

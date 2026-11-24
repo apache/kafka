@@ -273,8 +273,8 @@ public interface ClusterInstance {
     /**
      * Restarts a broker with the given static configuration overrides.
      *
-     * @return a future that completes when the broker is ready to process requests,
-     *         or exceptionally if the restart fails
+     * @return a future that completes after broker startup and propagation of broker metadata
+     *         to all brokers, or exceptionally if the restart fails
      */
     CompletableFuture<Void> restartBroker(int brokerId, Map<String, Object> propOverrides);
 

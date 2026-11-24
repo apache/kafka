@@ -241,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private void setSecurityProtocolProps(
-            Map<String, Object> props, 
+            Map<String, Object> props,
             String securityProtocol,
             Map<String, Object> sslConfig
         ) {
@@ -286,7 +286,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
                             JaasUtils.plainLoginModule(
-                                JaasUtils.KAFKA_PLAIN_ADMIN, 
+                                JaasUtils.KAFKA_PLAIN_ADMIN,
                                 JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
                                 true,
                                 Map.of(
@@ -607,6 +607,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (Future<?> future : brokerFutures) {
                 future.get();
             }
+            waitForReadyBrokers();
         } catch (Exception e) {
             brokerFutures.forEach(future -> future.cancel(true));
             controllerFutures.forEach(future -> future.cancel(true));
@@ -687,8 +688,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
      *
      * @param nodeId         The ID of the broker to restart.
      * @param propOverrides  Configs to override in the broker's static configuration.
-     * @return a future that completes when the broker is ready to process requests,
-     *         or exceptionally if the restart fails.
+     * @return a future that completes after broker startup and propagation of broker metadata
+     *         to all brokers, or exceptionally if the restart fails.
      */
     public CompletableFuture<Void> restartBroker(int nodeId, Map<String, Object> propOverrides) {
         BrokerServer broker = brokers.get(nodeId);
@@ -720,8 +721,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
             brokers.put(nodeId, restartedBroker);
 
             restartedBroker.startup();
+            waitForReadyBrokers();
             return CompletableFuture.completedFuture(null);
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return CompletableFuture.failedFuture(e);
+        } catch (ExecutionException e) {
+            return CompletableFuture.failedFuture(e.getCause());
+        } catch (Exception | AssertionError e) {
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -730,7 +737,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
      * And also wait for the metadata cache up-to-date in each broker server.
      */
-    public void waitForReadyBrokers() throws ExecutionException, InterruptedException {
+    private void waitForReadyBrokers() throws ExecutionException, InterruptedException {
         // We can choose any controller, not just the active controller.
         // If we choose a standby controller, we will wait slightly longer.
         ControllerServer controllerServer = controllers.values().iterator().next();
@@ -881,7 +888,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public SslManager sslManager() {
         return sslManager;
     }
-    
+
     @Override
     public void close() throws Exception {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();

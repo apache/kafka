@@ -124,7 +124,6 @@ public class InterBrokerOAuthIntegrationTest {
                 .build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             // min.insync.replicas equals the replication factor, so a send succeeds only if
             // the followers authenticate to the leader and replicate the record

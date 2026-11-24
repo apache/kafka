@@ -166,7 +166,6 @@ public class KRaftClusterTest {
             .build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
             assertConfigValue(cluster, 0);
 
             try (Admin admin = cluster.admin()) {
@@ -205,7 +204,6 @@ public class KRaftClusterTest {
             .build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             assertFoobarValue(cluster, 0);
 
@@ -347,7 +345,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
             TestUtils.waitForCondition(() -> brokerIsUnfenced(clusterImage(cluster, 1), 0),
                 "Timed out waiting for broker 0 to be unfenced.");
             cluster.brokers().get(0).shutdown();
@@ -482,7 +479,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = cluster.admin()) {
                 // Create the topic.
@@ -578,7 +574,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = cluster.admin()) {
                 Map<ConfigResource, Collection<AlterConfigOp>> brokerConfigs = Map.of(
@@ -697,7 +692,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = cluster.admin()) {
                 LOG.debug("setting log4j");
@@ -770,7 +764,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = createAdminClient(cluster, false)) {
                 QuorumInfo quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
@@ -836,7 +829,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = createAdminClient(cluster, true)) {
                 QuorumInfo quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
@@ -886,7 +878,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             try (Admin admin = cluster.admin()) {
                 admin.updateFeatures(
@@ -916,7 +907,6 @@ public class KRaftClusterTest {
             .build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                 "Broker never made it to RUNNING state.");
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
@@ -1024,7 +1014,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
         }
     }
 
@@ -1041,7 +1030,6 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             var controller = cluster.controllers().values().iterator().next();
-            controller.controller().waitForReadyBrokers(3).get();
             TestUtils.retryOnExceptionWithTimeout(60000, () -> {
                 var latch = pause((QuorumController) controller.controller());
                 Thread.sleep(1001);
@@ -1317,7 +1305,6 @@ public class KRaftClusterTest {
                 .setNumControllerNodes(3).build()).build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                 "Broker never made it to RUNNING state.");
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
@@ -1358,7 +1345,6 @@ public class KRaftClusterTest {
             .build()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
         }
         var oldBootstrapMetadata = BootstrapMetadata.fromRecords(
             List.of(
@@ -1380,7 +1366,6 @@ public class KRaftClusterTest {
                 .setBootstrapMetadata(oldBootstrapMetadata)
                 .build()).build()) {
             cluster.startup();
-            cluster.waitForReadyBrokers();
         }
     }
 

@@ -176,7 +176,6 @@ public class ReplicationQuotasTestRig {
                 ).build();
                 cluster.format();
                 cluster.startup();
-                cluster.waitForReadyBrokers();
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start test Kafka cluster", e);
             }
