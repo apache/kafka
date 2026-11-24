@@ -46,6 +46,7 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -471,6 +472,45 @@ public abstract class TopologyTestDriverTest {
 
         assertFalse(store.isOpen());
         assertTrue(taskDirectory().exists());
+    }
+
+    @Test
+    public void shouldCloseStateStoreWhenAnotherStateStoreFailsToInitialize() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            // under exactly-once, a store with a changelog and without a committed offset makes the task corrupted
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "processor");
+        final Topology failingTopology = new Topology();
+        failingTopology.addSource("source", SOURCE_TOPIC_1);
+        failingTopology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        failingTopology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "processor");
+        // the store of a later processor is initialized later, here after the first store has been opened
+        failingTopology.addProcessor("failingProcessor", new MockProcessorSupplier(), "source");
+        failingTopology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                storeSupplier(() -> new InMemoryKeyValueStore("failingStore") {
+                    @Override
+                    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                        throw new ProcessorStateException("failed to initialize");
+                    }
+                }),
+                Serdes.String(),
+                Serdes.Long()),
+            "failingProcessor");
+
+        assertThrows(
+            ProcessorStateException.class,
+            () -> new TopologyTestDriverBuilder(failingTopology).withConfig(config).build());
+
+        // RocksDB lets a store be opened again only once it has been closed
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
     }
 
     @Test
