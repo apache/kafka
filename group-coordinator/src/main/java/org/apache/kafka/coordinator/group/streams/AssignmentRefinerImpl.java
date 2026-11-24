@@ -1207,8 +1207,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        it runs -- the same shape as the task assignor's own {@code ProcessState.load()}, so that both layers
      *        rank processes comparably.
      *        <b>Only stateful tasks are counted.</b> A process running nothing but stateless tasks therefore has a
-     *        load of zero, which is the right answer: the load never decides where a task goes, because the target
-     *        assignment has already chosen every target owner.
+     *        load of zero.
      *        The count covers the tasks a member has been granted ({@link StreamsGroupMember#assignedTasks()}); a task
      *        on its way out ({@link StreamsGroupMember#tasksPendingRevocation()}) is no part of the load.
      */
