@@ -582,6 +582,7 @@ public class KafkaAdminClient extends AdminClient {
             boolean usingBootstrapControllers = determineBootstrapType(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 usingBootstrapControllers);
 
@@ -832,7 +833,7 @@ public class KafkaAdminClient extends AdminClient {
             // metadata update and hope it appears.  This behavior is useful for avoiding
             // flaky behavior in tests when the cluster is starting up and not all nodes
             // have appeared.
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -862,7 +863,7 @@ public class KafkaAdminClient extends AdminClient {
                 (metadataManager.controller() != null)) {
                 return metadataManager.controller();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -883,7 +884,7 @@ public class KafkaAdminClient extends AdminClient {
                 // In that case, we will postpone node assignment.
                 return client.leastLoadedNode(time.milliseconds()).node();
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -909,7 +910,7 @@ public class KafkaAdminClient extends AdminClient {
                     return client.leastLoadedNode(time.milliseconds()).node();
                 }
             }
-            metadataManager.requestUpdate();
+            metadataManager.requestUpdate(false);
             return null;
         }
 
@@ -1596,6 +1597,11 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Choose nodes for our pending calls.
                 pollTimeout = Math.min(pollTimeout, maybeDrainPendingCalls(now));
+                // The metadata refresh backoff only grows while calls are waiting for a node
+                // assignment. Once no call is waiting, whether the calls were assigned nodes
+                // or timed out, the next call to wait starts from the initial backoff.
+                if (pendingCalls.isEmpty())
+                    metadataManager.resetEquivalentResponseBackoff();
                 long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
                 if (metadataFetchDelayMs == 0) {
                     metadataManager.transitionToUpdatePending(now);
@@ -3626,6 +3632,7 @@ public class KafkaAdminClient extends AdminClient {
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData()
                                 .setTypesFilter(groupTypes)
                                 .setStatesFilter(groupStates)
+                                .setRequireCommittedOffsets(options.requireCommittedOffsets())
                             );
                         }
 
@@ -4281,7 +4288,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private void handleNotControllerError(Errors error) throws ApiException {
         metadataManager.clearController();
-        metadataManager.requestUpdate();
+        metadataManager.requestUpdate(true);
         throw error.exception();
     }
 

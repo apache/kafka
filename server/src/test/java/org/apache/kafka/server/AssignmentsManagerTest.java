@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
 import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -51,6 +53,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +80,10 @@ public class AssignmentsManagerTest {
     private static final Uuid DIR_1 = Uuid.fromString("cbgD8WdLQCyzLrFIMBhv3w");
     private static final Uuid DIR_2 = Uuid.fromString("zO0bDc0vSuam7Db9iH7rYQ");
     private static final Uuid DIR_3 = Uuid.fromString("CGBWbrFkRkeJQy6Aryzq2Q");
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion());
 
     private static final MetadataImage TEST_IMAGE;
 
@@ -142,8 +149,16 @@ public class AssignmentsManagerTest {
         TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
 
+    private static MetadataImage imageWithMetadataVersion(MetadataVersion metadataVersion) {
+        MetadataDelta delta = new MetadataDelta.Builder().setImage(TEST_IMAGE).build();
+        delta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()));
+        return delta.apply(MetadataProvenance.EMPTY);
+    }
+
     static class MockNodeToControllerChannelManager implements NodeToControllerChannelManager {
-        LinkedBlockingDeque<Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler>> callbacks =
+        LinkedBlockingDeque<Map.Entry<AssignReplicasToDirsRequest, ControllerRequestCompletionHandler>> callbacks =
             new LinkedBlockingDeque<>();
 
         @Override
@@ -166,7 +181,7 @@ public class AssignmentsManagerTest {
         ) {
             AssignReplicasToDirsRequest inputRequest = (AssignReplicasToDirsRequest) request.build();
             synchronized (this) {
-                callbacks.add(new AbstractMap.SimpleEntry<>(inputRequest.data(), callback));
+                callbacks.add(new AbstractMap.SimpleEntry<>(inputRequest, callback));
             }
         }
 
@@ -176,8 +191,8 @@ public class AssignmentsManagerTest {
         }
 
         void completeCallback(Function<AssignReplicasToDirsRequestData, Optional<ClientResponse>> completionist) throws InterruptedException {
-            Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler> entry = callbacks.take();
-            Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey());
+            Map.Entry<AssignReplicasToDirsRequest, ControllerRequestCompletionHandler> entry = callbacks.take();
+            Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey().data());
             if (clientResponse.isPresent()) {
                 entry.getValue().onComplete(clientResponse.get());
             } else {
@@ -194,10 +209,14 @@ public class AssignmentsManagerTest {
         final Map<TopicIdPartition, Integer> successes;
 
         TestEnv() {
+            this(TEST_IMAGE);
+        }
+
+        TestEnv(MetadataImage image) {
             this.backoff = new ExponentialBackoff(1, 2, 4, 0);
             this.channelManager = new MockNodeToControllerChannelManager();
             this.assignmentsManager = new AssignmentsManager(
-                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
+                    backoff, Time.SYSTEM, channelManager, 1, () -> image,
                     Uuid::toString, metricsRegistry);
             this.successes = new HashMap<>();
         }
@@ -303,6 +322,35 @@ public class AssignmentsManagerTest {
                 assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
             });
             assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_4_4_IV2", "IBP_4_5_IV0"})
+    public void testRequestVersionFollowsRequestHeaderVersion(MetadataVersion metadataVersion) throws Exception {
+        try (TestEnv testEnv = new TestEnv(imageWithMetadataVersion(metadataVersion))) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
+
+            short requestHeaderVersion = metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? LATEST_REQUEST_HEADER_VERSION : OLDEST_REQUEST_HEADER_VERSION;
+            short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
+            assertEquals(requestHeaderVersion, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
+        }
+    }
+
+    @Test
+    public void testRequestVersionFallsBackToMinimumMetadataVersion() throws Exception {
+        MetadataImage image = new MetadataImage(TEST_IMAGE.provenance(), FeaturesImage.EMPTY, TEST_IMAGE.cluster(),
+            TEST_IMAGE.topics(), TEST_IMAGE.configs(), TEST_IMAGE.clientQuotas(), TEST_IMAGE.producerIds(),
+            TEST_IMAGE.acls(), TEST_IMAGE.scram(), TEST_IMAGE.delegationTokens());
+        try (TestEnv testEnv = new TestEnv(image)) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
+
+            short requestHeaderVersion = MetadataVersion.MINIMUM_VERSION.assignReplicasToDirsRequestHeaderVersion();
+            short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
         }
     }
 

@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -865,6 +866,20 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testListGroupRequestV5FailsWithRequireCommittedOffsets() {
+        ListGroupsRequestData data = new ListGroupsRequestData().setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 5));
+    }
+
+    @Test
+    public void testListGroupRequestV4FailsWithRequireCommittedOffsetsAndDowngradableTypes() {
+        ListGroupsRequestData data = new ListGroupsRequestData()
+                .setTypesFilter(List.of(GroupType.CLASSIC.toString(), GroupType.CONSUMER.toString()))
+                .setRequireCommittedOffsets(true);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 4));
+    }
+
+    @Test
     public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
         testInvalidCase("apache-kafka-java", "0.0.0@java");
@@ -1298,7 +1313,7 @@ public class RequestResponseTest {
                                                 ))
                                 ))
                 ));
-        return new AssignReplicasToDirsRequest.Builder(data).build(version);
+        return new AssignReplicasToDirsRequest.Builder(data, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(version)).build(version);
     }
 
     private AssignReplicasToDirsResponse createAssignReplicasToDirsResponse() {
@@ -1646,7 +1661,8 @@ public class RequestResponseTest {
         return new EnvelopeRequest.Builder(
                 ByteBuffer.wrap("data".getBytes(StandardCharsets.UTF_8)),
                 "principal".getBytes(StandardCharsets.UTF_8),
-                "address".getBytes(StandardCharsets.UTF_8))
+                "address".getBytes(StandardCharsets.UTF_8),
+                ApiKeys.ENVELOPE.requestHeaderVersion(version))
                 .build(version);
     }
 
@@ -1872,7 +1888,7 @@ public class RequestResponseTest {
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data).build(version);
+        return new AlterPartitionRequest.Builder(data, ApiKeys.ALTER_PARTITION.requestHeaderVersion(version)).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse() {
@@ -1923,7 +1939,7 @@ public class RequestResponseTest {
         AllocateProducerIdsRequestData data = new AllocateProducerIdsRequestData()
                 .setBrokerEpoch(123L)
                 .setBrokerId(2);
-        return new AllocateProducerIdsRequest.Builder(data).build(version);
+        return new AllocateProducerIdsRequest.Builder(data, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(version)).build(version);
     }
 
     private AllocateProducerIdsResponse createAllocateProducerIdsResponse() {
@@ -2360,6 +2376,8 @@ public class RequestResponseTest {
         ListGroupsRequestData data = new ListGroupsRequestData();
         if (version >= 4)
             data.setStatesFilter(singletonList("Stable"));
+        if (version >= 6)
+            data.setRequireCommittedOffsets(true);
         return new ListGroupsRequest.Builder(data).build(version);
     }
 

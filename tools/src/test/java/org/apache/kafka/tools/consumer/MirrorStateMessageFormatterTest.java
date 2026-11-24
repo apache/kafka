@@ -63,7 +63,9 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
         .setPartition(0);
     private static final LastMirrorEpochsValue EPOCHS_VALUE = new LastMirrorEpochsValue()
         .setLastMirrorEpoch(42)
-        .setLastMirrorOffset(4_294_967_313L); // Verify offsets larger than a 32-bit integer.
+        .setLastMirrorOffset(4_294_967_313L) // Verify offsets larger than a 32-bit integer.
+        .setLeaderEpoch(11)
+        .setStateEpoch(5);
 
     @Override
     protected CoordinatorRecordMessageFormatter formatter() {
@@ -156,7 +158,7 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 MessageUtil.toVersionPrefixedBytes((short) 0, EPOCHS_VALUE),
                 """
                     {"key":{"type":1,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
-                     "value":{"version":0,"data":{"lastMirrorEpoch":42,"lastMirrorOffset":4294967313}}}
+                     "value":{"version":0,"data":{"lastMirrorEpoch":42,"lastMirrorOffset":4294967313,"leaderEpoch":11,"stateEpoch":5}}}
                 """
             ),
             Arguments.of(
@@ -164,7 +166,7 @@ public class MirrorStateMessageFormatterTest extends CoordinatorRecordMessageFor
                 MessageUtil.toVersionPrefixedBytes((short) 0, new LastMirrorEpochsValue()),
                 """
                     {"key":{"type":1,"data":{"mirrorName":"a-to-b","topicId":"1Y8fjhRoQsqFkIrwd1FIeg","partition":0}},
-                     "value":{"version":0,"data":{"lastMirrorEpoch":-1,"lastMirrorOffset":-1}}}
+                     "value":{"version":0,"data":{"lastMirrorEpoch":-1,"lastMirrorOffset":-1,"leaderEpoch":-1,"stateEpoch":0}}}
                 """
             ),
             Arguments.of(

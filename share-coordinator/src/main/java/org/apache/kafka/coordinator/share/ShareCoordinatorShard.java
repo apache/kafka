@@ -91,6 +91,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
     public static final Exception NEGATIVE_LEADER_EPOCH = new Exception("The leader epoch cannot be a negative number.");
     public static final Exception NEGATIVE_STATE_EPOCH = new Exception("The state epoch cannot be a negative number.");
+    public static final Exception INVALID_STATE_BATCH = new Exception("The state batch must have 0 <= firstOffset <= lastOffset, a non-negative delivery count and a known delivery state.");
     public static final Exception WRITE_UNINITIALIZED_SHARE_PARTITION = new Exception("Write operation on uninitialized share partition not allowed.");
     public static final Exception READ_UNINITIALIZED_SHARE_PARTITION = new Exception("Read operation on uninitialized share partition not allowed.");
 
@@ -779,6 +780,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
         }
 
+        if (!partitionData.stateBatches().stream().allMatch(ShareCoordinatorShard::isValidStateBatch)) {
+            return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, INVALID_STATE_BATCH, topicId, partitionId));
+        }
+
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
 
         if (!shareStateMap.containsKey(mapKey)) {
@@ -806,6 +811,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         return Optional.empty();
+    }
+
+    private static boolean isValidStateBatch(WriteShareGroupStateRequestData.StateBatch batch) {
+        // The delivery state is a RecordState id, from AVAILABLE (0) to ARCHIVED (4).
+        return batch.firstOffset() >= 0 &&
+            batch.firstOffset() <= batch.lastOffset() &&
+            batch.deliveryCount() >= 0 &&
+            batch.deliveryState() >= 0 &&
+            batch.deliveryState() <= 4;
     }
 
     private Optional<ReadShareGroupStateResponseData> maybeGetReadStateError(ReadShareGroupStateRequestData request) {

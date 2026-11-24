@@ -250,11 +250,11 @@ public class ControllerRegistrationManager implements MetadataPublisher {
         } else if (pendingRpc) {
             logger.info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
         } else {
-            sendControllerRegistration();
+            sendControllerRegistration(metadataVersion.get().controllerRegistrationRequestHeaderVersion());
         }
     }
 
-    private void sendControllerRegistration() {
+    private void sendControllerRegistration(short requestHeaderVersion) {
         ControllerRegistrationRequestData.FeatureCollection features = new ControllerRegistrationRequestData.FeatureCollection();
         supportedFeatures.forEach((name, range) -> features.add(new ControllerRegistrationRequestData.Feature().
                 setName(name).
@@ -268,7 +268,7 @@ public class ControllerRegistrationManager implements MetadataPublisher {
             setZkMigrationReady(false);
 
         logger.info("sendControllerRegistration: attempting to send {}", data);
-        channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
+        channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data, requestHeaderVersion),
                 new RegistrationResponseHandler());
         pendingRpc = true;
     }

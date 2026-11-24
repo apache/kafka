@@ -157,7 +157,7 @@ public class SaslConfigs {
         + "<p>The built-in <code>JwtValidator</code> implementations are:</p>"
         + "<ul>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator</code></li>"
-        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code></li>"
+        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code> (clients only, it does not verify JWT signatures and cannot be used on brokers)</li>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code></li>"
         + "</ul>";
 
@@ -315,12 +315,14 @@ public class SaslConfigs {
 
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL = "sasl.oauthbearer.token.endpoint.url";
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC = "The URL for the OAuth/OIDC identity provider. If the URL is HTTP(S)-based, it is the issuer's token"
-            + " endpoint URL to which requests will be made to login based on the configuration in <code>" + SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS + "</code>. If the URL is"
+            + " endpoint URL to which requests will be made to login based on the configuration in <code>" + SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS + "</code>."
+            + " An HTTP URL should not be used in production, since login requests and tokens are then sent without TLS; use an HTTPS URL instead. If the URL is"
             + " file-based, it specifies a file containing an access token (in JWT serialized form) issued by the OAuth/OIDC identity provider to use for authorization.";
 
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL = "sasl.oauthbearer.jwks.endpoint.url";
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC = "The OAuth/OIDC provider URL from which the provider's"
             + " <a href=\"https://datatracker.ietf.org/doc/html/rfc7517#section-5\">JWKS (JSON Web Key Set)</a> can be retrieved. The URL can be HTTP(S)-based or file-based."
+            + " An HTTP URL should not be used in production, since the keys used to verify tokens are then retrieved without TLS; use an HTTPS URL instead."
             + " If the URL is HTTP(S)-based, the JWKS data will be retrieved from the OAuth/OIDC provider via the configured URL on broker startup. All then-current"
             + " keys will be cached on the broker for incoming requests. If an authentication request is received for a JWT that includes a \"kid\" header claim value that"
             + " isn't yet in the cache, the JWKS endpoint will be queried again on demand. However, the broker polls the URL every sasl.oauthbearer.jwks.endpoint.refresh.ms"

@@ -47,7 +47,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MirrorCoordinatorRecordSerdeIntegrationTest {
-    private static final TopicPartition MIRROR_STATE = new TopicPartition("__mirror_state", 0);
+    private static final TopicPartition MIRROR_STATE = new TopicPartition("test-mirror-state", 0);
     private static final Uuid TOPIC_ID = new Uuid(1L, 2L);
 
     @ClusterTest(types = Type.KRAFT, brokers = 1, controllers = 1)
@@ -134,7 +134,11 @@ class MirrorCoordinatorRecordSerdeIntegrationTest {
         return CoordinatorRecord.record(
             new LastMirrorEpochsKey().setMirrorName("source-to-destination").setTopicId(TOPIC_ID).setPartition(0),
             new ApiMessageAndVersion(
-                new LastMirrorEpochsValue().setLastMirrorEpoch(epoch).setLastMirrorOffset(offset),
+                new LastMirrorEpochsValue()
+                    .setLastMirrorEpoch(epoch)
+                    .setLastMirrorOffset(offset)
+                    .setLeaderEpoch(11)
+                    .setStateEpoch(2),
                 (short) 0
             )
         );

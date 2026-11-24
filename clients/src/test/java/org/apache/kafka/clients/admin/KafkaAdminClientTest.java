@@ -142,10 +142,14 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
@@ -1324,7 +1328,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             doReturn(false).doReturn(true).when(metadataManager).isReady();
 
             // make maybeDrainPendingCall throw UnsupportedVersionException and go to Call#fail
-            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate();
+            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate(false);
 
             // make sure describeCluster handleUnsupportedVersionException doesn't always return false
             doReturn(false).when(metadataManager).usingBootstrapControllers();
@@ -1350,6 +1354,35 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                 mockClient.respondToRequest(request, prepareMetadataResponse(cluster, Errors.NONE));
                 assertEquals(cluster.clusterResource().clusterId(), assertDoesNotThrow(() -> result.clusterId().get()));
             }
+        }
+    }
+
+    @Test
+    public void testMetadataRefreshBackoffResetsWhenNoPendingCalls() throws Exception {
+        MockTime time = new MockTime();
+        try (MockClient mockClient = new MockClient(time)) {
+            AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
+            doReturn(true).when(metadataManager).isReady();
+            // avoid sending fetchMetadata request
+            doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
+
+            try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), time)) {
+                // the broker is not in the metadata, so both calls stay pending until they time out
+                DescribeLogDirsResult first = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(100));
+                DescribeLogDirsResult second = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(200));
+                TestUtils.waitForCondition(() -> admin.numPendingCalls() == 2, "Timed out waiting for the calls to be pending");
+                clearInvocations(metadataManager);
+
+                time.sleep(101);
+                TestUtils.assertFutureThrows(TimeoutException.class, first.allDescriptions());
+                // the second call is still pending
+                verify(metadataManager, never()).resetEquivalentResponseBackoff();
+
+                time.sleep(100);
+                TestUtils.assertFutureThrows(TimeoutException.class, second.allDescriptions());
+            }
+            verify(metadataManager, atLeastOnce()).resetEquivalentResponseBackoff();
         }
     }
 

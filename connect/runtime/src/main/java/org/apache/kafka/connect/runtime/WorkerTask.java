@@ -465,7 +465,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup.addValueMetric(registry.taskConnectorClass, now -> pluginsMetadata.connectorClass());
             metricGroup.addValueMetric(registry.taskConnectorClassVersion, now -> pluginsMetadata.connectorVersion());
-            metricGroup.addValueMetric(registry.taskConnectorType, now -> pluginsMetadata.connectorType());
+            metricGroup.addValueMetric(registry.taskConnectorType, now -> pluginsMetadata.connectorType().toString());
             metricGroup.addValueMetric(registry.taskClass, now -> pluginsMetadata.taskClass());
             metricGroup.addValueMetric(registry.taskVersion, now -> pluginsMetadata.taskVersion());
             metricGroup.addValueMetric(registry.taskKeyConverterClass, now -> pluginsMetadata.keyConverterClass());

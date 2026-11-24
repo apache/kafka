@@ -1063,6 +1063,17 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * @return true iff the group has at least one committed offset in the snapshot at
+     * {@code committedOffset}. Pending transactional offsets are not considered because
+     * the transaction may still abort.
+     *
+     * @see #groupHasNoOffsets(String, long)
+     */
+    public boolean hasCommittedOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) != null;
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.

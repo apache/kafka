@@ -30,6 +30,7 @@ public class ConfigResourceTest {
         assertEquals(ConfigResource.Type.BROKER, ConfigResource.Type.forId((byte) 4));
         assertEquals(ConfigResource.Type.CLIENT_METRICS, ConfigResource.Type.forId((byte) 16));
         assertEquals(ConfigResource.Type.GROUP, ConfigResource.Type.forId((byte) 32));
+        assertEquals(ConfigResource.Type.CLUSTER_MIRROR, ConfigResource.Type.forId((byte) 64));
     }
 
     @Test

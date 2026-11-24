@@ -302,7 +302,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle ${gradle.gradleVersion}, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -1991,7 +1991,6 @@ project(':mirror-coordinator') {
     implementation project(':server-common')
     implementation project(':coordinator-common')
 
-    testImplementation project(':server-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2277,7 +2276,8 @@ project(':clients') {
         'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
         'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
         'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
-        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorException.java'
     )
   }
 }
@@ -2812,6 +2812,7 @@ project(':tools') {
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation testFixtures(project(':streams'))
+    testImplementation libs.classgraph
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
