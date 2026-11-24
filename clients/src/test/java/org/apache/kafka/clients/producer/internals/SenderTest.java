@@ -100,6 +100,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -3023,12 +3024,13 @@ public class SenderTest {
         }
     }
 
-    @Test
-    public void testEmptyTransactionAbortOnShutdownDoesNotBlock() {
+    @ParameterizedTest(name = "commitBeforeClose={0}")
+    @ValueSource(booleans = {true, false})
+    public void testEmptyTransactionShutdownDoesNotBlock(boolean commitBeforeClose) {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testEmptyTransactionAbortOnShutdownDoesNotBlock", 6000, 100, apiVersions, metadata, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "testEmptyTransactionShutdownDoesNotBlock", 6000, 100, apiVersions, metadata, false);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
 
@@ -3036,39 +3038,14 @@ public class SenderTest {
             doInitTransactions(txnManager, new ProducerIdAndEpoch(123456L, (short) 0));
 
             txnManager.beginTransaction();
+            TransactionalRequestResult result = commitBeforeClose ? txnManager.beginCommit() : null;
             client.advanceTimeDuringPoll(true);
             long startMs = time.milliseconds();
             sender.initiateClose();
             sender.run();
 
-            assertFalse(txnManager.hasOngoingTransaction());
-            assertTrue(time.milliseconds() - startMs < REQUEST_TIMEOUT,
-                    "Sender shutdown took " + (time.milliseconds() - startMs) + " ms with an empty transaction");
-        } finally {
-            m.close();
-        }
-    }
-
-    @Test
-    public void testEmptyTransactionCommitBeforeShutdownDoesNotBlock() {
-        Metrics m = new Metrics();
-        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testEmptyTransactionCommitBeforeShutdownDoesNotBlock", 6000, 100, apiVersions, metadata, false);
-            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
-                    1, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
-
-            setupWithTransactionState(txnManager);
-            doInitTransactions(txnManager, new ProducerIdAndEpoch(123456L, (short) 0));
-
-            txnManager.beginTransaction();
-            TransactionalRequestResult result = txnManager.beginCommit();
-            client.advanceTimeDuringPoll(true);
-            long startMs = time.milliseconds();
-            sender.initiateClose();
-            sender.run();
-
-            assertTrue(result.isCompleted());
+            if (commitBeforeClose)
+                assertTrue(result.isCompleted());
             assertFalse(txnManager.hasOngoingTransaction());
             assertTrue(time.milliseconds() - startMs < REQUEST_TIMEOUT,
                     "Sender shutdown took " + (time.milliseconds() - startMs) + " ms with an empty transaction");

@@ -127,18 +127,14 @@ public class ProducerIntegrationTest {
             ProducerConfig.CLIENT_ID_CONFIG, "test",
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
             ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "60000");
-        var producer = cluster.producer(properties);
-        try {
+        try (var producer = cluster.producer(properties)) {
             producer.initTransactions();
             producer.beginTransaction();
-        } catch (RuntimeException e) {
+            long start = System.nanoTime();
             producer.close();
-            throw e;
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            assertTrue(elapsedMs < 5000, "close() took " + elapsedMs + " ms with an empty transaction");
         }
-        long start = System.nanoTime();
-        producer.close();
-        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-        assertTrue(elapsedMs < 5000, "close() took " + elapsedMs + " ms with an empty transaction");
     }
 
     @ClusterTests({
