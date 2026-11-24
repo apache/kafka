@@ -1007,6 +1007,17 @@ public class GroupConfigTest {
     }
 
     @Test
+    public void testDLQTopicNameReservedPrefixReportedBeforeInvalidTopicName() {
+        // A name that is both reserved ("__" prefix) and not a valid topic name reports the reserved prefix.
+        Map<String, String> configs = new HashMap<>();
+        configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my dlq");
+
+        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+            GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+        assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
+    }
+
+    @Test
     public void testDLQBlankTopicNameIsValid() {
         // Blank DLQ topic name is valid (means DLQ is disabled for that group)
         Map<String, String> configs = new HashMap<>();
