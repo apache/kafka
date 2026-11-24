@@ -268,26 +268,29 @@ public interface RebalanceListener {
      *
      * <h4>Important difference from {@code onPartitionsRevoked}</h4>
      *
-     * Unlike {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}, where the affected
-     * partitions are still part of the consumer's assignment until the callback completes, the
-     * partitions passed to this method have <em>already been removed</em> from the assignment
-     * before this callback fires. This means:
+     * Unlike {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}, where the consumer is still
+     * an active member of the group while the callback runs, the consumer is <em>no longer</em> an
+     * active member of the group when this callback fires. The partitions passed to this method are
+     * still part of the assignment until the callback completes. This means:
      *
      * <ul>
-     *   <li>{@link RebalanceConsumer#commitSync() commitSync()}/{@link RebalanceConsumer#commitAsync() commitAsync()}
-     *       will not commit the current assignment, since the consumer no longer includes the lost partitions.</li>
-     *   <li>{@link RebalanceConsumer#commitSync(java.util.Map) commitSync(offsets)}
-     *       /{@link RebalanceConsumer#commitAsync(java.util.Map, OffsetCommitCallback) commitAsync(offsets)}
-     *       with the lost partitions explicitly will be rejected by the broker since the consumer
-     *       no longer owns them.</li>
      *   <li>{@link RebalanceConsumer#position(org.apache.kafka.common.TopicPartition) position()} and
-     *       {@link RebalanceConsumer#seek(org.apache.kafka.common.TopicPartition, long) seek()} will
-     *       fail for the lost partitions since they are not in the assignment.</li>
+     *       {@link RebalanceConsumer#seek(org.apache.kafka.common.TopicPartition, long) seek()} can
+     *       still be used for the lost partitions since they are still in the assignment.</li>
+     *   <li>{@link RebalanceConsumer#commitSync() commitSync()}/{@link RebalanceConsumer#commitAsync() commitAsync()}
+     *       and {@link RebalanceConsumer#commitSync(java.util.Map) commitSync(offsets)}
+     *       /{@link RebalanceConsumer#commitAsync(java.util.Map, OffsetCommitCallback) commitAsync(offsets)}
+     *       will usually be rejected, since the consumer is no longer an active member of the group.
+     *       <ul>
+     *         <li>Classic protocol: rejected on the client with a {@link CommitFailedException}.</li>
+     *         <li>Consumer protocol: rejected by the broker with a {@link CommitFailedException},
+     *             unless no other members remain in the group, in which case the commit succeeds.</li>
+     *       </ul>
+     *   </li>
      * </ul>
      * <p>
      * The {@link RebalanceConsumer} does not add guardrails against these operations on lost
-     * partitions. Users should be aware that offset management for lost partitions is not
-     * possible in this callback.
+     * partitions. Users should not rely on committing offsets for lost partitions in this callback.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now have been reassigned
      *                   to other consumers. With both the Classic and Consumer protocols, this will always include

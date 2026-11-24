@@ -18,11 +18,13 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -427,6 +429,32 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
+    public void testClassicConsumerAwareSeekAndPositionOnPartitionsLost() throws InterruptedException {
+        testConsumerAwareSeekAndPositionOnPartitionsLost(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareSeekAndPositionOnPartitionsLost() throws InterruptedException {
+        testConsumerAwareSeekAndPositionOnPartitionsLost(CONSUMER);
+    }
+
+    private void testConsumerAwareSeekAndPositionOnPartitionsLost(GroupProtocol groupProtocol) throws InterruptedException {
+        sendRecords(cluster, tp, 10);
+        triggerOnPartitionsLostConsumerAware(tp, groupProtocol, (rebalanceConsumer, partitions) -> {
+            assertTrue(rebalanceConsumer.assignment().contains(tp));
+            rebalanceConsumer.seek(tp, 3L);
+            assertEquals(3L, rebalanceConsumer.position(tp));
+        });
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwarePositionWithoutInitialPositionOnPartitionsLost() throws InterruptedException {
+        sendRecords(cluster, tp, 10);
+        triggerOnPartitionsLostConsumerAware(tp, CONSUMER, (rebalanceConsumer, partitions) ->
+            assertThrows(TimeoutException.class, () -> rebalanceConsumer.position(tp, Duration.ofSeconds(1))));
+    }
+
+    @ClusterTest
     public void testClassicRebalanceConsumerExpiredAfterAssignedCallback() throws InterruptedException {
         testRebalanceConsumerExpiredAfterAssignedCallback(CLASSIC);
     }
@@ -671,6 +699,52 @@ public class PlaintextConsumerCallbackTest {
             );
         }
         assertTrue(partitionsRevoked.get());
+    }
+
+    private void triggerOnPartitionsLostConsumerAware(
+            TopicPartition tp,
+            GroupProtocol protocol,
+            BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
+    ) throws InterruptedException {
+        var partitionsAssigned = new AtomicBoolean(false);
+        var partitionsLost = new AtomicBoolean(false);
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
+                GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
+                ENABLE_AUTO_COMMIT_CONFIG, "false",
+                ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "3000"))) {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        partitionsAssigned.set(true);
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                }
+
+                @Override
+                public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        execute.accept(rc, partitions);
+                        partitionsLost.set(true);
+                    }
+                }
+            });
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    partitionsAssigned::get,
+                    "Timed out before expected rebalance completed"
+            );
+            Thread.sleep(8000);
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    partitionsLost::get,
+                    "Timed out before onPartitionsLost was invoked"
+            );
+        }
     }
 
     private void triggerOnPartitionsAssigned(
