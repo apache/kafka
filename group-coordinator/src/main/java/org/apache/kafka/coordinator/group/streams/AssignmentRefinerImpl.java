@@ -79,6 +79,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             decisions,
             currentAssignment,
             members,
+            heartbeatVersions,
             heartbeatVersions.keySet().containsAll(members.keySet()),
             processLoad,
             numWarmupReplicas
@@ -256,7 +257,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never warmed up: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration. It is granted to
-     * the target owner at once, unless {@code keepActiveTasks} is set.
+     * the target owner at once, unless {@code keepActiveTasks} is set and a member holds the task as an active task.
+     * Then the migration is staged, and {@link #planWarmups} gives it no warm-up task.
      *
      * <p>If {@code keepActiveTasks} is set, every active task stays with the member that holds it, and only tasks that
      * no member holds as an active task are placed.
@@ -331,13 +333,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // member reconciles to. Tasks that no member holds as an active task are placed below as usual.
             if (holder != null && keepActiveTasks) {
                 // A process can't hold a warm-up task next to the active task, so a move within it can't be warmed up.
-                // A target owner that never reports its restore progress could not be seen to finish warming up.
                 final boolean sameProcess = members.get(holder.memberId()).processId().equals(targetProcessId);
-                final boolean warmable = !sameProcess
-                    && WarmupSupport.of(heartbeatVersions.get(targetOwner)) != WarmupSupport.NOT_SUPPORTED;
                 stagedMigrations.add(stagedMigration(
                     currentAssignment, task, holder.memberId(), targetOwner,
-                    warmable ? Optional.of(targetProcessId) : Optional.empty()));
+                    sameProcess ? Optional.empty() : Optional.of(targetProcessId)));
                 continue;
             }
 
@@ -474,8 +473,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * Builds the staged migration that keeps the task on {@code currentOwner}. An empty {@code targetProcessId} means
      * the migration cannot be warmed up, which is the case when the target assignment names a member the group no
-     * longer has, when the task moves between two members of one process, or when the target owner does not report its
-     * restore progress.
+     * longer has, or when the task moves between two members of one process.
      */
     private static StagedMigration stagedMigration(
         final CurrentAssignmentIndex currentAssignment,
@@ -534,6 +532,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *     <li>If a target member's <em>sibling</em> holds a standby, we cannot borrow, but need to move the
      *     standby to its new owner, and putting a warmup on the target member, spending a warm-up slot.
      *     (Cf case (2) of {@link #isReady(CurrentAssignmentIndex, TaskId, Optional, String)})</li>
+     *     <li>A target owner that does not report its restore progress never gets a warm-up task, since it could never
+     *     be seen to catch up. A standby that its process already holds, on the target owner or on a sibling, is
+     *     borrowed where it sits, which costs no warm-up slot.</li>
      * </ul>
      *
      * <p>Everything else <b>parks</b> -- the task keeps running on its current owner with nothing warming up, and a
@@ -550,6 +551,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param members
      *        All members of the group, used to resolve which process a task's current owner runs in.
+     * @param heartbeatVersions
+     *        The version of the latest heartbeat of each member, which tells whether a target owner can be warmed up.
      * @param everyMemberHeardFrom
      *        Whether every member has heartbeated since the coordinator loaded the group. If not, no new warm-up task
      *        is funded.
@@ -564,6 +567,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final TaskDecisions decisions,
         final CurrentAssignmentIndex currentAssignment,
         final Map<String, StreamsGroupMember> members,
+        final Map<String, Integer> heartbeatVersions,
         final boolean everyMemberHeardFrom,
         final Map<String, ProcessLoad> processLoad,
         final int numWarmupReplicas
@@ -588,7 +592,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         // standby task that would move onto the target owner is borrowed where it sits instead, which costs no warm-up
         // slot.
         for (final StagedMigration migration : decisions.stagedMigrations()) {
-            final Warming warming = warmingOf(migration);
+            final WarmupSupport targetWarmupSupport = WarmupSupport.of(heartbeatVersions.get(migration.targetOwner()));
+            final Warming warming = warmingOf(migration, targetWarmupSupport);
             switch (warming) {
                 case PARK -> parkedMigrations.add(migration.task());
                 case BORROW -> borrowedMigrations.add(migration.task());
@@ -773,10 +778,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * How a staged migration is to be warmed, which is decided entirely by what the target owner's process already
-     * holds for the task -- and, when it holds a standby, by whether that standby sits on the target owner itself.
+     * How a staged migration is to be warmed, which is decided by whether the target owner reports its restore
+     * progress and by what the target owner's process already holds for the task -- and, when it holds a standby, by
+     * whether that standby sits on the target owner itself.
      */
-    private static Warming warmingOf(final StagedMigration migration) {
+    private static Warming warmingOf(final StagedMigration migration, final WarmupSupport targetWarmupSupport) {
         if (migration.targetProcessId().isEmpty()) {
             // The migration cannot be warmed up (see StagedMigration#targetProcessId), so no warm-up slot may be
             // spent. The task simply stays with its current owner.
@@ -784,6 +790,14 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         }
 
         final Optional<TaskCopy> copyOnTargetProcess = migration.copyOnTargetProcess();
+        if (targetWarmupSupport == WarmupSupport.NOT_SUPPORTED) {
+            // The target owner never reports its restore progress, so a warm-up task on it could never be seen to catch
+            // up, and no warm-up slot may be spent on it. A standby its process already holds keeps warming the
+            // process for free, so it stays where it sits.
+            return copyOnTargetProcess.filter(copy -> copy.role() == TaskRole.STANDBY).isPresent()
+                ? Warming.BORROW
+                : Warming.PARK;
+        }
         if (copyOnTargetProcess.isEmpty()) {
             return Warming.PLANT;
         }
@@ -1370,9 +1384,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The member the target assignment moves the task to.
      * @param targetProcessId
      *        The process the target owner runs in, or empty if the migration cannot be warmed up: the target
-     *        assignment names a member the group no longer has, the task moves between two members of one process,
-     *        or the target owner does not report its restore progress. An empty process gets the migration no warm-up
-     *        task and spends no warm-up slot on it, and the task stays with its current owner.
+     *        assignment names a member the group no longer has, or the task moves between two members of one process.
+     *        With an empty process, the migration gets no warm-up task, no warm-up slot is spent on it, and the task
+     *        stays with its current owner.
      * @param copyOnTargetProcess
      *        The copy of the task that the target owner's process already holds, if any. When there is none, the
      *        migration is a candidate for a fresh warm-up task. When there is one, the process is already restoring
@@ -1439,15 +1453,19 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * What a staged migration needs from the warm-up budget. This is decided entirely by what the target owner's
-     * process already holds for the task, so the five values are mutually exclusive and cover every staged
-     * migration.
+     * What a staged migration needs from the warm-up budget. This is decided by whether the target owner reports its
+     * restore progress and by what the target owner's process already holds for the task, so the five values are
+     * mutually exclusive and cover every staged migration.
      */
     private enum Warming {
         /** Nothing can warm this migration and no warm-up slot may be spent on it. */
         PARK,
 
-        /** A standby on the target owner itself already warms it, for free. */
+        /**
+         * A standby that the target owner's process already holds stays where it sits, for free: on the target owner
+         * itself, it warms the migration; on a sibling, it is the fallback for a sibling move that gets no warm-up
+         * slot, or for a target owner that does not report its restore progress.
+         */
         BORROW,
 
         /** A warm-up is already restoring for it, and keeps the warm-up slot it was funded with. */
