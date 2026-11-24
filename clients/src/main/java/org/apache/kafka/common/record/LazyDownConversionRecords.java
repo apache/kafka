@@ -33,6 +33,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
+    private final int maxRecordBodySize;
     private ConvertedRecords<?> firstConvertedBatch;
     private final int sizeInBytes;
     private final Time time;
@@ -42,17 +43,24 @@ public class LazyDownConversionRecords implements BaseRecords {
      * @param records Records to lazily down-convert
      * @param toMagic Magic version to down-convert to
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
-     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
+     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time, int)} for an explanation.
      * @param time The time instance to use
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
+     *                          exceeding it is rejected with a RecordSizeLimitExceededException before its body is allocated.
+     *                          Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the array-length ceiling.
      *
      * @throws org.apache.kafka.common.errors.UnsupportedCompressionTypeException If the first batch to down-convert
      *    has a compression type which we do not support down-conversion for.
+     * @throws RecordSizeLimitExceededException If the first batch to down-convert contains a record
+     *    whose decompressed body exceeds {@code maxRecordBodySize}.
      */
-    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset, Time time) {
+    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset, Time time,
+                                     int maxRecordBodySize) {
         this.topicPartition = Objects.requireNonNull(topicPartition);
         this.records = Objects.requireNonNull(records);
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
+        this.maxRecordBodySize = maxRecordBodySize;
         this.time = Objects.requireNonNull(time);
 
         // To make progress, kafka consumers require at least one full record batch per partition, i.e. we need to
@@ -92,6 +100,7 @@ public class LazyDownConversionRecords implements BaseRecords {
             LazyDownConversionRecords that = (LazyDownConversionRecords) o;
             return toMagic == that.toMagic &&
                     firstOffset == that.firstOffset &&
+                    maxRecordBodySize == that.maxRecordBodySize &&
                     topicPartition.equals(that.topicPartition) &&
                     records.equals(that.records);
         }
@@ -102,6 +111,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     public int hashCode() {
         int result = toMagic;
         result = 31 * result + Long.hashCode(firstOffset);
+        result = 31 * result + maxRecordBodySize;
         result = 31 * result + topicPartition.hashCode();
         result = 31 * result + records.hashCode();
         return result;
@@ -113,6 +123,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                 ", underlying=" + records +
                 ", toMagic=" + toMagic +
                 ", firstOffset=" + firstOffset +
+                ", maxRecordBodySize=" + maxRecordBodySize +
                 ")";
     }
 
@@ -176,7 +187,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                     isFirstBatch = false;
                 }
 
-                ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+                ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time, maxRecordBodySize);
                 // During conversion, it is possible that we drop certain batches because they do not have an equivalent
                 // representation in the message format we want to convert to. For example, V0 and V1 message formats
                 // have no notion of transaction markers which were introduced in V2 so they get dropped during conversion.

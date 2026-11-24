@@ -118,11 +118,14 @@ public class TopicConfig {
     public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_DOC = "The maximum decompressed size, in bytes, of a " +
         "single record the broker will accept; larger records are rejected with an " +
         "<code>InvalidRecordException</code>. It is enforced where the broker decompresses records: produce " +
-        "validation of compressed batches, log compaction, and offset lookups by timestamp or max timestamp against " +
-        "the local log or remote storage. " +
+        "validation of compressed batches, log compaction, offset lookups by timestamp or max timestamp against " +
+        "the local log or remote storage, and down-conversion for fetch requests from older clients (fetch " +
+        "versions 0 to 3). Other fetches return the stored batches without decompressing them, so the limit does " +
+        "not apply to them. " +
         "Unlike <code>max.message.bytes</code>, which bounds the compressed batch on the wire, this bounds the " +
         "decompressed size of an individual record. Lowering it below the size of already-stored records makes " +
-        "compaction and timestamp offset lookups of affected partitions fail until it is raised again. The " +
+        "compaction and timestamp offset lookups of affected partitions fail until it is raised again, and " +
+        "down-converting fetches of those records return an <code>INVALID_RECORD</code> error. The " +
         "default imposes no limit beyond the largest record the broker could allocate anyway; set a smaller value " +
         "to enforce a per-record cap.";
 

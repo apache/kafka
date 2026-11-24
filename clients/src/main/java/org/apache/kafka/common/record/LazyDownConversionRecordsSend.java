@@ -41,11 +41,14 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
     private RecordsSend<MemoryRecords> convertedRecordsWriter;
 
+    private boolean conversionFailed;
+
     public LazyDownConversionRecordsSend(LazyDownConversionRecords records) {
         super(records, records.sizeInBytes());
         convertedRecordsWriter = null;
         recordValidationStats = new RecordValidationStats();
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
+        conversionFailed = false;
     }
 
     private MemoryRecords buildOverflowBatch(int remaining) {
@@ -74,7 +77,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
             try {
                 // Check if we have more chunks left to down-convert
-                if (convertedRecordsIterator.hasNext()) {
+                if (!conversionFailed && convertedRecordsIterator.hasNext()) {
                     // Get next chunk of down-converted messages
                     ConvertedRecords<?> recordsAndStats = convertedRecordsIterator.next();
                     convertedRecords = (MemoryRecords) recordsAndStats.records();
@@ -90,6 +93,15 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 // offset of the batch which has the unsupported compression type. At that time, we will
                 // send back the UNSUPPORTED_COMPRESSION_TYPE error which will allow the consumer to fail gracefully.
                 convertedRecords = buildOverflowBatch(remaining);
+                conversionFailed = true;
+            } catch (RecordSizeLimitExceededException e) {
+                // We have encountered a record whose decompressed body exceeds the topic's
+                // max.decompressed.message.bytes. As above, we have already committed to the fetch size, so we send
+                // an overflow batch. The consumer will then fetch from the offset of the offending batch, at which
+                // point the eager conversion of the first batch fails and the INVALID_RECORD error is returned.
+                log.warn("Failed to down-convert records for partition {}, sending an overflow batch instead: {}", topicPartition(), e.getMessage());
+                convertedRecords = buildOverflowBatch(remaining);
+                conversionFailed = true;
             }
 
             convertedRecordsWriter = new DefaultRecordsSend<>(convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));

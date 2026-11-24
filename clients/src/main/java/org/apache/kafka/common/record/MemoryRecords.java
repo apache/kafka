@@ -114,7 +114,7 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
-        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
+        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time, Records.SOFT_MAX_ARRAY_LENGTH);
     }
 
     @Override
