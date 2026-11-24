@@ -43,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -353,8 +354,8 @@ public class SessionToHeadersStoreAdapterTest {
     @Test
     public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
         final ReadOnlySessionStore<Bytes, byte[]> innerView = mock(ReadOnlySessionStore.class);
-        final Bytes key = new Bytes("k".getBytes());
-        final byte[] committedPlain = "committed".getBytes();
+        final Bytes key = new Bytes("k".getBytes(StandardCharsets.UTF_8));
+        final byte[] committedPlain = "committed".getBytes(StandardCharsets.UTF_8);
 
         when(innerStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
         when(innerView.fetchSession(key, 0L, 10L)).thenReturn(committedPlain);

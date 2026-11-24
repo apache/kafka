@@ -44,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TimestampedToHeadersWindowStoreAdapterCompletenessTest {
 
     private static final Set<String> VALUE_CONVERTING = Set.of(
-        "fetch(Object,long)"
+        "fetch(Object,long)",
+        "readOnly(IsolationLevel)"
     );
 
     private static final Set<String> ITERATOR_WRAPPING = Set.of(
@@ -82,13 +83,9 @@ public class TimestampedToHeadersWindowStoreAdapterCompletenessTest {
     );
 
     // query has bespoke iterator wrapping; flush is a deprecated no-op.
-    // readOnly is NOT harmless: the adapter inherits the default that returns `this`, so the isolation
-    // level never reaches the inner store and READ_COMMITTED reads can observe uncommitted writes.
-    // Tracked by KAFKA-21505; remove readOnly from SPECIAL once the adapter overrides it.
     private static final Set<String> SPECIAL = Set.of(
         "query(Query,PositionBound,QueryConfig)",
-        "flush()",
-        "readOnly(IsolationLevel)"
+        "flush()"
     );
 
     @Test

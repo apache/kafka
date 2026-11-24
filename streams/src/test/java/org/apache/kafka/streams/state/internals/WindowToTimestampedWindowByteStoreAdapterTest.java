@@ -26,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -45,8 +47,8 @@ public class WindowToTimestampedWindowByteStoreAdapterTest {
         final WindowToTimestampedWindowByteStoreAdapter adapter =
             new WindowToTimestampedWindowByteStoreAdapter(mockStore);
         final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
-        final Bytes key = new Bytes("k".getBytes());
-        final byte[] committedPlain = "committed".getBytes();
+        final Bytes key = new Bytes("k".getBytes(StandardCharsets.UTF_8));
+        final byte[] committedPlain = "committed".getBytes(StandardCharsets.UTF_8);
 
         when(mockStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
         when(innerView.fetch(key, 10L)).thenReturn(committedPlain);

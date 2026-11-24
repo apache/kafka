@@ -38,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -402,8 +403,8 @@ public class TimestampedToHeadersStoreAdapterTest {
     public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
         final TimestampedToHeadersStoreAdapter adapter = createAdapter();
         final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
-        final Bytes key = new Bytes("k".getBytes());
-        final byte[] committedPlain = "committed".getBytes();
+        final Bytes key = new Bytes("k".getBytes(StandardCharsets.UTF_8));
+        final byte[] committedPlain = "committed".getBytes(StandardCharsets.UTF_8);
 
         when(mockStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
         when(innerView.get(key)).thenReturn(committedPlain);
