@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProtocolSerializationTest {
 
@@ -150,12 +150,19 @@ public class ProtocolSerializationTest {
         for (BoundField f : this.schema.fields()) {
             Object o = this.struct.get(f);
             try {
-                this.struct.set(f, null);
-                this.struct.validate();
-                if (!f.def.type.isNullable())
-                    fail("Should not allow serialization of null value.");
-            } catch (SchemaException e) {
-                assertFalse(f.def.type.isNullable(), f + " should not be nullable");
+                if (f.def.type.isNullable()) {
+                    this.struct.set(f, null);
+                    this.struct.validate();
+                } else {
+                    assertThrows(
+                            SchemaException.class,
+                            () -> {
+                                this.struct.set(f, null);
+                                this.struct.validate();
+                            }, "Should not allow serialization of null value."
+                    );
+                    assertFalse(f.def.type.isNullable(), f + " should not be nullable");
+                }
             } finally {
                 this.struct.set(f, o);
             }
@@ -213,6 +220,53 @@ public class ProtocolSerializationTest {
         assertThrows(SchemaException.class,
             () -> type.read(invalidBuffer),
             "Array size not validated");
+    }
+
+    @Test
+    public void testReadArrayLengthAboveMaxIsRejected() {
+        Type type = new ArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(4 + count);
+        buffer.putInt(count);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
+    }
+
+    @Test
+    public void testReadArrayLengthHonorsConfiguredMax() {
+        try {
+            MessageUtil.setMaxArrayLength(10);
+            for (Type type : new Type[] {new ArrayOf(Type.INT8), new CompactArrayOf(Type.INT8)}) {
+                ByteBuffer accepted = ByteBuffer.allocate(16);
+                type.write(accepted, new Object[] {(byte) 0, (byte) 1, (byte) 2, (byte) 3, (byte) 4,
+                    (byte) 5, (byte) 6, (byte) 7, (byte) 8, (byte) 9});
+                accepted.flip();
+                assertEquals(10, ((Object[]) type.read(accepted)).length);
+
+                ByteBuffer rejected = ByteBuffer.allocate(16);
+                type.write(rejected, new Object[] {(byte) 0, (byte) 1, (byte) 2, (byte) 3, (byte) 4,
+                    (byte) 5, (byte) 6, (byte) 7, (byte) 8, (byte) 9, (byte) 10});
+                rejected.flip();
+                SchemaException e = assertThrows(SchemaException.class, () -> type.read(rejected));
+                assertEquals("Error reading array of size 11, which exceeds the maximum allowed size of 10", e.getMessage());
+            }
+        } finally {
+            MessageUtil.setMaxArrayLength(MessageUtil.MAX_ARRAY_LENGTH);
+        }
+    }
+
+    @Test
+    public void testReadCompactArrayLengthAboveMaxIsRejected() {
+        Type type = new CompactArrayOf(Type.INT8);
+        int count = MessageUtil.MAX_ARRAY_LENGTH + 1;
+        ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfUnsignedVarint(count + 1) + count);
+        ByteUtils.writeUnsignedVarint(count + 1, buffer);
+        buffer.rewind();
+        SchemaException e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading array of size " + count + ", which exceeds the maximum allowed size of "
+                + MessageUtil.MAX_ARRAY_LENGTH, e.getMessage());
     }
 
     @Test

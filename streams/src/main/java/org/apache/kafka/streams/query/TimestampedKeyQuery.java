@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -28,6 +29,7 @@ import java.util.Objects;
  * @param <V> Type of values
  */
 @Evolving
+@InterfaceAudience.Public
 public final class TimestampedKeyQuery<K, V> implements Query<ValueAndTimestamp<V>> {
 
     private final K key;

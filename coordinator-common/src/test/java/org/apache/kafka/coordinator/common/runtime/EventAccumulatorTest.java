@@ -82,7 +82,7 @@ public class EventAccumulatorTest {
         assertEquals(0, accumulator.size());
         assertNull(accumulator.poll());
 
-        List<MockEvent> events = Arrays.asList(
+        List<MockEvent> events = List.of(
             new MockEvent(1, 0),
             new MockEvent(1, 1),
             new MockEvent(1, 2),

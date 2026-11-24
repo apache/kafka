@@ -19,8 +19,8 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -119,6 +119,11 @@ class TxnPartitionMap {
         if (entry != null)
             return entry.maybeUpdateLastAckedSequence(sequence);
         return TxnPartitionEntry.NO_LAST_ACKED_SEQUENCE_NUMBER;
+    }
+
+    int numBatchesAheadOfOldestInflight(TopicPartition topicPartition) {
+        TxnPartitionEntry entry = topicPartitions.get(topicPartition);
+        return entry == null ? 0 : entry.numBatchesAheadOfOldestInflight();
     }
 
     ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {

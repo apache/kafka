@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 /**
  * Options for {@link Admin#listTopics()}.
  */
+@InterfaceAudience.Public
 public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
 
     private boolean listInternal = false;
@@ -32,6 +35,7 @@ public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public ListTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

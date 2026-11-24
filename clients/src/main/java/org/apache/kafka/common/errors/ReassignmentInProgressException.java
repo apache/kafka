@@ -17,9 +17,12 @@
 
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Thrown if a request cannot be completed because a partition reassignment is in progress.
  */
+@InterfaceAudience.Public
 public class ReassignmentInProgressException extends ApiException {
 
     public ReassignmentInProgressException(String msg) {

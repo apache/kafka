@@ -25,14 +25,12 @@ import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,7 +80,7 @@ public class FilteredCacheIteratorTest {
     @Test
     public void shouldAllowEntryMatchingHasNextCondition() {
         final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(allIterator);
-        assertThat(keyValues, equalTo(entries));
+        assertEquals(entries, keyValues);
     }
 
     @Test
@@ -90,7 +88,7 @@ public class FilteredCacheIteratorTest {
         while (allIterator.hasNext()) {
             final Bytes nextKey = allIterator.peekNextKey();
             final KeyValue<Bytes, LRUCacheEntry> next = allIterator.next();
-            assertThat(next.key, equalTo(nextKey));
+            assertEquals(nextKey, next.key);
         }
     }
 
@@ -99,7 +97,7 @@ public class FilteredCacheIteratorTest {
         while (allIterator.hasNext()) {
             final KeyValue<Bytes, LRUCacheEntry> peeked = allIterator.peekNext();
             final KeyValue<Bytes, LRUCacheEntry> next = allIterator.next();
-            assertThat(peeked, equalTo(next));
+            assertEquals(next, peeked);
         }
     }
 
@@ -113,7 +111,7 @@ public class FilteredCacheIteratorTest {
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
         final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(firstEntryIterator);
-        assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
+        assertEquals(List.of(firstEntry), keyValues);
     }
 
     @Test

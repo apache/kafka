@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder.RecordsInfo;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -46,6 +47,11 @@ import java.util.List;
 import java.util.Optional;
 
 public class LogValidator {
+
+    // Stop validating a batch after this many record errors, since the batch is rejected anyway.
+    // This bounds the record errors kept in memory and returned in the produce response, and
+    // matches the number of errors shown in the message built by processRecordErrors.
+    static final int MAX_RECORD_ERRORS_PER_BATCH = 3;
 
     public interface MetricsRecorder {
         void recordInvalidMagic();
@@ -78,6 +84,7 @@ public class LogValidator {
     private final long timestampAfterMaxMs;
     private final int partitionLeaderEpoch;
     private final AppendOrigin origin;
+    private final int maxRecordBodySize;
 
     public LogValidator(MemoryRecords records,
                         TopicPartition topicPartition,
@@ -91,6 +98,24 @@ public class LogValidator {
                         long timestampAfterMaxMs,
                         int partitionLeaderEpoch,
                         AppendOrigin origin) {
+        this(records, topicPartition, time, sourceCompressionType, targetCompression, compactedTopic, toMagic,
+            timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, partitionLeaderEpoch, origin,
+            Records.SOFT_MAX_ARRAY_LENGTH);
+    }
+
+    public LogValidator(MemoryRecords records,
+                        TopicPartition topicPartition,
+                        Time time,
+                        CompressionType sourceCompressionType,
+                        Compression targetCompression,
+                        boolean compactedTopic,
+                        byte toMagic,
+                        TimestampType timestampType,
+                        long timestampBeforeMaxMs,
+                        long timestampAfterMaxMs,
+                        int partitionLeaderEpoch,
+                        AppendOrigin origin,
+                        int maxRecordBodySize) {
         this.records = records;
         this.topicPartition = topicPartition;
         this.time = time;
@@ -103,6 +128,7 @@ public class LogValidator {
         this.timestampAfterMaxMs = timestampAfterMaxMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.origin = origin;
+        this.maxRecordBodySize = maxRecordBodySize;
     }
 
     /**
@@ -183,6 +209,8 @@ public class LogValidator {
                     record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
                     metricsRecorder);
                 recordError.ifPresent(recordErrors::add);
+                if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
+                    break;
                 // we fail the batch if any record fails, so we stop appending if any record fails
                 if (recordErrors.isEmpty())
                     builder.appendWithOffset(offsetCounter.value++, record);
@@ -227,6 +255,8 @@ public class LogValidator {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition, record,
                     recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                 recordError.ifPresent(recordErrors::add);
+                if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
+                    break;
 
                 offsetCounter.value++;
                 if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp)
@@ -312,9 +342,9 @@ public class LogValidator {
             // then we can optimize the iterator to skip key / value / headers since they would not be used at all
             CloseableIterator<Record> recordsIterator;
             if (inPlaceAssignment && firstBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                recordsIterator = batch.skipKeyValueIterator(bufferSupplier);
+                recordsIterator = batch.skipKeyValueIterator(bufferSupplier, maxRecordBodySize);
             else
-                recordsIterator = batch.streamingIterator(bufferSupplier);
+                recordsIterator = batch.streamingIterator(bufferSupplier, maxRecordBodySize);
 
             try {
                 List<ApiRecordError> recordErrors = new ArrayList<>(0);
@@ -342,13 +372,18 @@ public class LogValidator {
                         // Historically the broker handled this by rewriting the batches rather
                         // than rejecting the request. We must continue this handling here to avoid
                         // breaking these clients.
-                        if (record.offset() != expectedOffset)
+                        // V2 offset deltas are checked by validateOffsetDelta, and the V2 base
+                        // offset is overwritten when offsets are assigned, so V2 batches never
+                        // need to be rewritten for their offsets.
+                        if (batch.magic() == RecordBatch.MAGIC_VALUE_V1 && record.offset() != expectedOffset)
                             inPlaceAssignment = false;
                     }
 
-                    if (recordError.isPresent())
+                    if (recordError.isPresent()) {
                         recordErrors.add(recordError.get());
-                    else {
+                        if (recordErrors.size() >= MAX_RECORD_ERRORS_PER_BATCH)
+                            break;
+                    } else {
                         uncompressedSizeInBytes += record.sizeInBytes();
                         validatedRecords.add(record);
                     }
@@ -490,6 +525,32 @@ public class LogValidator {
             throw new UnsupportedForMessageFormatException("Idempotent records cannot be used with magic version " + toMagic);
     }
 
+    /**
+     * Producers write offset deltas 0..count-1 in order. Combined with the count == lastOffsetDelta + 1 check in
+     * {@link #validateBatch}, this guarantees offsets strictly increase within the batch and stay inside
+     * [baseOffset, lastOffset], which readers of the log (such as the log cleaner via MemoryRecordsBuilder) rely on.
+     * The batch header alone cannot guarantee this: a record with an out-of-order or negative offsetDelta can still
+     * produce a self-consistent header.
+     *
+     * @return an {@link ApiRecordError} with {@link Errors#INVALID_RECORD} if the record's offset delta does not match
+     *         its index in the batch, otherwise an empty {@link Optional}
+     */
+    private static Optional<ApiRecordError> validateOffsetDelta(TopicPartition topicPartition,
+                                                                RecordBatch batch,
+                                                                Record record,
+                                                                int recordIndex,
+                                                                MetricsRecorder metricsRecorder) {
+        // Offsets are not assigned yet, so baseOffset is still the client-supplied value.
+        long offsetDelta = record.offset() - batch.baseOffset();
+        if (offsetDelta != recordIndex) {
+            metricsRecorder.recordInvalidOffset();
+            return Optional.of(new ApiRecordError(Errors.INVALID_RECORD, new RecordError(recordIndex,
+                "Record " + recordIndex + " has offset delta " + offsetDelta + " but expected " + recordIndex
+                    + " in topic partition " + topicPartition)));
+        }
+        return Optional.empty();
+    }
+
     private static Optional<ApiRecordError> validateRecord(RecordBatch batch,
                                                            TopicPartition topicPartition,
                                                            Record record,
@@ -506,6 +567,13 @@ public class LogValidator {
                 new RecordError(recordIndex, "Record " + record
                     + "'s magic does not match outer magic " + batch.magic() + " in topic partition "
                     + topicPartition)));
+        }
+
+        if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+            Optional<ApiRecordError> offsetDeltaError = validateOffsetDelta(topicPartition, batch, record,
+                recordIndex, metricsRecorder);
+            if (offsetDeltaError.isPresent())
+                return offsetDeltaError;
         }
 
         // verify the record-level CRC only if this is one of the deep entries of a compressed message
@@ -594,9 +662,11 @@ public class LogValidator {
                 throw new RecordValidationException(new InvalidTimestampException(
                     "One or more records have been rejected due to invalid timestamp"), errors);
             } else {
+                String count = errors.size() >= MAX_RECORD_ERRORS_PER_BATCH
+                    ? "at least " + errors.size() : String.valueOf(errors.size());
                 throw new RecordValidationException(new InvalidRecordException(
-                    "One or more records have been rejected due to " + errors.size() + " record errors "
-                    + "in total, and only showing the first three errors at most: " + errors.subList(0, Math.min(errors.size(), 3))), errors);
+                    "One or more records have been rejected due to " + count + " record errors in total, and only showing the first "
+                    + MAX_RECORD_ERRORS_PER_BATCH + " errors at most: " + errors), errors);
             }
         }
     }

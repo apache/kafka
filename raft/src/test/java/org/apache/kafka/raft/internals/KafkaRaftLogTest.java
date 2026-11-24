@@ -55,10 +55,6 @@ import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,6 +76,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -179,22 +176,24 @@ public class KafkaRaftLogTest {
         assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    public void testRandomRecords(@ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords records) throws IOException {
-        File tempDir = TestUtils.tempDirectory();
-        try {
-            KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
-            long previousEndOffset = log.endOffset().offset();
+    @Test
+    public void testRandomRecords() {
+        ArbitraryMemoryRecords.forRandomRecords(100, records -> {
+            File tempDir = TestUtils.tempDirectory();
+            try {
+                KafkaRaftLog log = buildMetadataLog(tempDir, mockTime);
+                long previousEndOffset = log.endOffset().offset();
 
-            assertThrows(
-                    CorruptRecordException.class,
-                    () -> log.appendAsFollower(records, Integer.MAX_VALUE)
-            );
+                assertThrows(
+                        CorruptRecordException.class,
+                        () -> log.appendAsFollower(records, Integer.MAX_VALUE)
+                );
 
-            assertEquals(previousEndOffset, log.endOffset().offset());
-        } finally {
-            Utils.delete(tempDir);
-        }
+                assertEquals(previousEndOffset, log.endOffset().offset());
+            } finally {
+                assertDoesNotThrow(() -> Utils.delete(tempDir));
+            }
+        });
     }
 
     @Test

@@ -24,12 +24,16 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithStreamAndMappedKey;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -49,9 +53,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamGlobalKTableLeftJoinTest {
     private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -101,7 +104,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         stream.leftJoin(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
 
         processor = supplier.theCapturedProcessor();
 
@@ -139,6 +142,45 @@ public class KStreamGlobalKTableLeftJoinTest {
         for (int i = 0; i < messageCount; i++) {
             inputTableTopic.pipeInput("FKey" + expectedKeys[i], (String) null);
         }
+    }
+
+    private void initWithStreamAndMappedKeyJoiner(
+        final ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String> joiner) {
+        driver.close();
+        builder = new StreamsBuilder();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KStream<Integer, String> stream = builder.stream(streamTopic, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final GlobalKTable<String, String> table = builder.globalTable(globalTableTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        final KeyValueMapper<Integer, String, String> keyMapper = (key, value) -> {
+            if (value == null) return null;
+            final String[] tokens = value.split(",");
+            return tokens.length > 1 ? tokens[1] : null;
+        };
+        stream.leftJoin(table, keyMapper, joiner).process(supplier);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
+        processor = supplier.theCapturedProcessor();
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
+        inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
+    }
+
+    @SuppressWarnings("deprecation")
+    private void initWithDeprecatedStreamKeyJoiner(
+        final ValueJoinerWithKey<Integer, String, String, String> joiner) {
+        driver.close();
+        builder = new StreamsBuilder();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KStream<Integer, String> stream = builder.stream(streamTopic, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final GlobalKTable<String, String> table = builder.globalTable(globalTableTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        final KeyValueMapper<Integer, String, String> keyMapper = (key, value) -> {
+            if (value == null) return null;
+            final String[] tokens = value.split(",");
+            return tokens.length > 1 ? tokens[1] : null;
+        };
+        stream.leftJoin(table, keyMapper, joiner).process(supplier);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
+        processor = supplier.theCapturedProcessor();
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
+        inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
     }
 
     @Test
@@ -281,7 +323,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(3, "XXX3+null", 3)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -292,8 +335,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -316,7 +358,8 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(3, "XXX3+null", 3)
         );
 
-        assertThat(
+        assertEquals(
+            0.0,
             driver.metrics().get(
                     new MetricName(
                         "dropped-records-total",
@@ -327,8 +370,7 @@ public class KStreamGlobalKTableLeftJoinTest {
                             mkEntry("task-id", "0_0")
                         )
                     ))
-                .metricValue(),
-            is(0.0)
+                .metricValue()
         );
     }
 
@@ -348,5 +390,123 @@ public class KStreamGlobalKTableLeftJoinTest {
             new KeyValueTimestamp<>(2, "X2,FKey2+Y2", 2),
             new KeyValueTimestamp<>(3, "X3,FKey3+Y3", 3)
         );
+    }
+
+    @Test
+    public void shouldPassMappedKeyAndStreamKeyToJoiner() {
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
+                mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
+
+        pushToGlobalTable(2, "Y");
+        pushToStream(2, "X", true, false);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "FKey0|0|X0,FKey0|Y0", 0),
+            new KeyValueTimestamp<>(1, "FKey1|1|X1,FKey1|Y1", 1)
+        );
+    }
+
+    @Test
+    public void shouldDropRecordAndRecordDroppedSensorWhenStreamValueIsNull() {
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
+                mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
+        pushToGlobalTable(2, "Y");
+        inputStreamTopic.pipeInput(0, null);
+        inputStreamTopic.pipeInput(1, "X1,FKey1");
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(1, "FKey1|1|X1,FKey1|Y1", 1)
+        );
+
+        assertEquals(
+            1.0,
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", Thread.currentThread().getName()),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue()
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldPassStreamKeyAsReadOnlyKeyToDeprecatedJoiner() {
+        initWithDeprecatedStreamKeyJoiner(
+            (readOnlyKey, streamValue, tableValue) -> readOnlyKey + "|" + streamValue + "|" + tableValue);
+
+        pushToGlobalTable(2, "Y");
+        pushToStream(2, "X", true, false);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "0|X0,FKey0|Y0", 0),
+            new KeyValueTimestamp<>(1, "1|X1,FKey1|Y1", 1)
+        );
+    }
+
+    @Test
+    public void shouldEmitWithNullTableValueOnNoMatch() {
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
+                mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
+
+        pushToStream(2, "X", true, false);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "FKey0|0|X0,FKey0|null", 0),
+            new KeyValueTimestamp<>(1, "FKey1|1|X1,FKey1|null", 1)
+        );
+    }
+
+    @Test
+    public void shouldEmitWithNullMappedKeyWhenMapperReturnsNull() {
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
+                mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
+
+        pushToGlobalTable(2, "Y");
+        pushToStream(2, "XXX", false, false);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "null|0|XXX0|null", 0),
+            new KeyValueTimestamp<>(1, "null|1|XXX1|null", 1)
+        );
+
+        assertEquals(
+            0.0,
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", Thread.currentThread().getName()),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue()
+        );
+    }
+
+    @Test
+    public void shouldNameProcessorBasedOnNamedParameter() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(streamTopic, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final GlobalKTable<String, String> table = builder.globalTable(globalTableTopic, Consumed.with(Serdes.String(), Serdes.String()));
+
+        stream.leftJoin(
+            table,
+            (KeyValueMapper<Integer, String, String>) (k, v) -> v,
+            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>) (streamKey, mappedKey, v1, v2) -> v1 + v2,
+            Named.as("left-join-table"));
+
+        assertTrue(builder.build().describe().toString().contains("Processor: left-join-table"));
     }
 }

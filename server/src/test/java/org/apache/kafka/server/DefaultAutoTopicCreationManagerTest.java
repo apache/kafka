@@ -44,7 +44,6 @@ import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.quota.ControllerMutationQuota;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -132,9 +131,9 @@ public class DefaultAutoTopicCreationManagerTest {
     ) {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -179,9 +178,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicCreationWithMetadataContext() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -208,7 +207,7 @@ public class DefaultAutoTopicCreationManagerTest {
         var response = new CreateTopicsResponse(createTopicsResponseData);
         topicCreator.setResponseForWithPrincipal(response);
 
-        autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, requestContext);
+        autoTopicCreationManager.createTopics(Set.of(topicName), requestContext);
 
         assertEquals(1, topicCreator.withPrincipalCallCount(),
                 "Should have called createTopicWithPrincipal once");
@@ -239,9 +238,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -280,9 +279,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -306,9 +305,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -333,9 +332,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicCreationErrorCaching() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -367,9 +366,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testGetTopicCreationErrorsWithMultipleTopics() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -407,9 +406,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testErrorCacheTTL() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -450,9 +449,9 @@ public class DefaultAutoTopicCreationManagerTest {
         // Create manager with small cache size for testing
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 3);
@@ -499,9 +498,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicsInBackoffAreNotRetried() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -539,9 +538,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicsOutOfBackoffCanBeRetried() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -586,9 +585,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testInflightTopicsAreNotRetriedConcurrently() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -620,9 +619,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testBackoffAndInflightInteraction() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -710,7 +709,7 @@ public class DefaultAutoTopicCreationManagerTest {
             String topicName,
             boolean isInternal
     ) {
-        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA);
+        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName));
 
         var expectedResponses = List.of(new MetadataResponseTopic()
                 .setErrorCode(error.code())

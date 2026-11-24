@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -24,6 +26,7 @@ import java.util.Objects;
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
  */
+@InterfaceAudience.Public
 public class ConfigEntry {
 
     private final String name;
@@ -212,6 +215,7 @@ public class ConfigEntry {
     /**
      * Source of configuration entries.
      */
+    // Keep in sync with DescribeConfigsResponse.ConfigSource
     public enum ConfigSource {
         DYNAMIC_TOPIC_CONFIG,           // dynamic topic config that is configured for a specific topic
         DYNAMIC_BROKER_LOGGER_CONFIG,   // dynamic broker logger config that is configured for a specific broker
@@ -221,7 +225,8 @@ public class ConfigEntry {
         DYNAMIC_GROUP_CONFIG,           // dynamic group config that is configured for a specific group
         STATIC_BROKER_CONFIG,           // static broker config provided as broker properties at start up (e.g. server.properties file)
         DEFAULT_CONFIG,                 // built-in default configuration for configs that have a default value
-        UNKNOWN                         // source unknown e.g. in the ConfigEntry used for alter requests where source is not set
+        UNKNOWN,                        // source unknown e.g. in the ConfigEntry used for alter requests where source is not set
+        DYNAMIC_CLUSTER_MIRROR_CONFIG,  // dynamic cluster mirror config that is configured for a specific cluster mirror
     }
 
     /**

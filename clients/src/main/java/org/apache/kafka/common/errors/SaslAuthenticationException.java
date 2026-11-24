@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.security.sasl.SaslServer;
 
@@ -33,6 +36,7 @@ import javax.security.sasl.SaslServer;
  * security-critical information in the message that should not be leaked to unauthenticated clients.
  * </p>
  */
+@InterfaceAudience.Public
 public class SaslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;

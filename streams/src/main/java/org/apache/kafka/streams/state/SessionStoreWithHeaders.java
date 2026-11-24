@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
+@InterfaceAudience.Public
 public interface SessionStoreWithHeaders<K, AGG> extends StateStore, SessionStore<K, AggregationWithHeaders<AGG>>  {
 
 }

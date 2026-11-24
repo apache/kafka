@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -81,6 +82,7 @@ import java.util.stream.Collectors;
  * This class can be used standalone or in combination with {@link AbstractConfig} which provides some additional
  * functionality for accessing configs.
  */
+@InterfaceAudience.Public
 public class ConfigDef {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
@@ -519,7 +521,7 @@ public class ConfigDef {
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
             String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
-            throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
+            throw new ConfigException("Some configurations are referred to in the dependents but not defined: " + joined);
         }
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
@@ -1013,6 +1015,7 @@ public class ConfigDef {
                 throw new ConfigException(name, o, "Value must be no more than " + max);
         }
 
+        @Override
         public String toString() {
             if (min == null && max == null)
                 return "[...]";
@@ -1091,6 +1094,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return !validString.validStrings.isEmpty() ? validString.toString() : "";
         }
@@ -1116,6 +1120,7 @@ public class ConfigDef {
 
         }
 
+        @Override
         public String toString() {
             return "[" + String.join(", ", validStrings) + "]";
         }
@@ -1143,6 +1148,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
@@ -1157,6 +1163,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "non-null string";
         }
@@ -1270,6 +1277,7 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "non-empty string without ISO control characters";
         }

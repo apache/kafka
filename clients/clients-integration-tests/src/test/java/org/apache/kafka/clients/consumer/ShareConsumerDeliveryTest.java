@@ -35,8 +35,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,7 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(1200)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {

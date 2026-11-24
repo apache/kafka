@@ -82,6 +82,7 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
 
         try {
             output.write(json.toString().getBytes(UTF_8));
+            output.write("\n".getBytes(UTF_8));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

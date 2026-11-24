@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: 
+description: Kafka configuration reference for clusters, clients, and supporting components.
 weight: 3
 tags: ['kafka', 'docs', 'configuration']
 aliases: 

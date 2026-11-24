@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 
@@ -35,6 +36,7 @@ import java.util.Map;
  *
  * @param <T> Type to be deserialized into.
  */
+@InterfaceAudience.Public
 public interface Deserializer<T> extends Closeable {
 
     /**

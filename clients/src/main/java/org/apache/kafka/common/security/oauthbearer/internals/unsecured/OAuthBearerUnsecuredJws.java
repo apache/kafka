@@ -345,14 +345,14 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         if (isClaimType(scopeClaimName, String.class)) {
             String scopeClaimValue = claim(scopeClaimName, String.class);
             if (Utils.isBlank(scopeClaimValue))
-                return Collections.emptySet();
+                return Set.of();
             else {
                 return Set.of(scopeClaimValue.trim());
             }
         }
         List<?> scopeClaimValue = claim(scopeClaimName, List.class);
         if (scopeClaimValue == null || scopeClaimValue.isEmpty())
-            return Collections.emptySet();
+            return Set.of();
         @SuppressWarnings("unchecked")
         List<String> stringList = (List<String>) scopeClaimValue;
         Set<String> retval = new HashSet<>();

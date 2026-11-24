@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * This exception indicates that the produce request sent to the partition leader
@@ -22,6 +25,7 @@ package org.apache.kafka.common.errors;
  * by calling KafkaProducer#abortTransaction which would try to send initPidRequest and reinitialize the producer
  * under the hood.
  */
+@InterfaceAudience.Public
 public class InvalidProducerEpochException extends ApplicationRecoverableException {
 
     private static final long serialVersionUID = 1L;

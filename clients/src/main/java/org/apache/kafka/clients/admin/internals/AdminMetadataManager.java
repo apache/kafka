@@ -17,23 +17,29 @@
 
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages the metadata for KafkaAdminClient.
@@ -45,10 +51,10 @@ public class AdminMetadataManager {
     private final Logger log;
 
     /**
-     * The minimum amount of time that we should wait between subsequent
-     * retries, when fetching metadata.
+     * The backoff between metadata fetches. It grows while successive
+     * metadata responses do not change the cluster nodes.
      */
-    private final long refreshBackoffMs;
+    private final ExponentialBackoff refreshBackoff;
 
     /**
      * The minimum amount of time that we should wait before triggering an
@@ -83,6 +89,11 @@ public class AdminMetadataManager {
     private long lastMetadataFetchAttemptMs = 0;
 
     /**
+     * The number of successive metadata responses that did not change the cluster nodes.
+     */
+    private final AtomicLong equivalentResponseCount = new AtomicLong(0);
+
+    /**
      * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
      * metadata has not been requested. This is the start time based on which rebootstrap is
      * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
@@ -102,11 +113,24 @@ public class AdminMetadataManager {
     private ApiException fatalException = null;
 
     /**
+     * If this is non-null, bootstrap DNS resolution permanently failed. Unlike
+     * {@link #fatalException}, this is never cleared so all subsequent API calls see it.
+     * Volatile because it is written by the I/O thread (via the network client) and read by
+     * both the I/O thread and the app thread (via {@link KafkaAdminClient#enqueue}).
+     */
+    private volatile BootstrapResolutionException bootstrapFatalException = null;
+
+    /**
      * The cluster with which the metadata was bootstrapped.
      */
     private Cluster bootstrapCluster;
 
     public class AdminMetadataUpdater implements MetadataUpdater {
+        @Override
+        public String clusterId() {
+            return cluster.clusterResource().clusterId();
+        }
+
         @Override
         public List<Node> fetchNodes() {
             return cluster.nodes();
@@ -125,7 +149,7 @@ public class AdminMetadataManager {
         @Override
         public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
             maybeFatalException.ifPresent(AdminMetadataManager.this::updateFailed);
-            AdminMetadataManager.this.requestUpdate();
+            AdminMetadataManager.this.requestUpdate(false);
         }
 
         @Override
@@ -149,6 +173,26 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public void bootstrapFailed(org.apache.kafka.common.KafkaException exception) {
+            if (exception instanceof BootstrapResolutionException) {
+                AdminMetadataManager.this.recordBootstrapFatalException((BootstrapResolutionException) exception);
+            }
+        }
+
+        @Override
+        public boolean isBootstrapped() {
+            return bootstrapCluster != null;
+        }
+
+        @Override
+        public void bootstrap(List<InetSocketAddress> addresses) {
+            // The `now` argument is unused when the incoming cluster is bootstrap-configured
+            // (see AdminMetadataManager#update), so we pass 0 rather than plumbing a clock through
+            // the MetadataUpdater interface for a value that would be ignored.
+            AdminMetadataManager.this.update(Cluster.bootstrap(addresses), 0);
+        }
+
+        @Override
         public void close() {
         }
     }
@@ -165,11 +209,16 @@ public class AdminMetadataManager {
     public AdminMetadataManager(
         LogContext logContext,
         long refreshBackoffMs,
+        long refreshBackoffMaxMs,
         long metadataExpireMs,
         boolean usingBootstrapControllers
     ) {
         this.log = logContext.logger(AdminMetadataManager.class);
-        this.refreshBackoffMs = refreshBackoffMs;
+        this.refreshBackoff = new ExponentialBackoff(
+            refreshBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            refreshBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.metadataExpireMs = metadataExpireMs;
         this.usingBootstrapControllers = usingBootstrapControllers;
         this.updater = new AdminMetadataUpdater();
@@ -181,6 +230,18 @@ public class AdminMetadataManager {
 
     public AdminMetadataUpdater updater() {
         return updater;
+    }
+
+    public boolean isBootstrapped() {
+        return bootstrapCluster != null;
+    }
+
+    public BootstrapResolutionException bootstrapFatalException() {
+        return bootstrapFatalException;
+    }
+
+    void recordBootstrapFatalException(BootstrapResolutionException exception) {
+        this.bootstrapFatalException = exception;
     }
 
     public boolean isReady() {
@@ -210,11 +271,18 @@ public class AdminMetadataManager {
         return cluster.nodeById(nodeId);
     }
 
-    public void requestUpdate() {
+    public void requestUpdate(boolean resetEquivalentResponseBackoff) {
+        if (resetEquivalentResponseBackoff) {
+            resetEquivalentResponseBackoff();
+        }
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;
             log.debug("Requesting metadata update.");
         }
+    }
+
+    public void resetEquivalentResponseBackoff() {
+        this.equivalentResponseCount.set(0);
     }
 
     public void clearController() {
@@ -255,7 +323,11 @@ public class AdminMetadataManager {
 
     private long delayBeforeNextAttemptMs(long now) {
         long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
-        return Math.max(0, refreshBackoffMs - timeSinceAttempt);
+        long count = equivalentResponseCount.get();
+        long backoffMs = count > 0 ?
+            refreshBackoff.backoff(count - 1) :
+            refreshBackoff.initialInterval();
+        return Math.max(0, backoffMs - timeSinceAttempt);
     }
 
     public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
@@ -275,9 +347,9 @@ public class AdminMetadataManager {
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
+        this.equivalentResponseCount.set(0);
 
         if (RequestUtils.isFatalException(exception)) {
-            log.warn("Fatal error during metadata update", exception);
             // avoid unchecked/unconfirmed cast to ApiException
             if (exception instanceof  ApiException) {
                 this.fatalException = (ApiException) exception;
@@ -290,9 +362,11 @@ public class AdminMetadataManager {
                 } else {
                     log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
                 }
+            } else {
+                log.warn("Fatal error during metadata update", exception);
             }
         } else {
-            log.info("Metadata update failed", exception);
+            log.debug("Metadata update failed", exception);
         }
     }
 
@@ -306,6 +380,19 @@ public class AdminMetadataManager {
             bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
+            boolean equivalent = now - lastMetadataUpdateMs < metadataExpireMs &&
+                cluster.nodes().size() == this.cluster.nodes().size() &&
+                cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())));
+            // The controller is only compared when talking to the controller quorum, which reports
+            // the active controller. Brokers report a random broker instead.
+            if (usingBootstrapControllers && !Objects.equals(cluster.controller(), this.cluster.controller())) {
+                equivalent = false;
+            }
+            if (equivalent) {
+                this.equivalentResponseCount.incrementAndGet();
+            } else {
+                this.equivalentResponseCount.set(0);
+            }
             this.lastMetadataUpdateMs = now;
         }
 

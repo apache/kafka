@@ -1,6 +1,6 @@
 ---
 title: Listener Configuration
-description: Listener Configuration
+description: Kafka listener configuration for client, inter-broker, and controller communication.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

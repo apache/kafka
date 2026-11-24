@@ -14,22 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
 /**
  * Options for {@link Admin#listGroups()}.
  */
+@InterfaceAudience.Public
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
     private Set<GroupState> groupStates = Set.of();
     private Set<GroupType> types = Set.of();
     private Set<String> protocolTypes = Set.of();
+    private boolean requireCommittedOffsets = false;
 
     /**
      * Only consumer groups will be returned by listGroups().
@@ -88,6 +92,24 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
     }
 
     /**
+     * If set to true, only groups with at least one committed offset will be returned by listGroups().
+     * Otherwise, groups are returned whether or not they have committed offsets. A group is returned
+     * only if it also matches the group state, group type and protocol type filters. Share groups never
+     * have committed offsets, so they are never returned when this option is set.
+     * <p>
+     * This operation is supported by brokers with version 4.5.0 or later. The request to an older
+     * broker fails with {@link org.apache.kafka.common.errors.UnsupportedVersionException}. In a
+     * cluster with mixed broker versions, {@link ListGroupsResult#all()} fails, {@link ListGroupsResult#errors()}
+     * contains one error per broker that does not support the option, and {@link ListGroupsResult#valid()}
+     * contains only the groups from the brokers that do. Callers must check {@code errors()} before
+     * treating {@code valid()} as a complete listing.
+     */
+    public ListGroupsOptions requireCommittedOffsets(boolean requireCommittedOffsets) {
+        this.requireCommittedOffsets = requireCommittedOffsets;
+        return this;
+    }
+
+    /**
      * Returns the list of group states that are requested or empty if no states have been specified.
      */
     public Set<GroupState> groupStates() {
@@ -106,5 +128,12 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      */
     public Set<GroupType> types() {
         return types;
+    }
+
+    /**
+     * Returns whether only groups with at least one committed offset are requested.
+     */
+    public boolean requireCommittedOffsets() {
+        return requireCommittedOffsets;
     }
 }

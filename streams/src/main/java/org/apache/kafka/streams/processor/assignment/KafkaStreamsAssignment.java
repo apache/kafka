@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Instant;
@@ -32,6 +33,7 @@ import static java.util.Collections.unmodifiableMap;
  * A simple container class for the assignor to return the desired placement of active and standby tasks on
  * KafkaStreams clients.
  */
+@InterfaceAudience.Public
 public class KafkaStreamsAssignment {
 
     private final ProcessId processId;

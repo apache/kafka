@@ -61,12 +61,7 @@ jobs:
           echo "Restored PR_NUMBER.txt:"
           cat PR_NUMBER.txt
           PR_NUMBER=$(cat PR_NUMBER.txt)
-          REVIEWER_LOGIN=""
-          if [ -f REVIEWER_LOGIN.txt ]; then
-            REVIEWER_LOGIN=$(cat REVIEWER_LOGIN.txt)
-            echo "Reviewer login: $REVIEWER_LOGIN"
-          fi
-          PR_NUMBER=$PR_NUMBER REVIEWER_LOGIN=$REVIEWER_LOGIN python .github/scripts/pr-format.py 2>> "$GITHUB_STEP_SUMMARY" 1>> pr-format-output.txt
+          PR_NUMBER=$PR_NUMBER python .github/scripts/pr-format.py 2>> "$GITHUB_STEP_SUMMARY" 1>> pr-format-output.txt
           exitcode="$?"
           message=$(cat pr-format-output.txt)
           echo "message=$message" >> "$GITHUB_OUTPUT"

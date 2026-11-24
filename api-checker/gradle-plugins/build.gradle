@@ -1,0 +1,79 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+apply plugin: 'java-gradle-plugin'
+
+dependencies {
+    api project(':core')
+
+    testImplementation "org.junit.jupiter:junit-jupiter:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.platform:junit-platform-launcher:${apiCheckerVersions.junitPlatform}"
+    testImplementation "org.mockito:mockito-core:${apiCheckerVersions.mockito}"
+    testImplementation gradleTestKit()
+    // Re-use the ASM-based class-file builders from :core's test-fixtures (AsmClassFactory,
+    // TempJarBuilder) instead of duplicating them.
+    testImplementation(testFixtures(project(':core')))
+}
+
+gradlePlugin {
+    plugins {
+        kafkaPublicApiChecker {
+            id = 'org.apache.kafka.public-api-checker'
+            implementationClass = 'org.apache.kafka.gradle.KafkaPublicApiCheckerPlugin'
+            displayName = 'Kafka Public API Checker'
+            description = 'Internal plugin for checking public API consistency in Kafka codebase'
+        }
+        kafkaInternalApiChecker {
+            id = 'org.apache.kafka.internal-api-checker'
+            implementationClass = 'org.apache.kafka.gradle.KafkaInternalApiCheckerPlugin'
+            displayName = 'Kafka Internal API Checker'
+            description = 'Plugin for external projects to check they don\'t use internal Kafka APIs'
+        }
+    }
+}
+
+// The `java-gradle-plugin` plugin auto-generates one publication per declared plugin
+// (the marker poms) plus a `pluginMaven` publication carrying the implementation jar.
+// Rename the implementation jar to a sensible Maven coordinate; the markers point at it
+// by group + artifactId.
+// The `public-api-checker` plugin is Kafka-internal: it's applied to Kafka's own subprojects
+// via the includedBuild wiring, but shipping its marker pom to Maven Central would only
+// invite consumers to apply a plugin that expects Kafka-style javadoc layout. Disable the
+// publish tasks for that marker only — the plugin must stay registered in
+// `gradlePlugin { plugins { } }` above so `apply plugin: 'org.apache.kafka.public-api-checker'`
+// continues to resolve, but the marker artifact never reaches a remote repository.
+tasks.matching { it.name.startsWith('publishKafkaPublicApiCheckerPluginMarkerMavenPublication') }.configureEach {
+    enabled = false
+}
+
+afterEvaluate {
+    // url, license, developers, scm come from the shared block in ../build.gradle.
+    publishing.publications.matching { it.name == 'pluginMaven' }.configureEach {
+        artifactId = 'kafka-internal-api-checker-gradle-plugin'
+        pom {
+            name = 'Apache Kafka Internal API Checker Gradle Plugin'
+            description = 'Gradle plugin that flags references to non-@Public Kafka classes in a downstream project'
+        }
+    }
+    publishing.publications.matching { it.name.endsWith('PluginMarkerMaven') }.configureEach {
+        pom {
+            name = 'Apache Kafka Internal API Checker Gradle Plugin'
+            description = 'Gradle plugin marker resolving the Apache Kafka internal-API checker'
+        }
+    }
+}

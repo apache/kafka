@@ -62,6 +62,7 @@ public final class DefaultTaskManager implements TaskManager {
     private final List<TaskId> lockedTasks = new ArrayList<>();
     private final Map<TaskId, StreamsException> uncaughtExceptions = new HashMap<>();
     private final Map<TaskId, TaskExecutor> assignedTasks = new HashMap<>();
+    private volatile boolean processingPaused = false;
     private final TaskExecutionMetadata taskExecutionMetadata;
 
     private final List<TaskExecutor> taskExecutors;
@@ -146,10 +147,9 @@ public final class DefaultTaskManager implements TaskManager {
                 } else {
                     log.debug("Not awaiting since shutdown was requested");
                 }
-            } catch (final InterruptedException ignored) {
-                // we interrupt the thread for shut down and pause.
-                // we can ignore this exception.
-                log.debug("Await unblocked: Interrupted while waiting for processable tasks");
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Await unblocked: Interrupted while waiting for processable tasks", e);
                 return true;
             }
             log.debug("Await unblocked: Woken up to check for processable tasks");
@@ -164,6 +164,22 @@ public final class DefaultTaskManager implements TaskManager {
     public void signalTaskExecutors() {
         log.debug("Waking up task executors");
         executeWithTasksLocked(tasksCondition::signalAll);
+    }
+
+    @Override
+    public void setProcessingPaused(final boolean paused) {
+        executeWithTasksLocked(() -> {
+            processingPaused = paused;
+            if (!paused) {
+                log.debug("Waking up task executors");
+                tasksCondition.signalAll();
+            }
+        });
+    }
+
+    @Override
+    public boolean processingPaused() {
+        return processingPaused;
     }
 
     @Override
@@ -363,9 +379,9 @@ public final class DefaultTaskManager implements TaskManager {
     }
 
     private boolean canProgress(final StreamTask task, final long nowMs) {
-        return
+        return !processingPaused && (
             taskExecutionMetadata.canProcessTask(task, nowMs) && task.isProcessable(nowMs) ||
-                taskExecutionMetadata.canPunctuateTask(task) && (task.canPunctuateStreamTime() || task.canPunctuateSystemTime());
+                taskExecutionMetadata.canPunctuateTask(task) && (task.canPunctuateStreamTime() || task.canPunctuateSystemTime()));
     }
 
     public void startTaskExecutors() {

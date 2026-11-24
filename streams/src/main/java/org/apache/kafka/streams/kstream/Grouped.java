@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 
 /**
@@ -27,6 +28,7 @@ import org.apache.kafka.common.serialization.Serde;
  * @param <K> the key type
  * @param <V> the value type
  */
+@InterfaceAudience.Public
 public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
 
     protected final Serde<K> keySerde;

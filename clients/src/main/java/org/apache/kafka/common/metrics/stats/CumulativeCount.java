@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
  * {@link CumulativeCount#record(MetricConfig, double, long)} invocations,
  * instead of summing the recorded values.
  */
+@InterfaceAudience.Public
 public class CumulativeCount extends CumulativeSum {
     @Override
     public void record(final MetricConfig config, final double value, final long timeMs) {

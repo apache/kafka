@@ -33,8 +33,28 @@ public interface PartitionWriter {
     /**
      * Listener allowing to listen to high watermark changes. This is meant
      * to be used in conjunction with {@link PartitionWriter#append(TopicPartition, VerificationGuard, MemoryRecords, short)}.
+     * <p>
+     * A registered listener observes a single leadership tenure of the partition. It is
+     * delivered high watermark updates only while this broker is the leader of the
+     * partition. Once the partition is no longer led by this broker (it transitions to
+     * follower, is deleted, or fails), the listener is permanently retired: no further
+     * updates are delivered to it, even if the broker later regains leadership. A new
+     * listener must be registered to observe a subsequent tenure.
+     * <p>
+     * Retiring the listener is required because, after a leadership change, the local log
+     * can be truncated and re-replicated from the new leader, so a high watermark observed
+     * afterwards may advance over records that this broker never wrote. This guarantees
+     * that every delivered update advances only over records that this broker wrote as
+     * leader.
      */
     interface Listener {
+        /**
+         * Called when the high watermark of the partition advances. Only invoked while
+         * this broker is the leader of the partition (see {@link Listener}).
+         *
+         * @param tp        The topic partition.
+         * @param offset    The new high watermark.
+         */
         void onHighWatermarkUpdated(
             TopicPartition tp,
             long offset
@@ -43,6 +63,11 @@ public interface PartitionWriter {
 
     /**
      * Register a {@link Listener}.
+     * <p>
+     * The listener observes only the current leadership tenure: as described on
+     * {@link Listener}, it stops receiving updates once the partition is no longer led by
+     * this broker and is not re-armed if leadership is regained. A new listener must be
+     * registered to observe a later tenure.
      *
      * @param tp        The partition to register the listener to.
      * @param listener  The listener.
@@ -66,22 +91,24 @@ public interface PartitionWriter {
     /**
      * Return the LogConfig of the partition.
      *
-     * @param tp    The partition.
+     * @param tp The partition.
      * @return The LogConfig.
+     * @throws KafkaException If the log of the partition is not available.
      */
     LogConfig config(
         TopicPartition tp
     );
 
     /**
-     * Write records to the partitions.
+     * Write records to the partition.
      *
-     * @param tp                The partition to write records to.
-     * @param verificationGuard The verification guard.
-     * @param records           The MemoryRecords.
+     * @param tp                  The partition to write records to.
+     * @param verificationGuard   The verification guard.
+     * @param records             The MemoryRecords.
      * @param transactionVersion  The transaction version (1 = TV1, 2 = TV2 etc.).
      *                            Use TV_UNKNOWN (-1) for non-transaction writes.
      * @return The log end offset right after the written records.
+     * @throws KafkaException Any KafkaException caught during the operation.
      */
     long append(
         TopicPartition tp,
@@ -112,9 +139,12 @@ public interface PartitionWriter {
     ) throws KafkaException;
 
     /**
-     * Delete records from a topic partition until specified offset
-     * @param tp                    The partition to delete records from
-     * @param deleteBeforeOffset    Offset to delete until, starting from the beginning
+     * Delete records from a topic partition until the specified offset.
+     *
+     * @param tp                    The partition to delete records from.
+     * @param deleteBeforeOffset    The offset to delete until, starting from the beginning.
+     * @return A future completed once the records are deleted, or failed with any error
+     *         encountered.
      * @throws KafkaException       Any KafkaException caught during the operation.
      */
     CompletableFuture<Void> deleteRecords(

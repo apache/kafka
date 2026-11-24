@@ -50,8 +50,14 @@
   // Version 17 no changes to the response (KIP-853).
   //
   // Version 18 no changes to the response (KIP-1166)
-  "validVersions": "4-18",
+  //
+  // Version 19 is the same as version 18 (KIP-1313).
+  "validVersions": "4-19",
   "flexibleVersions": "12+",
+  "headerVersions": {
+    "0-11": "0",
+    "12+": "1"
+  },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

@@ -1,6 +1,6 @@
 ---
 title: Multi-Tenancy
-description: Multi-Tenancy
+description: Kafka multi-tenant cluster planning and operational practices.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

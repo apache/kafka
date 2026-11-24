@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 
@@ -24,6 +27,7 @@ import java.time.Duration;
  * @see Punctuator
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Cancellable {
 
     /**

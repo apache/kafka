@@ -19,18 +19,31 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.TargetState;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 public record CreateConnectorRequest(
     @JsonProperty("name") String name,
     @JsonProperty("config") Map<String, String> config,
-    @JsonProperty("initial_state") InitialState initialState
+    @JsonProperty("initial_state") InitialState initialState,
+    @JsonProperty("initial_offsets") @JsonInclude(JsonInclude.Include.NON_NULL) List<ConnectorOffset> initialOffsets
 ) {
     public TargetState initialTargetState() {
         return initialState != null ? initialState.toTargetState() : null;
+    }
+
+    /**
+     * @return the initial offsets for this connector in the form used by the {@link org.apache.kafka.connect.runtime.Herder}
+     * and {@link org.apache.kafka.connect.runtime.Worker} offset APIs, or null if no initial offsets were specified.
+     * Note that a null return value (field absent) is distinct from an empty map (field present but empty), which is
+     * rejected as an invalid request.
+     */
+    public Map<Map<String, ?>, Map<String, ?>> initialOffsetsMap() {
+        return initialOffsets != null ? new ConnectorOffsets(initialOffsets).toMap() : null;
     }
 
     public enum InitialState {

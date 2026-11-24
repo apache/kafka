@@ -86,7 +86,7 @@ public class EnvelopeUtilsTest {
         assertTrue(forwardedRequest.isForwarded());
         assertSame(envelope, forwardedRequest.envelope().orElseThrow());
         assertEquals(envelope.requestDequeueTimeNanos(), forwardedRequest.requestDequeueTimeNanos());
-        assertInstanceOf(CreateTopicsRequest.class, forwardedRequest.body(AbstractRequest.class));
+        assertInstanceOf(CreateTopicsRequest.class, forwardedRequest.body());
     }
 
     @Test
@@ -203,7 +203,8 @@ public class EnvelopeUtilsTest {
         ByteBuffer envelopeRequestBuffer = new EnvelopeRequest.Builder(
             forwardedRequestBuffer,
             PRINCIPAL_SERDE.serialize(FORWARDED_PRINCIPAL),
-            clientAddress
+            clientAddress,
+            ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion())
         ).build().serializeWithHeader(envelopeRequestHeader);
 
         // Advance the buffer past the envelope header before constructing the Request.

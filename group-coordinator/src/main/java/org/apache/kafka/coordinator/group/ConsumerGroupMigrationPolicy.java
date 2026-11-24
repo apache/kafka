@@ -33,7 +33,7 @@ public enum ConsumerGroupMigrationPolicy {
     /** Only downgrade is enabled.*/
     DOWNGRADE("downgrade", false, true),
 
-    /** Neither upgrade nor downgrade is enabled.*/
+    /** Neither upgrade nor downgrade is enabled; a classic member cannot join or rejoin a consumer group.*/
     DISABLED("disabled", false, false);
 
     private final String name;
@@ -63,10 +63,12 @@ public enum ConsumerGroupMigrationPolicy {
         .collect(Collectors.toMap(policy -> policy.name.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**
-     * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
+     * Parse a string into the corresponding {@code ConsumerGroupMigrationPolicy} enum value, in a
+     * case-insensitive manner.
      *
-     * @return The {{@link ConsumerGroupMigrationPolicy}} according to the string passed. None is returned if
-     * the string doesn't correspond to a valid policy.
+     * @param name The name of the policy.
+     * @return The {@link ConsumerGroupMigrationPolicy} according to the string passed.
+     * {@code DISABLED} is returned if the string doesn't correspond to a valid policy.
      */
     public static ConsumerGroupMigrationPolicy parse(String name) {
         if (name == null) {

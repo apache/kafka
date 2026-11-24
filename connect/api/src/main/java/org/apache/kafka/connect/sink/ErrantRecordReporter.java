@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.sink;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.ConnectException;
 
 import java.util.concurrent.Future;
@@ -26,6 +27,7 @@ import java.util.concurrent.Future;
  *
  * @since 2.6
  */
+@InterfaceAudience.Public
 public interface ErrantRecordReporter {
 
     /**

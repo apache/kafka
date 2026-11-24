@@ -78,13 +78,9 @@ public class DeleteAclsResponse extends AbstractResponse {
         return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version), version);
     }
 
+    @Override
     public String toString() {
         return data.toString();
-    }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
     }
 
     private void validate(short version) {

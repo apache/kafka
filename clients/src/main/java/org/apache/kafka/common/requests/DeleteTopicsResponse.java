@@ -72,8 +72,4 @@ public class DeleteTopicsResponse extends AbstractResponse {
         return new DeleteTopicsResponse(new DeleteTopicsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

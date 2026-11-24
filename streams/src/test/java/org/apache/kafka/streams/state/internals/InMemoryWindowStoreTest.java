@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -31,6 +34,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
@@ -51,15 +55,21 @@ import java.io.File;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -161,6 +171,42 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldMeasureExpiredRecordsDroppedDuringRestoreAsRecords() {
+        final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
+
+        final List<KeyValue<byte[], byte[]>> batch = new LinkedList<>();
+        // advances observed stream time far enough that every record after it falls outside retention
+        batch.add(new KeyValue<>(
+            toStoreKeyBinary(0, 4 * RETENTION_PERIOD, 0, new RecordHeaders(), serdes).get(),
+            serdes.rawValue("on-time")));
+        for (int key = 1; key <= 3; key++) {
+            batch.add(new KeyValue<>(
+                toStoreKeyBinary(key, 0L, 0, new RecordHeaders(), serdes).get(),
+                serdes.rawValue("expired")));
+        }
+
+        context.restore(STORE_NAME, batch);
+
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+        final String threadId = Thread.currentThread().getName();
+        final Map<String, String> tags = mkMap(mkEntry("thread-id", threadId), mkEntry("task-id", "0_0"));
+
+        final Metric dropTotal = metrics.get(
+            new MetricName("dropped-records-total", "stream-task-metrics", "", tags));
+        final Metric dropRate = metrics.get(
+            new MetricName("dropped-records-rate", "stream-task-metrics", "", tags));
+
+        assertEquals(3.0, dropTotal.metricValue());
+        assertEquals(
+            3.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate must reflect the 3 records dropped, not the single sensor recording; "
+                + "counting recordings would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
+    }
+
+    @Test
     public void shouldNotExpireFromOpenIterator() {
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 10L);
@@ -251,6 +297,210 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
         final Position actual = inMemoryWindowStore.getPosition();
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void readOnlyCommittedShouldHideStagedFetchValue() {
+        final InMemoryWindowStore txnStore = openTransactionalWindowStore();
+        try {
+            final Bytes key = Bytes.wrap("k".getBytes());
+            txnStore.put(key, "v1".getBytes(), 0L);
+            txnStore.commit(java.util.Map.of());
+
+            txnStore.put(key, "v2".getBytes(), WINDOW_SIZE);
+
+            final ReadOnlyWindowStore<Bytes, byte[]> uncommitted = txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+            final ReadOnlyWindowStore<Bytes, byte[]> committed = txnStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+            assertArrayEquals("v1".getBytes(), uncommitted.fetch(key, 0L));
+            assertArrayEquals("v2".getBytes(), uncommitted.fetch(key, WINDOW_SIZE));
+            assertArrayEquals("v1".getBytes(), committed.fetch(key, 0L));
+            assertNull(committed.fetch(key, WINDOW_SIZE));
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyFetchRangeShouldRespectIsolationLevel() {
+        final InMemoryWindowStore txnStore = openTransactionalWindowStore();
+        try {
+            final Bytes key = Bytes.wrap("k".getBytes());
+            txnStore.put(key, "v1".getBytes(), 0L);
+            txnStore.commit(java.util.Map.of());
+            txnStore.put(key, "v2".getBytes(), WINDOW_SIZE);
+
+            final ReadOnlyWindowStore<Bytes, byte[]> uncommitted = txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+            final ReadOnlyWindowStore<Bytes, byte[]> committed = txnStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+            try (WindowStoreIterator<byte[]> it = uncommitted.fetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(WINDOW_SIZE))) {
+                final List<String> values = new LinkedList<>();
+                while (it.hasNext()) {
+                    values.add(new String(it.next().value));
+                }
+                assertEquals(List.of("v1", "v2"), values);
+            }
+            try (WindowStoreIterator<byte[]> it = committed.fetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(WINDOW_SIZE))) {
+                final List<String> values = new LinkedList<>();
+                while (it.hasNext()) {
+                    values.add(new String(it.next().value));
+                }
+                assertEquals(List.of("v1"), values);
+            }
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyAllShouldRespectIsolationLevel() {
+        final InMemoryWindowStore txnStore = openTransactionalWindowStore();
+        try {
+            txnStore.put(Bytes.wrap("k1".getBytes()), "v1".getBytes(), 0L);
+            txnStore.commit(java.util.Map.of());
+            txnStore.put(Bytes.wrap("k2".getBytes()), "v2".getBytes(), WINDOW_SIZE);
+
+            try (KeyValueIterator<Windowed<Bytes>, byte[]> it =
+                     txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).all()) {
+                int count = 0;
+                while (it.hasNext()) {
+                    it.next();
+                    count++;
+                }
+                assertEquals(2, count);
+            }
+            try (KeyValueIterator<Windowed<Bytes>, byte[]> it =
+                     txnStore.readOnly(IsolationLevel.READ_COMMITTED).all()) {
+                int count = 0;
+                while (it.hasNext()) {
+                    it.next();
+                    count++;
+                }
+                assertEquals(1, count);
+            }
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyCommittedFetchAllShouldNotRaceConcurrentCommit() throws InterruptedException {
+        // A READ_COMMITTED scan from a non-owner (IQ) thread must observe a point-in-time snapshot of
+        // the committed segments, taken under the buffer's snapshot read-lock. Without it the view
+        // iterated the live segment map while commit()'s write-lock-guarded flushToBase() mutated it,
+        // exposing a half-applied commit. Each commit flips every key to a single generation, so a
+        // correct snapshot scan must see one uniform generation across the full key set.
+        final InMemoryWindowStore txnStore = openTransactionalWindowStore();
+        final int numKeys = 300;
+        final int rounds = 300;
+        final AtomicReference<Throwable> readerFailure = new AtomicReference<>();
+        final AtomicBoolean stop = new AtomicBoolean(false);
+
+        try {
+            for (int i = 0; i < numKeys; i++) {
+                txnStore.put(Bytes.wrap(("k" + i).getBytes()), "gen0".getBytes(), 0L);
+            }
+            txnStore.commit(java.util.Map.of());
+
+            final Thread reader = new Thread(() -> {
+                final ReadOnlyWindowStore<Bytes, byte[]> committed = txnStore.readOnly(IsolationLevel.READ_COMMITTED);
+                try {
+                    while (!stop.get()) {
+                        try (KeyValueIterator<Windowed<Bytes>, byte[]> it =
+                                 committed.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(RETENTION_PERIOD))) {
+                            String generation = null;
+                            int count = 0;
+                            while (it.hasNext()) {
+                                final String value = new String(it.next().value);
+                                if (generation == null) {
+                                    generation = value;
+                                } else {
+                                    assertEquals(generation, value, "scan observed a partial commit");
+                                }
+                                count++;
+                            }
+                            assertEquals(numKeys, count, "scan observed a partial commit");
+                        }
+                    }
+                } catch (final Throwable t) {
+                    readerFailure.set(t);
+                }
+            }, "iq-reader");
+            reader.start();
+
+            for (int round = 1; round <= rounds && readerFailure.get() == null; round++) {
+                final String generation = "gen" + round;
+                for (int i = 0; i < numKeys; i++) {
+                    txnStore.put(Bytes.wrap(("k" + i).getBytes()), generation.getBytes(), 0L);
+                }
+                txnStore.commit(java.util.Map.of());
+            }
+            stop.set(true);
+            reader.join(TimeUnit.SECONDS.toMillis(30));
+
+            if (readerFailure.get() != null) {
+                throw new AssertionError("READ_COMMITTED fetchAll raced a concurrent commit", readerFailure.get());
+            }
+        } finally {
+            stop.set(true);
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void shouldReportUncommittedPositionForTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryWindowStore store = new InMemoryWindowStore(
+            "txn-pos-window-store", RETENTION_PERIOD, WINDOW_SIZE, false, "scope");
+        store.init(ctx, store);
+        try {
+            ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+            store.put(Bytes.wrap("k".getBytes()), "v".getBytes(), 0L);
+
+            final Position expected = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+
+            // READ_UNCOMMITTED query should expose the staged position before commit
+            final QueryResult<?> uncommitted = store.query(
+                WindowKeyQuery.withKeyAndWindowStartRange(
+                    Bytes.wrap("k".getBytes()), Instant.ofEpochMilli(0), Instant.ofEpochMilli(WINDOW_SIZE)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+            assertEquals(expected, uncommitted.getPosition(), "READ_UNCOMMITTED query position");
+
+            // getPosition() reports the uncommitted (committed + staged) position, mirroring
+            // RocksDBStore, so the changelog consistency vector reflects the staged write.
+            assertEquals(expected, store.getPosition(), "getPosition before commit (uncommitted)");
+
+            // after commit, committed position populated
+            store.commit(java.util.Map.of());
+            assertEquals(expected, store.getPosition(), "getPosition after commit");
+        } finally {
+            store.close();
+        }
+    }
+
+    private InMemoryWindowStore openTransactionalWindowStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryWindowStore store = new InMemoryWindowStore(
+            "txn-in-memory-window-store", RETENTION_PERIOD, WINDOW_SIZE, false, "scope");
+        store.init(ctx, store);
+        return store;
     }
 
     @Nested

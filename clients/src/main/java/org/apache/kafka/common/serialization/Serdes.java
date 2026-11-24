@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
@@ -26,6 +27,7 @@ import java.util.UUID;
 /**
  * Factory for creating serializers / deserializers.
  */
+@InterfaceAudience.Public
 public class Serdes {
 
     public static class WrapperSerde<T> implements Serde<T> {

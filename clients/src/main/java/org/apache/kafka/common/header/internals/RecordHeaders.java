@@ -22,7 +22,6 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -37,7 +36,13 @@ public class RecordHeaders implements Headers {
     }
 
     public RecordHeaders(Header[] headers) {
-        this(headers == null ? null : Arrays.asList(headers));
+        this.headers = new ArrayList<>();
+        if (headers != null) {
+            for (Header header : headers) {
+                Objects.requireNonNull(header, "Header cannot be null.");
+                this.headers.add(header);
+            }
+        }
     }
 
     public RecordHeaders(Iterable<Header> headers) {
@@ -112,6 +117,7 @@ public class RecordHeaders implements Headers {
         return isReadOnly;
     }
 
+    @Override
     public Header[] toArray() {
         return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[0]);     
     }
@@ -182,6 +188,7 @@ public class RecordHeaders implements Headers {
             this.key = key;
         }
 
+        @Override
         protected Header makeNext() {
             while (true) {
                 if (original.hasNext()) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.header;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * A mutable ordered collection of {@link Header} objects. Note that multiple headers may have the same {@link Header#key() key}.
  */
+@InterfaceAudience.Public
 public interface Headers extends Iterable<Header> {
 
     /**

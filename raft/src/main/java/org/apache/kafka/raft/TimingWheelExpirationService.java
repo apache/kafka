@@ -58,7 +58,14 @@ public class TimingWheelExpirationService implements ExpirationService {
 
         @Override
         public void run() {
-            future.completeExceptionally(new TimeoutException("Future failed to be completed before timeout of " + delayMs + " ms was reached"));
+            future.completeExceptionally(
+                new TimeoutException(
+                    String.format(
+                        "Future failed to be completed before timeout of %s ms was reached",
+                        delayMs
+                    )
+                )
+            );
         }
     }
 

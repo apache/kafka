@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
@@ -31,6 +32,7 @@ import java.util.Objects;
  * @param <K> key type
  * @param <V> value type
  */
+@InterfaceAudience.Public
 public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
 
     protected Serde<K> keySerde;
@@ -114,7 +116,7 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
 
     /**
      * Create a Produced instance with provided valueSerde.
-     * @param valueSerde    Serde to use for serializing the key
+     * @param valueSerde    Serde to use for serializing the value
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with valueSerde

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Marker interface for classes implementing {@link ProcessorSupplier}
  * that have been wrapped via a {@link ProcessorWrapper}.
@@ -25,6 +27,7 @@ package org.apache.kafka.streams.processor.api;
  * use the {@link ProcessorWrapper#asWrapped(ProcessorSupplier)} method
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface WrappedProcessorSupplier<KIn, VIn, KOut, VOut> extends ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
 }

@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeatureCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -498,6 +500,22 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, null);
     }
 
+    ControllerResult<Void> unregisterController(int controllerId) {
+        if (!featureControl.metadataVersionOrThrow().isControllerUnregistrationSupported()) {
+            throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
+                    "support controller unregistration.");
+        }
+        if (controllerRegistrations.get(controllerId) == null) {
+            throw new ControllerIdNotRegisteredException("Controller ID " + controllerId +
+                " is not currently registered.");
+        }
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new UnregisterControllerRecord().
+            setControllerId(controllerId),
+                (short) 0));
+        return ControllerResult.atomicOf(records, null);
+    }
+
     BrokerFeature processRegistrationFeature(
         int brokerId,
         FinalizedControllerFeatures finalizedFeatures,
@@ -606,6 +624,17 @@ public class ClusterControlManager {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             updateDirectories(brokerId, registration.directories(), null);
             brokerRegistrations.remove(brokerId);
+            log.info("Replayed {}", record);
+        }
+    }
+
+    public void replay(UnregisterControllerRecord record) {
+        int controllerId = record.controllerId();
+        ControllerRegistration registration = controllerRegistrations.remove(controllerId);
+        if (registration == null) {
+            throw new RuntimeException(String.format("Unable to replay %s: no controller " +
+                "registration found for that id", record));
+        } else {
             log.info("Replayed {}", record);
         }
     }

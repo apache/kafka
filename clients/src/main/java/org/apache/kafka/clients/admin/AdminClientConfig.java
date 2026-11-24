@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -41,6 +42,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
+@InterfaceAudience.Public
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
@@ -86,6 +88,12 @@ public class AdminClientConfig extends AbstractConfig {
      */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
     private static final String RETRY_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC;
+
+    /**
+     * <code>bootstrap.resolve.timeout.ms</code>
+     */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
+    private static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC;
 
     /**
      * <code>enable.metrics.push</code>
@@ -196,6 +204,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(0L),
+                                        Importance.HIGH,
+                                        BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         false,
@@ -294,10 +308,10 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.LOW,
                                         METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG, 
-                                        ConfigDef.Type.LIST,
+                                        Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW, 
+                                        Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 

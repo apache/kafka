@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#deleteTopics(Collection)}.
  */
+@InterfaceAudience.Public
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
     private boolean retryOnQuotaViolation = true;
@@ -32,6 +35,7 @@ public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

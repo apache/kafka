@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -29,7 +29,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,7 +42,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
 
     private Time time;
     private Metrics metrics;
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerRebalanceMetricsManager metricsManager;
     private MetricConfig metricConfig;
     private long windowSizeMs;
@@ -59,7 +58,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
                 .samples(numSamples)
                 .timeWindow(windowSizeMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         metrics = new Metrics(metricConfig, time);
-        subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState = new ConsumerSubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }
 
@@ -70,7 +69,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
 
     @Override
     protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         return new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }
 
@@ -88,7 +87,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
         assertEquals(0.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
 
         // Check for automatically assigned partitions
-        subscriptionState.subscribe(Set.of("topic"), Optional.empty());
+        subscriptionState.subscribe(Set.of("topic"));
         subscriptionState.assignFromSubscribed(Set.of(new TopicPartition("topic", 0)));
         assertEquals(1.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
     }

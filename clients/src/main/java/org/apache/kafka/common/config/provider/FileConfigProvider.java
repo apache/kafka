@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
@@ -38,6 +39,7 @@ import java.util.Set;
  * An implementation of {@link ConfigProvider} that represents a Properties file.
  * All property keys and values are stored as cleartext.
  */
+@InterfaceAudience.Public
 public class FileConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(FileConfigProvider.class);
@@ -57,6 +59,7 @@ public class FileConfigProvider implements ConfigProvider {
      * @param path the file where the data resides
      * @return the configuration data
      */
+    @Override
     public ConfigData get(String path) {
         if (allowedPaths == null) {
             throw new IllegalStateException("The provider has not been configured yet.");
@@ -98,6 +101,7 @@ public class FileConfigProvider implements ConfigProvider {
      * @param keys the keys whose values will be retrieved
      * @return the configuration data
      */
+    @Override
     public ConfigData get(String path, Set<String> keys) {
         if (allowedPaths == null) {
             throw new IllegalStateException("The provider has not been configured yet.");

@@ -25,8 +25,9 @@ import org.apache.kafka.raft.internals.EpochElection;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
-public class CandidateState implements NomineeState {
+public final class CandidateState implements NomineeState {
     private final int localId;
     private final Uuid localDirectoryId;
     private final int epoch;
@@ -124,6 +125,11 @@ public class CandidateState implements NomineeState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.empty(), epoch);
     }
 
     @Override

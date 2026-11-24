@@ -257,7 +257,7 @@ public final class Request implements BaseRequest {
 
     public Optional<JsonNode> responseNode(AbstractResponse response) {
         if (isRequestLoggingEnabled(context.header)) {
-            return Optional.of(RequestConvertToJson.response(response, context.apiVersion()));
+            return Optional.of(RequestConvertToJson.response(response, context.effectiveApiVersion()));
         }
         return Optional.empty();
     }
@@ -280,6 +280,10 @@ public final class Request implements BaseRequest {
         }
         throw new ClassCastException("Expected request with type " + clazz.getName()
             + ", but found " + bodyAndSize.request.getClass().getName());
+    }
+
+    public AbstractRequest body() {
+        return bodyAndSize.request;
     }
 
     public AbstractRequest loggableRequest() {
@@ -356,7 +360,7 @@ public final class Request implements BaseRequest {
         };
 
         for (String metricName : overrideMetricNames) {
-            RequestMetrics m = metrics.apply(metricName);
+            RequestMetrics m = metrics.get(metricName);
             m.requestRate(header().apiVersion()).mark();
             m.deprecatedRequestRate(header().apiKey(), header().apiVersion(), context.clientInformation)
                 .ifPresent(Meter::mark);

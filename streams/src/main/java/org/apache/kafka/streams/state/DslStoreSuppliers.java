@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.TopologyConfig;
 
 import java.util.Map;
@@ -47,6 +48,7 @@ import java.util.Map;
  * <p>Kafka Streams is packaged with some pre-existing {@code DslStoreSuppliers}
  * that exist in {@link BuiltInDslStoreSuppliers}
  */
+@InterfaceAudience.Public
 public interface DslStoreSuppliers extends Configurable {
 
     @Override

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public interface RaftClient<T> extends AutoCloseable {
 
@@ -200,9 +200,9 @@ public interface RaftClient<T> extends AutoCloseable {
      * in use.
      *
      * @param timeoutMs How long to wait for graceful completion of pending operations.
-     * @return A future which is completed when shutdown completes successfully or the timeout expires.
+     * @return A stage which is completed when shutdown completes successfully or the timeout expires.
      */
-    CompletableFuture<Void> shutdown(int timeoutMs);
+    CompletionStage<Void> shutdown(int timeoutMs);
 
     /**
      * Resign the leadership. The leader will give up its leadership in the passed epoch
@@ -263,6 +263,17 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return the current kraft.version.
      */
     KRaftVersion kraftVersion();
+
+    /**
+     * Returns the latest set of voters, even if it hasn't been committed durably to Raft.
+     *
+     * When the kraft.version is 0, the set of voters is the one configured in
+     * {@code controller.quorum.voters} and it never changes. When the kraft.version is 1, the set
+     * of voters is the one from the latest {@code VotersRecord} in the log or snapshot.
+     *
+     * @return the latest set of voters
+     */
+    VoterSet latestVoterSet();
 
     /**
      * Request that the leader to upgrade the kraft version.

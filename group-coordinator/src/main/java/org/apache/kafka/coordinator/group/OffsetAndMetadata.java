@@ -149,7 +149,7 @@ public class OffsetAndMetadata {
     }
 
     /**
-     * @return An OffsetAndMetadata created from a OffsetCommitValue record.
+     * @return An OffsetAndMetadata created from an OffsetCommitValue record.
      */
     public static OffsetAndMetadata fromRecord(
         long recordOffset,
@@ -187,7 +187,7 @@ public class OffsetAndMetadata {
     }
 
     /**
-     * @return An OffsetAndMetadata created from an OffsetCommitRequestPartition request.
+     * @return An OffsetAndMetadata created from a TxnOffsetCommitRequestPartition request.
      */
     public static OffsetAndMetadata fromRequest(
         Uuid topicId,

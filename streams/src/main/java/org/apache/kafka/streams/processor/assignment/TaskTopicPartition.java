@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.assignment;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Optional;
 import java.util.Set;
@@ -27,6 +29,7 @@ import java.util.Set;
  * looking at, and the rack information of the partition, this container class should have
  * everything necessary to make informed task assignment decisions.
  */
+@InterfaceAudience.Public
 public interface TaskTopicPartition {
     /**
      *

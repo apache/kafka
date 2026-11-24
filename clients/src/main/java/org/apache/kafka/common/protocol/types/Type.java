@@ -287,7 +287,7 @@ public abstract class Type {
             if (item instanceof Integer)
                 return (Integer) item;
             else
-                throw new SchemaException(item + " is not an a Integer (encoding an unsigned short)");
+                throw new SchemaException(item + " is not an Integer (encoding an unsigned short)");
         }
 
         @Override
@@ -1103,6 +1103,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not an integer");
         }
 
+        @Override
         public String typeName() {
             return "VARINT";
         }
@@ -1138,6 +1139,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not a long");
         }
 
+        @Override
         public String typeName() {
             return "VARLONG";
         }

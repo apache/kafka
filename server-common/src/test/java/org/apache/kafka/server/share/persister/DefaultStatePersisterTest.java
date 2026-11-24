@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
@@ -125,6 +126,11 @@ class DefaultStatePersisterTest {
             @Override
             public List<Node> getClusterNodes() {
                 return List.of(suppliedNode);
+            }
+
+            @Override
+            public short requestHeaderVersion() {
+                return ApiKeys.WRITE_SHARE_GROUP_STATE.requestHeaderVersion(ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion());
             }
         };
     }

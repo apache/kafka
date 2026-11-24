@@ -18,9 +18,6 @@
 package org.apache.kafka.common.telemetry;
 
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,67 +62,34 @@ public enum ClientTelemetryState {
      */
     TERMINATED;
 
-    private static final Map<ClientTelemetryState, List<ClientTelemetryState>> VALID_NEXT_STATES = new EnumMap<>(ClientTelemetryState.class);
-
-    static {
-        /*
-         If clients needs a subscription, then issue telemetry API to fetch subscription from broker.
-
-         However, it's still possible that client doesn't get very far before terminating.
-        */
-        VALID_NEXT_STATES.put(
-            SUBSCRIPTION_NEEDED, Arrays.asList(SUBSCRIPTION_IN_PROGRESS, TERMINATED));
-
-        /*
-         If client is finished waiting for subscription, then client is ready to push the telemetry.
-         But, it's possible that no telemetry metrics are requested, hence client should go back to
-         subscription needed state i.e. requesting the next updated subscription.
-
-         However, it's still possible that client doesn't get very far before terminating.
-        */
-        VALID_NEXT_STATES.put(SUBSCRIPTION_IN_PROGRESS, Arrays.asList(PUSH_NEEDED,
-            SUBSCRIPTION_NEEDED, TERMINATING_PUSH_NEEDED, TERMINATED));
-
-        /*
-         If client transitions out of this state, then client should proceed to push the metrics.
-         But, if the push fails (network issues, the subscription changed, etc.) then client should
-         go back to subscription needed state and request the next subscription.
-
-         However, it's still possible that client doesn't get very far before terminating.
-        */
-        VALID_NEXT_STATES.put(PUSH_NEEDED, Arrays.asList(PUSH_IN_PROGRESS, SUBSCRIPTION_NEEDED,
-            TERMINATING_PUSH_NEEDED, TERMINATED));
-
-        /*
-         A successful push should transition client to push needed which sends the next telemetry
-         metrics after the elapsed wait interval. But, if the push fails (network issues, the
-         subscription changed, etc.) then client should go back to subscription needed state and
-         request the next subscription.
-
-         However, it's still possible that client doesn't get very far before terminating.
-        */
-        VALID_NEXT_STATES.put(
-            PUSH_IN_PROGRESS, Arrays.asList(PUSH_NEEDED, SUBSCRIPTION_NEEDED, TERMINATING_PUSH_NEEDED,
-                TERMINATED));
-
-        /*
-         If client is moving out of this state, then try to send last metrics push.
-
-         However, it's still possible that client doesn't get very far before terminating.
-        */
-        VALID_NEXT_STATES.put(
-            TERMINATING_PUSH_NEEDED, Arrays.asList(TERMINATING_PUSH_IN_PROGRESS, TERMINATED));
-
-        /*
-         Client should only be transited to terminated state.
-        */
-        VALID_NEXT_STATES.put(TERMINATING_PUSH_IN_PROGRESS, Collections.singletonList(TERMINATED));
-
-        /*
-         Client should never be able to transition out of terminated state.
-        */
-        VALID_NEXT_STATES.put(TERMINATED, Collections.emptyList());
-    }
+    private static final Map<ClientTelemetryState, List<ClientTelemetryState>> VALID_NEXT_STATES = Map.of(
+        // If client needs a subscription, then issue telemetry API to fetch subscription from broker.
+        // However, it's still possible that client doesn't get very far before terminating.
+        SUBSCRIPTION_NEEDED, List.of(SUBSCRIPTION_IN_PROGRESS, TERMINATED),
+        // If client is finished waiting for subscription, then client is ready to push the telemetry.
+        // But, it's possible that no telemetry metrics are requested, hence client should go back to
+        // subscription needed state i.e. requesting the next updated subscription.
+        // However, it's still possible that client doesn't get very far before terminating.
+        SUBSCRIPTION_IN_PROGRESS, List.of(PUSH_NEEDED, SUBSCRIPTION_NEEDED, TERMINATING_PUSH_NEEDED, TERMINATED),
+        // If client transitions out of this state, then client should proceed to push the metrics.
+        // But, if the push fails (network issues, the subscription changed, etc.) then client should
+        // go back to subscription needed state and request the next subscription.
+        // However, it's still possible that client doesn't get very far before terminating.
+        PUSH_NEEDED, List.of(PUSH_IN_PROGRESS, SUBSCRIPTION_NEEDED, TERMINATING_PUSH_NEEDED, TERMINATED),
+        // A successful push should transition client to push needed which sends the next telemetry
+        // metrics after the elapsed wait interval. But, if the push fails (network issues, the
+        // subscription changed, etc.) then client should go back to subscription needed state and
+        // request the next subscription.
+        // However, it's still possible that client doesn't get very far before terminating.
+        PUSH_IN_PROGRESS, List.of(PUSH_NEEDED, SUBSCRIPTION_NEEDED, TERMINATING_PUSH_NEEDED, TERMINATED),
+        // If client is moving out of this state, then try to send last metrics push.
+        // However, it's still possible that client doesn't get very far before terminating.
+        TERMINATING_PUSH_NEEDED, List.of(TERMINATING_PUSH_IN_PROGRESS, TERMINATED),
+        // Client should only be transited to terminated state.
+        TERMINATING_PUSH_IN_PROGRESS, List.of(TERMINATED),
+        // Client should never be able to transition out of terminated state.
+        TERMINATED, List.of()
+    );
 
     /**
      * Validates that the <code>newState</code> is one of the valid transition from the current

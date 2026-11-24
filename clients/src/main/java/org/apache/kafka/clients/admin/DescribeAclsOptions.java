@@ -18,10 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Options for {@link Admin#describeAcls(AclBindingFilter)}.
  */
+@InterfaceAudience.Public
 public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
 
     /**
@@ -30,6 +32,7 @@ public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DescribeAclsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

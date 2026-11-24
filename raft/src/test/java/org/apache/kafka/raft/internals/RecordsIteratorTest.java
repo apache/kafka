@@ -50,14 +50,12 @@ import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.test.TestUtils;
 
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -98,67 +96,152 @@ public final class RecordsIteratorTest {
         testIterator(List.of(), records, true);
     }
 
-    @Property(tries = 50)
-    public void testMemoryRecords(
-        @ForAll CompressionType compressionType,
-        @ForAll long seed
-    ) {
-        List<TestBatch<String>> batches = createBatches(seed);
-
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
-        testIterator(batches, memRecords, true);
+    private interface CompressionTypeSeed {
+        void accept(CompressionType compressionType, long seed) throws IOException;
     }
 
-    @Property(tries = 50)
-    public void testFileRecords(
-        @ForAll CompressionType compressionType,
-        @ForAll long seed
-    ) throws IOException {
-        List<TestBatch<String>> batches = createBatches(seed);
-
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
-        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
-        fileRecords.append(memRecords);
-
-        testIterator(batches, fileRecords, true);
-        fileRecords.close();
+    private void forCompressionTypeSeed(CompressionTypeSeed compressionTypeSeed) {
+        for (CompressionType ct : CompressionType.values()) {
+            for (int i = 0; i < 50; i++) {
+                long seed = new Random(System.nanoTime() + i).nextLong();
+                assertDoesNotThrow(
+                    () -> compressionTypeSeed.accept(ct, seed),
+                    () -> "Failed with compressionType=" + ct + ", seed=" + seed);
+            }
+        }
     }
 
-    @Property(tries = 50)
-    public void testCrcValidation(
-        @ForAll CompressionType compressionType,
-        @ForAll long seed
-    ) throws IOException {
-        List<TestBatch<String>> batches = createBatches(seed);
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
-        // Read the Batch CRC for the first batch from the buffer
-        ByteBuffer readBuf = memRecords.buffer();
-        readBuf.position(DefaultRecordBatch.CRC_OFFSET);
-        int actualCrc = readBuf.getInt();
-        // Corrupt the CRC on the first batch
-        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc + 1);
+    @Test
+    public void testMemoryRecords() {
+        forCompressionTypeSeed((compressionType, seed) -> {
+            List<TestBatch<String>> batches = createBatches(seed);
+            MemoryRecords memRecords = buildRecords(compressionType, batches);
+            testIterator(batches, memRecords, true);
+        });
+    }
 
-        assertThrows(CorruptRecordException.class, () -> testIterator(batches, memRecords, true));
+    @Test
+    public void testFileRecords() {
+        forCompressionTypeSeed((compressionType, seed) -> {
+            List<TestBatch<String>> batches = createBatches(seed);
+            MemoryRecords memRecords = buildRecords(compressionType, batches);
+            FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
+            fileRecords.append(memRecords);
+            testIterator(batches, fileRecords, true);
+            fileRecords.close();
+        });
+    }
 
-        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
-        fileRecords.append(memRecords);
-        assertThrows(CorruptRecordException.class, () -> testIterator(batches, fileRecords, true));
+    @Test
+    public void testFileRecordsSliceLargerThanBatchSize() throws IOException {
+        // Models KafkaRaftClient reading committed records: the slice ends at the high-watermark
+        // and the file has uncommitted batches after the end of the slice.
+        List<TestBatch<String>> sliceBatches = List.of(
+            new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e")),
+            new TestBatch<>(5, 1, 0, List.of("f", "g", "h", "i", "j"))
+        );
+        List<TestBatch<String>> batchesAfterSlice = List.of(
+            new TestBatch<>(10, 1, 0, List.of("k"))
+        );
 
-        // Verify check does not trigger when doCrcValidation is false
-        assertDoesNotThrow(() -> testIterator(batches, memRecords, false));
-        assertDoesNotThrow(() -> testIterator(batches, fileRecords, false));
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, sliceBatches));
+            int sliceSize = fileRecords.sizeInBytes();
+            fileRecords.append(buildRecords(CompressionType.NONE, batchesAfterSlice));
+            FileRecords slice = fileRecords.slice(0, sliceSize);
 
-        // Fix the corruption
-        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc);
+            // A batch size one byte smaller than the slice forces a second read, which has only
+            // one byte of the slice left to read, but the buffer can hold `batchesAfterSlice`
+            List<TestBatch<String>> actualBatches = new ArrayList<>();
+            try (RecordsIterator<String> iterator = createIterator(
+                slice,
+                BufferSupplier.NO_CACHING,
+                sliceSize - 1,
+                true
+            )) {
+                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
+            }
 
-        // Verify check does not trigger when the corruption is fixed
-        assertDoesNotThrow(() -> testIterator(batches, memRecords, true));
-        FileRecords moreFileRecords = FileRecords.open(TestUtils.tempFile());
-        moreFileRecords.append(memRecords);
-        assertDoesNotThrow(() -> testIterator(batches, moreFileRecords, true));
+            assertEquals(sliceBatches, actualBatches);
+        }
+    }
 
-        fileRecords.close();
-        moreFileRecords.close();
+    @ParameterizedTest
+    @ValueSource(ints = {1, Records.HEADER_SIZE_UP_TO_MAGIC - 1, Records.HEADER_SIZE_UP_TO_MAGIC})
+    public void testRecordsEndingInPartialBatch(int partialBatchBytes) throws IOException {
+        TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
+        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, Collections.nCopies(10, "f"));
+        MemoryRecords records = buildRecords(
+            CompressionType.NONE,
+            List.of(firstBatch, secondBatch)
+        );
+        int firstBatchSize = records.firstBatchSize();
+        // The records end partialBatchBytes into the second batch
+        int partialRecordsSize = firstBatchSize + partialBatchBytes;
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(records);
+
+            testIterator(List.of(firstBatch), records.slice(0, partialRecordsSize), true);
+            testIterator(List.of(firstBatch), fileRecords.slice(0, partialRecordsSize), true);
+        }
+    }
+
+    @Test
+    public void testFileRecordsSliceEndingInPartialBatchAfterGrowingBuffer() throws IOException {
+        TestBatch<String> batch = new TestBatch<>(0, 1, 0, Collections.nCopies(10, "a"));
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(batch)));
+            int batchSize = fileRecords.sizeInBytes();
+            // The slice ends one byte before the end of the batch
+            FileRecords slice = fileRecords.slice(0, batchSize - 1);
+
+            Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
+            BufferSupplier bufferSupplier = mockBufferSupplier(allocatedBuffers);
+            try (RecordsIterator<String> iterator = createIterator(
+                slice,
+                bufferSupplier,
+                true
+            )) {
+                assertFalse(iterator::hasNext);
+                assertThrows(NoSuchElementException.class, iterator::next);
+            }
+
+            Mockito.verify(bufferSupplier).get(batchSize);
+            assertEquals(Set.of(), allocatedBuffers);
+        }
+    }
+
+    @Test
+    public void testCrcValidation() {
+        forCompressionTypeSeed((compressionType, seed) -> {
+            List<TestBatch<String>> batches = createBatches(seed);
+            MemoryRecords memRecords = buildRecords(compressionType, batches);
+            ByteBuffer readBuf = memRecords.buffer();
+            readBuf.position(DefaultRecordBatch.CRC_OFFSET);
+            int actualCrc = readBuf.getInt();
+            memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc + 1);
+
+            assertThrows(CorruptRecordException.class, () -> testIterator(batches, memRecords, true));
+
+            FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
+            fileRecords.append(memRecords);
+            assertThrows(CorruptRecordException.class, () -> testIterator(batches, fileRecords, true));
+
+            assertDoesNotThrow(() -> testIterator(batches, memRecords, false));
+            assertDoesNotThrow(() -> testIterator(batches, fileRecords, false));
+
+            memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc);
+
+            assertDoesNotThrow(() -> testIterator(batches, memRecords, true));
+            FileRecords moreFileRecords = FileRecords.open(TestUtils.tempFile());
+            moreFileRecords.append(memRecords);
+            assertDoesNotThrow(() -> testIterator(batches, moreFileRecords, true));
+
+            fileRecords.close();
+            moreFileRecords.close();
+        });
     }
 
     @Test
@@ -323,11 +406,20 @@ public final class RecordsIteratorTest {
         BufferSupplier bufferSupplier,
         boolean validateCrc
     ) {
+        return createIterator(records, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC, validateCrc);
+    }
+
+    static RecordsIterator<String> createIterator(
+        Records records,
+        BufferSupplier bufferSupplier,
+        int batchSize,
+        boolean validateCrc
+    ) {
         return new RecordsIterator<>(
             records,
-            STRING_SERDE,
+            RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
             bufferSupplier,
-            Records.HEADER_SIZE_UP_TO_MAGIC,
+            batchSize,
             validateCrc,
             new LogContext()
         );

@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Thrown when a broker registration request is considered invalid by the controller.
  */
+@InterfaceAudience.Public
 public class InvalidRegistrationException extends ApiException {
 
     private static final long serialVersionUID = 1L;

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
  */
+@InterfaceAudience.Public
 public class TopicPartitionInfo {
     private final int partition;
     private final Node leader;
@@ -114,6 +117,7 @@ public class TopicPartitionInfo {
         return lastKnownElr;
     }
 
+    @Override
     public String toString() {
         String elrString = elr != null ? elr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";
         String lastKnownElrString = lastKnownElr != null ? lastKnownElr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";

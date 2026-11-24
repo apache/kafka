@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -27,12 +29,14 @@ import java.util.stream.Collectors;
 /**
  * A class representing resources that have configs.
  */
+@InterfaceAudience.Public
 public final class ConfigResource {
 
     /**
      * Type of resource.
      */
     public enum Type {
+        CLUSTER_MIRROR((byte) 64),
         GROUP((byte) 32),
         CLIENT_METRICS((byte) 16),
         BROKER_LOGGER((byte) 8),

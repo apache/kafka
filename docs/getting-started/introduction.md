@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: 
+description: Learn what event streaming is, how Kafka works, and the core Kafka concepts and APIs.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

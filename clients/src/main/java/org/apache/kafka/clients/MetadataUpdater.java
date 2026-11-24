@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 import java.io.Closeable;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,14 @@ import java.util.Optional;
  * This class is not thread-safe!
  */
 public interface MetadataUpdater extends Closeable {
+
+    /**
+     * Gets the current cluster id without blocking.
+     * @return the cluster id, or null if unknown
+     */
+    default String clusterId() {
+        return null;
+    }
 
     /**
      * Gets the current cluster info without blocking.
@@ -101,6 +110,22 @@ public interface MetadataUpdater extends Closeable {
      * @param now Current time in milliseconds
      */
     default void rebootstrap(long now) {}
+
+    /**
+     * Record a permanent bootstrap DNS resolution failure so all API calls see the same error.
+     */
+    default void bootstrapFailed(KafkaException exception) {}
+
+    /**
+     * Returns true if the metadata has been bootstrapped.
+     */
+    boolean isBootstrapped();
+
+    /**
+     * Bootstrap the metadata cache with the given addresses.
+     * @param addresses list of addresses for the bootstrap servers
+     */
+    void bootstrap(List<InetSocketAddress> addresses);
 
     /**
      * Close this updater.

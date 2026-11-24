@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-
 package org.apache.kafka.streams.query;
 
-
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -36,6 +35,7 @@ import java.util.Optional;
  * @param <V> Type of values
  */
 @Evolving
+@InterfaceAudience.Public
 public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
 

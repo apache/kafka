@@ -32,7 +32,6 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -186,7 +185,7 @@ public class OffsetCheckpoint {
                         throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
                 }
             } catch (final NoSuchFileException e) {
-                return Collections.emptyMap();
+                return Map.of();
             }
         }
     }

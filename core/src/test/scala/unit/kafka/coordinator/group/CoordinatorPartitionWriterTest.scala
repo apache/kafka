@@ -71,6 +71,56 @@ class CoordinatorPartitionWriterTest {
   }
 
   @Test
+  def testListenerAdapterPropagatesHighWatermarkUpdates(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val updates = new util.ArrayList[Long]()
+    val adapter = new ListenerAdapter(new PartitionWriter.Listener {
+      override def onHighWatermarkUpdated(tp: TopicPartition, offset: Long): Unit = updates.add(offset)
+    })
+
+    adapter.onHighWatermarkUpdated(tp, 10L)
+    adapter.onHighWatermarkUpdated(tp, 20L)
+
+    assertEquals(util.List.of(10L, 20L), updates)
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterBecomingFollower(): Unit = {
+    assertHighWatermarkPropagationStops(_.onBecomingFollower(_))
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterFailed(): Unit = {
+    assertHighWatermarkPropagationStops(_.onFailed(_))
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterDeleted(): Unit = {
+    assertHighWatermarkPropagationStops(_.onDeleted(_))
+  }
+
+  /**
+   * Verifies that no high watermark update is propagated to the wrapped listener
+   * once the given transition has been signalled. Such updates are not safe to
+   * apply because the partition is no longer led by this broker.
+   */
+  private def assertHighWatermarkPropagationStops(
+    transition: (ListenerAdapter, TopicPartition) => Unit
+  ): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val updates = new util.ArrayList[Long]()
+    val adapter = new ListenerAdapter(new PartitionWriter.Listener {
+      override def onHighWatermarkUpdated(tp: TopicPartition, offset: Long): Unit = updates.add(offset)
+    })
+
+    adapter.onHighWatermarkUpdated(tp, 10L)
+    transition(adapter, tp)
+    adapter.onHighWatermarkUpdated(tp, 20L)
+
+    assertEquals(util.List.of(10L), updates)
+  }
+
+  @Test
   def testConfig(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])

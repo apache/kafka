@@ -137,6 +137,10 @@ public class ReplicationConfigs {
     public static final String INTER_BROKER_LISTENER_NAME_DOC = "Name of listener used for communication between brokers. If this is unset, the listener name is defined by " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG +
            ". It is an error to set this and " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG + " properties at the same time.";
 
+    public static final String MIRROR_ADMIN_LISTENER_NAME_CONFIG = "mirror.admin.listener.name";
+    public static final String MIRROR_ADMIN_LISTENER_NAME_DOC = "Name of listener used for cluster mirror admin communication on destination cluster. " +
+            "If this is unset, it defaults to the value of " + INTER_BROKER_LISTENER_NAME_CONFIG + ".";
+
     public static final String REPLICA_SELECTOR_CLASS_CONFIG = "replica.selector.class";
     public static final String REPLICA_SELECTOR_CLASS_DOC = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader.";
 
@@ -170,6 +174,7 @@ public class ReplicationConfigs {
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
+            .defineInternal(MIRROR_ADMIN_LISTENER_NAME_CONFIG, STRING, null, null, MEDIUM, MIRROR_ADMIN_LISTENER_NAME_DOC)
             .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)
             .define(FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, BOOLEAN, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT, MEDIUM, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DOC);
 

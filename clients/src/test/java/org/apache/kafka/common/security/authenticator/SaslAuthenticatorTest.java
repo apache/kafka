@@ -88,9 +88,9 @@ import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.MockTime;
@@ -148,7 +148,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
@@ -176,8 +175,9 @@ public class SaslAuthenticatorTest {
         CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        credentialCache = new CredentialCache();
+        credentialCache = new CredentialCache(ScramMechanism.mechanismNames());
         TestLogin.loginCount.set(0);
+        CountingKafkaPrincipalBuilder.buildCount = 0;
     }
 
     @AfterEach
@@ -215,6 +215,31 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         checkAuthenticationAndReauthentication(securityProtocol, node);
+    }
+
+    @Test
+    public void testPrincipalBuiltOncePerAuthentication() throws Exception {
+        String node = "0";
+        time = new MockTime();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+                CountingKafkaPrincipalBuilder.class);
+
+        server = createEchoServer(securityProtocol);
+        createClientConnection(securityProtocol, node);
+        checkClientConnection(node);
+        server.selector().channels().get(0).principal();
+        server.selector().channels().get(0).principal();
+        assertEquals(1, CountingKafkaPrincipalBuilder.buildCount,
+                "Principal should be built only once for repeated access on a connection");
+
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        checkClientConnection(node);
+        server.verifyReauthenticationMetrics(1, 0);
+        server.selector().channels().get(0).principal();
+        assertEquals(2, CountingKafkaPrincipalBuilder.buildCount,
+                "A successful re-authentication should build and cache a new principal");
     }
 
     /**
@@ -310,15 +335,11 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without username");
-        } catch (IOException e) {
-            // Expected exception
-            assertTrue(selector.channels().isEmpty(), "Channels not closed");
-            for (SelectionKey key : selector.keys())
-                assertFalse(key.isValid(), "Key not cancelled");
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE),
+                "SASL/PLAIN channel created without username");
+        assertTrue(selector.channels().isEmpty(), "Channels not closed");
+        for (SelectionKey key : selector.keys())
+            assertFalse(key.isValid(), "Key not cancelled");
     }
 
     /**
@@ -334,12 +355,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without password");
-        } catch (IOException e) {
-            // Expected exception
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE), "SASL/PLAIN channel created without password");
     }
 
     /**
@@ -557,6 +573,23 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests that SASL/SCRAM clients fail authentication if the server requests more than the maximum iterations.
+     */
+    @Test
+    public void testServerIterationsAboveMaximumSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        server = createEchoServer(securityProtocol);
+        ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
+        ScramCredential credential = new ScramFormatter(mechanism).generateCredential(TestJaasConfig.PASSWORD, mechanism.maxIterations() + 1);
+        credentialCache.cache(mechanism.mechanismName()).put(TestJaasConfig.USERNAME, credential);
+
+        Exception exception = createAndCheckClientConnectionFailure(securityProtocol, "0").exception();
+        assertInstanceOf(SaslAuthenticationException.class, exception);
+        assertTrue(exception.getMessage().contains("Requested iterations 16385 is greater than the maximum 16384"), exception.getMessage());
+    }
+
+    /**
      * Tests that SASL/SCRAM clients fail authentication if credentials are not available for
      * the specific SCRAM mechanism.
      */
@@ -567,7 +600,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
-        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
+        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName()).remove(TestJaasConfig.USERNAME);
         String node = "1";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
@@ -625,7 +658,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
             System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         createAndCheckClientConnectionFailure(securityProtocol, "0");
         server.verifyAuthenticationMetrics(0, 2);
 
@@ -676,7 +709,7 @@ public class SaslAuthenticatorTest {
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
         TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
                 System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
-        server.tokenCache().addToken(tokenId, tokenInfo);
+        server.tokenCache().addToken(new DelegationToken(tokenInfo, Base64.getDecoder().decode(tokenHmac)));
         updateTokenCredentialCache(tokenId, tokenHmac);
         // initial authentication must succeed
         createClientConnection(securityProtocol, "0");
@@ -1058,12 +1091,7 @@ public class SaslAuthenticatorTest {
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
-        try {
-            createSelector(securityProtocol, saslClientConfigs);
-            fail("SASL/PLAIN channel created without valid login module");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createSelector(securityProtocol, saslClientConfigs), "SASL/PLAIN channel created without valid login module");
     }
 
     /**
@@ -1227,40 +1255,19 @@ public class SaslAuthenticatorTest {
         saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                 TestServerCallbackHandler.class);
         Class<?> loginCallback = TestLoginCallbackHandler.class;
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with default login handler");
 
-        try {
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with default login handler");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener+mechanism prefix");
+        saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener+mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener prefix");
+        saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
-
-        try {
-            saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without mechanism prefix");
+        saslServerConfigs.remove(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
         // Connection should succeed using login callback override for mechanism
         saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
@@ -1296,9 +1303,8 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         try {
-            createAndCheckClientConnectionFailure(securityProtocol, node);
-            fail("Did not generate exception prior to creating channel");
-        } catch (IOException expected) {
+            IOException expected = assertThrows(IOException.class, () -> createAndCheckClientConnectionFailure(securityProtocol, node),
+                "Did not generate exception prior to creating channel");
             server.verifyAuthenticationMetrics(0, 0);
             server.verifyReauthenticationMetrics(0, 0);
             Throwable underlyingCause = expected.getCause().getCause().getCause();
@@ -1348,12 +1354,7 @@ public class SaslAuthenticatorTest {
         String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
         String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
-        try {
-            createClientConnection(securityProtocol, "1");
-            fail("Connection created with multiple login modules in sasl.jaas.config");
-        } catch (IllegalArgumentException e) {
-            // Expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> createClientConnection(securityProtocol, "1"), "Connection created with multiple login modules in sasl.jaas.config");
     }
 
     /**
@@ -1608,7 +1609,7 @@ public class SaslAuthenticatorTest {
          * original token with a new one.
          */
         delay(1000L);
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyReauthenticationMetrics(0, 1);
     }
 
@@ -1728,7 +1729,7 @@ public class SaslAuthenticatorTest {
          * to sleep long enough so that the next write will trigger a re-authentication.
          */
         delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyAuthenticationMetrics(1, 0);
         server.verifyReauthenticationMetrics(0, 1);
     }
@@ -2049,10 +2050,6 @@ public class SaslAuthenticatorTest {
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
-
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
@@ -2077,10 +2074,6 @@ public class SaslAuthenticatorTest {
         final Map<String, ?> configs = Collections.emptyMap();
         final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        boolean isScram = ScramMechanism.isScram(saslMechanism);
-        if (isScram)
-            ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
@@ -2333,6 +2326,12 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
+    private void assertClientConnectionDisconnects(String node) {
+        AssertionFailedError e = assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"),
+            "Expected disconnection failure, but got: " + e.getMessage());
+    }
+
     private void closeClientConnectionIfNecessary() {
         if (selector != null) {
             selector.close();
@@ -2485,7 +2484,7 @@ public class SaslAuthenticatorTest {
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
                 ScramCredential credential = formatter.generateCredential(password, 4096);
-                credentialCache.cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
+                credentialCache.cache(scramMechanism.mechanismName()).put(username, credential);
             }
         }
     }
@@ -2761,6 +2760,27 @@ public class SaslAuthenticatorTest {
 
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
+    }
+
+    public static class CountingKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
+        private static int buildCount;
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
+            buildCount++;
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslContext.server().getAuthorizationID());
         }
 
         @Override

@@ -22,8 +22,8 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
@@ -44,7 +44,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                             final boolean isGlobalKTable) {
 
         super(nodeName,
-              Collections.singletonList(topic),
+              List.of(topic),
               consumedInternal);
 
         this.sourceName = sourceName;

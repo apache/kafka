@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.net.ssl.SSLException;
 
@@ -29,6 +32,7 @@ import javax.net.ssl.SSLException;
  * authentication failure or server host name verification failure.
  * </p>
  */
+@InterfaceAudience.Public
 public class SslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;

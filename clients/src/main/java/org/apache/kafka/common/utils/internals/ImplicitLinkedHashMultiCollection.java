@@ -18,7 +18,6 @@
 package org.apache.kafka.common.utils.internals;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -121,7 +120,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      */
     public final List<E> findAll(E key) {
         if (key == null || size() == 0) {
-            return Collections.emptyList();
+            return List.of();
         }
         ArrayList<E> results = new ArrayList<>();
         int slot = slot(elements, key);

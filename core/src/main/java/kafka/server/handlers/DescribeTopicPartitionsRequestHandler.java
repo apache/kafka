@@ -17,7 +17,6 @@
 
 package kafka.server.handlers;
 
-import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.Uuid;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.network.Request;
+import org.apache.kafka.server.AuthHelper;
 
 import java.util.HashSet;
 import java.util.List;

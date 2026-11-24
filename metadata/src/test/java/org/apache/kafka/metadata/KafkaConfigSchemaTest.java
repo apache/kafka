@@ -25,6 +25,8 @@ import org.apache.kafka.server.config.ConfigSynonym;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.HashMap;
 import java.util.List;
@@ -102,8 +104,18 @@ public class KafkaConfigSchemaTest {
             DescribeConfigsResponse.ConfigSource.CLIENT_METRICS_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG,
             DescribeConfigsResponse.ConfigSource.GROUP_CONFIG);
+        testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG,
+            DescribeConfigsResponse.ConfigSource.CLUSTER_MIRROR_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DEFAULT_CONFIG,
             DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG);
+    }
+
+    // Catches a new ConfigEntry.ConfigSource added without a DescribeConfigsResponse.ConfigSource counterpart, which
+    // translateConfigSource would silently map to UNKNOWN. Unlike testTranslateConfigSources, this needs no update per source.
+    @ParameterizedTest
+    @EnumSource(ConfigEntry.ConfigSource.class)
+    public void testEveryConfigSourceHasWireRepresentation(ConfigEntry.ConfigSource source) {
+        assertEquals(source, KafkaConfigSchema.translateConfigSource(source).source());
     }
 
     private static void testTranslateConfigSource(ConfigEntry.ConfigSource a,

@@ -20,6 +20,7 @@ import org.apache.kafka.raft.ExpirationService;
 
 import java.util.NavigableMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,7 +36,7 @@ public class ThresholdPurgatory<T extends Comparable<T>> implements FuturePurgat
     }
 
     @Override
-    public CompletableFuture<Long> await(T threshold, long maxWaitTimeMs) {
+    public CompletionStage<Long> await(T threshold, long maxWaitTimeMs) {
         ThresholdKey<T> key = new ThresholdKey<>(idGenerator.incrementAndGet(), threshold);
         CompletableFuture<Long> future = expirationService.failAfter(maxWaitTimeMs);
         thresholdMap.put(key, future);
@@ -83,5 +84,4 @@ public class ThresholdPurgatory<T extends Comparable<T>> implements FuturePurgat
             }
         }
     }
-
 }

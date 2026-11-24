@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.StateStore;
 
 /**
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
  *
  * @param <T> State store type
  */
+@InterfaceAudience.Public
 public interface StoreSupplier<T extends StateStore> {
     /**
      * Return the name of this state store supplier.

@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: 
+description: Operational guidance for running, monitoring, and managing Kafka clusters.
 weight: 6
 tags: ['kafka', 'docs', 'ops']
 aliases: 

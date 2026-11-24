@@ -51,6 +51,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -234,7 +235,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
 
         // Check that the second listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = secondListener.drainHandledSnapshot().get()) {
@@ -286,12 +287,12 @@ public final class KafkaRaftClientSnapshotTest {
             snapshot.freeze();
         }
         context.log.deleteBeforeSnapshot(secondSnapshotId);
-        context.client.poll();
+        context.poll();
 
         // Resume the listener from reading commit batches
         context.listener.updateReadCommit(true);
 
-        context.client.poll();
+        context.poll();
         // Check that listener was notified of the second snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(secondSnapshotId, snapshot.snapshotId());
@@ -322,7 +323,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         // Send a fetch request for an end offset and epoch which has been snapshotted
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 6, 2, 500));
-        context.client.poll();
+        context.poll();
 
         // Expect that the leader replies immediately with a snapshot id
         FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
@@ -352,7 +353,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.prepareAppend(epoch, appendRecords);
         context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
-        context.client.poll();
+        context.poll();
 
         long localLogEndOffset = context.log.endOffset().offset();
         assertTrue(
@@ -369,7 +370,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshot.freeze();
         }
         context.log.deleteBeforeSnapshot(snapshotId);
-        context.client.poll();
+        context.poll();
 
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, snapshotId.offset() - 2, snapshotId.epoch(), 0));
@@ -402,7 +403,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.prepareAppend(epoch, appendRecords);
         context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
-        context.client.poll();
+        context.poll();
 
         long localLogEndOffset = context.log.endOffset().offset();
         assertTrue(
@@ -459,12 +460,12 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
-        context.client.poll();
+        context.poll();
 
         context.client.prepareAppend(epoch, List.of("g", "h", "i"));
         context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
-        context.client.poll();
+        context.poll();
 
         // It is an invalid request to send an last fetched epoch greater than the current epoch
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, oldestSnapshotId.offset() + 1, epoch + 1, 0));
@@ -501,7 +502,7 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
-        context.client.poll();
+        context.poll();
 
         // This should truncate to the old snapshot
         context.deliverRequest(
@@ -552,7 +553,7 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
-        context.client.poll();
+        context.poll();
 
         // Send fetch request at log start offset with valid last fetched epoch
         context.deliverRequest(
@@ -599,7 +600,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshot.freeze();
         }
         context.log.deleteBeforeSnapshot(oldestSnapshotId);
-        context.client.poll();
+        context.poll();
 
         // Send fetch with log start offset and invalid last fetched epoch
         context.deliverRequest(
@@ -652,7 +653,7 @@ public final class KafkaRaftClientSnapshotTest {
             assertEquals(oldestSnapshotId, snapshot.snapshotId());
             snapshot.freeze();
         }
-        context.client.poll();
+        context.poll();
 
         // Send a epoch less than the oldest snapshot
         context.deliverRequest(
@@ -697,7 +698,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.SNAPSHOT_NOT_FOUND, Errors.forCode(response.errorCode()));
@@ -730,7 +731,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.SNAPSHOT_NOT_FOUND, Errors.forCode(response.errorCode()));
@@ -761,10 +762,53 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(topicPartition).get();
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(response.errorCode()));
+    }
+
+    @Test
+    public void testFetchSnapshotRequestWithoutTopics() throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
+            .build();
+
+        context.unattachedToLeader();
+        context.deliverRequest(new FetchSnapshotRequestData());
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testFetchSnapshotRequestWithoutPartitions() throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
+            .build();
+
+        context.unattachedToLeader();
+
+        // FetchSnapshot is invalid for a topic that doesn't contain any partition.
+        context.deliverRequest(
+            new FetchSnapshotRequestData()
+                .setTopics(
+                    List.of(
+                        new FetchSnapshotRequestData.TopicSnapshot()
+                            .setName(context.metadataPartition.topic())
+                    )
+                )
+        );
+
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
     }
 
     @ParameterizedTest
@@ -802,7 +846,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context
             .assertSentFetchSnapshotResponse(context.metadataPartition)
@@ -879,37 +923,37 @@ public final class KafkaRaftClientSnapshotTest {
 
         // fetch timeout is not expired, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.quorum().isResigned());
 
         // voter1 sends fetchSnapshotRequest, the fetch timer should be reset
         context.deliverRequest(voter1FetchSnapshotRequest);
-        context.client.poll();
+        context.poll();
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // Since the fetch timer is reset, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.quorum().isResigned());
 
         // voter2 sends fetchSnapshotRequest, the fetch timer should be reset
         context.deliverRequest(voter2FetchSnapshotRequest);
-        context.client.poll();
+        context.poll();
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // Since the fetch timer is reset, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.quorum().isResigned());
 
         // An observer sends fetchSnapshotRequest, but the fetch timer should not be reset.
         context.deliverRequest(observerFetchSnapshotRequest);
-        context.client.poll();
+        context.poll();
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
         // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isResigned());
     }
 
@@ -949,7 +993,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context
             .assertSentFetchSnapshotResponse(context.metadataPartition)
@@ -982,7 +1026,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
@@ -1018,7 +1062,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(response.errorCode()));
@@ -1071,7 +1115,7 @@ public final class KafkaRaftClientSnapshotTest {
                     position
                 )
             );
-            context.client.poll();
+            context.poll();
 
             FetchSnapshotResponseData.PartitionSnapshot response =
                 context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
@@ -1099,7 +1143,7 @@ public final class KafkaRaftClientSnapshotTest {
                 position
             )
         );
-        context.client.poll();
+        context.poll();
         FetchSnapshotResponseData.PartitionSnapshot response =
             context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(epoch, response.currentLeader().leaderEpoch());
@@ -1141,7 +1185,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
@@ -1159,7 +1203,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.POSITION_OUT_OF_RANGE, Errors.forCode(response.errorCode()));
@@ -1192,7 +1236,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.FENCED_LEADER_EPOCH, Errors.forCode(response.errorCode()));
@@ -1225,7 +1269,7 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
 
         FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
         assertEquals(Errors.UNKNOWN_LEADER_EPOCH, Errors.forCode(response.errorCode()));
@@ -1260,7 +1304,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         // Handle the invalid response
-        context.client.poll();
+        context.poll();
 
         // Expect another fetch request after backoff has expired
         context.time.sleep(context.retryBackoffMs);
@@ -1277,7 +1321,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         // Handle the invalid response
-        context.client.poll();
+        context.poll();
 
         // Expect another fetch request after backoff has expired
         context.time.sleep(context.retryBackoffMs);
@@ -1931,7 +1975,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         // Assert that the response is ignored and the replicas stays as a prospective
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
     }
 
@@ -2052,7 +2096,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.prepareAppend(currentEpoch, newRecords);
         context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
-        context.client.poll();
+        context.poll();
         assertEquals(context.log.endOffset().offset(), context.client.highWatermark().getAsLong() + newRecords.size());
 
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + newRecords.size(), currentEpoch);
@@ -2146,7 +2190,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchRequest.destination(),
             context.fetchResponse(epoch, leaderId, batch1, 0L, Errors.NONE)
         );
-        context.client.poll();
+        context.poll();
 
         // 2) The high watermark must be larger than or equal to the snapshotId's endOffset
         int currentEpoch = context.currentEpoch();
@@ -2174,7 +2218,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchRequest.destination(),
             context.fetchResponse(epoch, leaderId, batch2, 6L, Errors.NONE)
         );
-        context.client.poll();
+        context.poll();
         assertEquals(6L, context.client.highWatermark().getAsLong());
 
         // 3) The quorum epoch must be larger than or equal to the snapshotId's epoch

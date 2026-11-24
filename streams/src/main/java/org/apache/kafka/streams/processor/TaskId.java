@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 
 import org.slf4j.Logger;
@@ -26,6 +27,7 @@ import java.util.Objects;
 /**
  * The task ID representation composed as subtopology plus the assigned partition ID.
  */
+@InterfaceAudience.Public
 public class TaskId implements Comparable<TaskId> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);

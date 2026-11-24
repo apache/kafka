@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -25,9 +27,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.SimpleTimeZone;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -45,6 +44,15 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
     @Override
     KeyValueSegments getSegments() {
         return new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+    }
+
+    @Test
+    public void shouldReportUnknownCommittedOffsetWithoutSegments() {
+        final TopicPartition changelogPartition = new TopicPartition("changelog", 0);
+        assertEquals(OffsetCheckpoint.OFFSET_UNKNOWN, segments.committedOffset(changelogPartition));
+
+        segments.getOrCreateSegmentIfLive(0, context, -1L);
+        assertNull(segments.committedOffset(changelogPartition));
     }
 
     @Test
@@ -316,7 +324,7 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
     public void shouldClearSegmentsOnClose() {
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.close();
-        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
+        assertNull(segments.segmentForTimestamp(0));
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {

@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * An interface that allows to dynamically determine the name of the Kafka topic to send at the sink node of the topology.
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface TopicNameExtractor<K, V> {
 
     /**

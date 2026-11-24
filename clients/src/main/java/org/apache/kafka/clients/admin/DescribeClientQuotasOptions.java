@@ -17,10 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 
 /**
  * Options for {@link Admin#describeClientQuotas(ClientQuotaFilter, DescribeClientQuotasOptions)}.
  */
+@InterfaceAudience.Public
 public class DescribeClientQuotasOptions extends AbstractOptions<DescribeClientQuotasOptions> {
 }

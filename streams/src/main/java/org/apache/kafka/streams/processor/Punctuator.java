@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.time.Duration;
@@ -27,6 +28,7 @@ import java.time.Duration;
  * @see Cancellable
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Punctuator {
 
     /**

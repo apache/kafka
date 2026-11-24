@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 
 /**
  * The group metadata specifications required to compute the target assignment.
  */
+@InterfaceAudience.Public
 public interface GroupSpec {
     /**
      * @return All the member Ids of the consumer group.

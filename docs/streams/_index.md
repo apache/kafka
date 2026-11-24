@@ -1,6 +1,6 @@
 ---
 title: Kafka Streams
-description: 
+description: Kafka Streams documentation for building and operating stream processing applications.
 weight: 9
 tags: ['kafka', 'docs', 'streams']
 aliases: 

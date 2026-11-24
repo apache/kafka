@@ -33,4 +33,8 @@ public interface GlobalStateManager extends StateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     Optional<Set<String>> initialize();
+
+    long approximateNumUncommittedBytes();
+
+    long maxStoreUncommittedBytes();
 }

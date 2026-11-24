@@ -18,9 +18,12 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionState;
 import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class TransactionLogMessageFormatter extends CoordinatorRecordMessageFormatter {
     public TransactionLogMessageFormatter() {
@@ -39,6 +42,17 @@ public class TransactionLogMessageFormatter extends CoordinatorRecordMessageForm
 
     @Override
     protected JsonNode valueAsJson(ApiMessage message, short version) {
-        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+        JsonNode json = CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+        if (message instanceof TransactionLogValue) {
+            byte statusId = ((TransactionLogValue) message).transactionStatus();
+            String statusName;
+            try {
+                statusName = TransactionState.fromId(statusId).stateName();
+            } catch (IllegalStateException e) {
+                statusName = String.valueOf(statusId);
+            }
+            ((ObjectNode) json).put("transactionStatus", statusName);
+        }
+        return json;
     }
 }

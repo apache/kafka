@@ -226,11 +226,11 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Map.of(), true, channelBuilder, logContext);
     }
 
     public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Map.of(), true, channelBuilder, logContext);
     }
 
     /**
@@ -388,6 +388,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
+    @Override
     public void send(NetworkSend send) {
         String connectionId = send.destinationId();
         KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
@@ -588,7 +589,8 @@ public class Selector implements Selectable, AutoCloseable {
                     //not come up in the next poll() and so we need to remember this channel for the
                     //next poll call otherwise data may be stuck in said buffers forever. If we attempt
                     //to process buffered data and no progress is made, the channel buffered status is
-                    //cleared to avoid the overhead of checking every time.
+                    //cleared to avoid the overhead of checking every time. A channel that has received an
+                    //end of stream (e.g. a TLS close_notify) stays buffered until a read reports it.
                     keysWithBufferedRead.add(key);
                 }
 
@@ -883,6 +885,7 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Close the connection identified by the given id
      */
+    @Override
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel != null) {
@@ -1373,6 +1376,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
+        @Override
         public void close() {
             for (MetricName metricName : topLevelMetricNames)
                 metrics.removeMetric(metricName);

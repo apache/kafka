@@ -56,6 +56,14 @@ public class ApiVersionsRequest extends AbstractRequest {
             this.data = data.duplicate();
         }
 
+        public void setClusterId(String clusterId) {
+            this.data.setClusterId(clusterId);
+        }
+
+        public void setNodeId(int nodeId) {
+            this.data.setNodeId(nodeId);
+        }
+
         @Override
         public ApiVersionsRequest build(short version) {
             return new ApiVersionsRequest(data, version);
@@ -94,6 +102,13 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public boolean isValid() {
+        if (version() >= 5) {
+            // Either cluster ID and node ID are both specified, or neither is.
+            if ((data.clusterId() == null && data.nodeId() != -1) || (data.clusterId() != null && data.nodeId() == -1)) {
+                return false;
+            }
+        }
+
         if (version() >= 3) {
             return SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareName()).matches() &&
                 SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareVersion()).matches();

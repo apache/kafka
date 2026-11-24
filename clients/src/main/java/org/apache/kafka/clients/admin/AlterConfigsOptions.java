@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 
 /**
  * Options for {@link Admin#incrementalAlterConfigs(Map)}.
  */
+@InterfaceAudience.Public
 public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
 
     private boolean validateOnly = false;
@@ -32,6 +35,7 @@ public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

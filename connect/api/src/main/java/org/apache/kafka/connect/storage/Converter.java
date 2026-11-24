@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.components.ConnectPlugin;
@@ -38,6 +39,7 @@ import java.util.Map;
  * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
  * <code>task</code> set to the task id and <code>converter</code> set to either <code>key</code> or <code>value</code>.
  */
+@InterfaceAudience.Public
 public interface Converter extends Closeable, ConnectPlugin {
 
     /**

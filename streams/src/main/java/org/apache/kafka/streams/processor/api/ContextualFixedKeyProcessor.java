@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.api;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * An abstract implementation of {@link FixedKeyProcessor} that manages the {@link FixedKeyProcessorContext} instance.
@@ -23,6 +26,7 @@ package org.apache.kafka.streams.processor.api;
  * @param <VIn> the type of input values
  * @param <VOut> the type of output values
  */
+@InterfaceAudience.Public
 public abstract class ContextualFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcessor<KIn, VIn, VOut> {
 
     private FixedKeyProcessorContext<KIn, VOut> context;

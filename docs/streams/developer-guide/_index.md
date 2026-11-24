@@ -1,6 +1,6 @@
 ---
 title: Streams Developer Guide
-description: 
+description: Developer guide for building, configuring, testing, and running Kafka Streams applications.
 weight: 10
 tags: ['kafka', 'docs', 'streams', 'developer-guide']
 aliases: 

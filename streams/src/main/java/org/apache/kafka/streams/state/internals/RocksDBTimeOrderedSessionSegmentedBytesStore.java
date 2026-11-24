@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Window;
@@ -38,8 +39,9 @@ import java.util.Optional;
 public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> extends AbstractRocksDBTimeOrderedSegmentedBytesStore<S> {
 
     private class SessionKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
-        SessionKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
-            super(indexIterator);
+        SessionKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator,
+                                                 final IsolationLevel isolationLevel) {
+            super(indexIterator, isolationLevel);
         }
 
         @Override
@@ -67,16 +69,31 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
     public byte[] fetchSession(final Bytes key,
                                final long sessionStartTime,
                                final long sessionEndTime) {
+        return fetchSession(key, sessionStartTime, sessionEndTime, null);
+    }
+
+    @Override
+    byte[] fetchSession(final Bytes key,
+                        final long sessionStartTime,
+                        final long sessionEndTime,
+                        final IsolationLevel isolationLevel) {
         return get(TimeFirstSessionKeySchema.toBinary(
             key,
             sessionStartTime,
             sessionEndTime
-        ));
+        ), isolationLevel);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
                                                          final long latestSessionEndTime) {
+        return fetchSessions(earliestSessionEndTime, latestSessionEndTime, null);
+    }
+
+    @Override
+    KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
+                                                  final long latestSessionEndTime,
+                                                  final IsolationLevel isolationLevel) {
         final List<S> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
 
         // here we want [0, latestSE, FF] as the upper bound to cover any possible keys,
@@ -102,7 +119,8 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
                 },
                 binaryFrom,
                 binaryTo,
-                true);
+                true,
+                isolationLevel);
     }
 
     @Override
@@ -133,7 +151,8 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
     }
 
     @Override
-    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<S> segmentIterator) {
-        return new SessionKeySchemaIndexToBaseStoreIterator(segmentIterator);
+    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<S> segmentIterator,
+                                                                   final IsolationLevel isolationLevel) {
+        return new SessionKeySchemaIndexToBaseStoreIterator(segmentIterator, isolationLevel);
     }
 }

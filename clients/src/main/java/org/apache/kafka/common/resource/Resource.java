@@ -17,11 +17,14 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 /**
  * Represents a cluster resource with a tuple of (type, name).
  */
+@InterfaceAudience.Public
 public class Resource {
     private final ResourceType resourceType;
     private final String name;

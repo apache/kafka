@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.io.IOException;
@@ -26,6 +27,7 @@ import java.io.IOException;
  */
 @Evolving
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface CommitCallback {
     void onCommit() throws IOException;
 }

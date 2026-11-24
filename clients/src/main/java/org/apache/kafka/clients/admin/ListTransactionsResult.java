@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import java.util.Set;
  * The result of the {@link Admin#listTransactions()} call.
  * <p>
  */
+@InterfaceAudience.Public
 public class ListTransactionsResult {
     private final KafkaFuture<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future;
 

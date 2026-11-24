@@ -34,7 +34,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Base64.Encoder;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,7 +146,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             throw new IllegalArgumentException(
                     String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                             jaasConfigEntries.size()));
-        this.moduleOptions = Collections.unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
+        this.moduleOptions = Map.copyOf((Map<String, String>) jaasConfigEntries.get(0).getOptions());
         configured = true;
     }
 
@@ -181,12 +180,21 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private void handleTokenCallback(OAuthBearerTokenCallback callback) {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
-        if (moduleOptions.isEmpty()) {
-            log.debug("Token not provided, this login cannot be used to establish client connections");
+        if (!hasUnsecuredLoginOptions()) {
+            if (moduleOptions.isEmpty()) {
+                log.debug("Token not provided, this login cannot be used to establish client connections");
+            } else {
+                // INFO (not DEBUG) so a mistyped unsecuredLogin* option isn't silently ignored; this is the
+                // normal path for ssl.*-only JWKS trust options (KAFKA-21143) until KAFKA-21221, not a warning.
+                log.info("Token not provided since no {}* options were found (module options: {}), this login cannot be used to establish client connections",
+                        OPTION_PREFIX, moduleOptions.keySet());
+            }
             callback.token(null);
             return;
         }
-        if (moduleOptions.keySet().stream().allMatch(name -> name.startsWith(EXTENSION_PREFIX))) {
+        if (moduleOptions.keySet().stream()
+                .filter(name -> name.startsWith(OPTION_PREFIX))
+                .allMatch(name -> name.startsWith(EXTENSION_PREFIX))) {
             throw new OAuthBearerConfigException("Extensions provided in login context without a token");
         }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
@@ -216,6 +224,16 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             // occurs if the principal claim doesn't exist or has an empty value
             throw new OAuthBearerConfigException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * Returns true if any module option is relevant to unsecured token creation.
+     * Options that do not start with the {@code unsecuredLogin} prefix (e.g.
+     * {@code ssl.*} options used for JWKS endpoint TLS trust) are not related to
+     * unsecured token minting and should not trigger token creation.
+     */
+    private boolean hasUnsecuredLoginOptions() {
+        return moduleOptions.keySet().stream().anyMatch(name -> name.startsWith(OPTION_PREFIX));
     }
 
     /**

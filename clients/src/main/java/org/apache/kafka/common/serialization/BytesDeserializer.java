@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
+@InterfaceAudience.Public
 public class BytesDeserializer implements Deserializer<Bytes> {
+    @Override
     public Bytes deserialize(String topic, byte[] data) {
         if (data == null)
             return null;

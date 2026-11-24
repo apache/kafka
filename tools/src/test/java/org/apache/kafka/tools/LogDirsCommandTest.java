@@ -20,7 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.LogDirDescription;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -50,7 +49,7 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithoutBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"), admin));
 
@@ -70,7 +69,7 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             int brokerId = 0;
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--broker-list", String.valueOf(brokerId), "--describe"), admin));
@@ -116,8 +115,8 @@ public class LogDirsCommandTest {
 
     @ClusterTest
     public void testLogDirsWithSpecificTopic(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
-        createTopic(clusterInstance, "other-topic");
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
+        clusterInstance.createTopicWithAssignment("other-topic", Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--topic-list", TOPIC, "--describe"), admin));
             // check all brokers are present
@@ -215,12 +214,5 @@ public class LogDirsCommandTest {
             }
         };
         return ToolsTestUtils.captureStandardOut(runnable);
-    }
-
-    private void createTopic(ClusterInstance clusterInstance, String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0))))).topicId(topic).get());
-            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, 1));
-        }
     }
 }

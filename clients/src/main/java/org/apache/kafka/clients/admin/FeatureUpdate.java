@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
 /**
  * Encapsulates details about an update to a finalized feature.
  */
+@InterfaceAudience.Public
 public class FeatureUpdate {
     private final short maxVersionLevel;
     private final UpgradeType upgradeType;

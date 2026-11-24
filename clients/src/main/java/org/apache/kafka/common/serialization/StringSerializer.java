@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.nio.charset.Charset;
@@ -28,6 +29,7 @@ import java.util.Map;
  *  String encoding defaults to UTF8 and can be customized by setting the property key.serializer.encoding,
  *  value.serializer.encoding or serializer.encoding. The first two take precedence over the last.
  */
+@InterfaceAudience.Public
 public class StringSerializer implements Serializer<String> {
     private Charset encoding = StandardCharsets.UTF_8;
 

@@ -26,6 +26,7 @@ import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.InvalidRecordException;
@@ -85,9 +86,9 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -98,9 +99,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
@@ -111,6 +114,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -119,8 +123,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL;
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL;
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -131,7 +139,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.geq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -171,7 +178,7 @@ public class SenderTest {
     private MockTime time = new MockTime();
     private final int batchSize = 16 * 1024;
     private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), time);
+            new LogContext(), new ClusterResourceListeners());
     private final ApiVersions apiVersions = new ApiVersions();
     private MockClient client = new MockClient(time, metadata);
     private Metrics metrics = null;
@@ -241,7 +248,7 @@ public class SenderTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext,
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.BROKER);
@@ -514,7 +521,7 @@ public class SenderTest {
 
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
             apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-            TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, metadata, false);
 
             setupWithTransactionState(txnManager);
             doInitTransactions(txnManager, producerIdAndEpoch);
@@ -546,16 +553,16 @@ public class SenderTest {
         }
     }
 
-    @Test
-    public void testNodeLatencyStats() throws Exception {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testNodeLatencyStats(String allocationStrategy) throws Exception {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
             // otherwise it wouldn't update the stats.
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42, false, "");
             long totalSize = 1024 * 1024;
-            accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, null,
-                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
+            accumulator = createAccumulator(allocationStrategy, config, 0L, 0L, m, "producer-metrics",
+                createBufferPool(allocationStrategy, totalSize, m, "producer-internal-metrics"));
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()));
@@ -642,7 +649,7 @@ public class SenderTest {
         // Initialize transaction manager. InitProducerId will be queued up until metadata response
         // is processed and FindCoordinator can be sent to `leastLoadedNode`.
         TransactionManager transactionManager = new TransactionManager(new LogContext(), "testInitProducerIdWithPendingMetadataRequest",
-                60000, 100L, new ApiVersions(), false);
+                60000, 100L, new ApiVersions(), metadata, false);
         setupWithTransactionState(transactionManager, false, null, false);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
         transactionManager.initializeTransactions(false);
@@ -694,7 +701,7 @@ public class SenderTest {
         client = new MockClient(time, metadata);
 
         TransactionManager transactionManager = new TransactionManager(new LogContext(), "testNodeNotReady",
-                60000, 100L, new ApiVersions(), false);
+                60000, 100L, new ApiVersions(), metadata, false);
         setupWithTransactionState(transactionManager, false, null, true);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
         transactionManager.initializeTransactions(false);
@@ -1533,10 +1540,99 @@ public class SenderTest {
     }
 
     @Test
+    public void testEpochBumpWhenOutOfOrderBatchesRetriedAndFirstBatchExpires() throws Exception {
+        // KAFKA-15591: Tests the situation where a producer sends a sequence of requests to a newly created
+        // partition before the creation of the partition has entirely completed. The first request arrives
+        // before the partition is ready and fails with NOT_LEADER_OR_FOLLOWER without reaching the log.
+        // The next two requests arrive after the partition creation is complete, but the sequence numbers
+        // do not start at zero so the requests fail with OUT_OF_ORDER_SEQUENCE_NUMBER. The first request
+        // could still fill the sequence gap, but it expires before being retried. Once the first request
+        // expires, the producer bumps the epoch, renumbers the remaining requests from sequence 0 and
+        // sends them again.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+
+        // Send the first ProduceRequest with sequence 0. It is created 1000ms before the others so that it expires
+        // first (deliveryTimeoutMs is 1500).
+        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
+        sender.runOnce();
+
+        time.sleep(1000L);
+
+        // Send the second and third ProduceRequests with sequences 1 and 2.
+        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        sender.runOnce();
+        Future<RecordMetadata> request3 = appendToAccumulator(tp0);
+        sender.runOnce();
+        assertEquals(3, client.inFlightRequestCount());
+
+        // The first request fails because the partition completion has not completed on the leader broker yet.
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
+        sender.runOnce(); // receive response 0
+
+        // The partition creation completes afterwards, so the request with sequence 0 does not reach the partition
+        // and the broker rejects the in-flight second and third requests. They are retried without an epoch bump
+        // since the retry of the first request could still fill the gap in the expected sequence.
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive response 1
+        sendIdempotentProducerResponse(2, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive response 2
+
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        assertFalse(request3.isDone());
+
+        // The first request is retried once the retry backoff elapses, but the delivery timeout expires while
+        // the retry is in-flight. Its sequence range will never be filled, so the partition has an unresolved
+        // sequence.
+        time.sleep(50L);
+        sender.runOnce(); // resend the first request (sequence 0)
+        time.sleep(450L);
+        sender.runOnce(); // resend the second request (sequence 1)
+        assertFutureFailure(request1, TimeoutException.class);
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+
+        // The response for the first expired request arrives and is ignored.
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1L);
+        sender.runOnce();
+        assertTrue(transactionManager.hasUnresolvedSequence(tp0));
+
+        // The retry of the second request is rejected again. This causes the producer to realise that the gap
+        // in the sequence will never be filled, so it bumps the epoch and renumbers the request sequences starting at 0.
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // receive the rejection
+        sender.runOnce(); // bump the epoch, renumber the remaining batches and resend
+
+        assertEquals((short) 1, transactionManager.producerIdAndEpoch().epoch);
+        assertFalse(transactionManager.hasUnresolvedSequence(tp0));
+        assertEquals(2, transactionManager.sequenceNumber(tp0));
+
+        // The remaining requests are delivered with the new epoch, starting at sequence 0.
+        sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 0L, -1L);
+        sender.runOnce();
+        assertTrue(request2.isDone());
+        assertEquals(0, request2.get().offset());
+
+        sender.runOnce(); // send the third request with the new epoch
+        sendIdempotentProducerResponse(1, 1, tp0, Errors.NONE, 1L, -1L);
+        sender.runOnce();
+        assertTrue(request3.isDone());
+        assertEquals(1, request3.get().offset());
+        assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
+    }
+
+    @Test
     public void testUnresolvedSequencesAreNotFatal() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-        TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -1821,7 +1917,7 @@ public class SenderTest {
     @Test
     public void testTransactionalUnknownProducerHandlingWhenRetentionLimitReached() throws Exception {
         final long producerId = 343434L;
-        TransactionManager transactionManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, false);
+        TransactionManager transactionManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(transactionManager);
         doInitTransactions(transactionManager, new ProducerIdAndEpoch(producerId, (short) 0));
@@ -2305,6 +2401,270 @@ public class SenderTest {
     }
 
     @Test
+    public void testNewBatchesAreHeldBackWhileOldestInFlightBatchCouldLeaveBrokerDeduplicationWindow() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        // Each `runOnce` drains at most one batch per partition. No response is given yet, so the batches stay in
+        // flight and fill up the window the broker retains for duplicate detection.
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
+        for (int i = 0; i < window; i++) {
+            appendToAccumulator(tp0);
+            sender.runOnce();
+            assertEquals(i + 1, sender.inFlightBatches(tp0).size());
+        }
+        List<ClientRequest> requests = List.copyOf(client.requests());
+        assertEquals(window, requests.size());
+
+        // Acknowledge every batch but the first, as a new leader would while the first is still in flight to the
+        // previous leader. The first batch is now the oldest one the broker retains and there is no room after it,
+        // even though only one batch is still in flight.
+        for (int i = 1; i < window; i++) {
+            client.respondToRequest(requests.get(i), produceResponse(tp0, i, Errors.NONE, 0));
+        }
+        sender.runOnce(); // receive the responses
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // A new batch for tp0 is held back: appending it would make the broker forget the first batch, so a retry
+        // of that batch would fail with OUT_OF_ORDER_SEQUENCE. Other partitions of the same node are unaffected.
+        Future<RecordMetadata> heldBack = appendToAccumulator(tp0);
+        appendToAccumulator(tp1);
+        sender.runOnce();
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(heldBack.isDone());
+        assertEquals(1, sender.inFlightBatches(tp1).size());
+        assertTrue(accumulator.hasUndrained());
+
+        // Once the first batch completes, the held back batch is sent.
+        client.respondToRequest(requests.get(0), produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce(); // receive the response
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        sender.runOnce(); // send the held back batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(window, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(accumulator.hasUndrained());
+    }
+
+    @Test
+    public void testNewBatchesAreHeldBackWhileOldestBatchIsStuckOnPreviousLeader() throws Exception {
+        final long producerId = 343434L;
+        final Node previousLeader = new Node(0, "localhost", 1969);
+        final Node newLeader = new Node(1, "localhost", 1970);
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager, false, null, false);
+        client.updateMetadata(metadataWithTp0Leader(previousLeader, 100));
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        // The first batch is sent to the previous leader, which never answers.
+        Future<RecordMetadata> stuck = appendToAccumulator(tp0);
+        runUntilRequestsInFlight(previousLeader, 1);
+        ClientRequest stuckRequest = client.requests().peek();
+        assertEquals(0, sender.inFlightBatches(tp0).get(0).baseSequence());
+
+        // The leader moves to another broker. The following batches are sent there and acknowledged, so the new
+        // leader now holds four batches after the stuck one in its deduplication window.
+        client.updateMetadata(metadataWithTp0Leader(newLeader, 101));
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
+        for (int i = 1; i < window; i++) {
+            Future<RecordMetadata> future = appendToAccumulator(tp0);
+            runUntilRequestsInFlight(newLeader, 1);
+            client.respondFrom(produceResponse(tp0, i, Errors.NONE, 0), newLeader);
+            sender.runOnce(); // receive the response
+            assertEquals(i, future.get().offset());
+        }
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // A new batch for tp0 is held back while the first batch is unresolved. Without this the new leader would
+        // forget the first batch, and the first batch's retry would fail with OUT_OF_ORDER_SEQUENCE.
+        Future<RecordMetadata> heldBack = appendToAccumulator(tp0);
+        sender.runOnce(); // nothing is sent
+        sender.runOnce(); // make sure nothing is sent on a later pass either
+        assertEquals(0, client.inFlightRequestCount(newLeader.idString()));
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(0, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(heldBack.isDone());
+        assertTrue(accumulator.hasUndrained());
+
+        // The previous leader finally rejects the first batch. Its retry goes to the new leader straight away,
+        // and is still recognised there. Only then is the held back batch sent.
+        client.respondToRequest(stuckRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+        sender.runOnce(); // receive the response, re-enqueue the first batch
+        runUntilRequestsInFlight(newLeader, 1);
+        assertEquals(0, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(heldBack.isDone());
+        client.respondFrom(produceResponse(tp0, 0, Errors.NONE, 0), newLeader);
+        sender.runOnce(); // receive the response
+        assertEquals(0L, stuck.get().offset());
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        runUntilRequestsInFlight(newLeader, 1);
+        assertEquals(window, sender.inFlightBatches(tp0).get(0).baseSequence());
+        client.respondFrom(produceResponse(tp0, window, Errors.NONE, 0), newLeader);
+        sender.runOnce();
+        assertEquals(window, heldBack.get().offset());
+        assertFalse(accumulator.hasUndrained());
+    }
+
+    private ClientRequest lastRequest() {
+        List<ClientRequest> requests = List.copyOf(client.requests());
+        return requests.get(requests.size() - 1);
+    }
+
+    private ProducerBatch lastInFlightBatch(TopicPartition tp) {
+        List<ProducerBatch> batches = sender.inFlightBatches(tp);
+        return batches.get(batches.size() - 1);
+    }
+
+    private MetadataResponse metadataWithTp0Leader(Node leader, int leaderEpoch) {
+        return RequestTestUtils.metadataUpdateWith("kafka-cluster", 2, Map.of(),
+            Map.of(TOPIC_NAME, 2), tp -> leaderEpoch,
+            (error, tp, leaderId, epoch, replicas, isr, offline) -> new MetadataResponse.PartitionMetadata(
+                error, tp, tp0.equals(tp) ? Optional.of(leader.id()) : leaderId, epoch, replicas, isr, offline),
+            ApiKeys.METADATA.latestVersion(), TOPIC_IDS);
+    }
+
+    private void runUntilRequestsInFlight(Node node, int expected) {
+        // The first send to a node needs an extra pass to connect to it.
+        for (int i = 0; i < 3 && client.inFlightRequestCount(node.idString()) < expected; i++) {
+            sender.runOnce();
+        }
+        assertEquals(expected, client.inFlightRequestCount(node.idString()));
+    }
+
+    @Test
+    public void testRetryOfOldestInFlightBatchIsNotHeldBackByBrokerDeduplicationWindow() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        int window = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        for (int i = 0; i < window; i++) {
+            futures.add(appendToAccumulator(tp0));
+            sender.runOnce();
+        }
+        List<ClientRequest> requests = List.copyOf(client.requests());
+        assertEquals(window, requests.size());
+
+        // The leader moved: the first batch is rejected by the previous leader while the later batches are
+        // acknowledged by the new one. The first batch is re-enqueued for a retry.
+        for (int i = 1; i < window; i++) {
+            client.respondToRequest(requests.get(i), produceResponse(tp0, i, Errors.NONE, 0));
+        }
+        client.respondToRequest(requests.get(0), produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
+        sender.runOnce(); // receive the responses
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(1, accumulator.getDeque(tp0).size());
+        assertEquals(0, accumulator.getDeque(tp0).peekFirst().baseSequence());
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+        // The retry already has a sequence and is not held back, otherwise the partition could never make progress.
+        // A new batch queued behind it is held back until the retry completes.
+        Future<RecordMetadata> heldBack = appendToAccumulator(tp0);
+        time.sleep(RETRY_BACKOFF_MS);
+        sender.runOnce(); // send the retry
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(0, sender.inFlightBatches(tp0).get(0).baseSequence());
+        sender.runOnce(); // nothing else is sent
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(heldBack.isDone());
+        assertTrue(accumulator.hasUndrained());
+
+        // The retry is still within the broker's window and succeeds, which releases the held back batch.
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0L);
+        sender.runOnce(); // receive the response
+        assertTrue(futures.get(0).isDone());
+        assertEquals(0L, futures.get(0).get().offset());
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        sender.runOnce(); // send the held back batch
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(window, sender.inFlightBatches(tp0).get(0).baseSequence());
+        assertFalse(accumulator.hasUndrained());
+    }
+
+    @Test
+    public void testSplitOfOldestBatchKeepsAcknowledgedBatchesInBrokerDeduplicationWindow() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        try (Metrics m = new Metrics()) {
+            // Compress with an optimistic compression ratio estimate, so that two records of half the batch size are
+            // put into one batch. Once that batch is rejected as too large the estimate is reset, and the retry splits
+            // it into one batch per record.
+            CompressionRatioEstimator.setEstimation(TOPIC_NAME, CompressionType.GZIP, 0.2f);
+            accumulator = new RecordAccumulator(logContext, batchSize, Compression.gzip().build(), 0, 0L, 0L,
+                DELIVERY_TIMEOUT_MS, m, "producer-metrics", time, transactionManager,
+                new BufferPool(1024 * 1024, batchSize, m, time, "producer-internal-metrics"));
+            sender = new Sender(logContext, client, metadata, accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                Integer.MAX_VALUE, new SenderMetricsRegistry(m), time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager);
+            prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+            assertTrue(transactionManager.hasProducerId());
+
+            // The first batch holds two records and takes sequences 0 and 1. Three more batches follow at 2, 3 and 4.
+            String largeValue = "x".repeat(batchSize / 2);
+            Future<RecordMetadata> first1 = appendToAccumulator(tp0, time.milliseconds(), "key1", largeValue);
+            Future<RecordMetadata> first2 = appendToAccumulator(tp0, time.milliseconds(), "key2", largeValue);
+            sender.runOnce();
+            assertEquals(2, sender.inFlightBatches(tp0).get(0).recordCount);
+            List<Future<RecordMetadata>> others = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                others.add(appendToAccumulator(tp0));
+                sender.runOnce();
+            }
+            List<ClientRequest> requests = List.copyOf(client.requests());
+            assertEquals(4, requests.size());
+            assertEquals(5, transactionManager.sequenceNumber(tp0));
+
+            // The batches at 2 and 4 are acknowledged while the first batch is still in flight: three batches have been
+            // sent after it, so there is room for one more.
+            client.respondToRequest(requests.get(1), produceResponse(tp0, 2, Errors.NONE, 0));
+            client.respondToRequest(requests.get(3), produceResponse(tp0, 4, Errors.NONE, 0));
+            sender.runOnce(); // receive the responses
+            assertEquals(2, sender.inFlightBatches(tp0).size());
+            assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+            // The first batch is rejected as too large and split into two batches at sequences 0 and 1. The split
+            // batch at 1 is one more batch after the one at 0, so the window is now full: the batches at 2 and 4
+            // must still be counted even though they completed before the split re-added the batch at 0.
+            client.respondToRequest(requests.get(0), produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, 0));
+            sender.runOnce(); // split and re-enqueue
+            assertEquals(0, transactionManager.firstInFlightSequence(tp0));
+            assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+
+            // The split batches are retried one at a time and succeed. Once the batch at 0 completes, three batches
+            // are ahead of the one at 1, and once that completes only the one at 4 is ahead of the one at 3.
+            sender.runOnce(); // send the split batch at 0
+            assertEquals(0, lastInFlightBatch(tp0).baseSequence());
+            client.respondToRequest(lastRequest(), produceResponse(tp0, 0, Errors.NONE, 0));
+            sender.runOnce(); // receive the response
+            assertEquals(0L, first1.get().offset());
+            assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+            sender.runOnce(); // send the split batch at 1
+            assertEquals(1, lastInFlightBatch(tp0).baseSequence());
+            client.respondToRequest(lastRequest(), produceResponse(tp0, 1, Errors.NONE, 0));
+            sender.runOnce(); // receive the response
+            assertEquals(1L, first2.get().offset());
+            assertEquals(3, transactionManager.firstInFlightSequence(tp0));
+            assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+            client.respondToRequest(requests.get(2), produceResponse(tp0, 3, Errors.NONE, 0));
+            sender.runOnce(); // receive the response
+            assertFalse(transactionManager.hasInflightBatches(tp0));
+            for (int i = 0; i < others.size(); i++) {
+                assertEquals(2L + i, others.get(i).get().offset());
+            }
+        }
+    }
+
+    @Test
     public void testRetryWhenProducerIdChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
@@ -2390,7 +2750,7 @@ public class SenderTest {
                 TOPIC_IDS.getOrDefault("testSplitBatchAndSend", Uuid.ZERO_UUID),
                 new TopicPartition("testSplitBatchAndSend", 1));
 
-        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -2742,7 +3102,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testTransactionalRequestsSentOnShutdown", 6000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "testTransactionalRequestsSentOnShutdown", 6000, 100, apiVersions, metadata, false);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
 
@@ -2775,7 +3135,7 @@ public class SenderTest {
             int lingerMs = 50;
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
 
-            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions, metadata, false);
             setupWithTransactionState(txnManager, lingerMs);
 
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -2832,7 +3192,7 @@ public class SenderTest {
         try (Metrics m = new Metrics()) {
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
 
-            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "txnId", 6000, 100, apiVersions, metadata, false);
             setupWithTransactionState(txnManager);
 
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -2903,7 +3263,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testIncompleteTransactionAbortOnShutdown", 6000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "testIncompleteTransactionAbortOnShutdown", 6000, 100, apiVersions, metadata, false);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
 
@@ -2937,7 +3297,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testForceShutdownWithIncompleteTransaction", 6000, 100, apiVersions, false);
+            TransactionManager txnManager = new TransactionManager(logContext, "testForceShutdownWithIncompleteTransaction", 6000, 100, apiVersions, metadata, false);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager);
 
@@ -2968,7 +3328,7 @@ public class SenderTest {
     @Test
     public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager, false, null);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -2994,7 +3354,7 @@ public class SenderTest {
     public void testDoNotPollWhenNoRequestSent() {
         client = spy(new MockClient(time, metadata));
 
-        TransactionManager txnManager = new TransactionManager(logContext, "testDoNotPollWhenNoRequestSent", 6000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testDoNotPollWhenNoRequestSent", 6000, 100, apiVersions, metadata, false);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3006,7 +3366,7 @@ public class SenderTest {
     @Test
     public void testTooLargeBatchesAreSafelyRemoved() throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager, false, null);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3059,6 +3419,7 @@ public class SenderTest {
                 60000,
                 RETRY_BACKOFF_MS,
                 apiVersions,
+                metadata,
                 false
         );
 
@@ -3095,12 +3456,8 @@ public class SenderTest {
         assertFutureFailure(future2, TransactionAbortableException.class);
 
         // Verify transaction API requests also fail with TransactionAbortableException
-        try {
-            txnManager.beginCommit();
-            fail("Expected beginCommit() to fail with TransactionAbortableException when in abortable error state");
-        } catch (KafkaException e) {
-            assertEquals(TransactionAbortableException.class, e.getCause().getClass());
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> txnManager.beginCommit(), "Expected beginCommit() to fail with TransactionAbortableException when in abortable error state");
+        assertEquals(TransactionAbortableException.class, e.getCause().getClass());
     }
 
     @Test
@@ -3129,7 +3486,7 @@ public class SenderTest {
     public void testReceiveFailedBatchTwiceWithTransactions() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-        TransactionManager txnManager = new TransactionManager(logContext, "testFailTwice", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testFailTwice", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3179,7 +3536,7 @@ public class SenderTest {
     public void testInvalidTxnStateIsAnAbortableError() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-        TransactionManager txnManager = new TransactionManager(logContext, "testInvalidTxnState", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "testInvalidTxnState", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3218,7 +3575,7 @@ public class SenderTest {
     public void testTransactionAbortableExceptionIsAnAbortableError() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-        TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions, false);
+        TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions, metadata, false);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3257,7 +3614,7 @@ public class SenderTest {
     public void testAbortableErrorIsConvertedToFatalErrorDuringAbort() throws Exception {
 
         // Initialize and begin transaction
-        TransactionManager transactionManager = new TransactionManager(logContext, "testAbortableErrorIsConvertedToFatalErrorDuringAbort", 60000, 100, apiVersions, false);
+        TransactionManager transactionManager = new TransactionManager(logContext, "testAbortableErrorIsConvertedToFatalErrorDuringAbort", 60000, 100, apiVersions, metadata, false);
         setupWithTransactionState(transactionManager);
         doInitTransactions(transactionManager, new ProducerIdAndEpoch(1L, (short) 0));
         transactionManager.beginTransaction();
@@ -3279,13 +3636,9 @@ public class SenderTest {
         // Attempt to commit transaction
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
         sender.runOnce();
-        try {
-            commitResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test.");
-            fail("Expected abortable error to be thrown for commit");
-        } catch (KafkaException e) {
-            assertTrue(transactionManager.hasAbortableError());
-            assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
-        }
+        assertThrows(KafkaException.class, () -> commitResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test"), "Expected abortable error to be thrown for commit");
+        assertTrue(transactionManager.hasAbortableError());
+        assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
 
         // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
         client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
@@ -3296,32 +3649,26 @@ public class SenderTest {
         sender.runOnce();
 
         // Verify the error is converted to KafkaException (not TransactionAbortableException)
-        try {
-            abortResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test.");
-            fail("Expected KafkaException to be thrown");
-        } catch (KafkaException e) {
-            // Verify TM is in FATAL_ERROR state
-            assertTrue(transactionManager.hasFatalError());
-            assertFalse(e instanceof TransactionAbortableException);
-            assertEquals(KafkaException.class, abortResult.error().getClass());
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> abortResult.await(1000, TimeUnit.MILLISECONDS, "Unexpected time out during the test"));
+        // Verify TM is in FATAL_ERROR state
+        assertTrue(transactionManager.hasFatalError());
+        assertFalse(e instanceof TransactionAbortableException);
+        assertEquals(KafkaException.class, abortResult.error().getClass());
     }
 
-    @Test
-    public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testProducerBatchRetriesWhenPartitionLeaderChanges(String allocationStrategy) throws Exception {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3420,8 +3767,9 @@ public class SenderTest {
      * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, but it
      * does not contain new leader info(defined in KIP-951).
      */
-    @Test
-    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation()
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation(String allocationStrategy)
         throws InterruptedException {
         // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
         Metrics m = new Metrics();
@@ -3430,13 +3778,10 @@ public class SenderTest {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3500,8 +3845,9 @@ public class SenderTest {
      * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, along with
      * new leader info(defined in KIP-951).
      */
-    @Test
-    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation()
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation(String allocationStrategy)
         throws InterruptedException {
         // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
         Metrics m = new Metrics();
@@ -3510,13 +3856,10 @@ public class SenderTest {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3817,8 +4160,28 @@ public class SenderTest {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L, null);
     }
 
+    private static Stream<String> allocationStrategies() {
+        return Stream.of(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL);
+    }
+
+    private BufferPool createBufferPool(String allocationStrategy, long totalSize, Metrics metrics, String metricGrpName) {
+        return allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)
+            ? new BufferPool(totalSize, 128, metrics, time, metricGrpName, BufferPool.AllocationMode.INCREMENTAL)
+            : new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+    }
+
+    private RecordAccumulator createAccumulator(String allocationStrategy, RecordAccumulator.PartitionerConfig partitionerConfig,
+                                                long retryBackoffMs, long retryBackoffMaxMs, Metrics metrics,
+                                                String metricGrpName, BufferPool pool) {
+        return allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)
+            ? new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE, 0, retryBackoffMs, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, partitionerConfig, metrics, metricGrpName, time, null, pool)
+            : new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, retryBackoffMs, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, partitionerConfig, metrics, metricGrpName, time, null, pool);
+    }
+
     private TransactionManager createTransactionManager() {
-        return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions(), false);
+        return new TransactionManager(new LogContext(), null, 0, RETRY_BACKOFF_MS, new ApiVersions(), metadata, false);
     }
     
     private void setupWithTransactionState(TransactionManager transactionManager) {
@@ -3880,23 +4243,15 @@ public class SenderTest {
         client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-        } catch (ExecutionException e) {
-            fail("Future should not have raised an exception: " + e.getCause());
-        }
+        assertDoesNotThrow(() -> future.get(), "Future should not have raised an exception");
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedError.getSimpleName());
-        } catch (ExecutionException e) {
-            assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(), "Future should have raised " + expectedError.getSimpleName());
+        assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
     }
 
     private void prepareAndReceiveInitProducerId(long producerId, Errors error) {
@@ -3947,13 +4302,9 @@ public class SenderTest {
     private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType)
             throws InterruptedException {
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedExceptionType.getName());
-        } catch (ExecutionException e) {
-            Class<? extends Throwable> causeType = e.getCause().getClass();
-            assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(), "Future should have raised " + expectedExceptionType.getName());
+        Class<? extends Throwable> causeType = e.getCause().getClass();
+        assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
     }
 
     private void createMockClientWithMaxFlightOneMetadataPending() {

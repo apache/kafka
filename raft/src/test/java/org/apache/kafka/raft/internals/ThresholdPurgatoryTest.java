@@ -23,8 +23,6 @@ import org.apache.kafka.raft.MockExpirationService;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.CompletableFuture;
-
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,9 +35,9 @@ class ThresholdPurgatoryTest {
 
     @Test
     public void testThresholdCompletion() throws Exception {
-        CompletableFuture<Long> future1 = purgatory.await(3L, 500);
-        CompletableFuture<Long> future2 = purgatory.await(1L, 500);
-        CompletableFuture<Long> future3 = purgatory.await(5L, 500);
+        var future1 = purgatory.await(3L, 500).toCompletableFuture();
+        var future2 = purgatory.await(1L, 500).toCompletableFuture();
+        var future3 = purgatory.await(5L, 500).toCompletableFuture();
         assertEquals(3, purgatory.numWaiting());
 
         long completionTime1 = time.milliseconds();
@@ -77,14 +75,14 @@ class ThresholdPurgatoryTest {
 
     @Test
     public void testExpiration() {
-        CompletableFuture<Long> future1 = purgatory.await(1L, 200);
-        CompletableFuture<Long> future2 = purgatory.await(1L, 200);
+        var future1 = purgatory.await(1L, 200).toCompletableFuture();
+        var future2 = purgatory.await(1L, 200).toCompletableFuture();
         assertEquals(2, purgatory.numWaiting());
 
         time.sleep(100);
-        CompletableFuture<Long> future3 = purgatory.await(5L, 50);
-        CompletableFuture<Long> future4 = purgatory.await(5L, 200);
-        CompletableFuture<Long> future5 = purgatory.await(5L, 100);
+        var future3 = purgatory.await(5L, 50).toCompletableFuture();
+        var future4 = purgatory.await(5L, 200).toCompletableFuture();
+        var future5 = purgatory.await(5L, 100).toCompletableFuture();
         assertEquals(5, purgatory.numWaiting());
 
         time.sleep(50);
@@ -113,9 +111,9 @@ class ThresholdPurgatoryTest {
 
     @Test
     public void testCompleteAll() throws Exception {
-        CompletableFuture<Long> future1 = purgatory.await(3L, 500);
-        CompletableFuture<Long> future2 = purgatory.await(1L, 500);
-        CompletableFuture<Long> future3 = purgatory.await(5L, 500);
+        var future1 = purgatory.await(3L, 500).toCompletableFuture();
+        var future2 = purgatory.await(1L, 500).toCompletableFuture();
+        var future3 = purgatory.await(5L, 500).toCompletableFuture();
         assertEquals(3, purgatory.numWaiting());
 
         long completionTime = time.milliseconds();
@@ -128,9 +126,9 @@ class ThresholdPurgatoryTest {
 
     @Test
     public void testCompleteAllExceptionally() {
-        CompletableFuture<Long> future1 = purgatory.await(3L, 500);
-        CompletableFuture<Long> future2 = purgatory.await(1L, 500);
-        CompletableFuture<Long> future3 = purgatory.await(5L, 500);
+        var future1 = purgatory.await(3L, 500).toCompletableFuture();
+        var future2 = purgatory.await(1L, 500).toCompletableFuture();
+        var future3 = purgatory.await(5L, 500).toCompletableFuture();
         assertEquals(3, purgatory.numWaiting());
 
         purgatory.completeAllExceptionally(new NotLeaderOrFollowerException());
@@ -141,22 +139,68 @@ class ThresholdPurgatoryTest {
     }
 
     @Test
-    public void testExternalCompletion() {
-        CompletableFuture<Long> future1 = purgatory.await(3L, 500);
-        CompletableFuture<Long> future2 = purgatory.await(1L, 500);
-        CompletableFuture<Long> future3 = purgatory.await(5L, 500);
+    public void testMultipleAwaitersWithSameThreshold() throws Exception {
+        var future1 = purgatory.await(3L, 500).toCompletableFuture();
+        var future2 = purgatory.await(3L, 500).toCompletableFuture();
+        var future3 = purgatory.await(3L, 500).toCompletableFuture();
         assertEquals(3, purgatory.numWaiting());
 
-        future2.complete(time.milliseconds());
-        assertFalse(future1.isDone());
-        assertFalse(future3.isDone());
-        assertEquals(2, purgatory.numWaiting());
+        long completionTime = time.milliseconds();
+        purgatory.maybeComplete(3L, completionTime);
+        assertTrue(future1.isDone());
+        assertTrue(future2.isDone());
+        assertTrue(future3.isDone());
+        assertEquals(completionTime, future1.get());
+        assertEquals(completionTime, future2.get());
+        assertEquals(completionTime, future3.get());
+        assertEquals(0, purgatory.numWaiting());
+    }
 
-        future1.complete(time.milliseconds());
-        assertFalse(future3.isDone());
+    @Test
+    public void testMaybeCompleteWithHigherValue() throws Exception {
+        var future1 = purgatory.await(1L, 500).toCompletableFuture();
+        var future2 = purgatory.await(3L, 500).toCompletableFuture();
+        var future3 = purgatory.await(5L, 500).toCompletableFuture();
+        assertEquals(3, purgatory.numWaiting());
+
+        long completionTime = time.milliseconds();
+        purgatory.maybeComplete(10L, completionTime);
+        assertTrue(future1.isDone());
+        assertTrue(future2.isDone());
+        assertTrue(future3.isDone());
+        assertEquals(completionTime, future1.get());
+        assertEquals(completionTime, future2.get());
+        assertEquals(completionTime, future3.get());
+        assertEquals(0, purgatory.numWaiting());
+    }
+
+    @Test
+    public void testNumWaitingWithMixedCompletions() {
+        purgatory.await(1L, 500);
+        purgatory.await(2L, 500);
+        purgatory.await(3L, 500);
+        purgatory.await(4L, 500);
+        assertEquals(4, purgatory.numWaiting());
+
+        purgatory.maybeComplete(1L, time.milliseconds());
+        assertEquals(3, purgatory.numWaiting());
+
+        purgatory.maybeComplete(3L, time.milliseconds());
         assertEquals(1, purgatory.numWaiting());
 
-        future3.complete(time.milliseconds());
+        purgatory.completeAll(time.milliseconds());
+        assertEquals(0, purgatory.numWaiting());
+    }
+
+    @Test
+    public void testExpirationReducesWaitingCount() {
+        var future1 = purgatory.await(1L, 100).toCompletableFuture();
+        var future2 = purgatory.await(2L, 100).toCompletableFuture();
+        assertEquals(2, purgatory.numWaiting());
+
+        time.sleep(100);
+        assertFutureThrows(TimeoutException.class, future1);
+        assertFutureThrows(TimeoutException.class, future2);
         assertEquals(0, purgatory.numWaiting());
     }
 

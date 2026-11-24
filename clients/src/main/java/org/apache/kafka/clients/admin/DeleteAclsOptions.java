@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for the {@link Admin#deleteAcls(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DeleteAclsOptions extends AbstractOptions<DeleteAclsOptions> {
 
     /**
@@ -30,6 +33,7 @@ public class DeleteAclsOptions extends AbstractOptions<DeleteAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DeleteAclsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 
 /**
  * Describe records to delete in a call to {@link Admin#deleteRecords(Map)}
  */
+@InterfaceAudience.Public
 public class RecordsToDelete {
 
     private final long offset;
@@ -34,7 +37,8 @@ public class RecordsToDelete {
      * Delete all the records before the given {@code offset}
      *
      * @param offset    The offset before which all records will be deleted.
-     *                  Use {@code -1} to truncate to the high watermark.
+     *                  Use {@code -1} to truncate to the high watermark. Otherwise, the offset
+     *                  must be at least 0 and at most the high watermark of the partition.
      */
     public static RecordsToDelete beforeOffset(long offset) {
         return new RecordsToDelete(offset);

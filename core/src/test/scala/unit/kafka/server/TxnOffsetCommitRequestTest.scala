@@ -23,9 +23,10 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{EndTxnRequest, JoinGroupRequest}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.{assertNotEquals, assertThrows}
 
 @ClusterTestDefaults(
@@ -59,6 +60,42 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     testDelayedTxnOffsetCommitWithBumpedEpochIsRejected(false)
   }
 
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, value = "1000")
+    )
+  )
+  def testTxnOffsetCommitExceedingMaxMessageSize(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val transactionalId = "txn"
+    val groupId = "group"
+
+    // Creates the __consumer_offsets and __transaction_state topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+    createTransactionStateTopic()
+
+    val topicId = createTopic(topic, 1)
+
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion()) {
+      // Verify TXN_OFFSET_COMMIT request failed with metadata larger than message.max.bytes.
+      verifyTxnCommitAndFetch(
+        topic = topic,
+        topicId = topicId,
+        partition = partition,
+        transactionalId = transactionalId,
+        groupId = groupId,
+        memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+        generationId = JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        offset = 100 + version,
+        metadata = "m" * 2000,
+        version = version.toShort,
+        expectedTxnCommitError = Errors.INVALID_COMMIT_OFFSET_SIZE
+      )
+    }
+  }
+
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
     val topic = "topic"
     val partition = 0
@@ -78,7 +115,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
 
     val topicId = createTopic(topic, 1)
 
-    for (version <- 0 to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- 0 to ApiKeys.TXN_OFFSET_COMMIT.latestVersion()) {
       // Verify that the TXN_OFFSET_COMMIT request is processed correctly when member id is UNKNOWN_MEMBER_ID
       // and generation id is UNKNOWN_GENERATION_ID under all api versions.
       verifyTxnCommitAndFetch(
@@ -206,6 +243,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     memberId: String,
     generationId: Int,
     offset: Long,
+    metadata: String = "",
     version: Short,
     expectedTxnCommitError: Errors
   ): Unit = {
@@ -244,6 +282,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       topicId = topicId,
       partition = partition,
       offset = offset,
+      metadata = metadata,
       expectedError = expectedTxnCommitError,
       version = version
     )
@@ -288,7 +327,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
 
     val topicId = createTopic(topic, 1)
 
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion()) {
       val useTV2 = version > EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
 
       // Initialize producer. Wait until the coordinator finishes loading.

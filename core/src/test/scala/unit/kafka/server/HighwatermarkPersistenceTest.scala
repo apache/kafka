@@ -18,6 +18,7 @@ package kafka.server
 
 import java.io.File
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._

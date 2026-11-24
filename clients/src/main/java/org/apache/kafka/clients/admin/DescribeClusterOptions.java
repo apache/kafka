@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#describeCluster()}.
  */
+@InterfaceAudience.Public
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
     private boolean includeAuthorizedOperations;
@@ -32,6 +35,7 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DescribeClusterOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

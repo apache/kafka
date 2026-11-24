@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
@@ -32,7 +33,9 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
+import org.apache.kafka.server.authorizer.internals.CidrUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -49,8 +52,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
-
 
 /**
  * The AclControlManager manages any ACLs that are stored in the __cluster_metadata topic.
@@ -61,6 +62,7 @@ public class AclControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -72,34 +74,45 @@ public class AclControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         AclControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new AclControlManager(logContext, snapshotRegistry);
+            return new AclControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);
         }
     }
 
     private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
+    private final int maxRecordsPerBatch;
 
     private AclControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
     }
 
-    ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
+    ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls, MetadataVersion metadataVersion) {
         Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         for (AclBinding acl : acls) {
             try {
-                validateNewAcl(acl);
+                validateNewAcl(acl, metadataVersion.isCidrAclSupported());
             } catch (Throwable t) {
                 ApiException e = (t instanceof ApiException) ? (ApiException) t :
                     new UnknownServerException("Unknown error while trying to create ACL", t);
@@ -132,7 +145,7 @@ public class AclControlManager {
         return uuid;
     }
 
-    static void validateNewAcl(AclBinding binding) {
+    static void validateNewAcl(AclBinding binding, boolean isCidrAclSupported) {
         switch (binding.pattern().resourceType()) {
             case UNKNOWN:
             case ANY:
@@ -174,6 +187,45 @@ public class AclControlManager {
                 binding.entry().principal() + "` " + "(no colon is present separating the " +
                 "principal type from the principal name)");
         }
+        validateHostPattern(binding.entry().host(), isCidrAclSupported);
+    }
+
+    /**
+     * Validates the host pattern of an ACL entry.
+     *
+     * Accepts:
+     * - Wildcard "*" (matches any host)
+     * - Valid IPv4 address (e.g., "192.168.1.1")
+     * - Valid IPv6 address (e.g., "2001:db8::1")
+     * - Valid IPv4 CIDR notation (e.g., "192.168.0.0/24"), which requires cidrSupported=true
+     * - Valid IPv6 CIDR notation (e.g., "2001:db8::/32"), which requires cidrSupported=true
+     *
+     * @param host The host pattern to validate
+     * @param isCidrSupported Whether CIDR notation is supported by the current metadata version
+     * @throws InvalidRequestException if the host pattern is invalid
+     * @throws UnsupportedVersionException if CIDR notation is used but not supported
+     */
+    static void validateHostPattern(String host, boolean isCidrSupported) {
+        if (host == null || host.isEmpty()) {
+            throw new InvalidRequestException("Host pattern cannot be null or empty");
+        }
+
+        if ("*".equals(host)) {
+            return;
+        }
+
+        if (host.contains("/")) {
+            if (!isCidrSupported) {
+                throw new UnsupportedVersionException(
+                    "CIDR-based ACL host patterns require metadata version " +
+                    MetadataVersion.IBP_4_4_IV1 + " or higher.");
+            }
+            try {
+                CidrUtils.validate(host);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRequestException("Invalid CIDR notation '" + host + "': " + e.getMessage());
+            }
+        }
     }
 
     ControllerResult<List<AclDeleteResult>> deleteAcls(List<AclBindingFilter> filters) {
@@ -204,9 +256,9 @@ public class AclControlManager {
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
                 // check size limitation first before adding additional records
-                if (records.size() >= MAX_RECORDS_PER_USER_OP) {
+                if (records.size() >= maxRecordsPerBatch) {
                     throw new BoundedListTooLongException("Cannot remove more than " +
-                        MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
+                        maxRecordsPerBatch + " acls in a single delete operation.");
                 }
                 deleted.add(new AclBindingDeleteResult(binding));
                 records.add(new ApiMessageAndVersion(

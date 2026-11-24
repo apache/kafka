@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.kerberos;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,7 +42,7 @@ public class KerberosShortNamer {
     }
 
     public static KerberosShortNamer fromUnparsedRules(String defaultRealm, List<String> principalToLocalRules) {
-        List<String> rules = principalToLocalRules == null ? Collections.singletonList("DEFAULT") : principalToLocalRules;
+        List<String> rules = principalToLocalRules == null ? List.of("DEFAULT") : principalToLocalRules;
         return new KerberosShortNamer(parseRules(defaultRealm, rules));
     }
 

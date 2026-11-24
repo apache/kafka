@@ -43,7 +43,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
-import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -63,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -118,6 +118,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineObject<ConsumerGroupState> state;
 
     /**
+     * The number of stable members at each member epoch.
+     */
+    private final TimelineHashMap<Integer, Integer> numStableMembersByEpoch;
+
+    /**
      * The static group members.
      */
     private final TimelineHashMap<String, String> staticMembers;
@@ -164,6 +169,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         super(snapshotRegistry, groupId);
         this.log = logContext.logger(ConsumerGroup.class);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
+        this.numStableMembersByEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -201,6 +207,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -246,12 +253,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
-     * @param createIfNotExists Booleans indicating whether the member must be
-     *                          created if it does not exist.
+     * @param createIfNotExists Whether the member must be created if it does not exist.
      *
      * @return A ConsumerGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
+    @Override
     public ConsumerGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
@@ -324,7 +331,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateSubscribedRegularExpression(oldMember, newMember);
-        updateStaticMember(newMember);
+        updateStaticMember(oldMember, newMember);
+        maybeUpdateNumStableMembers(oldMember, newMember);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
@@ -334,9 +342,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Updates the member id stored against the instance id if the member is a static member.
      *
+     * @param oldMember The old member state.
      * @param newMember The new member state.
      */
-    private void updateStaticMember(ConsumerGroupMember newMember) {
+    private void updateStaticMember(ConsumerGroupMember oldMember, ConsumerGroupMember newMember) {
+        if (oldMember != null && oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
         if (newMember.instanceId() != null) {
             staticMembers.put(newMember.instanceId(), newMember.memberId());
         }
@@ -345,11 +357,18 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     @Override
     public void removeMember(String memberId) {
         ConsumerGroupMember oldMember = members.remove(memberId);
+
+        // Compaction can remove the target assignment tombstone of the member and keep its member
+        // metadata tombstone, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         maybeUpdateSubscribedRegularExpression(oldMember, null);
         removeStaticMember(oldMember);
+        maybeUpdateNumStableMembers(oldMember, null);
         maybeUpdateGroupState();
         maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, null);
@@ -592,41 +611,74 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Compute the preferred (server side) assignor for the group while
      * taking into account the updated member. The computation relies
-     * on {{@link ConsumerGroup#serverAssignors}} persisted structure
+     * on {@link ConsumerGroup#serverAssignors} persisted structure
      * but it does not update it.
      *
-     * @param oldMember The old member.
-     * @param newMember The new member.
+     * @param oldMember               The old member.
+     * @param newMember               The new member.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
      *
-     * @return An Optional containing the preferred assignor.
+     * @return The preferred assignor.
      */
-    public Optional<String> computePreferredServerAssignor(
+    public String computePreferredServerAssignor(
         ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember
+        ConsumerGroupMember newMember,
+        List<String> configuredAssignorNames
     ) {
         // Copy the current count and update it.
         Map<String, Integer> counts = new HashMap<>(this.serverAssignors);
         maybeUpdateServerAssignors(counts, oldMember, newMember);
 
-        return counts.entrySet().stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey);
+        return selectPreferredServerAssignor(configuredAssignorNames, counts::get);
     }
 
     /**
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
+     *
      * @return The preferred assignor for the group.
      */
-    public Optional<String> preferredServerAssignor() {
-        return preferredServerAssignor(Long.MAX_VALUE);
+    public String preferredServerAssignor(List<String> configuredAssignorNames) {
+        return preferredServerAssignor(Long.MAX_VALUE, configuredAssignorNames);
     }
 
     /**
+     * @param committedOffset         The committed offset.
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
+     *
      * @return The preferred assignor for the group with given offset.
      */
-    public Optional<String> preferredServerAssignor(long committedOffset) {
-        return serverAssignors.entrySet(committedOffset).stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey);
+    public String preferredServerAssignor(long committedOffset, List<String> configuredAssignorNames) {
+        return selectPreferredServerAssignor(
+            configuredAssignorNames,
+            assignorName -> serverAssignors.get(assignorName, committedOffset)
+        );
+    }
+
+    /**
+     * Selects the preferred assignor among the configured assignors. The assignor
+     * with the most votes wins. When several assignors have the same number of
+     * votes, the one that comes first in the configured assignors wins. When none
+     * of them has a vote, the first configured assignor is the default.
+     *
+     * @param configuredAssignorNames The names of the configured assignors in order of preference.
+     * @param votes                   The number of votes of an assignor, or null if it has none.
+     *
+     * @return The preferred assignor.
+     */
+    private static String selectPreferredServerAssignor(
+        List<String> configuredAssignorNames,
+        Function<String, Integer> votes
+    ) {
+        String preferredAssignorName = configuredAssignorNames.get(0);
+        int maxVotes = 0;
+        for (String assignorName : configuredAssignorNames) {
+            Integer assignorVotes = votes.apply(assignorName);
+            if (assignorVotes != null && assignorVotes > maxVotes) {
+                preferredAssignorName = assignorName;
+                maxVotes = assignorVotes;
+            }
+        }
+        return preferredAssignorName;
     }
 
     /**
@@ -635,8 +687,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param memberId          The member id.
      * @param groupInstanceId   The group instance id.
      * @param memberEpoch       The member epoch.
-     * @param isTransactional   Whether the offset commit is transactional or not. It has no
-     *                          impact when a consumer group is used.
+     * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
      * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException     If the member is not found.
@@ -963,15 +1014,44 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
-            for (ModernGroupMember member : members.values()) {
-                if (!member.isReconciledTo(assignmentEpoch())) {
-                    newState = RECONCILING;
-                    break;
-                }
+            Integer numStableMembers = numStableMembersByEpoch.get(assignmentEpoch());
+            if (numStableMembers == null || numStableMembers < members.size()) {
+                newState = RECONCILING;
             }
         }
 
         state.set(newState);
+    }
+
+    /**
+     * Updates the number of stable members at each member epoch.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateNumStableMembers(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        boolean oldStable = oldMember != null && oldMember.state() == MemberState.STABLE;
+        boolean newStable = newMember != null && newMember.state() == MemberState.STABLE;
+
+        if (oldStable && newStable && oldMember.memberEpoch() == newMember.memberEpoch()) {
+            // The member is stable at the same member epoch before and after
+            // the update, so the counts do not change.
+            return;
+        }
+
+        if (oldStable) {
+            // The old member is no longer counted at its member epoch. The
+            // entry is removed when its count drops to zero.
+            numStableMembersByEpoch.compute(oldMember.memberEpoch(), Utils::decValue);
+        }
+
+        if (newStable) {
+            // The new member is counted at its member epoch.
+            numStableMembersByEpoch.compute(newMember.memberEpoch(), Utils::incValue);
+        }
     }
 
     /**
@@ -1177,12 +1257,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
-        String defaultAssignor,
+        List<String> configuredAssignorNames,
         CoordinatorMetadataImage image
     ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
-            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
+            .setAssignorName(preferredServerAssignor(committedOffset, configuredAssignorNames))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
@@ -1238,10 +1318,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
             }
 
-            // Every member is guaranteed to have metadata set when it joins,
-            // so we don't check for empty subscription here.
+            // Every member is guaranteed to have metadata set when it joins, so we don't check for
+            // empty subscription here. All the protocols of a member have the same subscription,
+            // so the first one is used.
             ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
-                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
+                ByteBuffer.wrap(classicGroupMember.supportedProtocols().iterator().next().metadata())
             );
 
             // The target assignment and the assigned partitions of each member are set based on the last

@@ -17,12 +17,15 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Set;
 
 /**
  * Options for {@link org.apache.kafka.clients.admin.Admin#electLeaders(ElectionType, Set, org.apache.kafka.clients.admin.ElectLeadersOptions)}.
  */
+@InterfaceAudience.Public
 public enum ElectionType {
     PREFERRED((byte) 0), UNCLEAN((byte) 1);
 

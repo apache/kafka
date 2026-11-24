@@ -14,9 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
 public class IntegerSerializer implements Serializer<Integer> {
+    @Override
     public byte[] serialize(String topic, Integer data) {
         if (data == null)
             return null;

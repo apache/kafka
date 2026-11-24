@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -47,6 +48,7 @@ import java.util.Map;
  * When we deprecate `ProcessorContext` can also deprecate `To` class,
  * as it is only used in the `ProcessorContext#forward` method.
  */
+@InterfaceAudience.Public
 public interface ProcessorContext {
 
     /**

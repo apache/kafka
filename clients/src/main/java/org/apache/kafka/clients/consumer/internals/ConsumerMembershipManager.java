@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
@@ -33,7 +33,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.Time;
@@ -105,7 +104,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * the user if the callbacks fail. This manager is only concerned about the callbacks completion to
  * know that it can proceed with the reconciliation.
  */
-public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponse> {
+public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponse, ConsumerSubscriptionState> {
 
     /**
      * Group instance ID to be used by the member, provided when creating the current membership manager.
@@ -145,7 +144,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
-                                     SubscriptionState subscriptions,
+                                     ConsumerSubscriptionState subscriptions,
                                      CommitRequestManager commitRequestManager,
                                      ConsumerMetadata metadata,
                                      LogContext logContext,
@@ -174,7 +173,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
-                              SubscriptionState subscriptions,
+                              ConsumerSubscriptionState subscriptions,
                               CommitRequestManager commitRequestManager,
                               ConsumerMetadata metadata,
                               LogContext logContext,
@@ -209,61 +208,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         return rackId;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponse response) {
-        ConsumerGroupHeartbeatResponseData responseData = response.data();
-        if (responseData.errorCode() != Errors.NONE.code()) {
-            String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(responseData.errorCode())
-            );
-            throw new IllegalArgumentException(errorMessage);
-        }
-        MemberState state = state();
-        if (state == MemberState.LEAVING) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
-            return;
-        }
-        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
-            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
-            return;
-        }
-        if (isNotInGroup()) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                    " so it's not a member of the group. ", memberId, state);
-            return;
-        }
-        if (responseData.memberEpoch() < 0) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
-                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
-                    responseData.memberEpoch());
-            maybeCompleteLeaveInProgress();
-            return;
-        }
+    protected short errorCode(ConsumerGroupHeartbeatResponse response) {
+        return response.data().errorCode();
+    }
 
-        updateMemberEpoch(responseData.memberEpoch());
+    @Override
+    protected int memberEpoch(ConsumerGroupHeartbeatResponse response) {
+        return response.data().memberEpoch();
+    }
 
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
-
-        if (assignment != null) {
-            if (!state.canHandleNewAssignment()) {
-                // New assignment received but member is in a state where it cannot take new
-                // assignments (ex. preparing to leave the group)
-                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
-                        assignment, state);
-                return;
-            }
-
-            Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
-            assignment.topicPartitions().forEach(topicPartition ->
-                newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
-            processAssignmentReceived(newAssignment);
+    @Override
+    protected Optional<Map<Uuid, SortedSet<Integer>>> extractAssignment(ConsumerGroupHeartbeatResponse response) {
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = response.data().assignment();
+        if (assignment == null) {
+            return Optional.empty();
         }
+        Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
+        assignment.topicPartitions().forEach(topicPartition ->
+            newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
+        return Optional.of(newAssignment);
     }
 
     /**
@@ -356,8 +320,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
         // This should not trigger the callback if partitionsRevoked is empty, to keep the
         // current behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
+        if (!partitionsRevoked.isEmpty() && subscriptions.hasRebalanceListener()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
@@ -367,8 +330,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (!partitionsLost.isEmpty() && listener.isPresent()) {
+        if (!partitionsLost.isEmpty() && subscriptions.hasRebalanceListener()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);
@@ -438,7 +400,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     /**
      * Enqueue a {@link PartitionsRemovedEvent} to trigger the execution of either
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked} or {@link ConsumerRebalanceListener#onPartitionsLost}
+     * {@link RebalanceListener#onPartitionsRevoked} or {@link RebalanceListener#onPartitionsLost}
      * on the application thread.
      *
      * <p/>
@@ -479,7 +441,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals that a {@link ConsumerRebalanceListener} callback has completed. This is invoked when the
+     * Signals that a {@link RebalanceListener} callback has completed. This is invoked when the
      * application thread has completed the callback and has submitted a
      * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
      * notify the state machine that it's complete so that it can move to the next appropriate step of the

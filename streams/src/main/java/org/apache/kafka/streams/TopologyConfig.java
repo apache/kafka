@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -86,6 +87,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  * to be applied and the config will be ignored.
  */
 @SuppressWarnings("deprecation")
+@InterfaceAudience.Public
 public final class TopologyConfig extends AbstractConfig {
 
     public static class InternalConfig {

@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeConfigs(Collection)}.
  */
+@InterfaceAudience.Public
 public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptions> {
 
     private boolean includeSynonyms = false;
@@ -33,6 +36,7 @@ public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptio
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public DescribeConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;

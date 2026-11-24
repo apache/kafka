@@ -30,8 +30,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.function.Function;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,8 +58,8 @@ public class GenericKeyValueIteratorFacadeTest {
             .thenReturn(KeyValue.pair("key1", ValueAndTimestamp.make("value1", 42L)))
             .thenReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 84L)));
 
-        assertThat(facade.next(), is(KeyValue.pair("key1", "value1")));
-        assertThat(facade.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", "value1"), facade.next());
+        assertEquals(KeyValue.pair("key2", "value2"), facade.next());
     }
 
     @Test
@@ -69,8 +68,8 @@ public class GenericKeyValueIteratorFacadeTest {
             .thenReturn(KeyValue.pair("key1", null))
             .thenReturn(KeyValue.pair("key2", ValueAndTimestamp.make("value2", 42L)));
 
-        assertThat(facade.next(), is(KeyValue.pair("key1", null)));
-        assertThat(facade.next(), is(KeyValue.pair("key2", "value2")));
+        assertEquals(KeyValue.pair("key1", null), facade.next());
+        assertEquals(KeyValue.pair("key2", "value2"), facade.next());
     }
 
     @Test
@@ -85,7 +84,7 @@ public class GenericKeyValueIteratorFacadeTest {
     public void shouldDelegatePeekNextKey() {
         when(mockedInnerIterator.peekNextKey()).thenReturn("peekedKey", (String) null);
 
-        assertThat(facade.peekNextKey(), is("peekedKey"));
+        assertEquals("peekedKey", facade.peekNextKey());
         assertNull(facade.peekNextKey());
     }
 

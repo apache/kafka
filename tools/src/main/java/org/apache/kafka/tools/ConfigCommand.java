@@ -14,8 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools;
 
+package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
@@ -50,7 +50,6 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.DynamicConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
@@ -67,7 +66,6 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -92,7 +90,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups/cluster-mirrors dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
@@ -105,6 +103,7 @@ import joptsimple.OptionSpec;
  *     <li> ip: {@code --ip <ip>} OR {@code --entity-type ips --entity-name <ip>}
  *     <li> client-metrics: {@code --client-metrics <name>} OR {@code --entity-type client-metrics --entity-name <name>}
  *     <li> group: {@code --group <group>} OR {@code --entity-type groups --entity-name <group>}
+ *     <li> cluster-mirror: {@code --cluster-mirror <mirror-name>} OR {@code --entity-type cluster-mirrors --entity-name <mirror-name>}
  * </ul>
  * {@code --entity-type <users|clients|brokers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|ips> --entity-name <entityName>}
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -117,25 +116,24 @@ public class ConfigCommand {
 
     private static final String BROKER_DEFAULT_ENTITY_NAME = "";
     private static final int DEFAULT_SCRAM_ITERATIONS = 4096;
-    private static final String TOPIC_TYPE = ConfigType.TOPIC.value();
-    private static final String CLIENT_METRICS_TYPE = ConfigType.CLIENT_METRICS.value();
-    private static final String BROKER_TYPE = ConfigType.BROKER.value();
-    private static final String GROUP_TYPE = ConfigType.GROUP.value();
-    private static final String USER_TYPE = ConfigType.USER.value();
-    private static final String CLIENT_TYPE = ConfigType.CLIENT.value();
-    private static final String IP_TYPE = ConfigType.IP.value();
+    private static final String TOPIC_TYPE = "topics";
+    private static final String CLIENT_METRICS_TYPE = "client-metrics";
+    private static final String BROKER_TYPE = "brokers";
+    private static final String GROUP_TYPE = "groups";
+    private static final String USER_TYPE = "users";
+    private static final String CLIENT_TYPE = "clients";
+    private static final String IP_TYPE = "ips";
+    private static final String CLUSTER_MIRROR_TYPE = "cluster-mirrors";
 
     static final String BROKER_LOGGER_CONFIG_TYPE = "broker-loggers";
-    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES = Stream.concat(
-            Stream.of(BROKER_LOGGER_CONFIG_TYPE),
-            Stream.of(ConfigType.values()).map(ConfigType::value)
-    ).toList();
+    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES = List.of(
+            BROKER_LOGGER_CONFIG_TYPE, TOPIC_TYPE, CLIENT_TYPE, USER_TYPE, BROKER_TYPE, IP_TYPE, CLIENT_METRICS_TYPE, GROUP_TYPE, CLUSTER_MIRROR_TYPE);
 
     public static void main(String[] args) {
         try {
             ConfigCommandOptions opts = new ConfigCommandOptions(args);
             CommandLineUtils.maybePrintHelpOrVersion(opts,
-                    "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip, client-metrics or group");
+                    "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip, client-metrics, group or cluster-mirror");
             opts.checkArgs();
             processCommand(opts);
         } catch (UnsupportedVersionException uve) {
@@ -241,7 +239,7 @@ public class ConfigCommand {
         List<String> configsToBeDeleted = parseConfigsToBeDeleted(opts);
 
         if (TOPIC_TYPE.equals(entityType) || CLIENT_METRICS_TYPE.equals(entityType) ||
-                BROKER_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType)) {
+                BROKER_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType) || CLUSTER_MIRROR_TYPE.equals(entityType)) {
             ConfigResource.Type configResourceType;
             if (TOPIC_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.TOPIC;
@@ -252,13 +250,21 @@ public class ConfigCommand {
                     validateBrokerId(entityName, entityType);
                 }
                 configResourceType = ConfigResource.Type.BROKER;
-            } else {
+            } else if (GROUP_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.GROUP;
+            } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
+                configResourceType = ConfigResource.Type.CLUSTER_MIRROR;
+            } else {
+                throw new IllegalArgumentException("Invalid entity type: " + entityType);
             }
             try {
                 alterResourceConfig(adminClient, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);
             } catch (ExecutionException ee) {
-                if (ee.getCause() instanceof UnsupportedVersionException) {
+                if (ee.getCause() instanceof UnsupportedVersionException uve) {
+                    // the cluster supports the API but may not support cluster mirrors yet, so surface the server's error as is
+                    if (configResourceType == ConfigResource.Type.CLUSTER_MIRROR) {
+                        throw uve;
+                    }
                     throw new UnsupportedVersionException("The " + ApiKeys.INCREMENTAL_ALTER_CONFIGS + " API is not supported by the cluster. The API is supported starting from version 2.3.0."
                             + " You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.");
                 }
@@ -310,7 +316,7 @@ public class ConfigCommand {
                     combined.addAll(scramConfigsToDelete);
                     throw new IllegalArgumentException("Only quota configs can be deleted for '" + CLIENT_TYPE + "' using --bootstrap-server. Unexpected config names: " + String.join(",", combined));
                 }
-            } else { // ConfigType.User
+            } else { // USER_TYPE
                 if (!unknownConfigsToAdd.isEmpty())
                     throw new IllegalArgumentException("Only quota and SCRAM credential configs can be added for '" + USER_TYPE + "' using --bootstrap-server. Unexpected config names: " + String.join(",", unknownConfigsToAdd));
                 if (!unknownConfigsToDelete.isEmpty())
@@ -465,7 +471,7 @@ public class ConfigCommand {
 
         Collection<ClientQuotaAlteration.Op> alterOps = Stream.concat(addOps.stream(), deleteOps.stream()).toList();
 
-        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+        adminClient.alterClientQuotas(Set.of(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
                 .all().get(60, TimeUnit.SECONDS);
     }
 
@@ -476,7 +482,7 @@ public class ConfigCommand {
 
         String entityType = entityTypes.get(0);
         if (TOPIC_TYPE.equals(entityType) || BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType) ||
-                CLIENT_METRICS_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType)) {
+                CLIENT_METRICS_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType) || CLUSTER_MIRROR_TYPE.equals(entityType)) {
             describeResourceConfig(adminClient, entityType, entityNames.isEmpty() ? Optional.empty() : Optional.of(entityNames.get(0)), describeAll);
         } else if (USER_TYPE.equals(entityType) || CLIENT_TYPE.equals(entityType)) {
             describeClientQuotaAndUserScramCredentialConfigs(adminClient, entityTypes, entityNames);
@@ -523,6 +529,9 @@ public class ConfigCommand {
                         System.out.println("The " + entityTypeSingular + " '" + name + "' doesn't exist and doesn't have dynamic config.");
                         return;
                     }
+                } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
+                    // cluster mirrors cannot be listed until KAFKA-21530, so the existence check is skipped
+                    System.out.println("WARNING: Cannot check whether the " + entityTypeSingular + " '" + name + "' exists, since cluster mirrors cannot be listed yet.");
                 } else {
                     throw new IllegalArgumentException("Invalid entity type: " + entityType);
                 }
@@ -652,6 +661,9 @@ public class ConfigCommand {
         } else if (GROUP_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.GROUP;
             dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG;
+        } else if (CLUSTER_MIRROR_TYPE.equals(entityType)) {
+            configResourceType = ConfigResource.Type.CLUSTER_MIRROR;
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_CLUSTER_MIRROR_CONFIG;
         } else {
             throw new IllegalArgumentException("Invalid entity type: " + entityType);
         }
@@ -672,7 +684,7 @@ public class ConfigCommand {
                 ? Optional.empty()
                 : Optional.of(context.dynamicConfigSource());
         DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
-        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(context.configResource()), describeOptions)
+        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Set.of(context.configResource()), describeOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
         return filterAndSortEntries(configs.get(context.configResource()), configSourceFilter);
@@ -819,6 +831,7 @@ public class ConfigCommand {
         private final OptionSpec<String> ip;
         private final OptionSpec<String> group;
         private final OptionSpec<String> clientMetrics;
+        private final OptionSpec<String> clusterMirror;
 
         private static String formatConfigNames(Collection<String> names) {
             String nl = System.lineSeparator();
@@ -847,10 +860,10 @@ public class ConfigCommand {
             describeOpt = parser.accepts("describe", "List configs for the given entity.");
             allOpt = parser.accepts("all", "List all configs for the given entity, including static configs if available.");
 
-            entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups)")
+            entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups/cluster-mirrors)")
                     .withRequiredArg()
                     .ofType(String.class);
-            entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id)")
+            entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id/cluster mirror name)")
                     .withRequiredArg()
                     .ofType(String.class);
             entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type)");
@@ -901,6 +914,9 @@ public class ConfigCommand {
             clientMetrics = parser.accepts("client-metrics", "The client metrics config resource name.")
                     .withRequiredArg()
                     .ofType(String.class);
+            clusterMirror = parser.accepts("cluster-mirror", "The cluster mirror's name.")
+                    .withRequiredArg()
+                    .ofType(String.class);
 
             options = parser.parse(args);
         }
@@ -916,7 +932,8 @@ public class ConfigCommand {
                 new EntityFlag(brokerLogger, BROKER_LOGGER_CONFIG_TYPE),
                 new EntityFlag(ip, IP_TYPE),
                 new EntityFlag(clientMetrics, CLIENT_METRICS_TYPE),
-                new EntityFlag(group, GROUP_TYPE)
+                new EntityFlag(group, GROUP_TYPE),
+                new EntityFlag(clusterMirror, CLUSTER_MIRROR_TYPE)
             );
         }
 
@@ -1040,7 +1057,7 @@ public class ConfigCommand {
                     throw new IllegalArgumentException("--entity-default must not be specified with --describe of " + String.join(",", entityTypeVals));
                 }
 
-                if (entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE) && !hasEntityName)
+                if ((entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE) || entityTypeVals.contains(CLUSTER_MIRROR_TYPE)) && !hasEntityName)
                     throw new IllegalArgumentException("An entity name must be specified with --describe of " + String.join(",", entityTypeVals));
             }
 

@@ -86,9 +86,6 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                 .setGroupId(groupId);
 
             if (spec.topicPartitions() != null) {
-                Map<String, List<Integer>> topicPartitionMap = new HashMap<>();
-                spec.topicPartitions().forEach(tp -> topicPartitionMap.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition()));
-
                 Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
                 for (TopicPartition tp : spec.topicPartitions()) {
                     requestTopics.computeIfAbsent(tp.topic(), t ->

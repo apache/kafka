@@ -60,8 +60,10 @@ class VerifiableShareConsumerTest(KafkaTest):
                                   request_timeout_sec=self.PRODUCER_REQUEST_TIMEOUT_SEC,
                                   log_level="DEBUG")
 
-    def await_produced_messages(self, producer, min_messages=1000, timeout_sec=10):
-        current_acked = producer.num_acked
+    def await_produced_messages(self, producer, min_messages=1000, timeout_sec=10, total=False):
+        current_acked = 0
+        if total is False:
+            current_acked = producer.num_acked
         wait_until(lambda: producer.num_acked >= current_acked + min_messages, timeout_sec=timeout_sec,
                    err_msg="Timeout awaiting messages to be produced and acked")
 

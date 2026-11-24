@@ -39,7 +39,6 @@ public class BenchmarkConfigUtils {
         props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
         props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, String.valueOf(TimeUnit.MINUTES.toMillis(10)));
         props.put(KRaftConfigs.NODE_ID_CONFIG, "0");
-        props.put(ServerConfigs.BROKER_ID_CONFIG, "0");
 
         props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:9092");
         props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093");

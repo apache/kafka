@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -84,6 +85,7 @@ import static org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSu
  * topology.addStateStore(storeBuilder, "processorName");
  * }</pre>
  */
+@InterfaceAudience.Public
 public final class Stores {
 
     /**

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.StreamsConfig;
 
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.ma
  * Deserialization handler that logs a deserialization exception and then
  * signals the processing pipeline to continue processing more records.
  */
+@InterfaceAudience.Public
 public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
     private String deadLetterQueueTopic = null;

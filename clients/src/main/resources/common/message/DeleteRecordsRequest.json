@@ -23,6 +23,10 @@
   // Version 2 is the first flexible version.
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]DeleteRecordsTopic", "versions": "0+",
       "about": "Each topic that we want to delete records from.", "fields": [

@@ -1,6 +1,6 @@
 ---
 title: Kafka Connect Configs
-description: Kafka Connect Configs
+description: Kafka Connect configuration reference.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

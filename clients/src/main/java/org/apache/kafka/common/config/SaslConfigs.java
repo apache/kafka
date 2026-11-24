@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Range;
 
 import java.util.List;
 
+@InterfaceAudience.Public
 public class SaslConfigs {
 
     private static final String OAUTHBEARER_NOTE = " Currently applies only to OAUTHBEARER.";
@@ -155,7 +157,7 @@ public class SaslConfigs {
         + "<p>The built-in <code>JwtValidator</code> implementations are:</p>"
         + "<ul>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator</code></li>"
-        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code></li>"
+        + "<li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code> (clients only, it does not verify JWT signatures and cannot be used on brokers)</li>"
         + "<li><code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code></li>"
         + "</ul>";
 
@@ -313,12 +315,14 @@ public class SaslConfigs {
 
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL = "sasl.oauthbearer.token.endpoint.url";
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC = "The URL for the OAuth/OIDC identity provider. If the URL is HTTP(S)-based, it is the issuer's token"
-            + " endpoint URL to which requests will be made to login based on the configuration in <code>" + SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS + "</code>. If the URL is"
+            + " endpoint URL to which requests will be made to login based on the configuration in <code>" + SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS + "</code>."
+            + " An HTTP URL should not be used in production, since login requests and tokens are then sent without TLS; use an HTTPS URL instead. If the URL is"
             + " file-based, it specifies a file containing an access token (in JWT serialized form) issued by the OAuth/OIDC identity provider to use for authorization.";
 
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL = "sasl.oauthbearer.jwks.endpoint.url";
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC = "The OAuth/OIDC provider URL from which the provider's"
             + " <a href=\"https://datatracker.ietf.org/doc/html/rfc7517#section-5\">JWKS (JSON Web Key Set)</a> can be retrieved. The URL can be HTTP(S)-based or file-based."
+            + " An HTTP URL should not be used in production, since the keys used to verify tokens are then retrieved without TLS; use an HTTPS URL instead."
             + " If the URL is HTTP(S)-based, the JWKS data will be retrieved from the OAuth/OIDC provider via the configured URL on broker startup. All then-current"
             + " keys will be cached on the broker for incoming requests. If an authentication request is received for a JWT that includes a \"kid\" header claim value that"
             + " isn't yet in the cache, the JWKS endpoint will be queried again on demand. However, the broker polls the URL every sasl.oauthbearer.jwks.endpoint.refresh.ms"
@@ -352,15 +356,31 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC = "The (optional) value in seconds to allow for differences between the time of the OAuth/OIDC identity provider and"
             + " the broker.";
 
+    public static final String SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE = "sasl.oauthbearer.allow.unverified.audience";
+    public static final String SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE_DOC = "The (optional) setting that allows the broker to validate JWTs without verifying the audience. By default the broker"
+            + " requires sasl.oauthbearer.expected.audience to be set whenever " + SASL_OAUTHBEARER_JWKS_ENDPOINT_URL + " is configured, and rejects any JWT whose \"aud\" claim does"
+            + " not match one of the expected audiences. When this is set to true that requirement is lifted: the \"aud\" claim is no longer checked and a JWT bearing any (or no)"
+            + " audience is accepted. Leaving the audience unverified is insecure and strongly discouraged; enable it only for deployments that intentionally accept tokens regardless"
+            + " of their intended audience. The default value is 'false'.";
+
     public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE = "sasl.oauthbearer.expected.audience";
-    public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC = "The (optional) comma-delimited setting for the broker to use to verify that the JWT was issued for one of the"
-            + " expected audiences. The JWT will be inspected for the standard OAuth \"aud\" claim and if this value is set, the broker will match the value from JWT's \"aud\" claim "
-            + " to see if there is an exact match. If there is no match, the broker will reject the JWT and authentication will fail.";
+    public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC = "The comma-delimited setting for the broker to use to verify that the JWT was issued for one of the"
+            + " expected audiences. The JWT will be inspected for the standard OAuth \"aud\" claim and the broker will match the value(s) from the JWT's \"aud\" claim"
+            + " to see if there is an exact match. If there is no match, the broker will reject the JWT and authentication will fail. Required if " + SASL_OAUTHBEARER_JWKS_ENDPOINT_URL + " is set," +
+            " with the ability to opt-out using " + SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE + ".";
+
+    public static final String SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER = "sasl.oauthbearer.allow.unverified.issuer";
+    public static final String SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER_DOC = "The (optional) setting that allows the broker to validate JWTs without verifying the issuer. By default the broker"
+            + " requires sasl.oauthbearer.expected.issuer to be set whenever " + SASL_OAUTHBEARER_JWKS_ENDPOINT_URL + " is configured, and rejects any JWT whose \"iss\" claim does not"
+            + " match the expected issuer. When this is set to true that requirement is lifted: the \"iss\" claim is no longer checked and a JWT bearing any (or no) issuer is accepted."
+            + " Leaving the issuer unverified is insecure and strongly discouraged; enable it only for deployments that intentionally accept tokens regardless of which issuer minted"
+            + " them. The default value is 'false'.";
 
     public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER = "sasl.oauthbearer.expected.issuer";
-    public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC = "The (optional) setting for the broker to use to verify that the JWT was created by the expected issuer. The JWT will"
-            + " be inspected for the standard OAuth \"iss\" claim and if this value is set, the broker will match it exactly against what is in the JWT's \"iss\" claim. If there is no"
-            + " match, the broker will reject the JWT and authentication will fail.";
+    public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC = "The setting for the broker to use to verify that the JWT was created by the expected issuer. The JWT will"
+            + " be inspected for the standard OAuth \"iss\" claim and the broker will match it exactly against what is in the JWT's \"iss\" claim. If there is no"
+            + " match, the broker will reject the JWT and authentication will fail. Required if " + SASL_OAUTHBEARER_JWKS_ENDPOINT_URL + " is set, with the ability to " +
+            "opt-out using " + SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER + ".";
 
     public static final String SASL_OAUTHBEARER_HEADER_URLENCODE = "sasl.oauthbearer.header.urlencode";
     public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE = false;
@@ -409,8 +429,10 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE, ConfigDef.Type.BOOLEAN, false, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.HIGH, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, ConfigDef.Type.BOOLEAN, false, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_DOC);
     }
 }

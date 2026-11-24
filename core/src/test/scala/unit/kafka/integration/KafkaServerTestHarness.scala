@@ -25,7 +25,6 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
@@ -165,7 +164,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
     listenerName: ListenerName = listenerName,
     adminClientConfig: Properties = new Properties
   ): scala.collection.immutable.Map[Int, Int] = {
@@ -316,7 +315,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
     _brokers.foreach { server =>
-      val cache = server.credentialProvider.credentialCache.cache(mechanismName, classOf[ScramCredential])
+      val cache = server.credentialProvider.credentialCache.cache(mechanismName)
       TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
     }
   }

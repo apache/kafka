@@ -14,9 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
 public class LongSerializer implements Serializer<Long> {
+    @Override
     public byte[] serialize(String topic, Long data) {
         if (data == null)
             return null;
