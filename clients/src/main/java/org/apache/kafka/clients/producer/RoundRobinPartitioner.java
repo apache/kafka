@@ -69,8 +69,12 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(ThreadLocalRandom.current().nextInt()));
+        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(initialCounterValue()));
         return counter.getAndIncrement();
+    }
+
+    int initialCounterValue() {
+        return ThreadLocalRandom.current().nextInt();
     }
 
     @Override
