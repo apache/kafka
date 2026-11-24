@@ -125,6 +125,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testAlterShareGroupOffsetsInvalidGroupId
 - testAlterShareGroupOffsetsMetadataImageNull
 - testAlterShareGroupOffsetsRequestReturnsGroupNotEmpty
+- testCommitOffsetsWithWrappedError
 - testCommitTransactionalOffsets
 - testCommitTransactionalOffsetsWhenNotStarted
 - testCommitTransactionalOffsetsWithInvalidGroupId

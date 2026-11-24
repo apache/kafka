@@ -2023,6 +2023,7 @@ kafka.server.MultipleListenersWithAdditionalJaasContextTest:
 kafka.server.MultipleListenersWithDefaultJaasContextTest:
 - testProduceConsume
 kafka.server.OffsetCommitRequestTest:
+- testOffsetCommitExceedingMaxMessageSize
 - testOffsetCommitWithNewConsumerGroupProtocol
 - testOffsetCommitWithOldConsumerGroupProtocol
 kafka.server.OffsetDeleteRequestTest:
@@ -2338,6 +2339,7 @@ kafka.server.TierStateMachineTest:
 kafka.server.TxnOffsetCommitRequestTest:
 - testDelayedTxnOffsetCommitWithBumpedEpochIsRejectedWithNewConsumerGroupProtocol
 - testDelayedTxnOffsetCommitWithBumpedEpochIsRejectedWithOldConsumerGroupProtocol
+- testTxnOffsetCommitExceedingMaxMessageSize
 - testTxnOffsetCommitWithNewConsumerGroupProtocol
 - testTxnOffsetCommitWithOldConsumerGroupProtocol
 kafka.server.WriteTxnMarkersRequestTest:
