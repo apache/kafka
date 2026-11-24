@@ -73,6 +73,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -607,12 +608,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (Future<?> future : brokerFutures) {
                 future.get();
             }
-            waitForReadyBrokers();
         } catch (Exception e) {
             brokerFutures.forEach(future -> future.cancel(true));
             controllerFutures.forEach(future -> future.cancel(true));
             throw e;
         }
+        waitForReadyBrokers();
     }
 
     /**
@@ -688,66 +689,71 @@ public class KafkaClusterTestKit implements AutoCloseable {
      *
      * @param nodeId         The ID of the broker to restart.
      * @param propOverrides  Configs to override in the broker's static configuration.
-     * @return a future that completes after broker startup and propagation of broker metadata
-     *         to all brokers, or exceptionally if the restart fails.
+     * @return A future which completes once the broker has started up and all the live brokers are ready.
      */
     public CompletableFuture<Void> restartBroker(int nodeId, Map<String, Object> propOverrides) {
         BrokerServer broker = brokers.get(nodeId);
         if (broker == null) {
             throw new IllegalArgumentException("Unknown broker ID " + nodeId);
         }
-        try {
-            if (!broker.isShutdown()) {
-                broker.shutdown();
-            }
-            broker.awaitShutdown();
-
-            Map<String, Object> props = new HashMap<>(broker.config().originals());
-            props.putAll(propOverrides);
-            KafkaConfig newConfig = new KafkaConfig(props, false);
-
-            SharedServer sharedServer = new SharedServer(
-                newConfig,
-                broker.sharedServer().metaPropsEnsemble(),
-                Time.SYSTEM,
-                new Metrics(),
-                CompletableFuture.completedFuture(
-                    QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
-                QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
-                faultHandlerFactory,
-                socketFactoryManager.getOrCreateSocketFactory(nodeId)
-            );
-            BrokerServer restartedBroker = new BrokerServer(sharedServer);
-            brokers.put(nodeId, restartedBroker);
-
-            restartedBroker.startup();
-            waitForReadyBrokers();
-            return CompletableFuture.completedFuture(null);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return CompletableFuture.failedFuture(e);
-        } catch (ExecutionException e) {
-            return CompletableFuture.failedFuture(e.getCause());
-        } catch (Exception | AssertionError e) {
-            return CompletableFuture.failedFuture(e);
+        if (!broker.isShutdown()) {
+            broker.shutdown();
         }
+        broker.awaitShutdown();
+
+        Map<String, Object> props = new HashMap<>(broker.config().originals());
+        props.putAll(propOverrides);
+        KafkaConfig newConfig = new KafkaConfig(props, false);
+
+        SharedServer sharedServer = new SharedServer(
+            newConfig,
+            broker.sharedServer().metaPropsEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(
+                QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(nodeId)
+        );
+        BrokerServer newBroker = new BrokerServer(sharedServer);
+        brokers.put(nodeId, newBroker);
+
+        return CompletableFuture.runAsync(() -> {
+            newBroker.startup();
+            try {
+                waitForReadyBrokers();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new CompletionException(e);
+            } catch (ExecutionException e) {
+                throw new CompletionException(e.getCause());
+            }
+        }, executorService);
     }
 
     /**
-     * Wait for a controller to mark all the brokers as ready (registered and unfenced).
-     * And also wait for the metadata cache up-to-date in each broker server.
+     * Wait for a controller to mark all the live brokers as ready (registered and unfenced).
+     * And also wait for the metadata cache up-to-date in each live broker server.
      */
     private void waitForReadyBrokers() throws ExecutionException, InterruptedException {
+        List<BrokerServer> liveBrokers = brokers.values().stream()
+            .filter(broker -> !broker.isShutdown())
+            .toList();
+        if (liveBrokers.isEmpty()) {
+            return;
+        }
+
         // We can choose any controller, not just the active controller.
         // If we choose a standby controller, we will wait slightly longer.
         ControllerServer controllerServer = controllers.values().iterator().next();
         Controller controller = controllerServer.controller();
-        controller.waitForReadyBrokers(brokers.size()).get();
+        controller.waitForReadyBrokers(liveBrokers.size()).get();
 
-        // make sure metadata cache in each broker server is up-to-date
+        // make sure metadata cache in each live broker server is up-to-date
         TestUtils.waitForCondition(() ->
-                brokers.values().stream().map(BrokerServer::metadataCache)
-                    .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
+                liveBrokers.stream().map(BrokerServer::metadataCache)
+                    .allMatch(cache -> liveBrokers.stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
