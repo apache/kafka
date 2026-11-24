@@ -15,7 +15,6 @@
 
 from glob import glob
 import logging
-import os
 import sys
 import xml.etree.ElementTree
 
@@ -50,10 +49,6 @@ if __name__ == "__main__":
     """
     Parse Apache Rat reports and generate GitHub annotations.
     """
-    if not os.getenv("GITHUB_WORKSPACE"):
-        print("This script is intended to be run by GitHub Actions.")
-        exit(1)
-
     reports = glob(pathname="**/rat/*.xml", recursive=True)
     logger.debug(f"Found {len(reports)} Rat reports")
 
