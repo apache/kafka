@@ -47,7 +47,6 @@ import com.yammer.metrics.core.Gauge;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,12 +74,12 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public final class AuthorizationTestUtils {
     public static final int BROKER_COUNT = 1;
-    public static final int NUM_RECORDS = 1;
-    public static final String GROUP_PREFIX = "gr";
-    public static final String GROUP_ID = GROUP_PREFIX + "oup";
-    public static final String TOPIC_PREFIX = "e2e";
+    private static final int NUM_RECORDS = 1;
+    private static final String GROUP_PREFIX = "gr";
+    private static final String GROUP_ID = GROUP_PREFIX + "oup";
+    private static final String TOPIC_PREFIX = "e2e";
     public static final String TOPIC_NAME = TOPIC_PREFIX + "topic";
-    public static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
+    private static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
 
     private AuthorizationTestUtils() {
     }
@@ -96,17 +95,17 @@ public final class AuthorizationTestUtils {
             superuserConfig = Map.copyOf(superuserConfig);
         }
 
-        public Producer<byte[], byte[]> producer() {
+        private Producer<byte[], byte[]> producer() {
             return producer(Map.of());
         }
 
-        public Producer<byte[], byte[]> producer(Map<String, Object> overrides) {
+        private Producer<byte[], byte[]> producer(Map<String, Object> overrides) {
             Map<String, Object> props = new HashMap<>(clientConfig);
             props.putAll(overrides);
             return cluster.producer(props);
         }
 
-        public Consumer<byte[], byte[]> consumer(GroupProtocol groupProtocol) {
+        private Consumer<byte[], byte[]> consumer(GroupProtocol groupProtocol) {
             Map<String, Object> props = new HashMap<>(clientConfig);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID);
             props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
@@ -115,20 +114,20 @@ public final class AuthorizationTestUtils {
             return cluster.consumer(props);
         }
 
-        public Admin admin() {
+        private Admin admin() {
             return cluster.admin(clientConfig);
         }
 
-        public Admin superuserAdmin() {
+        private Admin superuserAdmin() {
             return cluster.admin(superuserConfig);
         }
 
-        public AclBinding acl(ResourcePattern resource, AclOperation operation) {
+        private AclBinding acl(ResourcePattern resource, AclOperation operation) {
             return new AclBinding(resource, new AccessControlEntry(clientPrincipal.toString(), "*", operation, ALLOW));
         }
     }
 
-    public static void createAcls(TestContext context, List<AclBinding> bindings) throws Exception {
+    private static void createAcls(TestContext context, List<AclBinding> bindings) throws Exception {
         try (Admin admin = context.superuserAdmin()) {
             admin.createAcls(bindings).all().get();
         }
@@ -139,7 +138,7 @@ public final class AuthorizationTestUtils {
         }
     }
 
-    public static void waitAcls(
+    private static void waitAcls(
         TestContext context,
         ResourcePattern resource,
         Set<AccessControlEntry> expected
@@ -148,7 +147,7 @@ public final class AuthorizationTestUtils {
         context.cluster().waitAcls(filter, expected);
     }
 
-    public static void setReadAndWriteAcls(TestContext context, TopicPartition tp) throws Exception {
+    private static void setReadAndWriteAcls(TestContext context, TopicPartition tp) throws Exception {
         setResourceAcls(context, tp.topic(), GROUP_ID, LITERAL);
     }
 
@@ -169,14 +168,14 @@ public final class AuthorizationTestUtils {
         );
     }
 
-    public static void setAclsAndProduce(TestContext context, TopicPartition tp) throws Exception {
+    private static void setAclsAndProduce(TestContext context, TopicPartition tp) throws Exception {
         setReadAndWriteAcls(context, tp);
         try (var producer = context.producer()) {
             sendRecords(producer, NUM_RECORDS, tp);
         }
     }
 
-    public static void sendRecords(Producer<byte[], byte[]> producer, int numRecords, TopicPartition tp) throws Exception {
+    private static void sendRecords(Producer<byte[], byte[]> producer, int numRecords, TopicPartition tp) throws Exception {
         List<Future<RecordMetadata>> futures = new ArrayList<>();
         for (int i = 0; i < numRecords; i++) {
             byte[] value = Integer.toString(i).getBytes(StandardCharsets.UTF_8);
@@ -194,11 +193,11 @@ public final class AuthorizationTestUtils {
         }
     }
 
-    public static void consumeRecords(Consumer<byte[], byte[]> consumer) throws InterruptedException {
+    private static void consumeRecords(Consumer<byte[], byte[]> consumer) throws InterruptedException {
         consumeRecords(consumer, NUM_RECORDS, 0, TP, 10_000);
     }
 
-    public static void consumeRecords(
+    private static void consumeRecords(
         Consumer<byte[], byte[]> consumer,
         int numRecords,
         int startingOffset,
@@ -215,7 +214,7 @@ public final class AuthorizationTestUtils {
         }
     }
 
-    public static double totalMetricValue(TestContext context, int brokerId, String metricName) {
+    private static double totalMetricValue(TestContext context, int brokerId, String metricName) {
         return context.cluster()
                 .brokers()
                 .get(brokerId)
@@ -226,7 +225,9 @@ public final class AuthorizationTestUtils {
                 .sum();
     }
 
-    public static void confirmReauthenticationMetrics(TestContext context) {
+    private static void confirmReauthenticationMetrics(TestContext context) {
+        // Client retries can hide expired-session disconnections, so also check the metrics
+        // after verifying the expected authorization behavior.
         var gauge = KafkaYammerMetrics.defaultRegistry()
                 .allMetrics()
                 .entrySet().stream()
@@ -286,6 +287,7 @@ public final class AuthorizationTestUtils {
             TestContext context,
             GroupProtocol groupProtocol
         ) throws Exception {
+            // topic2 is not created in setUp(), so producing must trigger topic auto-creation.
             var tp = new TopicPartition("topic2", 0);
             setAclsAndProduce(context, tp);
             try (var consumer = context.consumer(groupProtocol)) {
@@ -295,11 +297,16 @@ public final class AuthorizationTestUtils {
             }
         }
 
+        /**
+         * Verifies produce, consume, and describe failures without topic DESCRIBE permission, access to
+         * another authorized topic, and recovery after granting the missing ACLs.
+         */
         public static void testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(
             TestContext context,
             GroupProtocol groupProtocol,
             boolean idempotenceEnabled
         ) throws Exception {
+            // Grant group access so failures are caused by topic authorization.
             createAcls(context, List.of(context.acl(new ResourcePattern(GROUP, GROUP_ID, LITERAL), READ)));
             Map<String, Object> overrides = Map.of(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotenceEnabled);
             try (var producer = context.producer(overrides);
@@ -331,6 +338,7 @@ public final class AuthorizationTestUtils {
             Admin admin,
             TopicPartition tp2
         ) throws Exception {
+            // Verify access to an authorized topic without recreating the consumer or admin client.
             sendRecords(producer, NUM_RECORDS, tp2);
             consumer.assign(List.of(tp2));
             consumeRecords(consumer, NUM_RECORDS, 0, tp2, 10_000);
@@ -339,6 +347,9 @@ public final class AuthorizationTestUtils {
             var e = assertThrows(ExecutionException.class, () -> admin.describeTopics(Set.of(TOPIC_NAME)).allTopicNames().get());
             assertInstanceOf(TopicAuthorizationException.class, e.getCause());
 
+            // The consumer may return records from the authorized topic while updating metadata or
+            // fetching positions, before reporting the unauthorized topic. Track those records so
+            // recovery below does not try to consume them again.
             consumer.assign(List.of(TP, tp2));
             sendRecords(producer, NUM_RECORDS, tp2);
             var topic2RecordConsumed = new AtomicBoolean();
@@ -354,6 +365,7 @@ public final class AuthorizationTestUtils {
                 fail("Consumer did not fail with an authorization exception");
             });
 
+            // Grant access to the original topic and verify that all clients recover.
             setReadAndWriteAcls(context, TP);
             if (!topic2RecordConsumed.get()) {
                 consumeRecords(consumer, NUM_RECORDS, 1, tp2, 10_000);
@@ -369,6 +381,7 @@ public final class AuthorizationTestUtils {
             createAcls(context, List.of(context.acl(new ResourcePattern(TOPIC, TOPIC_NAME, LITERAL), DESCRIBE)));
             try (var producer = context.producer(Map.of(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, idempotenceEnabled))) {
                 if (idempotenceEnabled) {
+                    // With idempotence enabled, authorization fails during InitProducerId.
                     assertThrows(KafkaException.class, () -> sendRecords(producer, NUM_RECORDS, TP));
                 } else {
                     var e = assertThrows(TopicAuthorizationException.class, () -> sendRecords(producer, NUM_RECORDS, TP));
@@ -393,10 +406,12 @@ public final class AuthorizationTestUtils {
                 consumer.subscribe(List.of(TOPIC_NAME));
                 waitForPollThrowException(consumer, TopicAuthorizationException.class);
 
+                // A subscription containing an unauthorized topic must still fail after the first topic is authorized.
                 setReadAndWriteAcls(context, TP);
                 consumer.subscribe(List.of(TOPIC_NAME, "topic2"));
                 waitForPollThrowException(consumer, TopicAuthorizationException.class);
 
+                // Removing the unauthorized topic from the subscription allows consumption to resume.
                 consumer.subscribe(List.of(TOPIC_NAME));
                 consumeRecords(consumer);
             }
@@ -434,7 +449,7 @@ public final class AuthorizationTestUtils {
         }
 
         private static void noConsumeWithDescribeAclSetup(TestContext context) throws Exception {
-            List<AclBinding> bindings = new ArrayList<>(topicAcls(context, WRITE, CREATE, DESCRIBE));
+            List<AclBinding> bindings = new ArrayList<>(topicAcls(context, List.of(WRITE, CREATE, DESCRIBE)));
             bindings.add(context.acl(new ResourcePattern(GROUP, GROUP_ID, LITERAL), READ));
             createAcls(context, bindings);
             try (var producer = context.producer()) {
@@ -443,7 +458,7 @@ public final class AuthorizationTestUtils {
         }
 
         public static void testNoGroupAcl(TestContext context, GroupProtocol groupProtocol) throws Exception {
-            createAcls(context, topicAcls(context, WRITE, CREATE, DESCRIBE));
+            createAcls(context, topicAcls(context, List.of(WRITE, CREATE, DESCRIBE)));
             try (var producer = context.producer(); var consumer = context.consumer(groupProtocol)) {
                 sendRecords(producer, NUM_RECORDS, TP);
                 consumer.assign(List.of(TP));
@@ -453,8 +468,9 @@ public final class AuthorizationTestUtils {
             }
         }
 
-        private static List<AclBinding> topicAcls(TestContext context, AclOperation... operations) {
-            return Arrays.stream(operations)
+        private static List<AclBinding> topicAcls(TestContext context, List<AclOperation> operations) {
+            return operations
+                    .stream()
                     .map(operation -> context.acl(new ResourcePattern(ResourceType.TOPIC, TOPIC_NAME, LITERAL), operation))
                     .toList();
         }
