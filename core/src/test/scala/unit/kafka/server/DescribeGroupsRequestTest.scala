@@ -17,6 +17,7 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.message.DescribeGroupsResponseData.{DescribedGroup, DescribedGroupMember}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
@@ -24,6 +25,9 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
@@ -106,5 +110,102 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
         )
       )
     }
+  }
+
+  @ClusterTest
+  def testDescribeGroupsWithOldConsumerGroupProtocolDuringRebalance(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // DescribeGroups returns the members in no particular order.
+    def describeGroup(): DescribedGroup = {
+      val describedGroup = describeGroups(groupIds = List("grp")).head
+      describedGroup.setMembers(describedGroup.members.asScala.sortBy(_.memberId).asJava)
+    }
+
+    // Member 1 joins the group and completes the rebalance so that the group is in STABLE state.
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = "grp",
+      metadata = Array(1, 2, 3),
+      assignment = Array(4, 5, 6)
+    )
+
+    assertEquals(
+      new DescribedGroup()
+        .setGroupId("grp")
+        .setGroupState(ClassicGroupState.STABLE.toString)
+        .setProtocolType("consumer")
+        .setProtocolData("consumer-range")
+        .setMembers(List(
+          new DescribedGroupMember()
+            .setMemberId(memberId1)
+            .setGroupInstanceId(null)
+            .setClientId("client-id")
+            .setClientHost("/127.0.0.1")
+            .setMemberMetadata(Array(1, 2, 3))
+            .setMemberAssignment(Array(4, 5, 6))
+        ).asJava),
+      describeGroup()
+    )
+
+    // Member 2 joins the group, which starts a rebalance that waits for member 1 to rejoin.
+    val joinMember2ResponseData = sendJoinRequest(
+      groupId = "grp",
+      metadata = Array(1, 2, 3)
+    )
+    assertEquals(Errors.MEMBER_ID_REQUIRED.code, joinMember2ResponseData.errorCode)
+    val memberId2 = joinMember2ResponseData.memberId
+    val joinMember2Future = Future {
+      sendJoinRequest(
+        groupId = "grp",
+        memberId = memberId2,
+        metadata = Array(1, 2, 3)
+      )
+    }
+
+    TestUtils.waitUntilTrue(() => {
+      ClassicGroupState.PREPARING_REBALANCE.toString == describeGroup().groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+    // The members are described without metadata and assignment while the group rebalances.
+    val rebalancingMembers = List(memberId1, memberId2).sorted.map { memberId =>
+      new DescribedGroupMember()
+        .setMemberId(memberId)
+        .setGroupInstanceId(null)
+        .setClientId("client-id")
+        .setClientHost("/127.0.0.1")
+        .setMemberMetadata(Array.empty)
+        .setMemberAssignment(Array.empty)
+    }.asJava
+
+    assertEquals(
+      new DescribedGroup()
+        .setGroupId("grp")
+        .setGroupState(ClassicGroupState.PREPARING_REBALANCE.toString)
+        .setProtocolType("consumer")
+        .setMembers(rebalancingMembers),
+      describeGroup()
+    )
+
+    // Member 1 rejoins the group, which completes the join phase.
+    assertEquals(
+      Errors.NONE.code,
+      sendJoinRequest(
+        groupId = "grp",
+        memberId = memberId1,
+        metadata = Array(1, 2, 3)
+      ).errorCode
+    )
+    assertEquals(Errors.NONE.code, Await.result(joinMember2Future, Duration.Inf).errorCode)
+
+    assertEquals(
+      new DescribedGroup()
+        .setGroupId("grp")
+        .setGroupState(ClassicGroupState.COMPLETING_REBALANCE.toString)
+        .setProtocolType("consumer")
+        .setMembers(rebalancingMembers),
+      describeGroup()
+    )
   }
 }
