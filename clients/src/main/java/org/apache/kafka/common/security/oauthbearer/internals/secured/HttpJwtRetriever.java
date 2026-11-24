@@ -116,6 +116,10 @@ public class HttpJwtRetriever implements JwtRetriever {
 
         tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
+        if (tokenEndpointUrl.getProtocol().equalsIgnoreCase("http"))
+            log.warn("The {} configuration uses an HTTP URL, so login requests and tokens are sent without TLS. " +
+                "Use an HTTPS URL instead.", SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+
         if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
             sslSocketFactory = jou.createSSLSocketFactory();
 
@@ -139,6 +143,7 @@ public class HttpJwtRetriever implements JwtRetriever {
      *
      * @throws JwtRetrieverException Thrown on errors related to IO, parsing, etc. during retrieval
      */
+    @Override
     public String retrieve() throws JwtRetrieverException {
         String requestBody = requestFormatter.formatBody();
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);

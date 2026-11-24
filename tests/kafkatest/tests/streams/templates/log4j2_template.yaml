@@ -30,10 +30,10 @@ Configuration:
       AppenderRef:
         - ref: FILE
 
+    {% if loggers is defined %}
     Logger:
-        {% if loggers is defined %}
         {% for logger, log_level in loggers.items() %}
         - name: {{ logger }}
           level: {{ log_level }}
         {% endfor %}
-        {% endif %}
+    {% endif %}

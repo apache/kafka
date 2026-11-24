@@ -82,6 +82,16 @@ public class OAuthBearerClientInitialResponseTest {
     }
 
     @Test
+    public void testLongAuthorizationIdAndExtensions() throws Exception {
+        String authorizationId = "u".repeat(200_000);
+        String message = "n,a=" + authorizationId + ",\u0001" + "ext=val\u0001".repeat(30_000) + "auth=Bearer 345\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
+        assertEquals("345", response.tokenValue());
+        assertEquals(authorizationId, response.authorizationId());
+        assertEquals("val", response.extensions().map().get("ext"));
+    }
+
+    @Test
     public void testExtensions() throws Exception {
         String message = "n,,\u0001propA=valueA1, valueA2\u0001auth=Bearer 567\u0001propB=valueB\u0001\u0001";
         OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));

@@ -103,6 +103,20 @@ public class AbstractTransactionBufferTest {
         assertEquals(2 * Integer.BYTES + 4 + 8, buffer.approximateNumUncommittedBytes());
     }
 
+    @Test
+    void byteCountCountsOverwrittenKeyOnce() {
+        buffer.stage(1, new byte[4]);
+        buffer.stage(1, new byte[8]);
+        assertEquals(Integer.BYTES + 8, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    void byteCountReplacesValueWithTombstone() {
+        buffer.stage(1, new byte[4]);
+        buffer.stage(1, null);
+        assertEquals(Integer.BYTES, buffer.approximateNumUncommittedBytes());
+    }
+
     // -- commit --
 
     @Test
@@ -452,12 +466,6 @@ public class AbstractTransactionBufferTest {
 
     static class TestBuffer extends AbstractTransactionBuffer<Integer> {
         final TreeMap<Integer, byte[]> base = new TreeMap<>();
-        private final TreeMap<Integer, Optional<byte[]>> pendingBatch = new TreeMap<>();
-
-        @Override
-        void stageToBackend(final Integer key, final byte[] value) {
-            pendingBatch.put(key, Optional.ofNullable(value));
-        }
 
         @Override
         ManagedKeyValueIterator<Integer, byte[]> newBaseIterator(final Integer from, final Integer to) {
@@ -492,19 +500,17 @@ public class AbstractTransactionBufferTest {
 
         @Override
         void flushToBase() {
-            for (final Map.Entry<Integer, Optional<byte[]>> entry : pendingBatch.entrySet()) {
+            for (final Map.Entry<Integer, Optional<byte[]>> entry : pendingWrites.entrySet()) {
                 if (entry.getValue().isPresent()) {
                     base.put(entry.getKey(), entry.getValue().get());
                 } else {
                     base.remove(entry.getKey());
                 }
             }
-            pendingBatch.clear();
         }
 
         @Override
         void discardPendingBatch() {
-            pendingBatch.clear();
         }
 
         @Override

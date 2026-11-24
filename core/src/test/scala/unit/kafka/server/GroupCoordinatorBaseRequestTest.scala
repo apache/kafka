@@ -210,6 +210,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topicId: Uuid,
     partition: Int,
     offset: Long,
+    metadata: String = "",
     expectedError: Errors,
     version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
@@ -230,6 +231,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
+                .setCommittedMetadata(metadata)
             ).asJava)
         ).asJava)
     ).build(version)
@@ -261,6 +263,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      topicId: Uuid,
      partition: Int,
      offset: Long,
+     metadata: String = "",
      expectedError: Errors,
      version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
   ): Unit = {
@@ -280,6 +283,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
               new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
+                .setCommittedMetadata(metadata)
             ).asJava)
         ).asJava),
       true
@@ -596,7 +600,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     memberId: String = "",
     groupInstanceId: String = null,
     protocolType: String = "consumer",
-    protocolName: String = "consumer-range",
+    protocolNames: List[String] = List("consumer-range"),
     metadata: Array[Byte] = Array.empty,
     version: Short = ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)
   ): JoinGroupResponseData = {
@@ -608,11 +612,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       .setSessionTimeoutMs(600000)
       .setProtocolType(protocolType)
       .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        List(
+        protocolNames.map { protocolName =>
           new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName(protocolName)
             .setMetadata(metadata)
-        ).asJava.iterator
+        }.asJava.iterator
       ))
 
     // Send the request until receiving a successful response. There is a delay
@@ -629,12 +633,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def joinDynamicConsumerGroupWithOldProtocol(
     groupId: String,
+    protocolNames: List[String] = List("consumer-range"),
     metadata: Array[Byte] = Array.empty,
     assignment: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
   ): (String, Int) = {
     val joinGroupResponseData = sendJoinRequest(
       groupId = groupId,
+      protocolNames = protocolNames,
       metadata = metadata
     )
     assertEquals(Errors.MEMBER_ID_REQUIRED.code, joinGroupResponseData.errorCode)
@@ -643,6 +649,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val rejoinGroupResponseData = sendJoinRequest(
       groupId = groupId,
       memberId = joinGroupResponseData.memberId,
+      protocolNames = protocolNames,
       metadata = metadata
     )
     assertEquals(Errors.NONE.code, rejoinGroupResponseData.errorCode)
@@ -718,12 +725,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def listGroups(
     statesFilter: List[String],
     typesFilter: List[String],
+    requireCommittedOffsets: Boolean = false,
     version: Short = ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
         .setStatesFilter(statesFilter.asJava)
         .setTypesFilter(typesFilter.asJava)
+        .setRequireCommittedOffsets(requireCommittedOffsets)
     ).build(version)
 
     val response = connectAndReceive[ListGroupsResponse](request)

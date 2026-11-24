@@ -22,12 +22,12 @@ import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
@@ -353,7 +353,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Optional<String> groupInstanceID;
 
     private final ChangelogReader changelogReader;
-    private final ConsumerRebalanceListener rebalanceListener;
+    private final RebalanceListener rebalanceListener;
     private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -953,17 +953,30 @@ public class StreamThread extends Thread implements ProcessingThread {
             return;
         }
         boolean cleanRun = false;
+        // An interrupt that stops the run loop must not leak into the exception handler or the shutdown:
+        // with the flag set, the task removal waits give up immediately and the tasks are closed dirty,
+        // and a replacement thread cannot be created on the dying thread. The flag is cleared before
+        // either runs and restored once the shutdown completes.
+        boolean interrupted = false;
         try {
             taskManager.init();
             initLatencyWindowsIfNeeded(time.milliseconds());
             cleanRun = runLoop();
         } catch (final Throwable e) {
+            interrupted = Thread.interrupted();
             failedStreamThreadSensor.record();
             requestLeaveGroupOnFailure();
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
-            completeShutdown(cleanRun);
+            interrupted |= Thread.interrupted();
+            try {
+                completeShutdown(cleanRun);
+            } finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
     }
 
@@ -1196,7 +1209,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                 throw new IllegalArgumentException("Pattern subscription is not yet supported with the Streams rebalance " +
                     "protocol");
             }
-            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
+            mainConsumer.setRebalanceListener(rebalanceListener);
+            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern());
         } else {
             if (streamsRebalanceData.isPresent()) {
                 if (mainConsumer instanceof ConsumerWrapper) {
@@ -1211,7 +1225,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             } else {
-                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+                mainConsumer.setRebalanceListener(rebalanceListener);
+                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames());
             }
         }
     }
@@ -1941,7 +1956,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private boolean shouldCommitDueToUncommittedBytes() {
         final long limit = maxUncommittedBytesPerThread;
         if (limit <= 0) return false;
-        return taskManager.totalUncommittedBytes() > limit;
+        // stores commit one at a time, and a commit can need extra memory up to the size of the store's uncommitted data
+        return taskManager.totalUncommittedBytes() + taskManager.maxStoreUncommittedBytes() > limit;
     }
 
     public void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
@@ -2250,7 +2266,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return numIterations;
     }
 
-    ConsumerRebalanceListener rebalanceListener() {
+    RebalanceListener rebalanceListener() {
         return rebalanceListener;
     }
 

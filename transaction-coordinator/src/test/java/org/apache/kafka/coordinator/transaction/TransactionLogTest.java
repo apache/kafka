@@ -71,6 +71,7 @@ class TransactionLogTest {
             RecordBatch.NO_PRODUCER_ID,
             (short) 0,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             1000,
             state,
             Set.of(),
@@ -135,6 +136,7 @@ class TransactionLogTest {
             201L,       // nextProducerId
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch
+            RecordBatch.NO_PRODUCER_EPOCH, // nextProducerEpoch
             1000,       // txnTimeoutMs
             TransactionState.PREPARE_COMMIT,
             new HashSet<>(Set.of(new TopicPartition("topic", 0))),
@@ -165,6 +167,7 @@ class TransactionLogTest {
             201L,       // nextProducerId — not persisted at v0
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch - not persisted at v0
+            RecordBatch.NO_PRODUCER_EPOCH, // nextProducerEpoch
             1000,       // txnTimeoutMs
             TransactionState.PREPARE_COMMIT,
             new HashSet<>(Set.of(new TopicPartition("topic", 0))),
@@ -187,14 +190,27 @@ class TransactionLogTest {
 
     @Test
     void testSerializeTransactionLogValueToHighestNonFlexibleVersion() {
-        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_0);
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_0);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0));
         assertEquals(TV_0.transactionLogValueVersion(), txnLogValueBuffer.getShort());
     }
 
     @Test
+    void testSerializeClientTransactionVersionToNonFlexibleVersion() {
+        // ClientTransactionVersion is a tagged field, it can only be written at the flexible version and
+        // falls back to the default (TV_0) at the non-flexible version, like the other tagged fields.
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
+        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+            TransactionLog.keyToBytes("transactionalId"),
+            TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
+        )).records().iterator().next();
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
+        assertEquals(TV_0, readResult.metadata().clientTransactionVersion());
+    }
+
+    @Test
     void testSerializeTransactionLogValueToFlexibleVersion() {
-        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2));
         assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort());
     }
@@ -231,6 +247,52 @@ class TransactionLogTest {
         var actualTxnPartitions = deserialized.topicPartitions();
         assertEquals(1, actualTxnPartitions.size());
         assertTrue(actualTxnPartitions.contains(new TopicPartition("topic", 0)));
+    }
+
+    @Test
+    void testAllPersistedFieldsRoundTrip() {
+        // Test that all persisted fields can be written and read back correctly.
+
+        var partitionsWithData = Set.of(
+            new TopicPartition("topic-a", 0),
+            new TopicPartition("topic-a", 1),
+            new TopicPartition("topic-b", 2)
+        );
+        var txnTransitMetadataWithPartitions = new TxnTransitMetadata(
+            100L,                           // producerId
+            50L,                            // prevProducerId
+            200L,                           // nextProducerId
+            (short) 5,                      // producerEpoch
+            (short) 3,                      // lastProducerEpoch
+            (short) 10,                     // nextProducerEpoch
+            1000,                           // txnTimeoutMs
+            TransactionState.PREPARE_COMMIT, // state
+            new HashSet<>(partitionsWithData), // topicPartitions
+            500L,                           // txnStartTimestamp
+            750L,                           // txnLastUpdateTimestamp
+            TV_2                            // clientTransactionVersion
+        );
+
+        var recordWithPartitions = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+            TransactionLog.keyToBytes("test-txn-id"),
+            TransactionLog.valueToBytes(txnTransitMetadataWithPartitions, TV_2)
+        )).records().iterator().next();
+        var readResultWithPartitions = assertInstanceOf(TransactionLog.TxnRecord.class,
+            TransactionLog.read(recordWithPartitions.key(), recordWithPartitions.value()));
+        var deserializedWithPartitions = readResultWithPartitions.metadata();
+
+        assertEquals(100L, deserializedWithPartitions.producerId());
+        assertEquals(50L, deserializedWithPartitions.prevProducerId());
+        assertEquals(200L, deserializedWithPartitions.nextProducerId());
+        assertEquals((short) 5, deserializedWithPartitions.producerEpoch());
+        assertEquals((short) 3, deserializedWithPartitions.lastProducerEpoch());
+        assertEquals((short) 10, deserializedWithPartitions.nextProducerEpoch());
+        assertEquals(TransactionState.PREPARE_COMMIT, deserializedWithPartitions.state());
+        assertEquals(1000, deserializedWithPartitions.txnTimeoutMs());
+        assertEquals(500L, deserializedWithPartitions.txnStartTimestamp());
+        assertEquals(750L, deserializedWithPartitions.txnLastUpdateTimestamp());
+        assertEquals(partitionsWithData, deserializedWithPartitions.topicPartitions());
+        assertEquals(TV_2, deserializedWithPartitions.clientTransactionVersion());
     }
 
     @Test
