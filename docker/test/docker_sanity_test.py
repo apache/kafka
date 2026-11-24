@@ -306,11 +306,17 @@ class DockerSanityTestCombinedMode(DockerSanityTest):
         self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
-        # Run Streams inside the image to exercise its RocksDB native dependencies.
-        if self.IMAGE_TYPE == "jvm":
-            self.wordcount_with_rocksdb()
 
-    def wordcount_with_rocksdb(self):
+class DockerStreamsTest(DockerSanityTest):
+    def setUp(self) -> None:
+        if self.IMAGE_TYPE != "jvm":
+            self.skipTest("native image has no JVM")
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
+
+    def tearDown(self) -> None:
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
+
+    def test_wordcount_with_rocksdb(self):
         input_topic = "streams-plaintext-input"
         output_topic = "streams-wordcount-output"
         bootstrap = ["--bootstrap-server", "localhost:9092"]
