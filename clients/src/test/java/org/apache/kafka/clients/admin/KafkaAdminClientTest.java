@@ -142,10 +142,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1355,20 +1358,31 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
     }
 
     @Test
-    public void testPendingCallTimeoutResetsMetadataRefreshBackoff() throws Exception {
-        try (MockClient mockClient = new MockClient(Time.SYSTEM)) {
+    public void testMetadataRefreshBackoffResetsWhenNoPendingCalls() throws Exception {
+        MockTime time = new MockTime();
+        try (MockClient mockClient = new MockClient(time)) {
             AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
             doReturn(true).when(metadataManager).isReady();
             // avoid sending fetchMetadata request
             doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
 
             try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
-                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), Time.SYSTEM)) {
-                // the broker is not in the metadata, so the call stays pending until it times out
-                DescribeLogDirsResult result = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(100));
-                TestUtils.assertFutureThrows(TimeoutException.class, result.allDescriptions());
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), time)) {
+                // the broker is not in the metadata, so both calls stay pending until they time out
+                DescribeLogDirsResult first = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(100));
+                DescribeLogDirsResult second = admin.describeLogDirs(List.of(0), new DescribeLogDirsOptions().timeoutMs(200));
+                TestUtils.waitForCondition(() -> admin.numPendingCalls() == 2, "Timed out waiting for the calls to be pending");
+                clearInvocations(metadataManager);
+
+                time.sleep(101);
+                TestUtils.assertFutureThrows(TimeoutException.class, first.allDescriptions());
+                // the second call is still pending
+                verify(metadataManager, never()).resetEquivalentResponseBackoff();
+
+                time.sleep(100);
+                TestUtils.assertFutureThrows(TimeoutException.class, second.allDescriptions());
             }
-            verify(metadataManager).resetEquivalentResponseBackoff();
+            verify(metadataManager, atLeastOnce()).resetEquivalentResponseBackoff();
         }
     }
 

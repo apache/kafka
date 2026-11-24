@@ -1219,10 +1219,8 @@ public class KafkaAdminClient extends AdminClient {
          */
         private void timeoutPendingCalls(TimeoutProcessor processor) {
             int numTimedOut = processor.handleTimeouts(pendingCalls, "Timed out waiting for a node assignment.");
-            if (numTimedOut > 0) {
+            if (numTimedOut > 0)
                 log.debug("Timed out {} pending calls.", numTimedOut);
-                metadataManager.resetEquivalentResponseBackoff();
-            }
         }
 
         /**
@@ -1599,6 +1597,11 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Choose nodes for our pending calls.
                 pollTimeout = Math.min(pollTimeout, maybeDrainPendingCalls(now));
+                // The metadata refresh backoff only grows while calls are waiting for a node
+                // assignment. Once no call is waiting, whether the calls were assigned nodes
+                // or timed out, the next call to wait starts from the initial backoff.
+                if (pendingCalls.isEmpty())
+                    metadataManager.resetEquivalentResponseBackoff();
                 long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
                 if (metadataFetchDelayMs == 0) {
                     metadataManager.transitionToUpdatePending(now);
