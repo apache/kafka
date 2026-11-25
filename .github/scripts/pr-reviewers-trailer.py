@@ -80,9 +80,25 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
-def reviewers_lines(body: str) -> List[str]:
-    """Lines of the body that look like a Reviewers trailer."""
-    return [line for line in body.split("\n") if re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)]
+def last_paragraph_start(lines: List[str]) -> int:
+    """Index of the first line of the last paragraph. Blank lines at the end are not counted."""
+    end = len(lines)
+    while end > 0 and not lines[end - 1].strip():
+        end -= 1
+    return max((i + 1 for i in range(end) if not lines[i].strip()), default=0)
+
+
+def reviewers_trailer_is_misplaced(title: str, body: str) -> bool:
+    """True if a "Reviewers:" line is not a trailer in the last paragraph.
+
+    git reads trailers only from the last paragraph. A "Reviewers:" line
+    anywhere else is plain text, and the people on it get no credit.
+    """
+    lines = body.split("\n")
+    is_reviewers = [bool(re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)) for line in lines]
+    if any(is_reviewers[:last_paragraph_start(lines)]):
+        return True
+    return sum(is_reviewers) > len(parse_trailers(title, body).get("reviewers", []))
 
 
 def resolve_reviewer(login: str) -> tuple:
@@ -223,11 +239,11 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     """
     newline = "\r\n" if "\r\n" in body else "\n"
     lines = body.split("\n")
+    last_paragraph = last_paragraph_start(lines)
     while lines and not lines[-1].strip():
         lines.pop()
     if lines:
         lines[-1] = lines[-1].rstrip("\r")
-    last_paragraph = max((i + 1 for i, line in enumerate(lines) if not line.strip()), default=0)
     old_trailers = parse_trailers(title, body)
     had_trailers = bool(old_trailers)
 
@@ -255,7 +271,7 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     new_reviewers = new_trailers.pop("reviewers", [])
     old_trailers.pop("reviewers", None)
     if (new_reviewers[-1:] != [expected]
-            or len(reviewers_lines(new_body)) != len(new_reviewers)
+            or reviewers_trailer_is_misplaced(title, new_body)
             or new_trailers != old_trailers):
         logger.error("git does not read the new description as expected; leaving the body unchanged.")
         return None
@@ -271,19 +287,8 @@ def gh_pr_view(pr_number: str, fields: str) -> Dict:
     return json.loads(p.stdout)
 
 
-if __name__ == "__main__":
-    """
-    Appends REVIEWER_LOGIN to the Reviewers trailer of PR_NUMBER's body, and
-    folds the trailer if it has a line longer than 72 characters.
-    Approvals are review events too, so approvers are credited the same way.
-    The PR author is never added as their own reviewer.
-    """
-    pr_number = get_env("PR_NUMBER")
-    reviewer_login = get_env("REVIEWER_LOGIN")
-    if not pr_number or not reviewer_login:
-        logger.info("PR_NUMBER and REVIEWER_LOGIN are both required; nothing to do.")
-        exit(0)
-
+def resolve_identity(pr_number: str, reviewer_login: str) -> tuple:
+    """Return (text for the trailer, token that identifies the reviewer). Exits if the reviewer is the PR author."""
     pr_author = (gh_pr_view(pr_number, "author").get("author") or {}).get("login")
 
     if reviewer_login == pr_author:
@@ -296,8 +301,29 @@ if __name__ == "__main__":
     else:
         # Fall back to the GitHub handle without tagging the reviewer.
         identity = f"(github:{reviewer_login})"
-    resolved = f"{name} {identity}"
+    return f"{name} {identity}", identity
 
+
+if __name__ == "__main__":
+    """
+    Appends REVIEWER_LOGIN to the Reviewers trailer of PR_NUMBER's body, and
+    folds the trailer if it has a line longer than 72 characters.
+    Approvals are review events too, so approvers are credited the same way.
+    The PR author is never added as their own reviewer.
+
+    Without REVIEWER_LOGIN the script adds nobody. It only writes the
+    existing Reviewers trailer in the standard format. This runs when the
+    description is edited, so a trailer typed by hand is folded before the merge.
+    """
+    pr_number = get_env("PR_NUMBER")
+    reviewer_login = get_env("REVIEWER_LOGIN")
+    if not pr_number:
+        logger.info("PR_NUMBER is required; nothing to do.")
+        exit(0)
+
+    resolved = identity = None
+    if reviewer_login:
+        resolved, identity = resolve_identity(pr_number, reviewer_login)
     # Read the body only now. Resolving the reviewer takes several API calls,
     # and an edit made between reading the body and writing it back is lost.
     gh_json = gh_pr_view(pr_number, "title,body")
@@ -305,13 +331,17 @@ if __name__ == "__main__":
     body = gh_json["body"] or ""
 
     existing_reviewers = parse_trailers(title, body).get("reviewers", [])
-    if len(reviewers_lines(body)) > len(existing_reviewers):
+    if reviewers_trailer_is_misplaced(title, body):
         # There is text below the Reviewers trailer, so git does not read it.
         # Adding a second trailer would hide the problem. The PR linter reports it.
         logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
         exit(0)
     new_value = ", ".join(existing_reviewers)
-    if already_exists(identity, existing_reviewers):
+    if not reviewer_login:
+        if len(existing_reviewers) != 1:
+            logger.info("No single Reviewers trailer to format; nothing to do.")
+            exit(0)
+    elif already_exists(identity, existing_reviewers):
         logger.info(f"Reviewer {resolved} already present.")
     else:
         new_value = f"{new_value}, {resolved}" if new_value else resolved

@@ -201,12 +201,40 @@ class ReviewersTrailerTest(unittest.TestCase):
 
     def test_description_is_left_alone_when_git_reads_it_differently(self):
         # git skips "#" lines at the end, so its trailer block is above the heading.
-        for body in ("Text\n\nSigned-off-by: X <x@example.com>\n\n## Notes\n",
-                     "Text\n\nReviewers: A <a@example.com>\n\n## Notes\n"):
+        # Adding the trailer below the heading would make Signed-off-by plain text.
+        gh = FakeGh("Text\n\nSigned-off-by: X <x@example.com>\n\n## Notes\n")
+        result = gh.run("pr-reviewers-trailer.py", REVIEWER_LOGIN="newperson")
+        self.assertEqual(1, result.returncode)
+        self.assertIsNone(gh.edited_body())
+
+    def test_heading_below_reviewers_is_reported_like_other_text(self):
+        body = "Text\n\nReviewers: A <a@example.com>\n\n## Notes\n"
+        self.assertIsNone(add_reviewer(body).edited_body())
+        result = FakeGh(body).run("pr-format.py")
+        self.assertEqual(1, result.returncode)
+        self.assertIn("'Reviewers:' must be in the last paragraph", result.stdout)
+
+    def test_edit_of_the_description_folds_a_hand_written_trailer(self):
+        body = ("Fix the thing.\n\n"
+                "reviewers : Alice <alice@example.com>, Bob <bob@example.com>, Carol <carol@example.com>\n")
+        gh = FakeGh(body)
+        result = gh.run("pr-reviewers-trailer.py")  # no REVIEWER_LOGIN
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            "Fix the thing.\n\n"
+            "Reviewers: Alice <alice@example.com>, Bob <bob@example.com>,\n"
+            " Carol <carol@example.com>\n",
+            gh.edited_body())
+        self.assertEqual([], [c for c in gh.calls() if c[0] == "api"])
+
+    def test_edit_of_the_description_adds_no_trailer(self):
+        for body in ("Fix the thing.\n",
+                     "Fix the thing.\n\nReviewers: A <a@example.com>\n",
+                     "Fix the thing.\n\nReviewers: A <a@example.com>\nReviewers: B <b@example.com>\n",
+                     "Fix the thing.\n\nReviewers: A <a@example.com>\n\nText below.\n"):
             gh = FakeGh(body)
-            result = gh.run("pr-reviewers-trailer.py", REVIEWER_LOGIN="newperson")
-            self.assertEqual(1, result.returncode, body)
-            self.assertIsNone(gh.edited_body())
+            self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode, body)
+            self.assertIsNone(gh.edited_body(), body)
 
     def test_lower_case_reviewers_trailer_keeps_its_reviewers(self):
         edited = add_reviewer("Text\n\nreviewers: A <a@example.com>\n").edited_body()

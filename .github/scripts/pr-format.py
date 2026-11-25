@@ -83,9 +83,25 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
-def reviewers_lines(body: str) -> List[str]:
-    """Lines of the body that look like a Reviewers trailer."""
-    return [line for line in body.split("\n") if re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)]
+def last_paragraph_start(lines: List[str]) -> int:
+    """Index of the first line of the last paragraph. Blank lines at the end are not counted."""
+    end = len(lines)
+    while end > 0 and not lines[end - 1].strip():
+        end -= 1
+    return max((i + 1 for i in range(end) if not lines[i].strip()), default=0)
+
+
+def reviewers_trailer_is_misplaced(title: str, body: str) -> bool:
+    """True if a "Reviewers:" line is not a trailer in the last paragraph.
+
+    git reads trailers only from the last paragraph. A "Reviewers:" line
+    anywhere else is plain text, and the people on it get no credit.
+    """
+    lines = body.split("\n")
+    is_reviewers = [bool(re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)) for line in lines]
+    if any(is_reviewers[:last_paragraph_start(lines)]):
+        return True
+    return sum(is_reviewers) > len(parse_trailers(title, body).get("reviewers", []))
 
 
 if __name__ == "__main__":
@@ -143,11 +159,9 @@ if __name__ == "__main__":
     check("Committer Checklist" not in body, "Old PR template text not present", "Old PR template text should be removed")
 
     # Check for Reviewers
-    # git reads trailers only from the last paragraph. A "Reviewers:" line
-    # anywhere else is plain text, and the people on it get no credit.
-    reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
-    check(len(reviewers_lines(body)) <= len(reviewers_in_body), "Every 'Reviewers:' line is a trailer",
+    check(not reviewers_trailer_is_misplaced(title, body), "Every 'Reviewers:' line is a trailer",
           "'Reviewers:' must be in the last paragraph. Move the text below it above it.")
+    reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
 
     approved = has_approval(reviews)
     if approved:
