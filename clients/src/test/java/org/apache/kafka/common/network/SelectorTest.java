@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -530,8 +531,9 @@ public class SelectorTest {
         AtomicBoolean throwIOException = new AtomicBoolean();
         Selector selector = new ImmediatelyConnectingSelector(CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
-            protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
-                SelectionKey key = super.registerChannel(id, socketChannel, interestedOps);
+            protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps,
+                                                   Uuid clientInstanceId) throws IOException {
+                SelectionKey key = super.registerChannel(id, socketChannel, interestedOps, clientInstanceId);
                 key.cancel();
                 if (throwIOException.get())
                     throw new IOException("Test exception");

@@ -126,7 +126,6 @@ public class Selector implements Selectable, AutoCloseable {
     private final MemoryPool memoryPool;
     private final long lowMemThreshold;
     private final int failedAuthenticationDelayMs;
-    private Uuid clientInstanceId;
 
     //indicates if the previous call to poll was able to make progress in reading already-buffered data.
     //this is used to prevent tight loops when memory is not available to read any more data
@@ -245,18 +244,20 @@ public class Selector implements Selectable, AutoCloseable {
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
+     * @param clientInstanceId The client instance ID that SASL authentication sends on the new connection, or null if none
      * @throws IllegalStateException if there is already a connection for that id
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */
     @Override
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
+                        Uuid clientInstanceId) throws IOException {
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
         SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT, clientInstanceId);
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
@@ -311,7 +312,8 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
-        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        // Accepted connections have no client instance ID.
+        registerChannel(id, socketChannel, SelectionKey.OP_READ, null);
         this.sensors.connectionCreated.record();
         // Default to empty client information as the ApiVersionsRequest is not
         // mandatory. In this case, we still want to account for the connection.
@@ -327,16 +329,18 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
-    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps,
+                                           Uuid clientInstanceId) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
-        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key, clientInstanceId);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
         return key;
     }
 
-    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key,
+                                                    Uuid clientInstanceId) throws IOException {
         ChannelMetadataRegistry metadataRegistry = null;
         try {
             metadataRegistry = new SelectorChannelMetadataRegistry();
@@ -986,11 +990,6 @@ public class Selector implements Selectable, AutoCloseable {
     public boolean isChannelReady(String id) {
         KafkaChannel channel = this.channels.get(id);
         return channel != null && channel.ready();
-    }
-
-    @Override
-    public void clientInstanceId(Uuid clientInstanceId) {
-        this.clientInstanceId = clientInstanceId;
     }
 
     private KafkaChannel openOrClosingChannelOrFail(String id) {

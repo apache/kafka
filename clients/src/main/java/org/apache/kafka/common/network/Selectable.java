@@ -44,7 +44,21 @@ public interface Selectable {
      * @param receiveBufferSize The receive buffer for the socket
      * @throws IOException If we cannot begin connecting
      */
-    void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
+    default void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        connect(id, address, sendBufferSize, receiveBufferSize, null);
+    }
+
+    /**
+     * Begin establishing a socket connection to the given address identified by the given id
+     * @param id The id for this connection
+     * @param address The address to connect to
+     * @param sendBufferSize The send buffer for the socket
+     * @param receiveBufferSize The receive buffer for the socket
+     * @param clientInstanceId The client instance ID that SASL authentication sends on this connection, or null if none
+     * @throws IOException If we cannot begin connecting
+     */
+    void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
+                 Uuid clientInstanceId) throws IOException;
 
     /**
      * Wakeup this selector if it is blocked on I/O
@@ -127,10 +141,4 @@ public interface Selectable {
      * @param id The id for the connection
      */
     boolean isChannelReady(String id);
-
-    /**
-     * Set the client instance ID that SASL authentication sends on the connections this selector opens.
-     * @param clientInstanceId The client instance ID of the client that owns this selector
-     */
-    void clientInstanceId(Uuid clientInstanceId);
 }

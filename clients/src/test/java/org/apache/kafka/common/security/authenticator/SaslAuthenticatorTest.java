@@ -2446,8 +2446,7 @@ public class SaslAuthenticatorTest {
         clientChannelBuilder.configure(saslClientConfigs);
         this.channelBuilder = clientChannelBuilder;
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
-        selector.clientInstanceId(clientInstanceId);
-        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE, clientInstanceId);
     }
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
