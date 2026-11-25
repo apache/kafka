@@ -68,13 +68,13 @@ public class StickyTaskAssignor implements TaskAssignor {
     };
 
     /** By partition, then by subtopology. Written as one lambda to keep sorting cheap. */
-    private static final Comparator<TaskId> TASK_BY_PARTITION = (task1, task2) -> {
+    private static final Comparator<TaskId> TASK_PARTITION_FIRST = (task1, task2) -> {
         final int byPartition = Integer.compare(task1.partition(), task2.partition());
         return byPartition != 0 ? byPartition : task1.subtopologyId().compareTo(task2.subtopologyId());
     };
 
     /** By subtopology, then by partition. Written as one lambda to keep sorting cheap. */
-    private static final Comparator<TaskId> TASK_BY_SUBTOPOLOGY = (task1, task2) -> {
+    private static final Comparator<TaskId> TASK_SUBTOPOLOGY_FIRST = (task1, task2) -> {
         final int bySubtopology = task1.subtopologyId().compareTo(task2.subtopologyId());
         return bySubtopology != 0 ? bySubtopology : Integer.compare(task1.partition(), task2.partition());
     };
@@ -331,7 +331,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static void assignActive(final LocalState localState, final LinkedList<TaskId> activeTasks, final boolean stateful) {
 
         // Assuming our current assignment pairs same partitions (range-based), we want to sort by partition first
-        activeTasks.sort(TASK_BY_PARTITION);
+        activeTasks.sort(TASK_PARTITION_FIRST);
 
         // 1. re-assigning existing active tasks to clients that previously had the same active tasks
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
@@ -361,7 +361,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         // To achieve an initially range-based assignment, sort by subtopology
-        activeTasks.sort(TASK_BY_SUBTOPOLOGY);
+        activeTasks.sort(TASK_SUBTOPOLOGY_FIRST);
 
         // 3. assign any remaining unassigned tasks
         final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(PROCESS_BY_LOAD);
@@ -552,7 +552,7 @@ public class StickyTaskAssignor implements TaskAssignor {
      */
     private static void assignStandby(final LocalState localState, final LinkedList<TaskId> standbyTasks) {
         // Assuming our current assignment is range-based, we want to sort by partition first.
-        standbyTasks.sort((task1, task2) -> TASK_BY_PARTITION.compare(task2, task1));
+        standbyTasks.sort((task1, task2) -> TASK_PARTITION_FIRST.compare(task2, task1));
 
         // 1. and 2. assigning the standby tasks that make their task more rack-diverse
         final Map<TaskId, List<ProcessState>> rackAwareStandbys = localState.rackAwareAssignmentTags.isEmpty()
@@ -576,7 +576,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         // To achieve a range-based assignment, sort by subtopology
-        toLeastLoaded.sort((standby1, standby2) -> TASK_BY_SUBTOPOLOGY.compare(standby2.taskId, standby1.taskId));
+        toLeastLoaded.sort((standby1, standby2) -> TASK_SUBTOPOLOGY_FIRST.compare(standby2.taskId, standby1.taskId));
 
         // 4. assigning any remaining standby tasks to the least loaded client
         final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>((process1, process2) -> Double.compare(process1.load(), process2.load()));
