@@ -378,6 +378,8 @@ public class DefaultStateUpdater implements StateUpdater {
                     corruptedTask = updatingTasks.get(taskId);
                     corruptedUpdatingTasks.add(corruptedTask);
                 } else if (pausedTasks.containsKey(taskId)) {
+                    // A paused task's changelog partitions can still be assigned to the restore consumer,
+                    // so an invalid offset for one of them can result in a TaskCorruptedException naming this task.
                     corruptedTask = pausedTasks.get(taskId);
                     corruptedPausedTasks.add(corruptedTask);
                 } else {
