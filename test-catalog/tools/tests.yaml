@@ -806,6 +806,7 @@ org.apache.kafka.tools.consumer.GroupMetadataMessageFormatterTest:
 org.apache.kafka.tools.consumer.MirrorStateMessageFormatterTest:
 - testMalformedRecord
 - testMessageFormatter
+- testRoundTrip
 - testUnsupportedValueVersion
 org.apache.kafka.tools.consumer.NoOpMessageFormatterTest:
 - testNoOpMessageFormatter
