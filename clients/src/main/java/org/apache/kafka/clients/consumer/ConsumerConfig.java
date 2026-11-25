@@ -406,6 +406,15 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>metadata.cluster.check.enable</code> */
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
 
+    /** <code>client.framework.name</code> */
+    public static final String CLIENT_FRAMEWORK_NAME_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_NAME_CONFIG;
+
+    /** <code>client.framework.version</code> */
+    public static final String CLIENT_FRAMEWORK_VERSION_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_VERSION_CONFIG;
+
+    /** <code>client.framework.id</code> */
+    public static final String CLIENT_FRAMEWORK_ID_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_ID_CONFIG;
+
     /**
      * <code>share.acknowledgement.mode</code>
      */
@@ -737,6 +746,21 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CLIENT_FRAMEWORK_NAME_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_NAME_DOC)
+                                .define(CLIENT_FRAMEWORK_VERSION_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_VERSION_DOC)
+                                .define(CLIENT_FRAMEWORK_ID_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_ID_DOC)
                                 .define(SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         ShareAcknowledgementMode.IMPLICIT.name(),
