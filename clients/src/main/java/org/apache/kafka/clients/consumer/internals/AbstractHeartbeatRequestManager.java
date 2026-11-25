@@ -97,6 +97,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      */
     private final HeartbeatMetricsManager metricsManager;
 
+    private long heartbeatGeneration;
+
     public static final String CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the new CONSUMER " +
         "group protocol. Set group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
         "until the cluster is upgraded.";
@@ -176,6 +178,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
+            // Completions from before the leave must not update the next membership's request state.
+            heartbeatGeneration++;
             membershipManager().transitionToSendingLeaveGroup(true);
             NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
 
@@ -316,16 +320,21 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         NetworkClientDelegate.UnsentRequest request = buildHeartbeatRequest();
         if (ignoreResponse)
             return logResponse(request);
-        else
-            return request.whenComplete((response, exception) -> {
-                long completionTimeMs = request.handler().completionTimeMs();
-                if (response != null) {
-                    metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((R) response.responseBody(), completionTimeMs);
-                } else {
-                    onFailure(exception, completionTimeMs);
-                }
-            });
+        final long requestGeneration = heartbeatGeneration;
+        return request.whenComplete((response, exception) -> {
+            if (response != null) {
+                metricsManager.recordRequestLatency(response.requestLatencyMs());
+            }
+            if (requestGeneration != heartbeatGeneration) {
+                return;
+            }
+            long completionTimeMs = request.handler().completionTimeMs();
+            if (response != null) {
+                onResponse((R) response.responseBody(), completionTimeMs);
+            } else {
+                onFailure(exception, completionTimeMs);
+            }
+        });
     }
 
     @SuppressWarnings("unchecked")
