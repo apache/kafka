@@ -164,7 +164,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
   }
 
   @ClusterTest
-  def testClassicJoinWithKnownMemberIdToEmptyConsumerGroup(): Unit = {
+  def testClassicMemberJoinToEmptyConsumerGroupWithKnownMemberId(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
