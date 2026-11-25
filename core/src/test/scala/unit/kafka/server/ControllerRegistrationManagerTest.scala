@@ -20,8 +20,8 @@ package kafka.server
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord, UnregisterControllerRecord}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.ControllerRegistrationResponse
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, ControllerRegistrationRequest, ControllerRegistrationResponse}
 import org.apache.kafka.common.utils.internals.ExponentialBackoff
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -35,7 +35,7 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
@@ -45,6 +45,10 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
   private val controller1 = new Node(1, "localhost", 7000)
+  private val oldestRequestHeaderVersion =
+    ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(ApiKeys.CONTROLLER_REGISTRATION.oldestVersion)
+  private val latestRequestHeaderVersion =
+    ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(ApiKeys.CONTROLLER_REGISTRATION.latestVersion)
 
   private def configProperties = {
     val properties = new Properties()
@@ -218,6 +222,40 @@ class ControllerRegistrationManagerTest {
         )
         assertTrue(registeredInLog(manager))
       }
+    } finally {
+      manager.close()
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[MetadataVersion], names = Array("IBP_4_4_IV2", "IBP_4_5_IV0"))
+  def testRequestVersionFollowsRequestHeaderVersion(metadataVersion: MetadataVersion): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val manager = newControllerRegistrationManager(context)
+    try {
+      context.controllerNodeProvider.node.set(controller1)
+      val request = new CompletableFuture[ControllerRegistrationRequest]
+      context.mockClient.prepareResponseFrom(
+        (body: AbstractRequest) => request.complete(body.asInstanceOf[ControllerRegistrationRequest]),
+        new ControllerRegistrationResponse(new ControllerRegistrationResponseData()),
+        controller1)
+      manager.start(context.mockChannelManager)
+      doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        metadataVersion,
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
+      TestUtils.retryOnExceptionWithTimeout(30000, () => {
+        context.mockChannelManager.poll()
+        assertTrue(request.isDone)
+      })
+
+      val requestHeaderVersion =
+        if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)) latestRequestHeaderVersion else oldestRequestHeaderVersion
+      val requestVersion = request.get.version
+      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(requestHeaderVersion), requestVersion)
+      assertEquals(requestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
     } finally {
       manager.close()
     }

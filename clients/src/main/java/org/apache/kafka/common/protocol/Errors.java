@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidMirrorException;
 import org.apache.kafka.common.errors.InvalidMirrorStateException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
@@ -370,8 +371,8 @@ public enum Errors {
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available.",
             PreferredLeaderNotAvailableException::new),
     GROUP_MAX_SIZE_REACHED(81, "The group has reached its maximum size.", GroupMaxSizeReachedException::new),
-    FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
-            "another consumer with the same group.instance.id has registered with a different member.id.",
+    FENCED_INSTANCE_ID(82, "The broker rejected this static member because another member in the group " +
+            "is registered with the same group.instance.id and a different member.id.",
             FencedInstanceIdException::new),
     ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available.",
             EligibleLeadersNotAvailableException::new),
@@ -407,9 +408,9 @@ public enum Errors {
     NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new),
     OFFSET_MOVED_TO_TIERED_STORAGE(109, "The requested offset is moved to tiered storage.", OffsetMovedToTieredStorageException::new),
     FENCED_MEMBER_EPOCH(110, "The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoin.", FencedMemberEpochException::new),
-    UNRELEASED_INSTANCE_ID(111, "The instance ID is still used by another member in the consumer group. That member must leave first.", UnreleasedInstanceIdException::new),
+    UNRELEASED_INSTANCE_ID(111, "The instance ID is still in use by another member of the group. That member must leave first.", UnreleasedInstanceIdException::new),
     UNSUPPORTED_ASSIGNOR(112, "The assignor or its version range is not supported by the consumer group.", UnsupportedAssignorException::new),
-    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.", StaleMemberEpochException::new),
+    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch in a heartbeat response.", StaleMemberEpochException::new),
     MISMATCHED_ENDPOINT_TYPE(114, "The request was sent to an endpoint of the wrong type.", MismatchedEndpointTypeException::new),
     UNSUPPORTED_ENDPOINT_TYPE(115, "This endpoint type is not supported yet.", UnsupportedEndpointTypeException::new),
     UNKNOWN_CONTROLLER_ID(116, "This controller ID is not known.", UnknownControllerIdException::new),
@@ -440,7 +441,8 @@ public enum Errors {
     TOPIC_NOT_IN_CLUSTER_MIRROR(141, "The topic does not belong to the specified cluster mirror.", TopicNotInClusterMirrorException::new),
     CLUSTER_MIRROR_AUTHORIZATION_FAILED(142, "Cluster mirror authorization failed.", ClusterMirrorAuthorizationException::new),
     INVALID_CLUSTER_MIRROR_STATE(143, "Invalid cluster mirror state.", InvalidMirrorStateException::new),
-    MIRROR_CONFIG_NOT_AVAILABLE(144, "Mirror config is not available.", MirrorConfigNotAvailableException::new);
+    MIRROR_CONFIG_NOT_AVAILABLE(144, "Mirror config is not available.", MirrorConfigNotAvailableException::new),
+    INVALID_MIRROR(145, "The request attempted to perform an operation on an invalid mirror.", InvalidMirrorException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -42,7 +42,8 @@ class NamedCache {
     private final String storeName;
     private final String taskName;
     private final NavigableMap<Bytes, LRUNode> cache = new TreeMap<>();
-    private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
+    private Set<Bytes> dirtyKeys = new LinkedHashSet<>();
+    private int dirtyKeysPeak;
     private ThreadCache.DirtyEntryFlushListener listener;
     private LRUNode tail;
     private LRUNode head;
@@ -130,6 +131,7 @@ class NamedCache {
         }
 
         if (dirtyKeys.isEmpty()) {
+            resetDirtyKeys();
             return;
         }
 
@@ -155,7 +157,7 @@ class NamedCache {
             }
         }
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
-        dirtyKeys.clear();
+        resetDirtyKeys();
         listener.apply(entries);
         for (final Bytes key : deleted) {
             delete(key);
@@ -188,6 +190,7 @@ class NamedCache {
             // first remove and then add so we can maintain ordering as the arrival order of the records.
             dirtyKeys.remove(key);
             dirtyKeys.add(key);
+            dirtyKeysPeak = Math.max(dirtyKeysPeak, dirtyKeys.size());
         }
         currentSizeBytes += node.size();
         totalCacheSizeSensor.record(currentSizeBytes);
@@ -353,6 +356,10 @@ class NamedCache {
         return tail;
     }
 
+    synchronized Set<Bytes> dirtyKeys() {
+        return dirtyKeys;
+    }
+
     synchronized void close() {
         head = tail = null;
         listener = null;
@@ -365,8 +372,19 @@ class NamedCache {
     synchronized void clear() {
         head = tail = null;
         currentSizeBytes = 0;
-        dirtyKeys.clear();
+        resetDirtyKeys();
         cache.clear();
+    }
+
+    // HashMap#clear() nulls every slot of a table that never shrinks, so clearing a set that once held
+    // many keys costs as much as that peak. Replace the set once the load drops well below the peak.
+    private void resetDirtyKeys() {
+        if (dirtyKeys.size() < dirtyKeysPeak / 4) {
+            dirtyKeys = new LinkedHashSet<>();
+            dirtyKeysPeak = 0;
+        } else {
+            dirtyKeys.clear();
+        }
     }
 
     /**

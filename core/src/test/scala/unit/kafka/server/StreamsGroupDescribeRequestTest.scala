@@ -39,10 +39,135 @@ import java.lang.{Byte => JByte}
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
   )
 )
 class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )
+  )
+  def testStreamsGroupDescribeIncludesTasksPendingRevocation(): Unit = {
+    createOffsetsTopic()
+    createTopic(topic = "foo", numPartitions = 2)
+
+    val topology = new StreamsGroupHeartbeatRequestData.Topology()
+      .setEpoch(1)
+      .setSubtopologies(List(
+        new StreamsGroupHeartbeatRequestData.Subtopology()
+          .setSubtopologyId("subtopology-1")
+          .setSourceTopics(List("foo").asJava)
+          .setRepartitionSinkTopics(List.empty.asJava)
+          .setRepartitionSourceTopics(List.empty.asJava)
+          .setStateChangelogTopics(List.empty.asJava)
+      ).asJava)
+
+    // Member-1 joins and receives both active tasks.
+    var member1Response: StreamsGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      member1Response = streamsGroupHeartbeat(
+        groupId = "grp",
+        memberId = "member-1",
+        processId = "process-1",
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty,
+        topology = topology
+      )
+      member1Response.activeTasks != null &&
+        member1Response.activeTasks.asScala.flatMap(_.partitions.asScala).toSet == Set[Integer](0, 1)
+    }, msg = s"Member-1 did not receive both tasks. Last response $member1Response.")
+
+    // Member-2 joins, moving one task to its target assignment.
+    val member2Response = streamsGroupHeartbeat(
+      groupId = "grp",
+      memberId = "member-2",
+      processId = "process-2",
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty,
+      topology = topology
+    )
+
+    // Member-1 reports that it still owns both tasks and receives a revocation request.
+    // Do not acknowledge the reduced assignment: the revoked task is still pending.
+    var revocationResponse: StreamsGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      revocationResponse = streamsGroupHeartbeat(
+        groupId = "grp",
+        memberId = "member-1",
+        memberEpoch = member1Response.memberEpoch,
+        activeTasks = convertTaskIds(member1Response.activeTasks),
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      revocationResponse.activeTasks != null &&
+        revocationResponse.activeTasks.asScala.flatMap(_.partitions.asScala).size == 1
+    }, msg = s"Member-1 did not receive a reduced assignment. Last response $revocationResponse.")
+
+    for (version <- ApiKeys.STREAMS_GROUP_DESCRIBE.oldestVersion() to ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
+      var group: StreamsGroupDescribeResponseData.DescribedGroup = null
+      TestUtils.waitUntilTrue(() => {
+        group = streamsGroupDescribe(groupIds = List("grp"), version = version.toShort).head
+        group.errorCode == Errors.NONE.code &&
+          group.groupState == "Reconciling"
+      }, msg = s"Describe version $version did not return the group in Reconciling state. Last response $group.")
+
+      val member1 = group.members.asScala.find(_.memberId == "member-1").get
+      val member2 = group.members.asScala.find(_.memberId == "member-2").get
+      val member1Target = member1.targetAssignment.activeTasks.asScala.flatMap(_.partitions.asScala).toSet
+      val member2Target = member2.targetAssignment.activeTasks.asScala.flatMap(_.partitions.asScala).toSet
+      assertEquals(1, member1Target.size)
+      assertEquals(1, member2Target.size)
+      assertEquals(Set[Integer](0, 1), member1Target ++ member2Target)
+      assertTrue(member2.assignment.activeTasks.isEmpty)
+
+      // Describe must include the task pending revocation until member-1 acknowledges its release.
+      assertEquals(1, member1.assignment.activeTasks.size)
+      assertEquals("subtopology-1", member1.assignment.activeTasks.get(0).subtopologyId)
+      assertEquals(
+        Set[Integer](0, 1),
+        member1.assignment.activeTasks.get(0).partitions.asScala.toSet,
+        s"Describe version $version must include active tasks pending revocation"
+      )
+    }
+
+    // Member-1 acknowledges the revocation, allowing member-2 to receive the released task.
+    streamsGroupHeartbeat(
+      groupId = "grp",
+      memberId = "member-1",
+      memberEpoch = revocationResponse.memberEpoch,
+      activeTasks = convertTaskIds(revocationResponse.activeTasks),
+      standbyTasks = List.empty,
+      warmupTasks = List.empty
+    )
+    streamsGroupHeartbeat(
+      groupId = "grp",
+      memberId = "member-2",
+      memberEpoch = member2Response.memberEpoch,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty
+    )
+
+    val group = streamsGroupDescribe(groupIds = List("grp")).head
+    assertEquals(Errors.NONE.code, group.errorCode)
+    assertEquals("Stable", group.groupState)
+    val retainedTasks = revocationResponse.activeTasks.asScala.flatMap(_.partitions.asScala).toSet
+    val assignments = group.members.asScala.map { member =>
+      member.memberId -> member.assignment.activeTasks.asScala.flatMap(_.partitions.asScala).toSet
+    }.toMap
+    assertEquals(Map(
+      "member-1" -> retainedTasks,
+      "member-2" -> (Set[Integer](0, 1) -- retainedTasks)
+    ), assignments)
+  }
 
   @ClusterTest(
     features = Array(

@@ -71,7 +71,7 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
-import org.apache.kafka.server.{HostedPartition, PartitionFetchState}
+import org.apache.kafka.server.{HostedPartition, PartitionFetchState, ReplicaManager => JReplicaManager}
 import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
@@ -540,9 +540,9 @@ class ReplicaManagerTest {
       // Use the second instance of metrics group that is constructed. The first instance is constructed by
       // ReplicaManager constructor > BrokerTopicStats > BrokerTopicMetrics.
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
-      ReplicaManager.GaugeMetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
-      ReplicaManager.MeterMetricNames.foreach(metricName => verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(metricName), anyString(), any(classOf[TimeUnit])))
-      ReplicaManager.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      JReplicaManager.GAUGE_METRIC_NAMES.asScala.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      JReplicaManager.METER_METRIC_NAMES.asScala.foreach(metricName => verify(mockMetricsGroup).newMeter(ArgumentMatchers.eq(metricName), anyString(), any(classOf[TimeUnit])))
+      JReplicaManager.ALL_METRIC_NAMES.asScala.foreach(verify(mockMetricsGroup).removeMetric(_))
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)

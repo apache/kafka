@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.server;
 
-/**
- * Represents all the entities that can be configured.
- */
-public enum ConfigType {
-    TOPIC("topics"),
-    CLIENT("clients"),
-    USER("users"),
-    BROKER("brokers"),
-    IP("ips"),
-    CLIENT_METRICS("client-metrics"),
-    GROUP("groups");
+import org.apache.kafka.common.config.ConfigException;
 
-    private final String value;
+import org.junit.jupiter.api.Test;
 
-    ConfigType(String value) {
-        this.value = value;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class ProcessRoleTest {
+
+    @Test
+    public void testFromString() {
+        assertEquals(ProcessRole.BrokerRole, ProcessRole.fromString("broker"));
+        assertEquals(ProcessRole.ControllerRole, ProcessRole.fromString("controller"));
     }
 
-    public String value() {
-        return value;
+    @Test
+    public void testFromStringWithInvalidRole() {
+        ConfigException exception = assertThrows(ConfigException.class, () -> ProcessRole.fromString("unknown"));
+        assertEquals("Unknown process role 'unknown' (only 'broker' and 'controller' are allowed roles)", exception.getMessage());
     }
 }

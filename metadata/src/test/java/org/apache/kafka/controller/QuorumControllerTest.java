@@ -118,6 +118,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -855,7 +856,8 @@ public class QuorumControllerTest {
             alterPartitionRequest.topics().add(topicData);
 
             active.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest
-                .Builder(alterPartitionRequest).build(ApiKeys.ALTER_PARTITION.oldestVersion()).data()).get();
+                .Builder(alterPartitionRequest, ApiKeys.ALTER_PARTITION.requestHeaderVersion(ApiKeys.ALTER_PARTITION.oldestVersion()))
+                .build(ApiKeys.ALTER_PARTITION.oldestVersion()).data()).get();
 
             AtomicLong lastHeartbeatMs = new AtomicLong(getMonotonicMs(active.time()));
             sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
@@ -1617,13 +1619,18 @@ public class QuorumControllerTest {
                 (short) 0);
     }
 
-    @Test
-    public void testAppendRecords() {
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 10})
+    public void testAppendRecords(int maxRecordsPerBatch) {
         TestAppender appender = new TestAppender();
         assertEquals(5, QuorumController.appendRecords(log,
             ControllerResult.of(List.of(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
-            2,
-            appender));
+            maxRecordsPerBatch,
+            batch -> {
+                assertFalse(batch.isEmpty(), "Raft appends must not be empty");
+                assertTrue(batch.size() <= maxRecordsPerBatch, "Batch exceeds the maximum record count");
+                return appender.apply(batch);
+            }));
     }
 
     @Test

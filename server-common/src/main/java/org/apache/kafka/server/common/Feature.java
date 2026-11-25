@@ -48,6 +48,7 @@ public enum Feature {
     ELIGIBLE_LEADER_REPLICAS_VERSION(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.values(), EligibleLeaderReplicasVersion.LATEST_PRODUCTION),
     SHARE_VERSION(ShareVersion.FEATURE_NAME, ShareVersion.values(), ShareVersion.LATEST_PRODUCTION),
     STREAMS_VERSION(StreamsVersion.FEATURE_NAME, StreamsVersion.values(), StreamsVersion.LATEST_PRODUCTION),
+    MIRROR_VERSION(MirrorVersion.FEATURE_NAME, MirrorVersion.values(), MirrorVersion.LATEST_PRODUCTION),
 
     /**
      * Features defined only for unit tests and are not used in production.

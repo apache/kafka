@@ -109,6 +109,7 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow class="org.apache.kafka.common.requests.ApiVersionsResponse" />
+      <allow class="org.apache.logging.log4j.Level" />
     </subpackage>
 
     <subpackage name="resource">
@@ -338,6 +339,10 @@
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.security" />
+
+    <file name="NativeImageConfigTest">
+      <allow pkg="io.github.classgraph" />
+    </file>
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.coordinator.common.runtime" />

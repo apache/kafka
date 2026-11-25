@@ -161,8 +161,6 @@ jobs:
       - name: Annotate Rat errors
         if: failure()
         run: python .github/scripts/rat.py
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
       - name: Check generated documentation
         # Check if there are any empty files under ./site-docs/generated, If any empty files are found, print an error 
         # message and list the empty files
@@ -175,6 +173,8 @@ jobs:
           fi
       - name: Verify license file
         run: python committer-tools/verify_license.py --skip-build
+      - name: Verify NOTICE-binary file
+        run: python committer-tools/verify_notice.py --skip-build
 
   api-checker:
     needs: [configure, validate]

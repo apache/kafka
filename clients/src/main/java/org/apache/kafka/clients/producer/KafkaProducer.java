@@ -731,6 +731,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
+    @Override
     public void initTransactions(boolean keepPreparedTxn) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
@@ -758,6 +759,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         {@code transactional.id} is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
+    @Override
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
@@ -819,6 +821,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException if the thread is interrupted while blocked
      * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
+    @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         throwIfInvalidGroupMetadata(groupMetadata);
@@ -939,6 +942,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws TimeoutException if the time taken for committing the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
+    @Override
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
@@ -973,6 +977,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws TimeoutException if the time taken for aborting the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
+    @Override
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();

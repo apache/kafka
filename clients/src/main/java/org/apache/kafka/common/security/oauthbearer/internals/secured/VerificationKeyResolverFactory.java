@@ -25,6 +25,8 @@ import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.lang.UnresolvableKeyException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
@@ -51,6 +53,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * may have multiple instances, we want to reuse the single instance.
  */
 public class VerificationKeyResolverFactory {
+
+    private static final Logger LOG = LoggerFactory.getLogger(VerificationKeyResolverFactory.class);
 
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> CACHE = new HashMap<>();
 
@@ -80,6 +84,10 @@ public class VerificationKeyResolverFactory {
         if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
             resolver = new JwksFileVerificationKeyResolver();
         } else {
+            if (jwksEndpointUrl.getProtocol().equalsIgnoreCase("http"))
+                LOG.warn("The {} configuration uses an HTTP URL, so the keys used to verify tokens are retrieved without TLS. " +
+                    "Use an HTTPS URL instead.", SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+
             long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
             JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
             SSLSocketFactory sslSocketFactory = null;

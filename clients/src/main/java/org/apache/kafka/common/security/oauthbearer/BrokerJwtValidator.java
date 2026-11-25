@@ -204,6 +204,7 @@ public class BrokerJwtValidator implements JwtValidator {
      */
 
     @SuppressWarnings("unchecked")
+    @Override
     public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 

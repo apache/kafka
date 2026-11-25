@@ -34,7 +34,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -43,6 +46,7 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -53,6 +57,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
@@ -76,6 +81,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -85,6 +91,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -450,6 +457,187 @@ public abstract class TopologyTestDriverTest {
         assertTrue(mockProcessors.get(0).closed);
         // As testDriver is already closed, bypassing @AfterEach tearDown testDriver.close().
         testDriver = null;
+    }
+
+    @Test
+    public void shouldCloseStateStoreAndKeepTaskDirectoryWhenProcessorFailsToInitialize() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", failingProcessorSupplier("store"), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
+            "processor");
+
+        assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertFalse(store.isOpen());
+        assertTrue(taskDirectory().exists());
+    }
+
+    @Test
+    public void shouldCloseStateStoreWhenAnotherStateStoreFailsToInitialize() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            // under exactly-once, a store with a changelog and without a committed offset makes the task corrupted
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "processor");
+        final Topology failingTopology = new Topology();
+        failingTopology.addSource("source", SOURCE_TOPIC_1);
+        failingTopology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        failingTopology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "processor");
+        // the store of a later processor is initialized later, here after the first store has been opened
+        failingTopology.addProcessor("failingProcessor", new MockProcessorSupplier(), "source");
+        failingTopology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                storeSupplier(() -> new InMemoryKeyValueStore("failingStore") {
+                    @Override
+                    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                        throw new ProcessorStateException("failed to initialize");
+                    }
+                }),
+                Serdes.String(),
+                Serdes.Long()),
+            "failingProcessor");
+
+        assertThrows(
+            ProcessorStateException.class,
+            () -> new TopologyTestDriverBuilder(failingTopology).withConfig(config).build());
+
+        assertTrue(storeDirectory("store").exists());
+        // RocksDB lets a store be opened again only once it has been closed
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+    }
+
+    @Test
+    public void shouldKeepStateOfOpenDriverWhenConstructionOfAnotherDriverFails() {
+        final Topology topology = new Topology();
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), Serdes.String(), Serdes.Long()),
+            "processor");
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+
+        // the store of the open driver holds the lock of RocksDB
+        assertThrows(ProcessorStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertTrue(storeDirectory("store").exists());
+    }
+
+    @Test
+    public void shouldCloseGlobalStateStoreWhenProcessorFailsToInitializeOnRestore() {
+        final Topology topology = new Topology();
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("globalStore"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "source",
+            new StringDeserializer(),
+            new LongDeserializer(),
+            SOURCE_TOPIC_1,
+            "processor",
+            failingProcessorSupplier("globalStore"));
+
+        assertThrows(IllegalStateException.class, () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertFalse(store.isOpen());
+    }
+
+    @Test
+    public void shouldCloseGlobalStateStoreWhenStateStoreFailsToClose() {
+        final AtomicReference<StateStore> globalStore = new AtomicReference<>();
+        final Topology topology = new Topology();
+        topology.addGlobalStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("globalStore"), Serdes.String(), Serdes.Long())
+                .withLoggingDisabled(),
+            "globalSource",
+            new StringDeserializer(),
+            new LongDeserializer(),
+            SOURCE_TOPIC_2,
+            "globalProcessor",
+            () -> new Processor<String, Long, Void, Void>() {
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    globalStore.set(context.getStateStore("globalStore"));
+                }
+
+                @Override
+                public void process(final Record<String, Long> record) {
+                }
+            });
+        topology.addSource("source", SOURCE_TOPIC_1);
+        topology.addProcessor("processor", failingProcessorSupplier("store"), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                storeSupplier(() -> new InMemoryKeyValueStore("store") {
+                    @Override
+                    public void close() {
+                        throw new ProcessorStateException("failed to close");
+                    }
+                }),
+                Serdes.String(),
+                Serdes.Long()),
+            "processor");
+
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> new TopologyTestDriverBuilder(topology).withConfig(config).build());
+
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertEquals(1, exception.getSuppressed().length);
+        assertInstanceOf(ProcessorStateException.class, exception.getSuppressed()[0]);
+        assertFalse(globalStore.get().isOpen());
+    }
+
+    // the only task of the TopologyTestDriver is 0_0
+    private File taskDirectory() {
+        final File applicationDirectory = new File(
+            config.getProperty(StreamsConfig.STATE_DIR_CONFIG),
+            config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
+        return new File(applicationDirectory, "0_0");
+    }
+
+    private File storeDirectory(final String storeName) {
+        return new File(taskDirectory(), "rocksdb" + File.separator + storeName);
+    }
+
+    private static KeyValueBytesStoreSupplier storeSupplier(final Supplier<KeyValueStore<Bytes, byte[]>> store) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return store.get().name();
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return store.get();
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory";
+            }
+        };
+    }
+
+    // the processor keeps the store it is connected to, as its failure leaves the test without a driver to get it from
+    private ProcessorSupplier<String, Long, Void, Void> failingProcessorSupplier(final String storeName) {
+        return () -> new Processor<>() {
+            @Override
+            public void init(final ProcessorContext<Void, Void> context) {
+                store = context.getStateStore(storeName);
+                throw new IllegalStateException("failed to initialize");
+            }
+
+            @Override
+            public void process(final Record<String, Long> record) {
+            }
+        };
     }
 
     @Test
@@ -1784,17 +1972,15 @@ public abstract class TopologyTestDriverTest {
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
         testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
-        try {
-            pipeRecord(SOURCE_TOPIC_1, testRecord1);
-        } catch (final TopologyException exception) {
-            final String str =
-                    String.format(
-                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
-                                    "input record topic: %s and hence cannot process the message.",
-                            pattern2Source1,
-                            SOURCE_TOPIC_1);
-            assertEquals(str, exception.getMessage());
-        }
+        final TopologyException exception =
+                assertThrows(TopologyException.class, () -> pipeRecord(SOURCE_TOPIC_1, testRecord1));
+        final String str =
+                String.format(
+                        "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                "input record topic: %s and hence cannot process the message.",
+                        pattern2Source1,
+                        SOURCE_TOPIC_1);
+        assertEquals(str, exception.getMessage());
     }
 
     @Test

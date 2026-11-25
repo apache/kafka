@@ -130,7 +130,7 @@ public class Utils {
      * Decrements value by 1; returns null when reaching zero. This helper is
      * meant to be used with Map#compute.
      */
-    public static Integer decValue(String key, Integer value) {
+    public static Integer decValue(Object key, Integer value) {
         if (value == null) return null;
         return value == 1 ? null : value - 1;
     }
@@ -138,7 +138,7 @@ public class Utils {
     /**
      * Increments value by 1; This helper is meant to be used with Map#compute.
      */
-    public static Integer incValue(String key, Integer value) {
+    public static Integer incValue(Object key, Integer value) {
         return value == null ? 1 : value + 1;
     }
 
@@ -190,7 +190,10 @@ public class Utils {
     }
 
     /**
-     * Converts a ConsumerProtocolAssignment to a map of topic id and partition set.
+     * Converts a ConsumerProtocolAssignment to a map of topic id and partition set. The topics and
+     * the partitions that do not exist in the metadata image are dropped. The assignment refers to
+     * topics by name, so it can have partitions of a topic that was re-created with fewer
+     * partitions.
      *
      * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
      * @param metadataImage              The Metadata image.
@@ -203,7 +206,15 @@ public class Utils {
         Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
         consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
             metadataImage.topicMetadata(topicPartition.topic()).ifPresent(topicMetadata -> {
-                topicPartitionMap.put(topicMetadata.id(), new HashSet<>(topicPartition.partitions()));
+                Set<Integer> partitions = newHashSet(topicPartition.partitions().size());
+                for (int partition : topicPartition.partitions()) {
+                    if (partition >= 0 && partition < topicMetadata.partitionCount()) {
+                        partitions.add(partition);
+                    }
+                }
+                if (!partitions.isEmpty()) {
+                    topicPartitionMap.put(topicMetadata.id(), partitions);
+                }
             });
         });
         return topicPartitionMap;

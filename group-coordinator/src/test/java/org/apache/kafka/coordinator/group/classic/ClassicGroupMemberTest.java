@@ -272,7 +272,7 @@ public class ClassicGroupMemberTest {
             4500,
             "generic",
             new JoinGroupRequestProtocolCollection(),
-            new byte[0]
+            new byte[]{1}
         );
 
         DescribeGroupsResponseData.DescribedGroupMember expectedDescribedGroupMember =
@@ -281,7 +281,7 @@ public class ClassicGroupMemberTest {
                 .setGroupInstanceId("group-instance-id")
                 .setClientId("client-id")
                 .setClientHost("client-host")
-                .setMemberAssignment(new byte[0]);
+                .setMemberAssignment(EMPTY_ASSIGNMENT);
 
         DescribeGroupsResponseData.DescribedGroupMember describedGroupMember = member.describeNoMetadata();
 
@@ -305,7 +305,7 @@ public class ClassicGroupMemberTest {
             4500,
             "generic",
             protocols,
-            new byte[0]
+            new byte[]{1}
         );
 
         DescribeGroupsResponseData.DescribedGroupMember expectedDescribedGroupMember =
@@ -314,7 +314,7 @@ public class ClassicGroupMemberTest {
                 .setGroupInstanceId("group-instance-id")
                 .setClientId("client-id")
                 .setClientHost("client-host")
-                .setMemberAssignment(new byte[0])
+                .setMemberAssignment(new byte[]{1})
                 .setMemberMetadata(member.metadata("range"));
 
         DescribeGroupsResponseData.DescribedGroupMember describedGroupMember = member.describe("range");

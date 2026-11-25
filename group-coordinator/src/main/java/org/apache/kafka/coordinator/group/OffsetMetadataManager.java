@@ -1063,6 +1063,17 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * @return true iff the group has at least one committed offset in the snapshot at
+     * {@code committedOffset}. Pending transactional offsets are not considered because
+     * the transaction may still abort.
+     *
+     * @see #groupHasNoOffsets(String, long)
+     */
+    public boolean hasCommittedOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) != null;
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1087,6 +1098,7 @@ public class OffsetMetadataManager {
             return false;
         }
 
+        int numRecordsBefore = records.size();
         AtomicBoolean allOffsetsExpired = new AtomicBoolean(true);
         OffsetExpirationCondition condition = offsetExpirationCondition.get();
 
@@ -1106,7 +1118,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size() - numRecordsBefore);
 
         // We don't want to remove the group if there are ongoing transactions with undeleted offsets.
         return allOffsetsExpired.get() && !openTransactions.contains(groupId);

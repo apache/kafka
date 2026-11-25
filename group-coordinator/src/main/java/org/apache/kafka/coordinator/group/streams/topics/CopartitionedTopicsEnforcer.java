@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -61,8 +60,10 @@ public class CopartitionedTopicsEnforcer {
      *
      * @param copartitionedTopics          The set of copartitioned topics (external source topics and repartition topics).
      * @param fixedRepartitionTopics       The set of repartition topics whose partition count is fixed by the topology sent by the
-     *                                     client (in particular, when the user uses `repartition` in the DSL).
+     *                                     client (in particular, when the user uses `repartition` in the DSL). May contain topics
+     *                                     outside of copartitionedTopics, which are ignored.
      * @param flexibleRepartitionTopics    The set of repartition topics whose partition count is flexible, and can be changed.
+     *                                     May contain topics outside of copartitionedTopics, which are ignored.
      *
      * @throws IllegalStateException If the partition count for any topic in copartitionedTopics is not defined by
      *                               topicPartitionCountProvider.
@@ -90,14 +91,15 @@ public class CopartitionedTopicsEnforcer {
         final int numPartitionsToUseForRepartitionTopics;
 
         if (copartitionedTopics.equals(repartitionTopicPartitionCounts.keySet())) {
+            final Map<String, Integer> fixedRepartitionTopicPartitionCountsInGroup =
+                repartitionTopicPartitionCounts.entrySet().stream()
+                    .filter(entry -> fixedRepartitionTopics.contains(entry.getKey()))
+                    .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
 
-            // if there's at least one repartition topic with fixed number of partitions
+            // if there's at least one repartition topic with fixed number of partitions in this group
             // validate that they all have same number of partitions
-            if (!fixedRepartitionTopics.isEmpty()) {
-                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
-                    repartitionTopicPartitionCounts,
-                    fixedRepartitionTopics
-                );
+            if (!fixedRepartitionTopicPartitionCountsInGroup.isEmpty()) {
+                numPartitionsToUseForRepartitionTopics = getSamePartitions(fixedRepartitionTopicPartitionCountsInGroup);
             } else {
                 // If all topics for this co-partition group are repartition topics,
                 // then set the number of partitions to be the maximum of the number of partitions.
@@ -134,30 +136,11 @@ public class CopartitionedTopicsEnforcer {
         }
     }
 
-    private int validateAndGetNumOfPartitions(final Map<String, Integer> repartitionTopics,
-                                              final Collection<String> fixedRepartitionTopics) {
-        final String firstTopicName = fixedRepartitionTopics.iterator().next();
-
-        final int firstNumberOfPartitionsOfInternalTopic = getPartitionCount(firstTopicName);
-
-        for (final String topicName : fixedRepartitionTopics) {
-            final int numberOfPartitions = getPartitionCount(topicName);
-
-            if (numberOfPartitions != firstNumberOfPartitionsOfInternalTopic) {
-                final String msg = String.format("Following topics do not have the same number of partitions: [%s]",
-                    new TreeMap<>(repartitionTopics));
-                throw TopicConfigurationException.incorrectlyPartitionedTopics(msg);
-            }
-        }
-
-        return firstNumberOfPartitionsOfInternalTopic;
-    }
-
-    private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {
-        final int partitions = nonRepartitionTopicsInCopartitionGroup.values().iterator().next();
-        for (final Entry<String, Integer> entry : nonRepartitionTopicsInCopartitionGroup.entrySet()) {
+    private int getSamePartitions(final Map<String, Integer> topicsInCopartitionGroup) {
+        final int partitions = topicsInCopartitionGroup.values().iterator().next();
+        for (final Entry<String, Integer> entry : topicsInCopartitionGroup.entrySet()) {
             if (entry.getValue() != partitions) {
-                final TreeMap<String, Integer> sorted = new TreeMap<>(nonRepartitionTopicsInCopartitionGroup);
+                final TreeMap<String, Integer> sorted = new TreeMap<>(topicsInCopartitionGroup);
                 throw TopicConfigurationException.incorrectlyPartitionedTopics(
                     String.format("Following topics do not have the same number of partitions: [%s]", sorted));
             }

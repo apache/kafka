@@ -91,6 +91,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
     public static final Exception NEGATIVE_LEADER_EPOCH = new Exception("The leader epoch cannot be a negative number.");
     public static final Exception NEGATIVE_STATE_EPOCH = new Exception("The state epoch cannot be a negative number.");
+    public static final Exception INVALID_STATE_BATCH = new Exception("The state batch must have 0 <= firstOffset <= lastOffset, a non-negative delivery count and a known delivery state.");
     public static final Exception WRITE_UNINITIALIZED_SHARE_PARTITION = new Exception("Write operation on uninitialized share partition not allowed.");
     public static final Exception READ_UNINITIALIZED_SHARE_PARTITION = new Exception("Read operation on uninitialized share partition not allowed.");
 
@@ -260,12 +261,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
             // This record is the complete snapshot.
             shareStateMap.put(mapKey, offsetRecord);
-            // If number of share updates is exceeded, then reset it.
-            if (snapshotUpdateCount.containsKey(mapKey)) {
-                if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
-                    snapshotUpdateCount.put(mapKey, 0);
-                }
-            }
+            // A snapshot subsumes all prior share updates, so reset the count.
+            snapshotUpdateCount.remove(mapKey);
         }
 
         offsetsManager.updateState(mapKey, offset, value == null);
@@ -586,24 +583,28 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Iterates over the soft state to determine the share partitions whose last snapshot is
      * older than the allowed time interval. The candidate share partitions are force snapshotted.
+     * <p>
+     * Skipped if all share partitions are cold snapshotted with no pending share updates.
      *
      * @return A result containing snapshot records, if any, and a void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
-        long coldSnapshottedPartitionsCount = shareStateMap.values().stream()
-            .filter(shareGroupOffset -> shareGroupOffset.createTimestamp() - shareGroupOffset.writeTimestamp() != 0)
-            .count();
+        // snapshotUpdateCount only holds share partitions with pending share updates.
+        boolean allPartitionsQuiet = snapshotUpdateCount.isEmpty() && shareStateMap.values().stream()
+            .allMatch(shareGroupOffset -> shareGroupOffset.createTimestamp() != shareGroupOffset.writeTimestamp());
 
-        // If all share partitions are snapshotted, it means that
-        // system is quiet and cold snapshotting will not help much.
-        if (coldSnapshottedPartitionsCount == shareStateMap.size()) {
-            log.debug("All share snapshot records already cold snapshotted, skipping.");
+        // If all share partitions are cold snapshotted with no pending updates,
+        // it means that system is quiet and cold snapshotting will not help much.
+        if (allPartitionsQuiet) {
+            log.debug("All share snapshot records already cold snapshotted with no pending updates, skipping.");
             return new CoordinatorResult<>(List.of(), null);
         }
 
         // Some active partitions are there.
         List<CoordinatorRecord> records = new ArrayList<>();
 
+        // Idle partitions are snapshotted as well, since their old snapshot
+        // offsets hold back the prune floor.
         shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
             long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
             if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
@@ -779,6 +780,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
         }
 
+        if (!partitionData.stateBatches().stream().allMatch(ShareCoordinatorShard::isValidStateBatch)) {
+            return Optional.of(getWriteErrorCoordinatorResult(Errors.INVALID_REQUEST, INVALID_STATE_BATCH, topicId, partitionId));
+        }
+
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
 
         if (!shareStateMap.containsKey(mapKey)) {
@@ -806,6 +811,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         return Optional.empty();
+    }
+
+    private static boolean isValidStateBatch(WriteShareGroupStateRequestData.StateBatch batch) {
+        // The delivery state is a RecordState id, from AVAILABLE (0) to ARCHIVED (4).
+        return batch.firstOffset() >= 0 &&
+            batch.firstOffset() <= batch.lastOffset() &&
+            batch.deliveryCount() >= 0 &&
+            batch.deliveryState() >= 0 &&
+            batch.deliveryState() <= 4;
     }
 
     private Optional<ReadShareGroupStateResponseData> maybeGetReadStateError(ReadShareGroupStateRequestData request) {

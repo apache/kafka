@@ -460,6 +460,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -532,6 +533,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -545,6 +547,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
         throw new UnsupportedOperationException(String.format("Subscribe to RE2/J pattern is not supported when using" +
             "the %s protocol defined in config %s", GroupProtocol.CLASSIC, ConsumerConfig.GROUP_PROTOCOL_CONFIG));

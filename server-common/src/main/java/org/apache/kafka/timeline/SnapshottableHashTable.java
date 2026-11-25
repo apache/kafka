@@ -128,6 +128,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                             deltaTable.baseAddOrReplace(element);
                         }
                     }
+                    list.clear();
                 }
             }
         }

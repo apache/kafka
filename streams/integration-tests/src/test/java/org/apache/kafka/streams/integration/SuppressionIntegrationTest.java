@@ -71,7 +71,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT_MS;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
@@ -237,7 +237,7 @@ public class SuppressionIntegrationTest {
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
             final long start = System.currentTimeMillis();
-            while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT) {
+            while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT_MS) {
                 final ConsumerRecords<Object, Object> records = consumer.poll(ofMillis(500));
 
                 if (!records.isEmpty()) {
@@ -548,7 +548,7 @@ public class SuppressionIntegrationTest {
     }
 
     private static void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
-        waitForCondition(() -> !driver.state().isRunningOrRebalancing(), DEFAULT_TIMEOUT, "Streams didn't shut down.");
+        waitForCondition(() -> !driver.state().isRunningOrRebalancing(), DEFAULT_TIMEOUT_MS, "Streams didn't shut down.");
         waitForCondition(() -> driver.state() == KafkaStreams.State.ERROR, "Streams didn't transit to ERROR state");
     }
 }

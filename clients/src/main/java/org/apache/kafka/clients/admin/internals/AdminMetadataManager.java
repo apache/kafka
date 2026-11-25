@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
@@ -35,7 +37,9 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Manages the metadata for KafkaAdminClient.
@@ -47,10 +51,10 @@ public class AdminMetadataManager {
     private final Logger log;
 
     /**
-     * The minimum amount of time that we should wait between subsequent
-     * retries, when fetching metadata.
+     * The backoff between metadata fetches. It grows while successive
+     * metadata responses do not change the cluster nodes.
      */
-    private final long refreshBackoffMs;
+    private final ExponentialBackoff refreshBackoff;
 
     /**
      * The minimum amount of time that we should wait before triggering an
@@ -83,6 +87,11 @@ public class AdminMetadataManager {
      * metadata.
      */
     private long lastMetadataFetchAttemptMs = 0;
+
+    /**
+     * The number of successive metadata responses that did not change the cluster nodes.
+     */
+    private final AtomicLong equivalentResponseCount = new AtomicLong(0);
 
     /**
      * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
@@ -140,7 +149,7 @@ public class AdminMetadataManager {
         @Override
         public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
             maybeFatalException.ifPresent(AdminMetadataManager.this::updateFailed);
-            AdminMetadataManager.this.requestUpdate();
+            AdminMetadataManager.this.requestUpdate(false);
         }
 
         @Override
@@ -200,11 +209,16 @@ public class AdminMetadataManager {
     public AdminMetadataManager(
         LogContext logContext,
         long refreshBackoffMs,
+        long refreshBackoffMaxMs,
         long metadataExpireMs,
         boolean usingBootstrapControllers
     ) {
         this.log = logContext.logger(AdminMetadataManager.class);
-        this.refreshBackoffMs = refreshBackoffMs;
+        this.refreshBackoff = new ExponentialBackoff(
+            refreshBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            refreshBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.metadataExpireMs = metadataExpireMs;
         this.usingBootstrapControllers = usingBootstrapControllers;
         this.updater = new AdminMetadataUpdater();
@@ -257,11 +271,18 @@ public class AdminMetadataManager {
         return cluster.nodeById(nodeId);
     }
 
-    public void requestUpdate() {
+    public void requestUpdate(boolean resetEquivalentResponseBackoff) {
+        if (resetEquivalentResponseBackoff) {
+            resetEquivalentResponseBackoff();
+        }
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;
             log.debug("Requesting metadata update.");
         }
+    }
+
+    public void resetEquivalentResponseBackoff() {
+        this.equivalentResponseCount.set(0);
     }
 
     public void clearController() {
@@ -302,7 +323,11 @@ public class AdminMetadataManager {
 
     private long delayBeforeNextAttemptMs(long now) {
         long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
-        return Math.max(0, refreshBackoffMs - timeSinceAttempt);
+        long count = equivalentResponseCount.get();
+        long backoffMs = count > 0 ?
+            refreshBackoff.backoff(count - 1) :
+            refreshBackoff.initialInterval();
+        return Math.max(0, backoffMs - timeSinceAttempt);
     }
 
     public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
@@ -322,6 +347,7 @@ public class AdminMetadataManager {
     public void updateFailed(Throwable exception) {
         // We depend on pending calls to request another metadata update
         this.state = State.QUIESCENT;
+        this.equivalentResponseCount.set(0);
 
         if (RequestUtils.isFatalException(exception)) {
             // avoid unchecked/unconfirmed cast to ApiException
@@ -354,6 +380,19 @@ public class AdminMetadataManager {
             bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
+            boolean equivalent = now - lastMetadataUpdateMs < metadataExpireMs &&
+                cluster.nodes().size() == this.cluster.nodes().size() &&
+                cluster.nodes().stream().allMatch(node -> node.equals(this.cluster.nodeById(node.id())));
+            // The controller is only compared when talking to the controller quorum, which reports
+            // the active controller. Brokers report a random broker instead.
+            if (usingBootstrapControllers && !Objects.equals(cluster.controller(), this.cluster.controller())) {
+                equivalent = false;
+            }
+            if (equivalent) {
+                this.equivalentResponseCount.incrementAndGet();
+            } else {
+                this.equivalentResponseCount.set(0);
+            }
             this.lastMetadataUpdateMs = now;
         }
 

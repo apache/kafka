@@ -229,6 +229,37 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldInheritDefaultMaxWriteBufferNumberForOffsetsColumnFamily() throws Exception {
+        context = getProcessorContext(RecordingLevel.INFO);
+        rocksDBStore.init(context, rocksDBStore);
+
+        assertEquals(
+            rocksDBStore.db.getOptions(rocksDBStore.cfAccessor.dataColumnFamily()).maxWriteBufferNumber(),
+            rocksDBStore.db.getOptions(rocksDBStore.cfAccessor.offsetsColumnFamily()).maxWriteBufferNumber()
+        );
+    }
+
+    @Test
+    public void shouldInheritConfiguredMaxWriteBufferNumberForOffsetsColumnFamily() throws Exception {
+        context = getProcessorContext(RecordingLevel.INFO, RocksDBConfigSetterWithCustomMaxWriteBufferNumber.class);
+        rocksDBStore.init(context, rocksDBStore);
+
+        assertEquals(10, rocksDBStore.db.getOptions(rocksDBStore.cfAccessor.dataColumnFamily()).maxWriteBufferNumber());
+        assertEquals(10, rocksDBStore.db.getOptions(rocksDBStore.cfAccessor.offsetsColumnFamily()).maxWriteBufferNumber());
+    }
+
+    public static class RocksDBConfigSetterWithCustomMaxWriteBufferNumber implements RocksDBConfigSetter {
+        @Override
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setMaxWriteBufferNumber(10);
+        }
+
+        @Override
+        public void close(final String storeName, final Options options) {
+        }
+    }
+
+    @Test
     public void shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
@@ -1404,7 +1435,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStore();
         rocksDBStore.init(eosContext, rocksDBStore);
 
-        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        // An empty buffer reports zero uncommitted bytes.
         final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
 
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
@@ -1687,7 +1718,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStore();
         rocksDBStore.init(eosContext, rocksDBStore);
 
-        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        // An empty buffer reports zero uncommitted bytes.
         final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
 
         final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));

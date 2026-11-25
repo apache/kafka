@@ -1333,50 +1333,57 @@ public class DumpLogSegmentsTest {
                     .setRetryAttempt((short) 3)
                     .setPreviousState(MirrorPartitionState.MIRRORING.value()),
                 stateKeyJson,
-                "{\"version\":\"0\",\"data\":{\"state\":\"FAILED\",\"leaderEpoch\":42,\"stateEpoch\":7," +
-                    "\"errorMessage\":\"Source \\\"A\\\" failed: 東京\",\"retryAttempt\":3,\"previousState\":\"MIRRORING\"}}"
+                "{\"version\":\"0\",\"data\":{\"state\":8,\"leaderEpoch\":42,\"stateEpoch\":7," +
+                    "\"errorMessage\":\"Source \\\"A\\\" failed: 東京\",\"retryAttempt\":3,\"previousState\":3," +
+                    "\"stateName\":\"FAILED\",\"previousStateName\":\"MIRRORING\"}}"
             ),
             Arguments.of(
                 stateKey,
                 new MirrorPartitionStateValue(),
                 stateKeyJson,
-                "{\"version\":\"0\",\"data\":{\"state\":\"LOG_ALIGNMENT\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
-                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"UNKNOWN\"}}"
+                "{\"version\":\"0\",\"data\":{\"state\":0,\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":-1," +
+                    "\"stateName\":\"LOG_ALIGNMENT\",\"previousStateName\":\"UNKNOWN\"}}"
             ),
             Arguments.of(
                 stateKey,
                 new MirrorPartitionStateValue().setState(Byte.MAX_VALUE).setPreviousState(MirrorPartitionState.MIRRORING.value()),
                 stateKeyJson,
-                "{\"version\":\"0\",\"data\":{\"state\":\"127\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
-                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"MIRRORING\"}}"
+                "{\"version\":\"0\",\"data\":{\"state\":127,\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":3," +
+                    "\"stateName\":\"127\",\"previousStateName\":\"MIRRORING\"}}"
             ),
             Arguments.of(
                 stateKey,
                 new MirrorPartitionStateValue().setState(MirrorPartitionState.FAILED.value()).setPreviousState(Byte.MIN_VALUE),
                 stateKeyJson,
-                "{\"version\":\"0\",\"data\":{\"state\":\"FAILED\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
-                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"-128\"}}"
+                "{\"version\":\"0\",\"data\":{\"state\":8,\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":-128," +
+                    "\"stateName\":\"FAILED\",\"previousStateName\":\"-128\"}}"
             ),
             Arguments.of(
                 stateKey,
                 new MirrorPartitionStateValue().setState(Byte.MAX_VALUE).setPreviousState(Byte.MIN_VALUE),
                 stateKeyJson,
-                "{\"version\":\"0\",\"data\":{\"state\":\"127\",\"leaderEpoch\":-1,\"stateEpoch\":0," +
-                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":\"-128\"}}"
+                "{\"version\":\"0\",\"data\":{\"state\":127,\"leaderEpoch\":-1,\"stateEpoch\":0," +
+                    "\"errorMessage\":null,\"retryAttempt\":0,\"previousState\":-128," +
+                    "\"stateName\":\"127\",\"previousStateName\":\"-128\"}}"
             ),
             Arguments.of(
                 epochsKey,
                 new LastMirrorEpochsValue()
                     .setLastMirrorEpoch(42)
-                    .setLastMirrorOffset(4_294_967_313L), // Verify offsets larger than a 32-bit integer.
+                    .setLastMirrorOffset(4_294_967_313L) // Verify offsets larger than a 32-bit integer.
+                    .setLeaderEpoch(11)
+                    .setStateEpoch(5),
                 epochsKeyJson,
-                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":42,\"lastMirrorOffset\":4294967313}}"
+                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":42,\"lastMirrorOffset\":4294967313,\"leaderEpoch\":11,\"stateEpoch\":5}}"
             ),
             Arguments.of(
                 epochsKey,
                 new LastMirrorEpochsValue(),
                 epochsKeyJson,
-                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"
+                "{\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1,\"leaderEpoch\":-1,\"stateEpoch\":0}}"
             ),
             Arguments.of(stateKey, null, stateKeyJson, "<DELETE>"),
             Arguments.of(epochsKey, null, epochsKeyJson, "<DELETE>")
@@ -1496,7 +1503,7 @@ public class DumpLogSegmentsTest {
         assertTrue(output.contains("Unknown record type 2 at offset 0, skipping."), output);
         assertTrue(output.contains("Error at offset 1, skipping."), output);
         assertTrue(output.contains(DumpLogSegments.RECORD_INDENT + " offset: 2"), output);
-        assertTrue(output.contains("payload: {\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1}}"), output);
+        assertTrue(output.contains("payload: {\"version\":\"0\",\"data\":{\"lastMirrorEpoch\":-1,\"lastMirrorOffset\":-1,\"leaderEpoch\":-1,\"stateEpoch\":0}}"), output);
     }
 
     private MetadataLogConfig createMetadataLogConfig(
