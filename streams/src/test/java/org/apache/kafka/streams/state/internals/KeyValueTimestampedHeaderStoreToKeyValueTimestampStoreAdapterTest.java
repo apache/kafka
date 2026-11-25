@@ -46,6 +46,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -113,6 +114,12 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapterTest {
         verify(inner).putAll(List.of(
             KeyValue.pair(KEY, INNER_VALUE),
             KeyValue.pair(KEY_TO, ValueAndTimestamp.make("other", TIMESTAMP))));
+    }
+
+    @Test
+    public void shouldForwardNullValueAsDeleteOnPutAll() {
+        adapter.putAll(Arrays.asList(KeyValue.pair(KEY, withHeaders("value")), KeyValue.pair(KEY_TO, null)));
+        verify(inner).putAll(Arrays.asList(KeyValue.pair(KEY, INNER_VALUE), KeyValue.pair(KEY_TO, null)));
     }
 
     @Test

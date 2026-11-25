@@ -70,7 +70,7 @@ public final class StoreMethodSignatures {
         try {
             return impl.getMethod(method.getName(), method.getParameterTypes());
         } catch (final NoSuchMethodException e) {
-            throw new AssertionError(e);
+            throw new AssertionError(impl.getName() + " does not expose " + signature(method), e);
         }
     }
 }

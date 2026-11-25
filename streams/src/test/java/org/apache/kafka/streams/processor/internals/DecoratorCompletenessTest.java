@@ -67,7 +67,7 @@ public class DecoratorCompletenessTest {
 
     // readOnly is NOT harmless: the default returns `this`, so the isolation level is not propagated to the
     // wrapped store even though ReadOnlyKeyValueStore#readOnly documents that wrapping stores propagate it.
-    // Remove it from the allow-lists once the decorators override it.
+    // Tracked by KAFKA-21505; remove it from the allow-lists once the decorators override it.
     private static final String READ_ONLY = "readOnly(IsolationLevel)";
 
     // Deprecated StateStore#flush is a no-op default; read-write decorators intentionally do not forward it,

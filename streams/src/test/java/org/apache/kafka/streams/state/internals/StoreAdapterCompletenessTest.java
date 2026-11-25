@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.kstream.internals.SessionHeadersStoreToSessionStoreAdapter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -33,7 +35,7 @@ import static org.apache.kafka.streams.state.internals.StoreMethodSignatures.inh
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Pins, for each format-converting byte-store adapter without a dedicated completeness test, the exact set of
+ * Pins, for each format-converting store adapter without a dedicated completeness test, the exact set of
  * store-interface methods it leaves to the interface default (KAFKA-20328). A dropped override silently changes
  * behavior: e.g. a missing {@code backwardFetch} inherits the {@link WindowStore} default that throws
  * {@link UnsupportedOperationException}, and a missing {@code reverseRange} stops reaching the inner store.
@@ -62,7 +64,9 @@ public class StoreAdapterCompletenessTest {
             Arguments.of(PlainToHeadersWindowStoreAdapter.class, WindowStore.class, flushAndReadOnly),
             Arguments.of(KeyValueToTimestampedKeyValueByteStoreAdapter.class, KeyValueStore.class, flushAndReadOnly),
             Arguments.of(WindowToTimestampedWindowByteStoreAdapter.class, WindowStore.class, flushAndReadOnly),
-            Arguments.of(VersionedKeyValueToBytesStoreAdapter.class, VersionedBytesStore.class, Set.of(FLUSH))
+            Arguments.of(VersionedKeyValueToBytesStoreAdapter.class, VersionedBytesStore.class, Set.of(FLUSH)),
+            // DSL-level adapter in kstream.internals; it forwards flush, so only readOnly is inherited
+            Arguments.of(SessionHeadersStoreToSessionStoreAdapter.class, SessionStoreWithHeaders.class, Set.of(READ_ONLY))
         );
     }
 

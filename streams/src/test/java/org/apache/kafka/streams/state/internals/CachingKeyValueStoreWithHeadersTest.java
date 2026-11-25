@@ -24,10 +24,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.query.KeyQuery;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -39,14 +35,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Direct coverage of {@link CachingKeyValueStoreWithHeaders} (KAFKA-20328). The class adds no overrides to
  * {@link CachingKeyValueStore}; its contract is that serialized {@link ValueTimestampHeaders} bytes pass
- * through the cache unchanged on every path (cache hit, flush to the wrapped store, flush listener, IQv2
- * {@link KeyQuery}), leaving header-aware deserialization to the metered layer. These tests pin that
- * contract against a real {@link ThreadCache} and {@link InMemoryKeyValueStore}.
+ * through the cache unchanged (cache hit, flush to the wrapped store, flush listener), leaving header-aware
+ * deserialization to the metered layer. This pins that contract against a real {@link ThreadCache} and
+ * {@link InMemoryKeyValueStore}.
  */
 public class CachingKeyValueStoreWithHeadersTest {
 
@@ -79,53 +74,19 @@ public class CachingKeyValueStoreWithHeadersTest {
         store.close();
     }
 
+    // CachingKeyValueStore behavior (cache hits, eviction, IQv2) is covered by CachingInMemoryKeyValueStoreTest;
+    // this single round trip pins the headers-specific contract: header-format bytes are opaque to the cache.
     @Test
-    public void shouldServeHeaderFormatBytesFromCacheBeforeFlush() {
+    public void shouldRoundTripHeaderFormatBytesThroughCacheUnchanged() {
         store.put(KEY, serializedValue);
 
         assertNull(underlying.get(KEY), "write should still be in the cache only");
         assertArrayEquals(serializedValue, store.get(KEY));
-        assertEquals(value, valueSerde.deserializer().deserialize(TOPIC, store.get(KEY)));
-    }
-
-    @Test
-    public void shouldFlushHeaderFormatBytesUnchangedToWrappedStore() {
-        store.put(KEY, serializedValue);
 
         store.flushCache();
 
         assertArrayEquals(serializedValue, underlying.get(KEY));
-    }
-
-    @Test
-    public void shouldForwardHeaderFormatBytesToFlushListener() {
-        store.put(KEY, serializedValue);
-
-        store.flushCache();
-
         assertEquals(value, flushListener.forwarded.get("key").newValue);
         assertNull(flushListener.forwarded.get("key").oldValue);
-    }
-
-    @Test
-    public void shouldServeKeyQueryFromCache() {
-        store.put(KEY, serializedValue);
-
-        final QueryResult<byte[]> result =
-            store.query(KeyQuery.withKey(KEY), PositionBound.unbounded(), new QueryConfig(false));
-
-        assertTrue(result.isSuccess());
-        assertArrayEquals(serializedValue, result.getResult());
-    }
-
-    @Test
-    public void shouldBypassCacheForKeyQueryWithSkipCache() {
-        store.put(KEY, serializedValue);
-
-        final QueryResult<byte[]> result = store.query(
-            KeyQuery.<Bytes, byte[]>withKey(KEY).skipCache(), PositionBound.unbounded(), new QueryConfig(false));
-
-        assertTrue(result.isSuccess());
-        assertNull(result.getResult(), "skipCache must read the wrapped store, which has not been flushed yet");
     }
 }

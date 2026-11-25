@@ -76,8 +76,7 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapterComple
 
     // readOnly is NOT harmless: the adapter inherits the default that returns `this`, so the isolation
     // level never reaches the inner store and READ_COMMITTED reads can observe uncommitted writes.
-    // Same gap as KAFKA-21505 (which covers the byte-level header adapters); remove readOnly from here
-    // once the adapter overrides it.
+    // Tracked by KAFKA-21505; remove readOnly from here once the adapter overrides it.
     private static final Set<String> INHERITED_DEFAULTS = Set.of(
         "readOnly(IsolationLevel)"
     );

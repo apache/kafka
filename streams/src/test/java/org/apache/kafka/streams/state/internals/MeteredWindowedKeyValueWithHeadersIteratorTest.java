@@ -39,10 +39,9 @@ import java.util.concurrent.atomic.LongAdder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,8 +49,8 @@ import static org.mockito.Mockito.when;
  * Direct coverage of {@link MeteredWindowedKeyValueWithHeadersIterator} (KAFKA-20328). Unlike its
  * {@link MeteredWindowedKeyValueIterator} base, {@code next()} deserializes the value first and passes the
  * headers carried by that value to the key deserializer, so a header-aware key serde sees the record's
- * headers; the value is then converted (e.g. to the plain value or a {@code ReadOnlyRecord}). The iterator
- * also inherits the base's open-iterator and latency bookkeeping on close.
+ * headers; the value is then converted (e.g. to the plain value or a {@code ReadOnlyRecord}). The inherited
+ * open-iterator and latency bookkeeping is covered by {@link MeteredWindowedKeyValueIteratorTest}.
  */
 public class MeteredWindowedKeyValueWithHeadersIteratorTest {
 
@@ -111,42 +110,37 @@ public class MeteredWindowedKeyValueWithHeadersIteratorTest {
     }
 
     @Test
-    public void shouldDelegateHasNext() {
-        when(inner.hasNext()).thenReturn(true, false);
-        assertTrue(iterator.hasNext());
+    public void shouldPeekNextKeyUsingHeadersFromDeserializedValue() {
+        when(inner.next()).thenReturn(KeyValue.pair(RAW_KEY, RAW_VALUE));
+
+        assertEquals(new Windowed<>("key", RAW_KEY.window()), iterator.peekNextKey());
+        assertEquals(1, keyDeserializerHeaders.size());
+        assertSame(valueHeaders, keyDeserializerHeaders.get(0));
+    }
+
+    @Test
+    public void shouldReturnPeekedEntryFromNextWithoutReadingInnerAgain() {
+        when(inner.next()).thenReturn(KeyValue.pair(RAW_KEY, RAW_VALUE));
+
+        final Windowed<String> peeked = iterator.peekNextKey();
+        assertEquals(peeked, iterator.peekNextKey(), "repeated peeks must return the same key");
+        final KeyValue<Windowed<String>, String> next = iterator.next();
+
+        assertEquals(peeked, next.key);
+        assertEquals("value", next.value);
+        verify(inner, times(1)).next();
+        assertEquals(1, deserializedValueBytes.size());
+    }
+
+    @Test
+    public void shouldReportHasNextAfterPeekingTheLastEntry() {
+        when(inner.next()).thenReturn(KeyValue.pair(RAW_KEY, RAW_VALUE));
+        when(inner.hasNext()).thenReturn(false);
+
+        iterator.peekNextKey();
+
+        assertTrue(iterator.hasNext(), "the peeked entry is still pending");
+        iterator.next();
         assertFalse(iterator.hasNext());
-    }
-
-    @Test
-    public void shouldRegisterAsOpenIteratorOnCreation() {
-        assertEquals(1L, numOpenIterators.sum());
-        assertTrue(openIterators.contains(iterator));
-        assertEquals(time.milliseconds(), iterator.startTimestamp());
-    }
-
-    @Test
-    public void shouldCloseInnerRecordLatencyAndDeregisterOnClose() {
-        time.sleep(5L);
-
-        iterator.close();
-
-        verify(inner).close();
-        verify(operationSensor).record(5_000_000.0);
-        verify(iteratorSensor).record(5_000_000.0);
-        assertEquals(0L, numOpenIterators.sum());
-        assertFalse(openIterators.contains(iterator));
-    }
-
-    @Test
-    public void shouldRecordLatencyAndDeregisterEvenIfInnerCloseThrows() {
-        doThrow(new IllegalStateException("boom")).when(inner).close();
-        time.sleep(5L);
-
-        assertThrows(IllegalStateException.class, iterator::close);
-
-        verify(operationSensor).record(5_000_000.0);
-        verify(iteratorSensor).record(5_000_000.0);
-        assertEquals(0L, numOpenIterators.sum());
-        assertFalse(openIterators.contains(iterator));
     }
 }
