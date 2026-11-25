@@ -901,15 +901,6 @@ public class TopicsImageTest {
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
 
-        {
-            List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
-            topicRecords.add(newMirrorTopicStateChangeRecord("topic", null, MirrorPartitionState.LOG_ALIGNMENT));
-            TopicsDelta delta = new TopicsDelta(image);
-            RuntimeException ex = assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
-            assertEquals(IllegalArgumentException.class, ex.getCause().getClass());
-            assertEquals("desiredState must be UNKNOWN when mirrorName is null, got LOG_ALIGNMENT", ex.getCause().getMessage());
-        }
-
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
         topicRecords.add(newMirrorTopicStateChangeRecord("topic", null, MirrorPartitionState.UNKNOWN));
         TopicsDelta delta = new TopicsDelta(image);
@@ -925,6 +916,29 @@ public class TopicsImageTest {
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image, MetadataVersion.IBP_4_5_IV1);
         imageRecords.addAll(topicRecords);
         testToImage(finalImage, Optional.of(imageRecords));
+    }
+
+    @Test
+    public void testMirrorTopicDisassociationWithInvalidDesiredState() {
+        Uuid topicId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "topic",
+                topicId,
+                new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.STOPPED.value()),
+                newPartition(new int[] {3, 1, 2})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(newMirrorTopicStateChangeRecord("topic", null, MirrorPartitionState.LOG_ALIGNMENT));
+        TopicsDelta delta = new TopicsDelta(image);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+        assertEquals(IllegalArgumentException.class, ex.getCause().getClass());
+        assertEquals("desiredState must be UNKNOWN when mirrorName is null, got LOG_ALIGNMENT", ex.getCause().getMessage());
     }
 
     @Test
