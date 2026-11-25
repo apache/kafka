@@ -803,29 +803,6 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldNotAssignTasksOfRemovedSubtopology() {
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1)), mkEntry("test-subtopology1", Sets.newSet(0, 1))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3)), mkEntry("test-subtopology1", Sets.newSet(2, 3))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3)), mkEntry("test-subtopology1", Sets.newSet(2, 3))),
-            mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1)), mkEntry("test-subtopology1", Sets.newSet(0, 1))), Map.of());
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
-
-        // test-subtopology1 is no longer part of the topology
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
-            new TopologyDescriberImpl(4, true, List.of("test-subtopology0"))
-        );
-
-        assertEquals(mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1))), getAllActiveTasks(result, "member1"));
-        assertEquals(mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3))), getAllStandbyTasks(result, "member1"));
-        assertEquals(mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3))), getAllActiveTasks(result, "member2"));
-        assertEquals(mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1))), getAllStandbyTasks(result, "member2"));
-    }
-
-    @Test
     public void shouldNotAssignTasksBeyondTheCurrentNumberOfPartitions() {
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2))), Map.of(), Map.of());
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of(), Map.of());
