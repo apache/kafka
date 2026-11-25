@@ -8590,7 +8590,7 @@ public class GroupMetadataManager {
     ) {
         // If any members are awaiting sync, cancel their request and have them rejoin.
         if (group.isInState(COMPLETING_REBALANCE)) {
-            resetAndPropagateAssignmentWithError(group, Errors.REBALANCE_IN_PROGRESS);
+            propagateError(group, Errors.REBALANCE_IN_PROGRESS);
         }
 
         // If a sync expiration is pending, cancel it.
@@ -8690,18 +8690,18 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Reset assignment for all members and propagate the error to all members in the group.
+     * Propagate the error to all members in the group. The members keep their assignment
+     * because they may still own its partitions.
      *
      * @param group  The group.
      * @param error  The error to propagate.
      */
-    private void resetAndPropagateAssignmentWithError(ClassicGroup group, Errors error) {
+    private void propagateError(ClassicGroup group, Errors error) {
         if (!group.isInState(COMPLETING_REBALANCE)) {
             throw new IllegalStateException("Group " + group.groupId() + " must be in " + COMPLETING_REBALANCE.name() +
                 " state but is in " + group.currentState() + ".");
         }
 
-        group.allMembers().forEach(member -> member.setAssignment(EMPTY_ASSIGNMENT));
         propagateAssignment(group, error);
     }
 
@@ -8724,7 +8724,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Propagate assignment and error to all members.
+     * Propagate the assignment and the error to all members. A member gets an empty assignment
+     * with an error.
      *
      * @param group  The group.
      * @param error  The error to propagate.
@@ -8747,7 +8748,7 @@ public class GroupMetadataManager {
                 new SyncGroupResponseData()
                     .setProtocolName(protocolName.orElse(null))
                     .setProtocolType(protocolType.orElse(null))
-                    .setAssignment(member.assignment())
+                    .setAssignment(error == Errors.NONE ? member.assignment() : EMPTY_ASSIGNMENT)
                     .setErrorCode(error.code()))) {
 
                 // Reset the session timeout for members after propagating the member's assignment.
@@ -9111,7 +9112,7 @@ public class GroupMetadataManager {
                     if (group.isInState(COMPLETING_REBALANCE) && request.generationId() == group.generationId()) {
                         if (t != null) {
                             Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
-                            resetAndPropagateAssignmentWithError(group, error);
+                            propagateError(group, error);
                             maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment " +
                                 "during SyncGroup (member: " + memberId + ").");
                         } else {
