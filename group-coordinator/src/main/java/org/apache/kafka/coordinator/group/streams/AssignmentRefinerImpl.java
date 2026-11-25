@@ -1621,11 +1621,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        it is. They spend no warm-up slot, on the condition that the standby filter withholds the copy the
      *        target assignment relocates in its place. Either the standby sits on the target owner itself, where it
      *        is borrowed outright because the promotion can take it over in place, or it sits on a sibling member and
-     *        the migration competed for a warm-up slot to move it across, did not get one, and settles for warming
-     *        through the sibling.
+     *        the migration settles for warming through the sibling: either no warm-up slot was funded for moving
+     *        the standby across (the budget was spent, or not every member has been heard from yet), or its target
+     *        owner does not report its restore progress and so is never given a warm-up task.
      * @param parkedMigrations
-     *        The migrations with nothing warming them: the budget was spent, or the target assignment names a
-     *        member the group no longer has. Their tasks keep running on their current owners (or temporarily not at
+     *        The migrations with nothing warming them: no warm-up slot was funded for them, the target owner does not
+     *        report its restore progress and its process holds no standby of the task, or the target assignment names
+     *        a member the group no longer has. Their tasks keep running on their current owners (or temporarily not at
      *        all), and a later refinement step picks them up.
      */
     record WarmupPlan(
