@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
@@ -33,18 +33,6 @@ import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
 object StreamsGroupHeartbeatRequestTest {
-  @ClusterTestDefaults(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
-    )
-  )
-  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
-  }
-
   // Regression coverage for KIP-1331: re-runs this entire suite with a topology description plugin
   // configured, to prove its presence does not change ordinary (non-topology) heartbeat semantics.
   @ClusterTestDefaults(
@@ -53,6 +41,8 @@ object StreamsGroupHeartbeatRequestTest {
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false"),
       new ClusterConfigProperty(
         key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
         value = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin")
@@ -67,10 +57,16 @@ object StreamsGroupHeartbeatRequestTest {
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
   )
 )
 class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  protected def isStreamsAssignorOffloadEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.streamsGroupAssignorOffloadEnable)
+  }
 
   @ClusterTest
   def testStreamsGroupHeartbeatWithInvalidAPIVersion(): Unit = {
@@ -155,7 +151,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst(): Unit = {
     val admin = cluster.admin()
     val memberId = "test-member"
@@ -191,6 +204,23 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the response
       assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isStreamsAssignorOffloadEnabled) {
+        assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+
+        TestUtils.waitUntilTrue(() => {
+          streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+            groupId = groupId,
+            memberId = memberId,
+            memberEpoch = streamsGroupHeartbeatResponse.memberEpoch(),
+          )
+          streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+            streamsGroupHeartbeatResponse.memberEpoch() > 1
+        }, "Did not receive initial assignment.")
+      }
+
+      // Verify the response
       assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       val expectedStatus = new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(1)
@@ -241,7 +271,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testStreamsGroupHeartbeatForMultipleMembers(): Unit = {
     val admin = cluster.admin()
     val memberId1 = "test-member-1"
@@ -293,9 +340,36 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code()
       }, "First StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
-      // Verify first member gets all tasks initially
+      // Verify the response
       assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isStreamsAssignorOffloadEnabled) {
+        assertEquals(1, streamsGroupHeartbeatResponse1.memberEpoch())
+
+        TestUtils.waitUntilTrue(() => {
+          streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+            groupId = groupId,
+            memberId = memberId1,
+            memberEpoch = streamsGroupHeartbeatResponse1.memberEpoch(),
+            activeTasks = Option(streamsGroupHeartbeatResponse1)
+              .map(r => convertTaskIds(r.activeTasks()))
+              .getOrElse(List.empty),
+            standbyTasks = Option(streamsGroupHeartbeatResponse1)
+              .map(r => convertTaskIds(r.standbyTasks()))
+              .getOrElse(List.empty),
+            warmupTasks = Option(streamsGroupHeartbeatResponse1)
+              .map(r => convertTaskIds(r.warmupTasks()))
+              .getOrElse(List.empty),
+          )
+          streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
+            streamsGroupHeartbeatResponse1.activeTasks() != null &&
+            !streamsGroupHeartbeatResponse1.activeTasks().isEmpty
+        }, "Did not receive initial assignment.")
+      }
+
+      // Verify first member gets all tasks initially
       assertEquals(2, streamsGroupHeartbeatResponse1.memberEpoch())
       assertEquals(1, streamsGroupHeartbeatResponse1.activeTasks().size())
       assertEquals(3, streamsGroupHeartbeatResponse1.activeTasks().get(0).partitions().size())
@@ -633,7 +707,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testDynamicGroupConfig(): Unit = {
     val admin = cluster.admin()
     val memberId1 = "test-member-1"
@@ -1205,7 +1296,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testGroupCoordinatorChange(): Unit = {
     val admin = cluster.admin()
     val memberId = "test-member-1"
@@ -1257,6 +1365,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the response for member
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isStreamsAssignorOffloadEnabled) {
+        assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+
+        TestUtils.waitUntilTrue(() => {
+          streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+            groupId = groupId,
+            memberId = memberId,
+            memberEpoch = streamsGroupHeartbeatResponse.memberEpoch(),
+          )
+          streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+            streamsGroupHeartbeatResponse.activeTasks() != null &&
+            !streamsGroupHeartbeatResponse.activeTasks().isEmpty
+        }, "Did not receive initial assignment.")
+      }
+
+      // Verify the response for member
       assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       assertNotNull(streamsGroupHeartbeatResponse.activeTasks())
 
