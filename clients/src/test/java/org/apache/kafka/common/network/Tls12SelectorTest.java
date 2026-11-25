@@ -52,7 +52,7 @@ public class Tls12SelectorTest extends SslSelectorTest {
         String node = "0";
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         NetworkTestUtils.waitForChannelReady(selector, node);
 
         // send echo requests and receive responses

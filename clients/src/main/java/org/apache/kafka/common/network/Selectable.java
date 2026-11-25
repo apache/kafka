@@ -32,7 +32,7 @@ import java.util.Map;
 public interface Selectable {
 
     /**
-     * See {@link #connect(String, InetSocketAddress, int, int) connect()}
+     * See {@link #connect(String, InetSocketAddress, int, int, Uuid) connect()}
      */
     int USE_DEFAULT_BUFFER_SIZE = -1;
 
@@ -42,19 +42,7 @@ public interface Selectable {
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the socket
      * @param receiveBufferSize The receive buffer for the socket
-     * @throws IOException If we cannot begin connecting
-     */
-    default void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        connect(id, address, sendBufferSize, receiveBufferSize, null);
-    }
-
-    /**
-     * Begin establishing a socket connection to the given address identified by the given id
-     * @param id The id for this connection
-     * @param address The address to connect to
-     * @param sendBufferSize The send buffer for the socket
-     * @param receiveBufferSize The receive buffer for the socket
-     * @param clientInstanceId The client instance ID that SASL authentication sends on this connection, or null if none
+     * @param clientInstanceId The client instance ID of the client opening this connection
      * @throws IOException If we cannot begin connecting
      */
     void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,

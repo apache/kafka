@@ -94,7 +94,7 @@ public class SslVersionsTransportLayerTest {
         Selector selector = createClientSelector(sslClientConfigs);
 
         String node = "0";
-        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
 
         if (isCompatible(serverProtocols, clientProtocols)) {
             NetworkTestUtils.waitForChannelReady(selector, node);

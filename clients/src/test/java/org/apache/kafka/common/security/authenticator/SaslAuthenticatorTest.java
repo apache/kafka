@@ -342,7 +342,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE),
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID),
                 "SASL/PLAIN channel created without username");
         assertTrue(selector.channels().isEmpty(), "Channels not closed");
         for (SelectionKey key : selector.keys())
@@ -362,7 +362,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE), "SASL/PLAIN channel created without password");
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID), "SASL/PLAIN channel created without password");
     }
 
     /**
@@ -474,7 +474,7 @@ public class SaslAuthenticatorTest {
             createSelector(securityProtocol, saslClientConfigs);
             selector2 = selector;
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-            selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
             NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
             selector = null; // keeps it from being closed when next one is created
             server.verifyAuthenticationMetrics(2, 0);
@@ -483,7 +483,7 @@ public class SaslAuthenticatorTest {
             saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
             createSelector(securityProtocol, saslClientConfigs);
             selector3 = selector;
-            selector.connect(node3, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node3, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
             NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
             server.verifyAuthenticationMetrics(3, 0);
             
@@ -1727,7 +1727,7 @@ public class SaslAuthenticatorTest {
         // initial authentication must succeed
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         checkClientConnection(node);
         // ensure metrics are as expected before trying to re-authenticate
         server.verifyAuthenticationMetrics(1, 0);
@@ -2283,7 +2283,7 @@ public class SaslAuthenticatorTest {
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
     }
 
     /**
@@ -2479,7 +2479,7 @@ public class SaslAuthenticatorTest {
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
     }
     
     private void checkClientConnection(String node) throws Exception {

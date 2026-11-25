@@ -120,7 +120,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         Metrics metrics = new Metrics();
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
 
-        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         NetworkTestUtils.waitForChannelReady(selector, node);
 
         selector.send(createSend(node, request));

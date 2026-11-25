@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * A connection can be added to the nioSelector associated with an integer id by doing
  *
  * <pre>
- * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
+ * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000, clientInstanceId);
  * </pre>
  *
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
@@ -244,7 +244,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
-     * @param clientInstanceId The client instance ID that SASL authentication sends on the new connection, or null if none
+     * @param clientInstanceId The client instance ID of the client opening the new connection
      * @throws IllegalStateException if there is already a connection for that id
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */

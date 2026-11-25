@@ -179,7 +179,7 @@ public class SelectorTest {
     @Test
     public void testNoRouteToHost() {
         assertThrows(IOException.class,
-            () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE));
+            () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID));
     }
 
     /**
@@ -190,7 +190,7 @@ public class SelectorTest {
         String node = "0";
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
-        selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         while (selector.disconnected().containsKey(node)) {
             assertEquals(ChannelState.NOT_CONNECTED, selector.disconnected().get(node));
             selector.poll(1000L);
@@ -417,8 +417,8 @@ public class SelectorTest {
         };
         channelBuilder.configure(clientConfigs());
         Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
-        selector.connect("0", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        selector.connect("1", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
+        selector.connect("1", new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         assertThrows(RuntimeException.class, selector::close);
         assertEquals(2, closedChannelsCount.get());
     }
@@ -450,7 +450,7 @@ public class SelectorTest {
     @Test
     public void testCloseOldestConnection() throws Exception {
         String id = "0";
-        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         NetworkTestUtils.waitForChannelConnected(selector, id);
         NetworkTestUtils.waitForChannelReady(selector, id);
         // Complete an application round trip so TLS 1.3 post-handshake messages are processed before the idle window.
@@ -465,7 +465,7 @@ public class SelectorTest {
     @Test
     public void testIdleExpiryWithoutReadyKeys() throws IOException {
         String id = "0";
-        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         KafkaChannel channel = selector.channel(id);
         channel.selectionKey().interestOps(0);
 
@@ -511,7 +511,7 @@ public class SelectorTest {
 
     private void testImmediatelyConnectedCleaned(Selector selector, boolean closeAfterFirstPoll) throws Exception {
         String id = "0";
-        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         verifyNonEmptyImmediatelyConnectedKeys(selector);
         if (closeAfterFirstPoll) {
             selector.poll(0);
@@ -553,7 +553,7 @@ public class SelectorTest {
 
     private void verifyImmediatelyConnectedException(Selector selector, String id) throws Exception {
         try {
-            selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
             fail("Expected exception not thrown");
         } catch (Exception e) {
             verifyEmptyImmediatelyConnectedKeys(selector);
@@ -939,7 +939,7 @@ public class SelectorTest {
         };
         assertTrue(metrics.metrics().size() > 1);
         String id = "0";
-        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
 
         // Close the selector and ensure a RuntimeException has been throw
         assertThrows(RuntimeException.class, selector::close);
@@ -1026,7 +1026,7 @@ public class SelectorTest {
     }
 
     protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
-        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
     }
 
     /* connect and wait for the connection to complete */
@@ -1035,7 +1035,7 @@ public class SelectorTest {
     }
 
     protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
-        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         NetworkTestUtils.waitForChannelReady(selector, node);
     }
 
