@@ -91,8 +91,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 }
                 log.info("[Principal={}]: Expiring credential re-login sleeping until: {}", principalLogText(),
                         new Date(nextRefreshMs));
-                time.sleep(nextRefreshMs - nowMs);
-                if (Thread.currentThread().isInterrupted()) {
+                if (sleepUnlessClosing(nextRefreshMs - nowMs)) {
                     log.info("[Principal={}]: Expiring credential re-login thread has been interrupted and will exit.",
                             principalLogText());
                     loginContextFactory.refresherThreadDone();
@@ -116,8 +115,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                                 principalLogText(), DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS),
                                 loginException);
                         // Sleep and allow loop to run/try again unless interrupted
-                        time.sleep(DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000);
-                        if (Thread.currentThread().isInterrupted()) {
+                        if (sleepUnlessClosing(DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000)) {
                             log.error(
                                     "[Principal={}]: Interrupted while trying to perform a subsequent expiring credential re-login after one or more initial re-login failures: re-login thread exiting now: {}",
                                     principalLogText(), loginException.getMessage());
@@ -128,6 +126,17 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 }
             }
         }
+
+        /**
+         * Sleeps for the given time unless {@link #close()} has been called, and returns whether the thread should exit.
+         * KAFKA-21586: the interrupt from close() alone is not enough, since a login callback handler may clear it
+         * during a re-login, and the thread would then keep refreshing and never exit.
+         */
+        private boolean sleepUnlessClosing(long sleepMs) {
+            if (!closing)
+                time.sleep(sleepMs);
+            return closing || Thread.currentThread().isInterrupted();
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(ExpiringCredentialRefreshingLogin.class);
@@ -135,6 +144,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     private static final Random RNG = new Random();
     private final Time time;
     private Thread refresherThread;
+    private volatile boolean closing = false;
 
     private final LoginContextFactory loginContextFactory;
     private final String contextName;
@@ -247,6 +257,8 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
 
     public void close() {
         if (refresherThread != null && refresherThread.isAlive()) {
+            // set before the interrupt, so the thread exits even if the interrupt flag gets cleared
+            closing = true;
             refresherThread.interrupt();
             try {
                 refresherThread.join();
