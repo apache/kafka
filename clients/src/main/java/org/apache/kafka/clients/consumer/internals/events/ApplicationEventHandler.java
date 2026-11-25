@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -34,7 +35,6 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 /**
@@ -42,6 +42,13 @@ import java.util.function.Supplier;
  * are then readable from the {@link ApplicationEventProcessor} in the {@link ConsumerNetworkThread network thread}.
  */
 public class ApplicationEventHandler implements Closeable {
+
+    /**
+     * Length, in milliseconds, of each slice of the wait the application thread performs while it waits for an
+     * event to complete. Waiting in slices lets the application thread notice that the background thread has
+     * terminated and can therefore no longer complete the event. See {@link #awaitResult} for details.
+     */
+    static final long NETWORK_THREAD_LIVENESS_CHECK_INTERVAL_MS = 100L;
 
     private final Logger log;
     private final Time time;
@@ -95,7 +102,7 @@ public class ApplicationEventHandler implements Closeable {
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
-        ensureNetworkThreadAlive();
+        ensureNetworkThreadAlive(event);
         event.setEnqueuedMs(time.milliseconds());
         // Record the updated queue size before actually adding the event to the queue
         // to avoid race conditions (the background thread is continuously removing from this queue)
@@ -129,11 +136,14 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p/>
      *
-     * See {@link ConsumerUtils#getResult(Future)} for more details.
+     * The wait is bounded: it ends when the event completes, when the event's deadline passes, or when the
+     * background thread stops running. See {@link #awaitResult} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
+     * @throws KafkaException   if the consumer background thread is no longer running
+     * @throws TimeoutException if the event is not completed before its deadline
      */
     public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
@@ -144,7 +154,62 @@ public class ApplicationEventHandler implements Closeable {
         if (Thread.interrupted()) {
             throw new InterruptException("Interrupted waiting for results for application event " + event);
         }
-        return ConsumerUtils.getResult(event.future());
+        return awaitResult(event);
+    }
+
+    /**
+     * Waits for the result of the given event, but never for longer than the event's
+     * {@link CompletableApplicationEvent#deadlineMs() deadline} and never after the point where the background
+     * thread can no longer complete it.
+     *
+     * <p/>
+     *
+     * Both bounds are needed, and neither can be left to the background thread. The deadline is normally enforced
+     * by the {@link CompletableEventReaper reaper}, which runs on the background thread. A background thread that
+     * terminates without completing its {@code cleanup()} (for example when it fails with an
+     * {@link OutOfMemoryError}) therefore neither expires the event nor fails it, and a caller parked on the
+     * event's future would block forever. Waiting in slices bounded by the deadline and checking that the
+     * background thread is still alive on each slice keeps the caller from blocking on a result that only the
+     * background thread could have produced.
+     *
+     * <p/>
+     *
+     * An event whose deadline has already passed is still given a single slice, so that an event the background
+     * thread is about to complete is not failed before its result can be returned.
+     *
+     * @param event Event whose {@link CompletableApplicationEvent#future() future} holds the result
+     * @return      Value that is the result of the event
+     * @param <T>   Type of return value of the event
+     */
+    private <T> T awaitResult(final CompletableApplicationEvent<T> event) {
+        final long endMs = Math.max(event.deadlineMs(),
+                time.milliseconds() + NETWORK_THREAD_LIVENESS_CHECK_INTERVAL_MS);
+
+        while (true) {
+            // If the event has completed, return its result or propagate its error right away. This also covers an
+            // event whose future holds a TimeoutException, so that the caller sees that error instead of waiting for
+            // the end of the current wait slice below.
+            if (event.future().isDone())
+                return ConsumerUtils.getResult(event.future());
+
+            long remainingMs = endMs - time.milliseconds();
+            if (remainingMs <= 0L) {
+                throw new TimeoutException(String.format("%s was not completed before its deadline of %d ms",
+                        event.getClass().getSimpleName(), event.deadlineMs()));
+            }
+
+            try {
+                return ConsumerUtils.getResult(event.future(),
+                        Math.min(remainingMs, NETWORK_THREAD_LIVENESS_CHECK_INTERVAL_MS));
+            } catch (TimeoutException e) {
+                if (!networkThread.isAlive()) {
+                    throw new KafkaException(String.format("The consumer background thread is not running and " +
+                            "cannot process requests, so application event %s cannot be completed. Check the client " +
+                            "logs for the reason the background thread terminated.",
+                            event.getClass().getSimpleName()), e);
+                }
+            }
+        }
     }
 
     @Override
@@ -166,15 +231,17 @@ public class ApplicationEventHandler implements Closeable {
      * fails fast with a clear error message.
      *
      * <p>Note: this is inherently racy — the thread could die between this check and the
-     * subsequent {@code applicationEventQueue.add()}. That narrow window is acceptable because
-     * any subsequent call to {@code add()} will detect the dead thread immediately.
+     * subsequent {@code applicationEventQueue.add()}. That narrow window is covered by
+     * {@link #awaitResult}, which stops waiting once the thread is no longer alive.
      *
+     * @param event Event that is about to be added to the queue
      * @throws KafkaException if the background thread is not alive
      */
-    private void ensureNetworkThreadAlive() {
+    private void ensureNetworkThreadAlive(final ApplicationEvent event) {
         if (networkThread == null || !networkThread.isAlive()) {
-            throw new KafkaException(
-                "The consumer background thread is not running and cannot process requests.");
+            throw new KafkaException(String.format("The consumer background thread is not running and cannot " +
+                "process requests, so application event %s cannot be completed. Check the client logs for the " +
+                "reason the background thread terminated.", event.getClass().getSimpleName()));
         }
     }
 }
