@@ -2378,16 +2378,16 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (assignmentUpdate != AssignmentUpdate.NONE) {
             groupEpoch += 1;
-            records.add(newStreamsGroupMetadataRecord(
+            bumpStreamsGroupEpoch(
                 groupId,
                 groupEpoch,
                 metadataHash,
                 validatedTopologyEpoch,
                 currentAssignmentConfigs,
                 group.storedDescriptionTopologyEpoch(),
-                group.failedDescriptionTopologyEpoch()
-            ));
-            maybeCancelStaleTargetAssignmentUpdate(groupId, groupEpoch);
+                group.failedDescriptionTopologyEpoch(),
+                records
+            );
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topology epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -3155,8 +3155,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
-                maybeCancelStaleTargetAssignmentUpdate(groupId, groupEpoch);
+                bumpShareGroupEpoch(groupId, groupEpoch, groupMetadataHash, records);
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
             }
@@ -4040,8 +4039,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
-                maybeCancelStaleTargetAssignmentUpdate(groupId, groupEpoch);
+                bumpConsumerGroupEpoch(groupId, groupEpoch, groupMetadataHash, records);
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -4379,8 +4377,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
-            maybeCancelStaleTargetAssignmentUpdate(groupId, groupEpoch);
+            bumpConsumerGroupEpoch(groupId, groupEpoch, groupMetadataHash, records);
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -4434,8 +4431,100 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Bumps the consumer group epoch and cancels any stale offloaded target assignment updates.
+     *
+     * The new group epoch must be exactly one more than the current group epoch. See
+     * {@link #maybeCancelStaleTargetAssignmentUpdate(String, int)} for why.
+     *
+     * TODO: Remove and inline once KAFKA-21312 makes coordinator executor tasks snapshottable
+     *       and eliminates the need for cancellation.
+     *
+     * @param groupId       The group id.
+     * @param newGroupEpoch The new group epoch.
+     * @param metadataHash  The new metadata hash.
+     * @param records       The record accumulator.
+     */
+    private void bumpConsumerGroupEpoch(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        List<CoordinatorRecord> records
+    ) {
+        records.add(newConsumerGroupEpochRecord(groupId, newGroupEpoch, metadataHash));
+        maybeCancelStaleTargetAssignmentUpdate(groupId, newGroupEpoch);
+    }
+
+    /**
+     * Bumps the share group epoch and cancels any stale offloaded target assignment updates.
+     *
+     * The new group epoch must be exactly one more than the current group epoch. See
+     * {@link #maybeCancelStaleTargetAssignmentUpdate(String, int)} for why.
+     *
+     * TODO: Remove and inline once KAFKA-21312 makes coordinator executor tasks snapshottable
+     *       and eliminates the need for cancellation.
+     *
+     * @param groupId       The group id.
+     * @param newGroupEpoch The new group epoch.
+     * @param metadataHash  The new metadata hash.
+     * @param records       The record accumulator.
+     */
+    private void bumpShareGroupEpoch(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        List<CoordinatorRecord> records
+    ) {
+        records.add(newShareGroupEpochRecord(groupId, newGroupEpoch, metadataHash));
+        maybeCancelStaleTargetAssignmentUpdate(groupId, newGroupEpoch);
+    }
+
+    /**
+     * Bumps the streams group epoch and cancels any stale offloaded target assignment updates.
+     *
+     * The new group epoch must be exactly one more than the current group epoch. See
+     * {@link #maybeCancelStaleTargetAssignmentUpdate(String, int)} for why.
+     *
+     * TODO: Remove and inline once KAFKA-21312 makes coordinator executor tasks snapshottable
+     *       and eliminates the need for cancellation.
+     *
+     * @param groupId                        The group id.
+     * @param newGroupEpoch                  The new group epoch.
+     * @param metadataHash                   The new metadata hash.
+     * @param validatedTopologyEpoch         The validated topology epoch.
+     * @param assignmentConfigs              The assignment configs.
+     * @param storedDescriptionTopologyEpoch The stored description topology epoch.
+     * @param failedDescriptionTopologyEpoch The failed description topology epoch.
+     * @param records                        The record accumulator.
+     */
+    private void bumpStreamsGroupEpoch(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        int validatedTopologyEpoch,
+        AssignmentConfigs assignmentConfigs,
+        int storedDescriptionTopologyEpoch,
+        int failedDescriptionTopologyEpoch,
+        List<CoordinatorRecord> records
+    ) {
+        records.add(newStreamsGroupMetadataRecord(
+            groupId,
+            newGroupEpoch,
+            metadataHash,
+            validatedTopologyEpoch,
+            assignmentConfigs,
+            storedDescriptionTopologyEpoch,
+            failedDescriptionTopologyEpoch
+        ));
+        maybeCancelStaleTargetAssignmentUpdate(groupId, newGroupEpoch);
+    }
+
+    /**
      * Cancels any stale offloaded target assignment updates for a group.
      * Must be called whenever the group epoch is bumped.
+     *
+     * The new group epoch must be exactly one more than the current group epoch. Otherwise, the
+     * bump could skip over the epoch of an in-flight assignor run that was built off a reverted
+     * group state and the stale assignment would be installed.
      *
      * @param groupId       The group id.
      * @param newGroupEpoch The new group epoch.
@@ -5664,8 +5753,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
-            maybeCancelStaleTargetAssignmentUpdate(group.groupId(), groupEpoch);
+            bumpConsumerGroupEpoch(group.groupId(), groupEpoch, groupMetadataHash, records);
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
             // If all members are being fenced, the group becomes empty so
@@ -5722,8 +5810,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
-        maybeCancelStaleTargetAssignmentUpdate(group.groupId(), groupEpoch);
+        bumpShareGroupEpoch(group.groupId(), groupEpoch, groupMetadataHash, records);
 
         // If this is the last member, the group becomes empty so we must
         // also update the assignment epoch to match the group epoch. We
@@ -5835,16 +5922,16 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
 
-        records.add(newStreamsGroupMetadataRecord(
+        bumpStreamsGroupEpoch(
             group.groupId(),
             groupEpoch,
             group.metadataHash(),
             group.validatedTopologyEpoch(),
             group.lastAssignmentConfigs(),
             group.storedDescriptionTopologyEpoch(),
-            group.failedDescriptionTopologyEpoch()
-        ));
-        maybeCancelStaleTargetAssignmentUpdate(group.groupId(), groupEpoch);
+            group.failedDescriptionTopologyEpoch(),
+            records
+        );
 
         // If this is the last member, the group becomes empty so we must
         // also update the assignment epoch to match the group epoch. We
@@ -10241,8 +10328,7 @@ public class GroupMetadataManager {
         // ShareGroupMetadata record before the InitializeShareGroupState request is sent to the
         // share coordinator, so that the persisted state epoch reflects the new group epoch.
         final int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(groupId, groupEpoch, group.metadataHash()));
-        maybeCancelStaleTargetAssignmentUpdate(groupId, groupEpoch);
+        bumpShareGroupEpoch(groupId, groupEpoch, group.metadataHash(), records);
 
         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection alterShareGroupOffsetsResponseTopics = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection();
 
