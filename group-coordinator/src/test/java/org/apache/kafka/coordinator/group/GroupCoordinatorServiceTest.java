@@ -60,6 +60,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -3022,7 +3024,58 @@ public class GroupCoordinatorServiceTest {
     @ParameterizedTest
     @CsvSource({
         "NOT_ENOUGH_REPLICAS, COORDINATOR_NOT_AVAILABLE",
-        "NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS"
+        "NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS",
+        "MESSAGE_TOO_LARGE, INVALID_COMMIT_OFFSET_SIZE",
+        "RECORD_LIST_TOO_LARGE, INVALID_COMMIT_OFFSET_SIZE"
+    })
+    public void testCommitOffsetsWithWrappedError(
+        Errors error,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build(true);
+
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setMemberId("member-id")
+            .setGenerationIdOrMemberEpoch(10)
+            .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                .setName(TOPIC_NAME)
+                .setPartitions(List.of(new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(100)))));
+
+        OffsetCommitResponseData response = new OffsetCommitResponseData()
+            .setTopics(List.of(new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                .setName(TOPIC_NAME)
+                .setPartitions(List.of(new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(expectedError.code())))));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("commit-offset"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.failedFuture(new CompletionException(error.exception())));
+
+        CompletableFuture<OffsetCommitResponseData> future = service.commitOffsets(
+            requestContext(ApiKeys.OFFSET_COMMIT),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(response, future.get());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "NOT_ENOUGH_REPLICAS, COORDINATOR_NOT_AVAILABLE",
+        "NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS",
+        "MESSAGE_TOO_LARGE, INVALID_COMMIT_OFFSET_SIZE",
+        "RECORD_LIST_TOO_LARGE, INVALID_COMMIT_OFFSET_SIZE"
     })
     public void testCommitTransactionalOffsetsWithWrappedError(
         Errors error,

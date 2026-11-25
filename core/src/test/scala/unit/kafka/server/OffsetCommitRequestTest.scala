@@ -21,6 +21,7 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Clu
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerConfigs
 
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
@@ -39,6 +40,39 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   @ClusterTest
   def testOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testOffsetCommit(false)
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, value = "1000")
+    )
+  )
+  def testOffsetCommitExceedingMaxMessageSize(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 1
+    )
+
+    for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+      // Commit offset with metadata larger than message.max.bytes should fail.
+      commitOffset(
+        groupId = "grp",
+        memberId = "",
+        memberEpoch = -1,
+        topic = "foo",
+        topicId = topicId,
+        partition = 0,
+        offset = 100L,
+        metadata = "m" * 2000,
+        expectedError = Errors.INVALID_COMMIT_OFFSET_SIZE,
+        version = version.toShort
+      )
+    }
   }
 
   private def testOffsetCommit(useNewProtocol: Boolean): Unit = {
