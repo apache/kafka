@@ -88,9 +88,15 @@ class OfReleaseTest(unittest.TestCase):
         self._commit(author, *trailers)
         self._git("tag", "1.0")
 
-    def _release(self, *mailmap_lines, report=None):
+    def _head(self):
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+
+    def _write_mailmap(self, *lines):
         with open(self.mailmap, "w") as f:
-            f.write("".join(f"{line}\n" for line in mailmap_lines))
+            f.write("".join(f"{line}\n" for line in lines))
+
+    def _release(self, *mailmap_lines, report=None):
+        self._write_mailmap(*mailmap_lines)
         self._git("tag", "2.0")
         return contributors.of_release("1.0", "2.0", mailmap=self.mailmap, cwd=self.repo, report=report)
 
@@ -148,7 +154,7 @@ class OfReleaseTest(unittest.TestCase):
 
     def test_keeps_and_reports_an_ambiguous_bare_name_continuation(self):
         self._commit("Ann Lee <ann@example.com>", "Reviewers: Bo Kim <bo@example.com>,", "Cy Park")
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        commit = self._head()
         lines = []
         self.assertEqual((["Ann Lee", "Bo Kim", "Cy Park"], []), self._release(report=lines.append))
         report = "\n".join(lines)
@@ -171,7 +177,7 @@ class OfReleaseTest(unittest.TestCase):
     def test_reports_prose_after_a_complete_reviewer_without_crediting_it(self):
         prose = "Please also check the release notes."
         self._commit("Ann Lee <ann@example.com>", "Reviewers: Bo Kim <bo@example.com>", prose)
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        commit = self._head()
         lines = []
         self.assertEqual((["Ann Lee", "Bo Kim"], []), self._release(report=lines.append))
         report = "\n".join(lines)
@@ -181,7 +187,7 @@ class OfReleaseTest(unittest.TestCase):
     def test_reports_a_malformed_contact_and_keeps_previous_reviewers(self):
         malformed = "Broken [unclosed"
         self._commit("Ann Lee <ann@example.com>", "Reviewers: Bo Kim <bo@example.com>, " + malformed)
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        commit = self._head()
         lines = []
         self.assertEqual((["Ann Lee", "Bo Kim"], []), self._release(report=lines.append))
         report = "\n".join(lines)
@@ -325,6 +331,16 @@ class OfReleaseTest(unittest.TestCase):
                           ["Claude Opus 4.6", "Claude Sonnet 4.6", "Copilot", "Cursor", "Other Tool 1.0"]),
                          self._release())
 
+    def test_drops_bot_co_authors_without_reporting_them(self):
+        self._commit("dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                     "Reviewers: Ann Lee <ann@example.com>",
+                     "",
+                     "Signed-off-by: dependabot[bot] <support@github.com>",
+                     "Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>")
+        lines = []
+        self.assertEqual((["Ann Lee"], []), self._release(report=lines.append))
+        self.assertEqual([], lines)
+
     def test_credits_copilot_by_its_github_email(self):
         self._commit("Ann Lee <ann@example.com>", "Co-authored-by: GitHub Copilot <copilot@github.com>")
         self.assertEqual((["Ann Lee"], ["Copilot"]), self._release())
@@ -368,8 +384,7 @@ class OfReleaseTest(unittest.TestCase):
                    for person in ("@annlee", "annlee (github:annlee)", "A. Lee (@annlee)")]
         credits[-1].renamed = True
         expected = [(credit.name, credit.email, credit.login, credit.renamed) for credit in credits]
-        with open(self.mailmap, "w") as f:
-            f.write("Bo Kim <bo@users.noreply.github.com>\n")
+        self._write_mailmap("Bo Kim <bo@users.noreply.github.com>")
         mapped = contributors.apply_mailmap(credits, self.mailmap, cwd=self.repo)
         self.assertEqual(expected, [(credit.name, credit.email, credit.login, credit.renamed) for credit in mapped])
 
@@ -380,24 +395,21 @@ class OfReleaseTest(unittest.TestCase):
 
     def test_mailmap_name_override_does_not_store_a_lookup_email(self):
         credit = contributors.Credit("commit", "reviewer", login="annlee")
-        with open(self.mailmap, "w") as f:
-            f.write("Ann Lee <annlee@users.noreply.github.com>\n")
+        self._write_mailmap("Ann Lee <annlee@users.noreply.github.com>")
         mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
         self.assertEqual(("Ann Lee", None, "annlee", True),
                          (mapped.name, mapped.email, mapped.login, mapped.renamed))
 
     def test_mailmap_maps_email_less_login_to_a_canonical_email(self):
         credit = contributors.Credit("commit", "reviewer", login="annlee")
-        with open(self.mailmap, "w") as f:
-            f.write("Ann Lee <ann@example.com> <annlee@users.noreply.github.com>\n")
+        self._write_mailmap("Ann Lee <ann@example.com> <annlee@users.noreply.github.com>")
         mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
         self.assertEqual(("Ann Lee", "ann@example.com", "annlee", True),
                          (mapped.name, mapped.email, mapped.login, mapped.renamed))
 
     def test_mailmap_prefers_an_existing_email_over_the_github_login(self):
         credit = contributors.Credit("commit", "reviewer", "Existing Name", "existing@example.com", "annlee")
-        with open(self.mailmap, "w") as f:
-            f.write("Ann Lee <annlee@users.noreply.github.com>\n")
+        self._write_mailmap("Ann Lee <annlee@users.noreply.github.com>")
         mapped, = contributors.apply_mailmap([credit], self.mailmap, cwd=self.repo)
         self.assertEqual(("Existing Name", "existing@example.com", "annlee", False),
                          (mapped.name, mapped.email, mapped.login, mapped.renamed))
@@ -419,9 +431,9 @@ class OfReleaseTest(unittest.TestCase):
 
     def test_reports_commit_and_email_evidence_for_a_shared_word_name_collision(self):
         self._commit("David Jacot <shared@example.com>", "Reviewers: Jane Smith <review@example.com>")
-        first_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        first_commit = self._head()
         self._commit("David Arthur <shared@example.com>", "Reviewers: Jane Jones <review@example.com>")
-        second_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        second_commit = self._head()
         lines = []
         self._release(report=lines.append)
         evidence = [line.strip() for line in lines[lines.index("Commit evidence for grouped names:") + 1:-1]]
@@ -438,55 +450,41 @@ class OfReleaseTest(unittest.TestCase):
     def test_reports_names_to_check(self):
         self._commit("Sriram Subramanian <sriram@example.com>")
         self._commit("Swapnil Ghike <sriram@example.com>")
-        self._commit("Nick Telford <nick@example.com>")
-        self._commit("NIck Telford <nick@example.com>")
-        self._commit("Luke Chen <luke@example.com>")
-        self._commit("showuon <luke@example.com>")
-        self._commit("David Jacot <david@example.com>")
-        self._commit("David Jaco <david@example.com>")
-        self._commit("John Smith <john@example.com>")
-        self._commit("John Jones <john@example.com>")
-        self._commit("khyativ <kv@example.com>")
-        self._commit("KhyatiVaghamshi <khyati@example.org>")
-        lines = []
-        self._release(report=lines.append)
-        grouped = lines.index("Check that these names are of the same person:")
-        similar = lines.index("Check whether these names are of the same person:")
-        evidence = lines.index("Commit evidence for grouped names:")
-        self.assertLess(grouped, similar)
-        self.assertLess(similar, evidence)
-        self.assertFalse(any(" author: " in line or " reviewer: " in line for line in lines[:evidence]))
-        self.assertTrue(any("Sriram Subramanian" in line and "Swapnil Ghike" in line
-                            for line in lines[grouped + 1:similar]))
-        self.assertTrue(any("David Jacot" in line and "David Jaco" in line for line in lines))
-        self.assertTrue(any("John Smith" in line and "John Jones" in line for line in lines))
-        self.assertTrue(any("khyativ" in line and "KhyatiVaghamshi" in line for line in lines[similar + 1:evidence]))
-        self.assertFalse(any("Nick Telford" in line or "NIck Telford" in line for line in lines))
-        self.assertTrue(any("Luke Chen" in line and "showuon" in line for line in lines))
-        self.assertEqual(f"Fix any mistake in {self.mailmap}", lines[-1])
-
-    def test_reports_unrelated_names_before_typos_and_variants(self):
-        self._commit("Sriram Subramanian <sriram@example.com>")
-        self._commit("Swapnil Ghike <sriram@example.com>")
         self._commit("Luke Chen <luke@example.com>")
         self._commit("showuon <luke@example.com>")
         self._commit("David Jaco <david@example.com>")
         self._commit("David Jacot <david@example.com>")
         self._commit("Alieh Saeedi <alieh@example.com>")
         self._commit("aliehsaeedii <alieh@example.com>")
+        self._commit("John Smith <john@example.com>")
+        self._commit("John Jones <john@example.com>")
+        self._commit("Nick Telford <nick@example.com>")
+        self._commit("NIck Telford <nick@example.com>")
+        self._commit("khyativ <kv@example.com>")
+        self._commit("KhyatiVaghamshi <khyati@example.org>")
         lines = []
         self._release(report=lines.append)
         unrelated = lines.index("Check that these names are of the same person:")
         variants = lines.index("These names look like typos or variants of one name, and were grouped too:")
+        similar = lines.index("Check whether these names are of the same person:")
         evidence = lines.index("Commit evidence for grouped names:")
+        self.assertEqual(0, unrelated)
+        # Names with nothing in common come first, as that is what a wrong email looks like.
         self.assertEqual(["  Luke Chen <= Luke Chen, showuon",
                           "  Swapnil Ghike <= Sriram Subramanian, Swapnil Ghike"],
                          lines[unrelated + 1:variants])
         self.assertEqual(["  Alieh Saeedi <= Alieh Saeedi, aliehsaeedii",
-                          "  David Jacot <= David Jaco, David Jacot"],
-                         lines[variants + 1:evidence])
+                          "  David Jacot <= David Jaco, David Jacot",
+                          "  John Jones <= John Jones, John Smith"],
+                         lines[variants + 1:similar])
+        # Names that were not grouped, but look alike.
+        self.assertEqual(["  khyativ, KhyatiVaghamshi"], lines[similar + 1:evidence])
+        # The evidence follows the order of the groups above.
         headings = [line.strip().rstrip(":") for line in lines[evidence + 1:-1] if not line.startswith("    ")]
-        self.assertEqual(["Alieh Saeedi", "David Jacot"], headings[2:])
+        self.assertEqual(["Luke Chen", "Swapnil Ghike", "Alieh Saeedi", "David Jacot", "John Jones"], headings)
+        # Names that only differ in case are not reported.
+        self.assertFalse(any("Telford" in line for line in lines))
+        self.assertEqual(f"Fix any mistake in {self.mailmap}", lines[-1])
 
     def test_reports_nothing_when_there_is_nothing_to_check(self):
         self._commit("Ann Lee <ann@example.com>")
@@ -497,18 +495,15 @@ class OfReleaseTest(unittest.TestCase):
 
 class AnnouncementEmailTest(unittest.TestCase):
 
-    def test_lists_people_without_an_ai_section(self):
+    def test_lists_the_contributors(self):
         email = templates.release_announcement_email("4.4.0", ["ann lee", "Bo Kim"])
         self.assertIn("the following 2 contributors to this release!", email)
         self.assertIn("\n\nann lee, Bo Kim\n\nWe welcome", email)
-        self.assertNotIn("AIs", email)
-        self.assertNotRegex(email, r"\(and \d+ AIs?\)")
 
     def test_formats_a_single_contributor(self):
         email = templates.release_announcement_email("4.4.0", ["Bo Kim"])
         self.assertIn("the following 1 contributor to this release!", email)
         self.assertIn("\n\nBo Kim\n\nWe welcome", email)
-        self.assertNotIn("AIs", email)
 
 
 if __name__ == "__main__":

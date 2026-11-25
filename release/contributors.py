@@ -173,8 +173,9 @@ def read_credits(rev, cwd=repo_dir, report=None):
             for person in people:
                 start = value.index(person, offset)
                 separator = value[offset:start]
-                # Stray punctuation, such as a "." that ends the list, is not a credit.
-                if not re.search(r"\w", person):
+                # Stray punctuation, such as a "." that ends the list, is not a credit. A bot is
+                # not credited either, and its name would not be parsed.
+                if not re.search(r"\w", person) or "[bot]" in person:
                     offset = start + len(person)
                     continue
                 name, email, login = parse_person(person)

@@ -19,9 +19,13 @@
 # Add an entry only when:
 #  1. a contributor asks to be shown with another name,
 #  2. credits are known to be the same person but share no email, name or GitHub login,
-#     so they cannot be matched automatically, or
+#     so they cannot be matched automatically,
 #  3. a wrong email in some commit merges two people. Map that name and email to the right
-#     email, e.g. "Right Name <right@email> Right Name <wrong@email>".
+#     email, e.g. "Right Name <right@email> Right Name <wrong@email>", or
+#  4. the names of a group reported by the name check were checked and are of one person, to
+#     keep that group out of the next checks. Such an entry gives its name to every credit
+#     with that email, so a wrong email in a later commit is no longer reported for it, and
+#     a credit that was only grouped through a replaced name is no longer grouped.
 # Note why each entry was added, so that it can be checked later.
 #
 # The format is the one of git mailmap (see https://git-scm.com/docs/gitmailmap), but this
@@ -39,3 +43,65 @@ Avishek Das <imavishek@users.noreply.github.com>
 
 # 2. Chia-Ping Tsai is credited as @chia7712 in commit 0bc2c6e69994.
 Chia-Ping Tsai <chia7712@users.noreply.github.com>
+
+# 2. Andrew Schofield is credited as @AndrewJSchofield in commit dbe9d34e4745. That login was
+#    only matched through the name "Andrew J Schofield", which an entry below replaces.
+Andrew Schofield <AndrewJSchofield@users.noreply.github.com>
+
+# 4. Groups checked for 4.4.0. Every name and email below was grouped automatically and is
+#    the same person; these entries only keep the group out of the name check.
+Akhilesh C <akhileshchg@users.noreply.github.com>
+Alieh Saeedi <107070585+aliehsaeedii@users.noreply.github.com>
+Alieh Saeedi <asaeedi@confluent.io>
+Anastasia Vela <anastasiavela@berkeley.edu>
+Andrew Schofield <aschofield@apache.org>
+Apoorv Mittal <apoorvmittal10@gmail.com>
+Arpit Goyal <59436466+iit2009060@users.noreply.github.com>
+Bill Bejeck <bbejeck@gmail.com>
+Chia-Ping Tsai <chia7712@gmail.com>
+Chia-Yi Chiu <cychiu8@gmail.com>
+Christo Lolov <clolov@apache.org>
+Christo Lolov <lolovc@amazon.com>
+David Jacot <djacot@confluent.io>
+Dejan Stojadinović <dejan2609@gmail.com>
+Edoardo Comar <ecomar@uk.ibm.com>
+Evan Zhou <84255167+ezhou413@users.noreply.github.com>
+Hana <huikewong@gmail.com>
+Jian <fujian1115@gmail.com>
+José Armando García Sancio <jsancio@gmail.com>
+José Armando García Sancio <jsancio@users.noreply.github.com>
+Justine Olshan <jolshan@confluent.io>
+Kamal Chandraprakash <kamal.chandraprakash@gmail.com>
+Kamal Chandraprakash <kamal@nmsworks.co.in>
+KC.H <kuoche1712003@gmail.com>
+Kevin Wu <66326898+kevin-wu24@users.noreply.github.com>
+Kondrat Bertalan <kb.pcre@gmail.com>
+Kuan-Po Tseng <brandboat@gmail.com>
+Lan Ding <53332773+DL1231@users.noreply.github.com>
+Lan Ding <isDing_L@163.com>
+Lianet Magrans <lmagrans@confluent.io>
+Lucy Liu <lucliu@confluent.io>
+Luke Chen <43372967+showuon@users.noreply.github.com>
+Manikumar Reddy <manikumar.reddy@gmail.com>
+Matthias J. Sax <matthias@confluent.io>
+Matthias J. Sax <mjsax@apache.org>
+Mickael Maison <mickael.maison@gmail.com>
+Ming-Yen Chung <mingyen066@gmail.com>
+Nick Telford <nick.telford@gmail.com>
+Nikita Shupletsov <nshupletsov@confluent.io>
+Nilesh Kumar <nileshkumar3@gmail.com>
+Omnia Ibrahim <o.g.h.ibrahim@gmail.com>
+Paolo Patierno <ppatierno@live.com>
+Rajini Sivaram <rajinisivaram@googlemail.com>
+Russole Chen <850905junior@gmail.com>
+Shekhar Prasad Rajak <60732970+shekhar-rajak@users.noreply.github.com>
+TengYao Chi <51072200+frankvicky@users.noreply.github.com>
+TengYao Chi <kitingiao@gmail.com>
+Viktor Somogyi-Vass <viktor.somogyi@cloudera.com>
+Viktor Somogyi-Vass <viktorsomogyi@gmail.com>
+YANG-SYUAN CHOU <dino2895un@gmail.com>
+Yu-Chia Ma <minecraftmiku831@gmail.com>
+Yunchi Pang <yunchipang@gmail.com>
+Zheguang Zhao <zheguang.zhao@alumni.brown.edu>
+Zheguang Zhao <zheguang.zhao@gmail.com>
+Zhiyan Tang <ztang@confluent.io>
