@@ -351,7 +351,7 @@ public class ClassicGroupMember {
     }
 
     /**
-     * @return The described group member without metadata.
+     * @return The described group member without metadata and assignment.
      */
     public DescribeGroupsResponseData.DescribedGroupMember describeNoMetadata() {
         return new DescribeGroupsResponseData.DescribedGroupMember()
@@ -359,14 +359,17 @@ public class ClassicGroupMember {
             .setGroupInstanceId(groupInstanceId().orElse(null))
             .setClientId(clientId())
             .setClientHost(clientHost())
-            .setMemberAssignment(assignment());
+            .setMemberAssignment(EMPTY_ASSIGNMENT);
     }
 
     /**
-     * @return The described group member with metadata corresponding to the provided protocol.
+     * @return The described group member with its assignment and the metadata corresponding to the
+     *         provided protocol.
      */
     public DescribeGroupsResponseData.DescribedGroupMember describe(String protocolName) {
-        return describeNoMetadata().setMemberMetadata(metadata(protocolName));
+        return describeNoMetadata()
+            .setMemberMetadata(metadata(protocolName))
+            .setMemberAssignment(assignment());
     }
 
     /**
