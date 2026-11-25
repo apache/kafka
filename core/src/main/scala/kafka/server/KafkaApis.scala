@@ -3395,7 +3395,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.context,
       READ,
       TOPIC,
-      topicIdPartitionSeq.asJava,
+      topicIdPartitionSeq.filter(_.topicPartition.topic != null).asJava,
       (tp: TopicIdPartition) => tp.topicPartition.topic
     ).asScala
 
@@ -3721,7 +3721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.context,
       READ,
       TOPIC,
-      topicIdPartitionSeq.asJava,
+      topicIdPartitionSeq.filter(_.topicPartition.topic != null).asJava,
       (tp: TopicIdPartition) => tp.topicPartition.topic
     ).asScala
 
