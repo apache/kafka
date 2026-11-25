@@ -354,7 +354,8 @@ public class RequestTest {
         ByteBuffer envelopeBuffer = new EnvelopeRequest.Builder(
             requestBuffer,
             principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
-            InetAddress.getLocalHost().getAddress()
+            InetAddress.getLocalHost().getAddress(),
+            ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion())
         ).build().serializeWithHeader(envelopeHeader);
 
         RequestHeader.parse(envelopeBuffer);

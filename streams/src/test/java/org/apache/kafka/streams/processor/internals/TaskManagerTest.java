@@ -5306,6 +5306,65 @@ public class TaskManagerTest {
     @Test
     // waitForFuture retries in a loop, so a lost interrupt would hang this test
     @Timeout(30)
+    public void shouldNotLogErrorWhenRemovalWaitIsInterruptedDuringShutdown() {
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(new CompletableFuture<>());
+        when(stateUpdater.drainQueuedTasks()).thenReturn(Set.of(taskInStateUpdater));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            appender.setClassLogger(TaskManager.class, Level.WARN);
+            try {
+                Thread.currentThread().interrupt();
+                taskManager.shutdown(false);
+            } finally {
+                Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+            }
+
+            assertEquals(List.of(), appender.getMessages(Level.ERROR));
+            assertTrue(appender.getMessages(Level.WARN).stream()
+                .anyMatch(message -> message.contains("Interrupted while removing tasks from the state updater during shutdown")));
+        }
+        verify(taskInStateUpdater).closeDirty();
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
+    public void shouldLogErrorWhenRemovalWaitIsInterruptedOutsideOfShutdown() {
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(new CompletableFuture<>());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            appender.setClassLogger(TaskManager.class, Level.WARN);
+            final IllegalStateException exception;
+            try {
+                Thread.currentThread().interrupt();
+                exception = assertThrows(IllegalStateException.class, () -> taskManager.handleLostAll());
+            } finally {
+                Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+            }
+
+            assertInstanceOf(InterruptedException.class, exception.getCause());
+            assertTrue(appender.getMessages(Level.ERROR).stream()
+                .anyMatch(message -> message.contains("Thread got interrupted")));
+        }
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
     public void shouldCloseTasksAndReleaseResourcesOnUncleanShutdownWhenThreadIsInterrupted() {
         // a task owned by the state updater whose removal future never completes
         final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)

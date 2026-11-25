@@ -177,7 +177,9 @@ class MetadataVersionTest {
     @EnumSource(value = MetadataVersion.class)
     public void testPartitionChangeRecordVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
-        if (metadataVersion.isElrSupported()) {
+        if (metadataVersion.isClusterMirroringSupported()) {
+            expectedVersion = (short) 3;
+        } else if (metadataVersion.isElrSupported()) {
             expectedVersion = (short) 2;
         } else if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectedVersion = (short) 1;
@@ -221,7 +223,7 @@ class MetadataVersionTest {
     public void testProductionMetadataDontUseUnstableApiVersion() {
         MetadataVersion mv = MetadataVersion.latestProduction();
         assertTrue(mv.listOffsetRequestVersion() <= ApiKeys.LIST_OFFSETS.latestVersion(false));
-        assertTrue(mv.fetchRequestVersion() <= ApiKeys.FETCH.latestVersion(false));
+        assertTrue(mv.fetchRequestVersion(true) <= ApiKeys.FETCH.latestVersion(false));
     }
 
     @Test
@@ -242,6 +244,17 @@ class MetadataVersionTest {
             assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
         } else {
             assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testFetchRequestVersion(MetadataVersion metadataVersion) {
+        if (metadataVersion.isAtLeast(IBP_4_5_IV0)) {
+            assertEquals((short) 19, metadataVersion.fetchRequestVersion(true));
+            assertEquals(ApiKeys.FETCH.latestVersion(false), metadataVersion.fetchRequestVersion(false));
+        } else {
+            assertEquals(metadataVersion.fetchRequestVersion(true), metadataVersion.fetchRequestVersion(false));
         }
     }
 
@@ -271,5 +284,19 @@ class MetadataVersionTest {
     public void testControllerRegistrationRequestHeaderVersion(MetadataVersion metadataVersion) {
         short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
         assertEquals(expectedVersion, metadataVersion.controllerRegistrationRequestHeaderVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testEnvelopeRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.envelopeRequestHeaderVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testProduceRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.produceRequestHeaderVersion());
     }
 }

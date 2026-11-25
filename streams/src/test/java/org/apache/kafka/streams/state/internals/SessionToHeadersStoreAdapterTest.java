@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -39,11 +41,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Instant;
+import java.util.Map;
+
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -233,6 +239,40 @@ public class SessionToHeadersStoreAdapterTest {
         assertEquals("test-store", adapter.name());
     }
 
+    @Test
+    public void shouldDelegateCommit() {
+        final Map<TopicPartition, Long> changelogOffsets = Map.of(new TopicPartition("changelog", 0), 7L);
+        adapter.commit(changelogOffsets);
+        verify(innerStore).commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateManagesOffsets() {
+        when(innerStore.managesOffsets()).thenReturn(true);
+        assertTrue(adapter.managesOffsets());
+    }
+
+    @Test
+    public void shouldDelegateCommittedOffset() {
+        final TopicPartition partition = new TopicPartition("changelog", 0);
+        when(innerStore.committedOffset(partition)).thenReturn(7L);
+        assertEquals(7L, adapter.committedOffset(partition));
+    }
+
+    @Test
+    public void shouldDelegateApproximateNumUncommittedBytes() {
+        when(innerStore.approximateNumUncommittedBytes()).thenReturn(123L);
+        assertEquals(123L, adapter.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldDelegateGetPosition() {
+        final Position position = Position.emptyPosition();
+        when(innerStore.getPosition()).thenReturn(position);
+        assertSame(position, adapter.getPosition());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldDelegateQueryToInnerStore() {
@@ -305,5 +345,22 @@ public class SessionToHeadersStoreAdapterTest {
 
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
+    }
+
+    // Instant overloads delegate to the long-based overloads; verify conversion still happens.
+    @Test
+    public void shouldConvertFetchSessionViaInstantOverload() {
+        when(innerStore.fetchSession(KEY, 10L, 20L)).thenReturn(RAW_VALUE);
+        final byte[] result = adapter.fetchSession(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result);
+    }
+
+    @Test
+    public void shouldWrapFindSessionsViaInstantOverload() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result =
+            adapter.findSessions(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertAddsEmptyHeaders(result);
     }
 }

@@ -206,10 +206,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testSubscriptionAndPoll() {
@@ -231,10 +241,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testSubscriptionAndPollMultiple() {
@@ -1183,13 +1203,23 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
-    public void testMultipleConsumersInGroupSequentialConsumption() {
+    public void testMultipleConsumersInGroupSequentialConsumption() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
@@ -1205,31 +1235,37 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             }
             producer.flush();
 
-            int consumer1MessageCount = 0;
-            int consumer2MessageCount = 0;
+            AtomicInteger consumer1MessageCount = new AtomicInteger(0);
+            AtomicInteger consumer2MessageCount = new AtomicInteger(0);
 
-            int maxRetries = 10;
-            int retries = 0;
-            while (retries < maxRetries) {
+            TestUtils.waitForCondition(() -> {
                 ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(2000));
-                consumer1MessageCount += records1.count();
+                consumer1MessageCount.addAndGet(records1.count());
                 ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(2000));
-                consumer2MessageCount += records2.count();
-                if (records1.count() + records2.count() == 0)
-                    break;
-                retries++;
-            }
+                consumer2MessageCount.addAndGet(records2.count());
+                return consumer1MessageCount.get() + consumer2MessageCount.get() >= totalMessages;
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records");
 
-            assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
+            assertEquals(totalMessages, consumer1MessageCount.get() + consumer2MessageCount.get());
         }
     }
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testMultipleConsumersInGroupConcurrentConsumption()
@@ -1267,10 +1303,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
@@ -1387,10 +1433,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
@@ -1568,10 +1624,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
@@ -1604,10 +1670,20 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
@@ -1718,6 +1794,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
         // produce some messages
         ClientState prodState = new ClientState();
+        AtomicBoolean stopProducing = new AtomicBoolean(false);
         final Set<String> produced = new HashSet<>();
         service.execute(() -> {
                 int i = 0;
@@ -1725,7 +1802,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                     ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
                     ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
                 ))) {
-                    while (!prodState.done().get()) {
+                    while (!stopProducing.get()) {
                         String key = "key-" + (i++);
                         ProducerRecord<String, String> record = new ProducerRecord<>(
                             tpMulti.topic(),
@@ -1744,6 +1821,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                             // ignore
                         }
                     }
+                } finally {
+                    prodState.done().set(true);
                 }
             }
         );
@@ -1762,7 +1841,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
                         ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
                         consState.count().addAndGet(records.count());
                         records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
-                        if (prodState.done().get() && records.count() == 0) {
+                        if (prodState.done().get() && consumed.size() >= prodState.count().get()) {
                             consState.done().set(true);
                         }
                     }
@@ -1809,8 +1888,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             }, 5L, TimeUnit.SECONDS
         );
 
-        // top the producer after some time (but after coordinator shutdown)
-        service.schedule(() -> prodState.done().set(true), 10L, TimeUnit.SECONDS);
+        // stop the producer after some time (but after coordinator shutdown)
+        service.schedule(() -> stopProducing.set(true), 10L, TimeUnit.SECONDS);
 
         // wait for both producer and consumer to finish
         TestUtils.waitForCondition(

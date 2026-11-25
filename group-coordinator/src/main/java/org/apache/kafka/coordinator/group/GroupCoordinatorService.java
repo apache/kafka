@@ -147,6 +147,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
@@ -847,7 +848,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             });
     }
-    
+
     private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
         Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
@@ -1451,7 +1452,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
-    
+
     /**
      * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
      */
@@ -1516,7 +1517,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
-        
+
         if (groupId == null || groupId.isEmpty()) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
         }
@@ -1768,7 +1769,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * that should still proceed to tombstoning. Version-agnostic: the raw {@link ApiError}
      * is added as-is; any per-version translation of new error codes (e.g. downgrading
      * {@code GROUP_DELETION_FAILED} for {@code DeleteGroups} v&lt;3) happens at the
-     * {@code KafkaApis} layer where {@code request.context.apiVersion()} is in scope and
+     * {@code KafkaApis} layer where the request version is in scope and
      * matches how other new error codes are version-gated.
      */
     private static List<String> filterStreamsTopologyErrors(
@@ -2396,12 +2397,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "commit-offset",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception -> handleOperationException(
+        ).exceptionally(exception -> handleOffsetCommitException(
             "commit-offset",
             request,
             exception,
-            (error, __) -> OffsetCommitRequest.getErrorResponse(request, error),
-            log
+            error -> OffsetCommitRequest.getErrorResponse(request, error)
         ));
     }
 
@@ -2436,12 +2436,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerEpoch(),
             coordinator -> coordinator.commitTransactionalOffset(context, request),
             context.requestVersion()
-        ).exceptionally(exception -> handleOperationException(
+        ).exceptionally(exception -> handleOffsetCommitException(
             "txn-commit-offset",
             request,
             exception,
-            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error),
-            log
+            error -> TxnOffsetCommitRequest.getErrorResponse(request, error)
         ));
     }
 
@@ -2741,6 +2740,42 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         context.requestVersion()
                     ),
                     log
+            );
+        };
+    }
+
+    /**
+     * This is the handler used by offset commit operations to convert errors to coordinator errors.
+     * The handler also handles and logs unexpected errors.
+     *
+     * @param operationName     The name of the operation.
+     * @param request           The request for logging purposes.
+     * @param exception         The exception to handle.
+     * @param handler           A function which takes an Errors and builds the response.
+     * @return The response built by the handler.
+     * @param <T> The type of the request. It must be a toString'able object.
+     * @param <R> The type of the response.
+     */
+    private <T, R> R handleOffsetCommitException(
+        String operationName,
+        T request,
+        Throwable exception,
+        Function<Errors, R> handler
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
+
+        return switch (apiError.error()) {
+            case MESSAGE_TOO_LARGE, RECORD_LIST_TOO_LARGE ->
+                // Remap MESSAGE_TOO_LARGE and RECORD_LIST_TOO_LARGE to INVALID_COMMIT_OFFSET_SIZE,
+                // since the offsets of a commit are written in a single batch and these errors
+                // mean that the commit is too large.
+                handler.apply(Errors.INVALID_COMMIT_OFFSET_SIZE);
+            default -> handleOperationException(
+                operationName,
+                request,
+                exception,
+                (error, __) -> handler.apply(error),
+                log
             );
         };
     }

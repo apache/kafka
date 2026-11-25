@@ -265,7 +265,8 @@ class BrokerServer(
         60000
       )
       clientToControllerChannelManager.start()
-      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
+      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics,
+        () => requestHeaderVersion(_.envelopeRequestHeaderVersion))
       clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = new DefaultApiVersionManager(
@@ -430,7 +431,8 @@ class BrokerServer(
         () => groupCoordinator.groupMetadataTopicConfigs,
         () => transactionCoordinator.transactionStateTopicConfigs,
         () => shareCoordinator.shareGroupStateTopicConfigs,
-        new KRaftTopicCreator(clientToControllerChannelManager),
+        new KRaftTopicCreator(clientToControllerChannelManager,
+          () => requestHeaderVersion(_.envelopeRequestHeaderVersion)),
         time,
       )
 
@@ -921,9 +923,6 @@ class BrokerServer(
 
       if (shareCoordinator != null)
         Utils.swallow(this.logger.underlying, () => shareCoordinator.shutdown())
-
-      if (autoTopicCreationManager != null)
-        Utils.swallow(this.logger.underlying, () => autoTopicCreationManager.close())
 
       if (assignmentsManager != null)
         Utils.swallow(this.logger.underlying, () => assignmentsManager.close())

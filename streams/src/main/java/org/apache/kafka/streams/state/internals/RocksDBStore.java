@@ -250,6 +250,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
+        // Atomic flush switches both CFs' memtables, so the offsets CF must allow the same flush backlog as the data CF.
+        offsetsCfOptions.setMaxWriteBufferNumber(columnFamilyOptions.maxWriteBufferNumber());
+
         dbDir = new File(new File(stateDir, parentDir), name);
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());
