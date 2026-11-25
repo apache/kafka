@@ -21,6 +21,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.internals.Topic;
@@ -335,6 +336,7 @@ public final class GroupConfig extends AbstractConfig {
         .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
             STRING,
             ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT,
+            new DlqTopicNameValidator(),
             MEDIUM,
             ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC)
         .define(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG,
@@ -662,21 +664,36 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs()
         );
+    }
 
-        // DLQ validation (KIP-1191)
-        // DLQ topic name must not start with "__" (reserved for internal topics) and must be a valid topic name.
-        String dlqTopicName = (String) parsed.get(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
-        if (dlqTopicName != null && !dlqTopicName.isEmpty()) {
-            if (dlqTopicName.startsWith("__")) {
-                throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
-                    ": DLQ topic name must not start with '__'");
+    /**
+     * Validates the dead-letter queue (DLQ) topic name (KIP-1191). A blank name is valid and means the
+     * group has no DLQ topic. Otherwise the name must be a valid topic name and must not start with
+     * "__", which is reserved for internal topics.
+     */
+    static class DlqTopicNameValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+            String topicName = (String) value;
+            if (topicName.isEmpty()) {
+                return;
+            }
+            if (topicName.startsWith("__")) {
+                throw new ConfigException(name, value, "DLQ topic name must not start with '__'");
             }
             try {
-                Topic.validate(dlqTopicName);
-            } catch (InvalidTopicException invalidTopicException) {
-                throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
-                    ": DLQ topic name is not valid - " + invalidTopicException.getMessage());
+                Topic.validate(topicName);
+            } catch (InvalidTopicException e) {
+                throw new ConfigException(name, value, "DLQ topic name is not valid - " + e.getMessage());
             }
+        }
+
+        @Override
+        public String toString() {
+            return "A blank value, or a valid topic name that does not start with '__'";
         }
     }
 

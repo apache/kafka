@@ -138,8 +138,9 @@ public class GroupConfigTest {
                 // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
                 // empty tag key (an empty element between commas) is rejected.
                 assertPropertyInvalid(name, "tag1,,tag2");
-            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)
-                    && !GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG.equals(name)) {
+            } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "__my-dlq", "my dlq");
+            } else if (!GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG.equals(name)) {
                 // Free-form string configs (no ConfigDef validator) accept any value at construction
                 // time; their values are validated separately in GroupConfig.validate.
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
@@ -1001,7 +1002,7 @@ public class GroupConfigTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my-dlq");
 
-        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+        ConfigException exception = assertThrows(ConfigException.class, () ->
             GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
         assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
     }
@@ -1012,7 +1013,7 @@ public class GroupConfigTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my dlq");
 
-        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+        ConfigException exception = assertThrows(ConfigException.class, () ->
             GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
         assertTrue(exception.getMessage().contains("DLQ topic name must not start with '__'"));
     }
@@ -1038,7 +1039,7 @@ public class GroupConfigTest {
 
         Map<String, String> invalidConfigs = new HashMap<>();
         invalidConfigs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "a".repeat(250));
-        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+        ConfigException exception = assertThrows(ConfigException.class, () ->
             GroupConfig.validate(invalidConfigs, createGroupCoordinatorConfig(), createShareGroupConfig()));
         assertTrue(exception.getMessage().contains("DLQ topic name is not valid"));
     }
@@ -1049,7 +1050,7 @@ public class GroupConfigTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, topicName);
 
-        InvalidConfigurationException exception = assertThrows(InvalidConfigurationException.class, () ->
+        ConfigException exception = assertThrows(ConfigException.class, () ->
             GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
         assertTrue(exception.getMessage().contains("DLQ topic name is not valid"));
     }
@@ -1062,6 +1063,22 @@ public class GroupConfigTest {
 
         assertDoesNotThrow(() ->
             GroupConfig.validate(configs, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
+    public void testDLQTopicNameValidatorIsAppliedByConfigDefParse() {
+        // The check lives in the ConfigDef, so it applies to every parse and to GroupConfig construction.
+        assertThrows(ConfigException.class, () -> GroupConfig.CONFIG_DEF.parse(
+            Map.of(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my dlq")));
+        assertThrows(ConfigException.class, () -> GroupConfig.CONFIG_DEF.parse(
+            Map.of(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "__my-dlq")));
+        assertThrows(ConfigException.class, () -> new GroupConfig(
+            Map.of(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "a".repeat(250))));
+
+        assertDoesNotThrow(() -> GroupConfig.CONFIG_DEF.parse(
+            Map.of(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq")));
+        assertDoesNotThrow(() -> GroupConfig.CONFIG_DEF.parse(
+            Map.of(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "")));
     }
 
     @Test
