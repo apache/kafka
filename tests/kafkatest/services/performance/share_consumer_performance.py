@@ -73,7 +73,7 @@ class ShareConsumerPerformanceService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
-    def java_class_name(self):
+    def java_class_name(self, node):
         return "org.apache.kafka.tools.ShareConsumerPerformance"
 
     def args(self, version):
