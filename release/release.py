@@ -213,8 +213,8 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    people, ais = contributors.of_release(previous_release_version_num, release_version_num, report=print)
-    release_announcement_email = templates.release_announcement_email(release_version_num, people, ais)
+    people, _ = contributors.of_release(previous_release_version_num, release_version_num, report=print)
+    release_announcement_email = templates.release_announcement_email(release_version_num, people)
     print(templates.release_announcement_email_instructions(release_announcement_email))
     sys.exit(0)
 

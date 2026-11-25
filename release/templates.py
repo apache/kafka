@@ -73,11 +73,9 @@ Some of these may be used from these previous settings loaded from {prefs_file}:
 Do you have all of these setup?"""
 
 
-def release_announcement_email(release_version, contributors, ais):
+def release_announcement_email(release_version, contributors):
     contributors_str = ", ".join(contributors)
     num_contributors_str = f"{len(contributors)} {'contributor' if len(contributors) == 1 else 'contributors'}"
-    num_ais_str = f" (and {len(ais)} {'AI' if len(ais) == 1 else 'AIs'})" if ais else ""
-    ais_str = f"\n\nAIs: {', '.join(ais)}" if ais else ""
     # The downloads page on kafka-site is Hugo-generated and strips dots from version numbers when
     # deriving heading anchors (e.g. "4.2.2" -> "#422"), so the anchor here must match that format.
     # Link to the real page directly rather than the https://kafka.apache.org/downloads shortcut,
@@ -138,9 +136,9 @@ Apache Kafka is in use at large and small companies worldwide, including
 Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,
 Target, The New York Times, Uber, Yelp, and Zalando, among others.
 
-A big thank you for the following {num_contributors_str}{num_ais_str} to this release! (Please report an unintended omission)
+A big thank you for the following {num_contributors_str} to this release! (Please report an unintended omission)
 
-{contributors_str}{ais_str}
+{contributors_str}
 
 We welcome your help and feedback. For more information on how to
 report problems, and to get involved, visit the project website at

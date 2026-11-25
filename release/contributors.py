@@ -68,8 +68,12 @@ CREDIT_TRAILERS = {
 AI_TOOLS = [
     (r"^(noreply|claude)@anthropic\.com$", None),
     (r"^(\d+\+)?copilot@users\.noreply\.github\.com$", "Copilot"),
+    (r"^copilot@github\.com$", "Copilot"),
     (r"^cursoragent@cursor\.com$", "Cursor"),
 ]
+
+# Some Co-authored-by trailers identify Codex only by its name and GPT version.
+CODEX_MODEL_NAME = re.compile(r"(?:OpenAI )?Codex \(GPT-\d+(?:\.\d+)*\)", re.IGNORECASE)
 
 # Names that do not identify a person, so they must not be used to match people.
 PLACEHOLDER_NAMES = {"anonymous", "unknown"}
@@ -78,12 +82,17 @@ GITHUB_NOREPLY_EMAIL = re.compile(r"^(?:\d+\+)?([^@]+)@users\.noreply\.github\.c
 
 # One person as written in a trailer: "Name <email>", "Name <email" (not closed),
 # "Name [email](mailto:email)", "Name (github:login)", "Name (@login)", or only "Name".
+# For an email or login without brackets, see BARE_CONTACT.
 PERSON = re.compile(r"""
     ^(?:"(?P<quoted>[^"]*)"|(?P<name>[^<\[]*?))\s*
     (?:<(?P<email>[^<>]*)>?
       |\[(?P<md_email>[^\]]*)\]\(mailto:[^)]*\)
-      |\((?:github:|@)(?P<login>[^)\s]+)\))?
+      |\((?:github:|@)\s*(?P<login>[^)\s]+)\s*\))?
     $""", re.VERBOSE)
+
+# An email or a GitHub login without brackets, alone or after the name: "email", "@login",
+# "Name email" or "Name @login". A "." or ">" left after it is not part of it.
+BARE_CONTACT = re.compile(r"^(?:(?P<name>.*\S)\s+)?(?:@(?P<login>[^@\s]+?)|(?P<email>[^@\s]+@[^@\s]+?))[.>]*$")
 
 
 @dataclass
@@ -110,16 +119,22 @@ def of_release(from_rev, to_rev, mailmap=MAILMAP, cwd=repo_dir, report=None):
     Return (people, ais): the sorted names of the people credited by the commits in
     from_rev..to_rev, and of the AI tools credited by those commits.
 
-    If report is given, it is called with each line of what the release manager should check,
-    see names_to_check().
+    If report is given, it is called with parsing problems in the release and the names the
+    release manager should check, see names_to_check().
     """
     release_commits = set(_git(["rev-list", "--no-merges", f"{from_rev}..{to_rev}"], cwd).split())
-    credits = apply_mailmap(read_credits(to_rev, cwd), mailmap, cwd)
 
+    def report_credit(commit, text):
+        if report and commit in release_commits:
+            report(f"Check credit in {commit[:12]}: {text}")
+
+    credits = apply_mailmap(read_credits(to_rev, cwd, report=report_credit), mailmap, cwd)
+
+    ai_names = _ai_names_with_email(credits)
     ais = set()
     humans = []
     for credit in credits:
-        ai_name = _ai_tool_name(credit)
+        ai_name = _ai_tool_name(credit, ai_names)
         if ai_name or credit.role == "ai":
             if ai_name and credit.commit in release_commits:
                 ais.add(ai_name)
@@ -135,9 +150,10 @@ def of_release(from_rev, to_rev, mailmap=MAILMAP, cwd=repo_dir, report=None):
     return sorted(people, key=str.casefold), sorted(ais, key=str.casefold)
 
 
-def read_credits(rev, cwd=repo_dir):
+def read_credits(rev, cwd=repo_dir, report=None):
     """
     Return the credits of the non-merge commits reachable from rev, from the newest commit.
+    If provided, report(commit, text) receives any unparsed credit text.
     """
     log = _git(["log", "--no-merges", "--format=%H%x1f%an%x1f%ae%x1f%B%x1e", rev], cwd)
     credits = []
@@ -146,36 +162,93 @@ def read_credits(rev, cwd=repo_dir):
             continue
         commit, name, email, message = record.strip("\n").split("\x1f", 3)
         credits.append(Credit(commit, "author", name, email))
-        for role, value in _credit_trailers(message):
-            if role == "reviewer":
-                # Reviewers lists several people, and the value sometimes repeats "Reviewers:".
-                value = re.sub(r"^\s*reviewers?\s*:", "", value, flags=re.IGNORECASE)
-                credits += [Credit(commit, role, *parse_person(person)) for person in split_people(value)]
-            elif role:
-                credits.append(Credit(commit, role, *parse_person(value)))
+
+        def unparsed(text):
+            if report:
+                report(commit, text)
+
+        for role, value in _credit_trailers(message, report=unparsed):
+            offset = 0
+            people = split_people(value) if role == "reviewer" or not any(parse_person(value)) else [value]
+            for person in people:
+                start = value.index(person, offset)
+                separator = value[offset:start]
+                # Stray punctuation, such as a "." that ends the list, is not a credit.
+                if not re.search(r"\w", person):
+                    offset = start + len(person)
+                    continue
+                name, email, login = parse_person(person)
+                # A complete contact may be followed by another contact without a comma, but
+                # arbitrary text after it must not silently become a name.
+                delimited = any(parse_person(person, bare_after_name=False)[1:])
+                if not any((name, email, login)) or (offset and "," not in separator and not delimited):
+                    unparsed(person)
+                else:
+                    credits.append(Credit(commit, role, name, email, login))
+                offset = start + len(person)
     return credits
 
 
-def _credit_trailers(message):
+def _credit_trailers(message, report=None):
     """
     Read credit fields anywhere in the message, including before a separate final paragraph.
-    Unfold wrapped values even when their continuation lines are not indented.
+    Unfold wrapped contacts, including email lines that are not indented. Unrecognized
+    continuations are reported instead of being included as contributor names.
     """
     # Ignore examples in complete code blocks. Some messages leave a code fence open before
     # the real credits, so an unmatched opening fence must not hide the rest of the message.
     message = re.sub(r"(?ms)^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*\n.*?"
                      r"^[ \t]*(?P=fence)[ \t]*(?:\n|$)", "\n", message)
-    role, value = None, []
+    role, value = None, ""
     for line in message.splitlines() + [""]:
         trailer = re.match(r"^([\w-]+)\s*:\s*(.*)$", line.strip())
-        boundary = re.match(r"^(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-*_]{3,}\s*$)", line.strip())
+        boundary = re.match(r"^(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|[-*_]{3,}\s*$|"
+                            r"\(cherry picked from commit [0-9a-f]+\))", line.strip(), re.IGNORECASE)
         if trailer or boundary or not line.strip():
-            if role:
-                yield role, " ".join(value)
+            if role and value:
+                yield role, value
             role = CREDIT_TRAILERS.get(trailer.group(1).lower()) if trailer else None
-            value = [trailer.group(2)] if role else []
+            value = trailer.group(2) if role else ""
         elif role:
-            value.append(line.strip())
+            separator = _credit_separator(value, line)
+            if separator is not None:
+                name, email, login = parse_person(line.strip())
+                if report and role == "reviewer" and value.rstrip().endswith(",") and name and not (email or login):
+                    report(f"Name-only continuation: {line.strip()}")
+                value = f"{value}{separator}{line.strip()}".strip()
+            else:
+                if value:
+                    yield role, value
+                if report:
+                    report(line.strip())
+                role, value = None, ""
+
+        # Squash messages sometimes contain several credit fields on the same line.
+        while role:
+            inline = re.search(r"(?:^|\s+)(co-authored-by|generated-by|reviewers?)\s*:\s*", value,
+                               flags=re.IGNORECASE)
+            if not inline:
+                break
+            if value[:inline.start()].strip():
+                yield role, value[:inline.start()].strip()
+            role = CREDIT_TRAILERS[inline.group(1).lower()]
+            value = value[inline.end():]
+
+
+def _credit_separator(value, line):
+    """Return how to join a continuation, or None when the line is not a credit."""
+    text = line.strip()
+    # An email may itself be wrapped. Join its suffix without introducing a space.
+    if re.search(r"<[^<>]*$", value) and re.fullmatch(r"[^<>\s]+>", text):
+        return ""
+    if not value or value.rstrip().endswith(","):
+        return " "
+    if any(any(parse_person(person, bare_after_name=False)[1:]) for person in split_people(text)):
+        return " "
+    last = split_people(value)[-1]
+    if line[:1].isspace() and not any(parse_person(last)[1:]):
+        return " "
+    return None
 
 
 def split_people(value):
@@ -199,22 +272,25 @@ def split_people(value):
     return [person.strip() for person in people if person.strip()]
 
 
-def parse_person(text):
+def parse_person(text, bare_after_name=True):
     """
     Return (name, email, login) for one person, any of which may be None.
+
+    An email or login without brackets is also read after a name, as in "Ann Lee ann@x", unless
+    bare_after_name is False. Prose such as "Thanks to ann@x" looks the same, so callers pass
+    False where only a comma tells a person from the text around it.
     """
     match = PERSON.match(text.strip())
     if match is None:
-        return text.strip() or None, None, None
+        return None, None, None
     name = match.group("quoted") if match.group("quoted") is not None else match.group("name")
     name = name.strip() or None
     email = (match.group("email") or match.group("md_email") or "").strip() or None
     login = match.group("login")
     if name and not email and not login:
-        if name.startswith("@"):
-            name, login = None, name[1:]
-        elif re.fullmatch(r"[^@\s]+@[^@\s]+", name):
-            name, email = None, name
+        bare = BARE_CONTACT.match(name)
+        if bare and (bare_after_name or not bare.group("name")):
+            name, email, login = bare.group("name"), bare.group("email"), bare.group("login")
     return name, email, login
 
 
@@ -315,22 +391,60 @@ def names_to_check(groups, release_commits, mailmap=MAILMAP):
       - a wrong email in a single commit merges two people, so that one of them is not listed,
       - people that share no email, name or login are not merged, so they are listed twice.
     """
-    merged = []
+    # Groups with unrelated names are listed first, so that the many typos and variants do
+    # not hide them.
+    unrelated, variants = [], []
     for group in groups:
         names = sorted({credit.shown_name() for credit in group}, key=str.casefold)
-        if _may_be_different_people(names):
-            merged.append(f"  {best_name(group, release_commits)} <= {', '.join(names)}")
+        names_by_email = defaultdict(set)
+        for credit in group:
+            if credit.name and credit.email:
+                names_by_email[credit.email.lower()].add(_normalize(credit.name))
+        # A shared first or last name does not rule out a wrong email. Ignore differences
+        # in case, accents and punctuation, but ask the manager to check other aliases.
+        email_conflict = any(len(aliases) > 1 for aliases in names_by_email.values())
+        different_names = len({_normalize(name) for name in names}) > 1
+        if different_names and (_may_be_different_people(names) or email_conflict):
+            examples = {}
+            for credit in group:
+                key = (_normalize(credit.shown_name()), (credit.email or "").lower())
+                examples.setdefault(key, credit)
+            details = []
+            for key in sorted(examples):
+                credit = examples[key]
+                contact = credit.shown_name()
+                if credit.name and credit.email:
+                    contact += f" <{credit.email}>"
+                elif credit.login:
+                    contact += f" (github:{credit.login})"
+                details.append(f"    {credit.commit[:12]} {credit.role}: {contact}")
+            section = unrelated if _have_unrelated_names(names) else variants
+            section.append((best_name(group, release_commits), names, details))
 
     shown = sorted({best_name(group, release_commits) for group in groups}, key=str.casefold)
     similar = [f"  {a}, {b}" for a, b in itertools.combinations(shown, 2) if _may_be_same_person(a, b)]
 
     lines = []
-    if merged:
-        lines += ["Check that these names are of the same person:"] + sorted(merged, key=str.casefold)
+    for heading, section in (
+        ("Check that these names are of the same person:", unrelated),
+        ("These names look like typos or variants of one name, and were grouped too:", variants),
+    ):
+        section.sort(key=lambda entry: entry[0].casefold())
+        if section:
+            lines.append(heading)
+            lines.extend(f"  {name} <= {', '.join(aliases)}" for name, aliases, _ in section)
     if similar:
         lines += ["Check whether these names are of the same person:"] + similar
+    if unrelated or variants:
+        lines.append("Commit evidence for grouped names:")
+        for name, _, details in unrelated + variants:
+            lines.append(f"  {name}:")
+            lines.extend(details)
     if lines:
-        lines.append(f"Fix any mistake in {os.path.relpath(mailmap, repo_dir)}")
+        mailmap_path = os.path.relpath(mailmap, repo_dir)
+        if mailmap_path == os.pardir or mailmap_path.startswith(os.pardir + os.sep):
+            mailmap_path = os.path.abspath(mailmap)
+        lines.append(f"Fix any mistake in {mailmap_path}")
     return lines
 
 
@@ -342,6 +456,26 @@ def _may_be_different_people(names):
     words = [{_normalize(word) for word in name.split()} - {""} for name in names]
     full_names = [name_words for name_words in words if len(name_words) > 1]
     return any(not a & b for a, b in itertools.combinations(full_names, 2))
+
+
+def _have_unrelated_names(names):
+    # Most reported groups are typos or variants of one name, such as "David Jaco" and
+    # "David Jacot", or "nileshkumar3" and "Nilesh Kumar". Names that have nothing in common
+    # are listed before them, as that is what a wrong email looks like. A login next to a full
+    # name ("showuon" and "Luke Chen") looks the same, so it is listed with them.
+    return any(not _share_a_word(a, b) for a, b in itertools.combinations(names, 2))
+
+
+def _share_a_word(a, b):
+    # Whether a word of one name is a word of the other, or is found inside it, as in
+    # "Alieh" and "aliehsaeedii". Short words are only compared as whole words, as they are
+    # found inside most names.
+    for name, other in ((a, b), (b, a)):
+        other_words = {_normalize(word) for word in other.split()}
+        for word in {_normalize(word) for word in name.split()} - {""}:
+            if word in other_words or (len(word) >= 3 and word in _normalize(other)):
+                return True
+    return False
 
 
 def _may_be_same_person(a, b):
@@ -384,16 +518,40 @@ def _clean_name(name):
     return re.sub(r"^(?:(?i:reviewers?\s*:)|and\s|&|[^\w(\"])+\s*", "", name) or None
 
 
-def _ai_tool_name(credit):
+def _ai_tool_name(credit, ai_names=None):
     """
     Return the name to show for the AI tool of a credit, or None if it is not for a known AI tool.
+    ai_names is the result of _ai_names_with_email(), for the credits without an email.
     """
     for email_pattern, name in AI_TOOLS:
         if credit.email and re.search(email_pattern, credit.email.lower()):
             return name or _without_parentheses(credit.name)
     if credit.role == "ai":
         return _without_parentheses(credit.name)
+    if credit.role == "author" and not (credit.email or credit.login):
+        if CODEX_MODEL_NAME.fullmatch(credit.name or ""):
+            return "OpenAI Codex"
+        return (ai_names or {}).get(_ai_name_key(credit.name))
     return None
+
+
+def _ai_names_with_email(credits):
+    """
+    Return the names that the credits use with the email of an AI tool, with the name to show
+    for each. A tool is sometimes credited without its email, e.g. "Co-authored-by: Claude
+    Opus 5.5", and is then recognized by such a name. Matching a word such as "Claude" instead
+    would drop the people with that name from the list.
+    """
+    names = {}
+    for credit in credits:
+        ai_name = _ai_tool_name(credit) if credit.email else None
+        if ai_name and _ai_name_key(credit.name):
+            names[_ai_name_key(credit.name)] = ai_name
+    return names
+
+
+def _ai_name_key(name):
+    return _normalize(_without_parentheses(name) or "")
 
 
 def _without_parentheses(name):
