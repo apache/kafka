@@ -292,6 +292,7 @@ org.apache.kafka.controller.QuorumFeaturesTest:
 - testDefaultFeatureMapWithUnstable
 - testIsVoterId
 - testLocalSupportedFeature
+- testMirrorVersionRequiresUnstableFeatures
 - testReasonNotSupported
 - testVoterIdsAreSuppliedOnEveryCall
 org.apache.kafka.controller.RaftClientVotersSupplierTest:
@@ -962,6 +963,7 @@ org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisherTest:
 - testUserClientQuotaUpdateAndRemoval
 org.apache.kafka.metadata.storage.FormatterTest:
 - testDirectories
+- testExplicitMirrorVersionAtSupportedMetadataVersion
 - testFeatureFlag
 - testFormatElrEnabledWithMetadataVersions
 - testFormatWithInitialVoters
@@ -980,6 +982,9 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testFormattingCreatesLogDirId
 - testIgnoreFormatted
 - testInvalidFeatureFlag
+- testMirrorVersionDisabledByDefault
+- testMirrorVersionRequiresNewMetadataVersion
+- testMirrorVersionRequiresUnstableOptIn
 - testOneDirectoryFormattedAndOthersNotFormatted
 - testOneDirectoryFormattedAndOthersNotFormattedWithIgnoreFormatted
 - testSkipsBootstrapSnapshotWhenDisabled

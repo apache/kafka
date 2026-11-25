@@ -167,6 +167,7 @@ org.apache.kafka.server.BrokerFeaturesTest:
 - testEmpty
 - testIncompatibilitiesDueToAbsentFeature
 - testIncompatibilitiesDueToIncompatibleFeature
+- testMirrorVersionRequiresUnstableFeatures
 org.apache.kafka.server.BrokerRegistrationRequestTest:
 - shouldRegisterWhenSupportedRangeAndNotMigrating
 - shouldRejectRegistrationWhenFeatureLevelTooHigh

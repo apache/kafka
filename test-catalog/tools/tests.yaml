@@ -336,6 +336,8 @@ org.apache.kafka.tools.FeatureCommandTest:
 - testIncompatibleUpgradeFlags
 - testInvalidReleaseVersion
 - testLevelToString
+- testMirrorVersionCanBeEnabledAndDisabled
+- testMirrorVersionRequiresNewMetadataVersion
 - testParseNameAndLevel
 - testUpgradeMetadataVersionWithKraft
 - testUpgradeWithReleaseVersion

@@ -72,6 +72,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorServiceTest:
 - testWriteStateValidationsError
 - testWriteStateWhenNotStarted
 org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
+- testColdSnapshotResetsSnapshotUpdateCount
 - testDeleteNullMetadataImage
 - testDeletePartitionIdNonExistentInMetadataImage
 - testDeleteStateInvalidRequestData
@@ -101,10 +102,11 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testReadStateSummaryInvalidRequestData
 - testReadStateSummarySuccess
 - testReplayWithShareSnapshot
+- testSnapshotColdPartitionsConsidersUpdatesAfterColdSnapshot
 - testSnapshotColdPartitionsDoesNotPerpetuallySnapshot
 - testSnapshotColdPartitionsNoEligiblePartitions
 - testSnapshotColdPartitionsPartialEligiblePartitions
-- testSnapshotColdPartitionsSnapshotUpdateNotConsidered
+- testSnapshotColdPartitionsSnapshotsPendingUpdate
 - testSnapshotUpdateCountBoundary
 - testSubsequentWriteStateSnapshotEpochUpdatesSuccessfully
 - testWriteFailsOnUninitializedPartition
