@@ -252,7 +252,18 @@ public class TaskManager {
                 .filter(t -> t.state() == Task.State.RUNNING)
                 .filter(t -> !corruptedTasks.contains(t.id()))
                 .collect(Collectors.toSet());
-            commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, new HashMap<>());
+            final int committed = commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, new HashMap<>());
+            if (committed == -1 && processingMode == EXACTLY_ONCE_V2 && !corruptedActiveTasks.isEmpty()) {
+                final Set<Task> uncommittedActiveTasks = tasksToCommit.stream()
+                    .filter(Task::isActive)
+                    .filter(Task::commitNeeded)
+                    .collect(Collectors.toSet());
+                if (!uncommittedActiveTasks.isEmpty()) {
+                    log.info("Could not commit tasks {} during rebalance before aborting the transaction, these will be closed and revived",
+                        uncommittedActiveTasks.stream().map(Task::id).collect(Collectors.toSet()));
+                    closeDirtyAndRevive(uncommittedActiveTasks, false);
+                }
+            }
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
                          "tasks to clean and revive: {}", e.corruptedTasks());
