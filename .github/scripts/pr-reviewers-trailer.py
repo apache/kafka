@@ -336,10 +336,18 @@ if __name__ == "__main__":
         # Adding a second trailer would hide the problem. The PR linter reports it.
         logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
         exit(0)
-    new_value = ", ".join(existing_reviewers)
+    # Drop empty names, for example after a comma at the end of the line.
+    names = [name.strip() for name in ", ".join(existing_reviewers).split(",") if name.strip()]
+    new_value = ", ".join(names)
     if not reviewer_login:
-        if len(existing_reviewers) != 1:
+        if len(existing_reviewers) != 1 or not names:
             logger.info("No single Reviewers trailer to format; nothing to do.")
+            exit(0)
+        newline = "\r\n" if "\r\n" in body else "\n"
+        if fold_reviewers(new_value).replace("\n", newline) in body:
+            # Only the trailer text matters here. Do not touch a description
+            # whose trailer already has the standard format.
+            logger.info("Reviewers trailer already has the standard format; nothing to do.")
             exit(0)
     elif already_exists(identity, existing_reviewers):
         logger.info(f"Reviewer {resolved} already present.")

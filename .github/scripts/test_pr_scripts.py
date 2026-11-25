@@ -227,6 +227,20 @@ class ReviewersTrailerTest(unittest.TestCase):
             gh.edited_body())
         self.assertEqual([], [c for c in gh.calls() if c[0] == "api"])
 
+    def test_edit_of_the_description_leaves_a_standard_trailer_alone(self):
+        folded = add_reviewer("Fix the thing.\n\nReviewers: Alice <alice@example.com>, Bob <bob@example.com>\n").edited_body()
+        for body in (folded,
+                     folded.replace("\n", "\r\n"),
+                     "Fix the thing.\n\nReviewers: A <a@example.com>\nGenerated-by: Some Tool\n",
+                     "Fix the thing.\n\nReviewers: A <a@example.com>, B <b@example.com>,\n"):
+            gh = FakeGh(body)
+            self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode, repr(body))
+            self.assertIsNone(gh.edited_body(), repr(body))
+
+    def test_comma_at_the_end_of_the_trailer_is_dropped(self):
+        edited = add_reviewer("Fix the thing.\n\nReviewers: A <a@example.com>,\n").edited_body()
+        self.assertEqual("Fix the thing.\n\nReviewers: A <a@example.com>, New Person <new@example.com>\n", edited)
+
     def test_edit_of_the_description_adds_no_trailer(self):
         for body in ("Fix the thing.\n",
                      "Fix the thing.\n\nReviewers: A <a@example.com>\n",
