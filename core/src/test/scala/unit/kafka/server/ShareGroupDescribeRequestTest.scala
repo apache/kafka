@@ -109,7 +109,9 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
             .setGroupId("grp-1")
             .setGroupState(GroupState.STABLE.toString)
             .setGroupEpoch(2)
-            .setAssignmentEpoch(2)
+            // The subscribed topic does not exist, so no share partitions are initialized and
+            // the group stays at the initial assignment epoch.
+            .setAssignmentEpoch(1)
             .setAssignorName("simple")
             .setAuthorizedOperations(authorizedOperationsInt)
             .setMembers(List(

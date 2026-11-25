@@ -5891,6 +5891,10 @@ public class GroupMetadataManagerTest {
             )))
         ));
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Session timer is scheduled on first heartbeat.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
             context.shareGroupHeartbeat(
@@ -19741,6 +19745,8 @@ public class GroupMetadataManagerTest {
             true
         );
 
+        // The share partitions of group-id-2 are not initialized yet, so its target assignment
+        // has not been computed and the member stays at the initial assignment epoch.
         List<ShareGroupDescribeResponseData.DescribedGroup> expected = List.of(
             new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(100)
@@ -19750,11 +19756,11 @@ public class GroupMetadataManagerTest {
                 .setAssignorName("share-range"),
             new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(16)
-                .setAssignmentEpoch(16)
+                .setAssignmentEpoch(1)
                 .setGroupId(groupIds.get(1))
                 .setMembers(List.of(
                     new ShareGroupMember.Builder(memberId)
-                        .setMemberEpoch(16)
+                        .setMemberEpoch(1)
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(List.of(topicName))
@@ -19824,13 +19830,13 @@ public class GroupMetadataManagerTest {
             "MemberId should remain unchanged, as the server does not generate a new one since the consumer generates its own."
         );
 
-        // The response should get a bumped epoch and should not
-        // contain any assignment because we did not provide
-        // topics metadata.
+        // The response contains an empty assignment because no share partitions have been
+        // initialized yet. The target assignment is not computed until they are, so the
+        // member stays at the initial assignment epoch.
         assertEquals(
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()),
             result.response().getKey()
@@ -19973,6 +19979,74 @@ public class GroupMetadataManagerTest {
             true
         );
 
+        // The share partitions are not initialized yet, so the target assignment is not computed
+        // and the member gets an empty assignment.
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of())),
+            result.response().getKey()
+        );
+
+        ShareGroupMember expectedJoinedMember = new ShareGroupMember.Builder(memberId)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setSubscribedTopicNames(List.of("foo", "bar"))
+            .setAssignedPartitions(Map.of())
+            .build();
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedJoinedMember),
+            GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
+                fooTopicName, computeTopicHash(fooTopicName, coordinatorMetadataImage),
+                barTopicName, computeTopicHash(barTopicName, coordinatorMetadataImage)
+            ))),
+            GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedJoinedMember),
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5)),
+                    mkShareGroupStateMetadataEntry(barTopicId, barTopicName, List.of(0, 1, 2))
+                )),
+                Map.of(),
+                Map.of()
+            )
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+
+        // The share partitions are initialized, which schedules a timer that computes the target assignment.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(
+                fooTopicId, Set.of(0, 1, 2, 3, 4, 5),
+                barTopicId, Set.of(0, 1, 2)
+            ))
+            .records()
+            .forEach(context::replay);
+
+        assertEquals(
+            List.of(new ExpiredTimeout<>(
+                GroupMetadataManager.shareGroupTargetAssignmentAfterInitializationKey(groupId),
+                new CoordinatorResult<>(List.of(
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 0, 1, 2)
+                    )),
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())
+                ))
+            )),
+            context.sleep(0)
+        );
+
+        // The member heartbeats again and receives the assignment.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(1));
+
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId)
@@ -19989,41 +20063,6 @@ public class GroupMetadataManagerTest {
                     ))),
             result.response().getKey()
         );
-
-        ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
-            .setClientId(DEFAULT_CLIENT_ID)
-            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(0)
-            .setSubscribedTopicNames(List.of("foo", "bar"))
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 0, 1, 2)
-            ))
-            .build();
-
-        List<CoordinatorRecord> expectedRecords = List.of(
-            GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, coordinatorMetadataImage),
-                barTopicName, computeTopicHash(barTopicName, coordinatorMetadataImage)
-            ))),
-            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 0, 1, 2)
-            )),
-            GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
-            GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember),
-            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                    mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5)),
-                    mkShareGroupStateMetadataEntry(barTopicId, barTopicName, List.of(0, 1, 2))
-                )),
-                Map.of(),
-                Map.of()
-            )
-        );
-
-        assertRecordsEquals(expectedRecords, result.records());
     }
 
     private Map<Uuid, InitMapValue> mkShareGroupStateMap(List<Map.Entry<Uuid, Map.Entry<String, Set<Integer>>>> entries) {
@@ -20039,6 +20078,19 @@ public class GroupMetadataManagerTest {
             topicId,
             Map.entry(topicName, new LinkedHashSet<>(partitions))
         );
+    }
+
+    /**
+     * Sets the initialized share partitions of a share group, replacing any existing state
+     * metadata. The assignor does not run for a share group without a target assignment until
+     * some of its share partitions have been initialized.
+     */
+    private void replayInitializedSharePartitions(
+        GroupMetadataManagerTestContext context,
+        String groupId,
+        List<Map.Entry<Uuid, Map.Entry<String, Set<Integer>>>> entries
+    ) {
+        context.replay(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), mkShareGroupStateMap(entries), Map.of()));
     }
 
     @Test
@@ -20182,7 +20234,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(fooTopicName, barTopicName)));
-        assertEquals(101, result.response().getKey().memberEpoch());
+        // The share partitions are not initialized yet, so the member stays at the initial
+        // assignment epoch.
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -20220,15 +20274,20 @@ public class GroupMetadataManagerTest {
             .thenThrow(new PartitionAssignorException("Assignment failed."))
             .thenReturn(new GroupAssignment(Map.of()));
 
+        Uuid fooTopicId = Uuid.randomUuid();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
             .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(Uuid.randomUuid(), "foo", 1)
+                .addTopic(fooTopicId, "foo", 1)
                 .buildCoordinatorMetadataImage())
             .build();
+
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, "foo", List.of(0))
+        ));
 
         // Member 1 joins the group.
         context.shareGroupHeartbeat(
@@ -26630,7 +26689,9 @@ public class GroupMetadataManagerTest {
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(2, result.response().getKey().memberEpoch());
+        // The share partitions are not initialized yet, so the member stays at the initial
+        // assignment epoch.
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
@@ -27054,7 +27115,9 @@ public class GroupMetadataManagerTest {
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(2, result.response().getKey().memberEpoch());
+        // The share partitions are not initialized yet, so the member stays at the initial
+        // assignment epoch.
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         // Verify default heartbeat interval and session timeout before config update.
         assertEquals(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
@@ -31779,11 +31842,13 @@ public class GroupMetadataManagerTest {
             )
         ));
 
+        // The member is still at the initial assignment epoch because its share partitions were
+        // not initialized when it joined.
         result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId.toString())
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setSubscribedTopicNames(null));
 
         expected = newShareGroupStatePartitionMetadataRecord(
@@ -31804,7 +31869,8 @@ public class GroupMetadataManagerTest {
         assertRecordEquals(expected, actual.get());
 
         // t1 is already initialized, so its newly added partitions (2, 3) must start at offset 0
-        // to avoid losing records produced before initialization completes.
+        // to avoid losing records produced before initialization completes. The group epoch is not
+        // bumped again because the target assignment for epoch 2 had not been computed yet.
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
             Map.of(
@@ -31813,12 +31879,12 @@ public class GroupMetadataManagerTest {
             ),
             Map.of(t1Uuid, 0L),
             groupId,
-            3,
+            2,
             true
         );
 
         assertEquals(Map.of(t1Uuid, Set.of(0, 1), t2Uuid, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
-        verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
+        verify(context.metrics, times(1)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -31908,11 +31974,13 @@ public class GroupMetadataManagerTest {
             )
         ));
 
+        // The member is still at the initial assignment epoch because its share partitions were
+        // not initialized when it joined.
         result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId.toString())
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setSubscribedTopicNames(List.of(t1Name, t2Name, t3Name)));
 
         // Single request: t1's new partitions {2,3} (already-initialized topic) start at 0, while
@@ -35557,6 +35625,10 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Member 1 joins the group and gets an assignment immediately.
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
             memberId1, new MemberAssignmentImpl(mkAssignment(
@@ -35604,13 +35676,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
                 )),
                 GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
-                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1),
-                GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                        mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
-                    )),
-                    Map.of(),
-                    Map.of()
-                )
+                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1)
             ),
             result1.records()
         );
@@ -35732,6 +35798,10 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Member 1 joins the group and gets no assignment yet.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result1 = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -35765,13 +35835,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
                 ))),
-                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1),
-                GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                        mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
-                    )),
-                    Map.of(),
-                    Map.of()
-                )
+                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1)
             ),
             result1.records()
         );
@@ -35908,6 +35972,10 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Member 1 joins the group and gets no assignment yet.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result1 = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -35941,13 +36009,7 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
                 ))),
-                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1),
-                GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                        mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
-                    )),
-                    Map.of(),
-                    Map.of()
-                )
+                GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember1)
             ),
             result1.records()
         );
@@ -36103,29 +36165,350 @@ public class GroupMetadataManagerTest {
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
     }
 
+    /**
+     * Tests a fresh share group whose share partitions finish initializing before the member's
+     * next heartbeat (the acknowledgement heartbeat). The empty first assignment is skipped, and
+     * the assignor run is triggered when the share partitions are initialized. The offloaded
+     * assignment is installed before the next heartbeat, so that heartbeat returns the initialized
+     * partitions.
+     */
     @Test
-    public void testShareGroupAsyncTargetAssignmentWithPartitionInitialization() {
+    public void testShareGroupAsyncTargetAssignmentWithPartitionInitializationBeforeNextHeartbeat() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        SimpleAssignor assignor = new SimpleAssignor();
+        GroupMetadataManagerTestContext context = shareGroupPartitionInitializationContext(fooTopicId, fooTopicName);
 
+        // The member joins the group and gets no assignment yet. The share partitions start
+        // initializing and the assignor run is skipped since nothing can be assigned yet.
+        joinShareGroupBeforePartitionInitialization(context, groupId, memberId, fooTopicId, fooTopicName);
+
+        // The share partitions are initialized, which schedules a timer that triggers the assignor run.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)))
+            .records()
+            .forEach(context::replay);
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+        context.sleep(0);
+
+        // Assignor for epoch 2 is scheduled on executor and assigns the initialized share partitions.
+        processTasksAndAssertInitializedPartitionsAssigned(context, groupId, memberId, fooTopicId);
+
+        // The member heartbeats again and receives the assignment.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result2 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(1));
+
+        assertShareGroupHeartbeatReceivesInitializedPartitions(result2, memberId, fooTopicId);
+    }
+
+    /**
+     * Tests a fresh share group whose share partitions finish initializing after the member's
+     * next heartbeat (the acknowledgement heartbeat). That heartbeat skips the assignor run again,
+     * and the run is triggered when the share partitions are initialized instead of waiting for
+     * another heartbeat.
+     */
+    @Test
+    public void testShareGroupAsyncTargetAssignmentWithPartitionInitializationAfterNextHeartbeat() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        GroupMetadataManagerTestContext context = shareGroupPartitionInitializationContext(fooTopicId, fooTopicName);
+
+        // The member joins the group and gets no assignment yet. The share partitions start
+        // initializing and the assignor run is skipped since nothing can be assigned yet.
+        joinShareGroupBeforePartitionInitialization(context, groupId, memberId, fooTopicId, fooTopicName);
+
+        // The member heartbeats again before the share partitions are initialized. The assignor
+        // run is skipped again.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result2 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(1));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000),
+            result2.response().getKey()
+        );
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+
+        // The share partitions are initialized, which schedules a timer that triggers the assignor run.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)))
+            .records()
+            .forEach(context::replay);
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+        context.sleep(0);
+
+        // Assignor for epoch 2 is scheduled on executor and assigns the initialized share partitions.
+        processTasksAndAssertInitializedPartitionsAssigned(context, groupId, memberId, fooTopicId);
+
+        // The member heartbeats again and receives the assignment.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result3 = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(1));
+
+        assertShareGroupHeartbeatReceivesInitializedPartitions(result3, memberId, fooTopicId);
+    }
+
+    /**
+     * Tests a new member that joins an existing share group with an extra topic subscription. The
+     * target assignment for the member's join is installed before the extra topic's share partitions
+     * are initialized, so initialization does not trigger an assignor run. The next heartbeat bumps
+     * the group epoch to assign the newly initialized share partitions.
+     */
+    @Test
+    public void testShareGroupNewMemberWithExtraTopicJoinsExistingGroup() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
+        // Member 1 joins the group subscribed to foo.
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            ))
+        )));
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(fooTopicName)));
+        assertEquals(2, result.response().getKey().memberEpoch());
+
+        // Member 2 joins the group subscribed to foo and bar. The target assignment for epoch 3 is
+        // installed while the share partitions of bar are still initializing.
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)
+            ))
+        )));
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName)));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(3)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(3, 4, 5))
+                    ))),
+            result.response().getKey()
+        );
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(barTopicId, Set.of(0, 1, 2)),
+            groupId,
+            3,
+            true
+        );
+
+        // The share partitions of bar are initialized. The target assignment is already up to
+        // date with the group epoch, so the timer does not trigger an assignor run.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(barTopicId, Set.of(0, 1, 2)))
+            .records()
+            .forEach(context::replay);
+
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            ))
+        )));
+
+        List<ExpiredTimeout<CoordinatorRecord>> timeouts = context.sleep(0);
+        assertEquals(1, timeouts.size());
+        assertEquals(GroupMetadataManager.shareGroupTargetAssignmentAfterInitializationKey(groupId), timeouts.get(0).key());
+        assertEquals(List.of(), timeouts.get(0).result().records());
+
+        ShareGroup group = context.groupMetadataManager.shareGroup(groupId);
+        assertEquals(3, group.groupEpoch());
+        assertEquals(3, group.assignmentEpoch());
+
+        // Member 2 heartbeats again. The group epoch is bumped to assign the share partitions of bar.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(3));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(4)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(3, 4, 5)),
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(List.of(0, 1, 2))
+                    ))),
+            result.response().getKey()
+        );
+    }
+
+    /**
+     * Tests a share group without members whose share partitions are initialized after its
+     * offsets are altered. Altering the offsets bumps the group epoch but not the assignment
+     * epoch. The timer does not trigger an assignor run for the empty group.
+     */
+    @Test
+    public void testShareGroupPartitionInitializationTimerWithEmptyGroup() {
+        String groupId = "fooup";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        GroupMetadataManagerTestContext context = shareGroupPartitionInitializationContext(fooTopicId, fooTopicName);
+
+        // The offsets of a new group are altered, which creates the group without any members.
+        context.groupMetadataManager.alterShareGroupOffsets(
+                groupId,
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                    new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                        .setTopicName(fooTopicName)
+                        .setPartitions(List.of(
+                            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                                .setPartitionIndex(0)
+                                .setStartOffset(10L)
+                        ))
+                )))
+            .records()
+            .forEach(context::replay);
+
+        // The share partition is initialized, which schedules the timer.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0)))
+            .records()
+            .forEach(context::replay);
+
+        ShareGroup group = context.groupMetadataManager.shareGroup(groupId);
+        assertTrue(group.isEmpty());
+        assertEquals(2, group.groupEpoch());
+        assertEquals(1, group.assignmentEpoch());
+
+        // The timer fires and does nothing.
+        List<ExpiredTimeout<CoordinatorRecord>> timeouts = context.sleep(0);
+        assertEquals(1, timeouts.size());
+        assertEquals(GroupMetadataManager.shareGroupTargetAssignmentAfterInitializationKey(groupId), timeouts.get(0).key());
+        assertEquals(List.of(), timeouts.get(0).result().records());
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+    }
+
+    /**
+     * Tests a fresh share group that is deleted after its share partitions are initialized but
+     * before the timer fires. The timer does not trigger an assignor run for the deleted group.
+     */
+    @Test
+    public void testShareGroupPartitionInitializationTimerWithDeletedGroup() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        GroupMetadataManagerTestContext context = shareGroupPartitionInitializationContext(fooTopicId, fooTopicName);
+
+        joinShareGroupBeforePartitionInitialization(context, groupId, memberId, fooTopicId, fooTopicName);
+
+        // The share partitions are initialized, which schedules the timer.
+        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)))
+            .records()
+            .forEach(context::replay);
+
+        // The member leaves and the group is deleted before the timer fires.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, records);
+        records.forEach(context::replay);
+        context.commit();
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup(groupId));
+
+        // The timer fires and does nothing.
+        List<ExpiredTimeout<CoordinatorRecord>> timeouts = context.sleep(0);
+        assertEquals(1, timeouts.size());
+        assertEquals(GroupMetadataManager.shareGroupTargetAssignmentAfterInitializationKey(groupId), timeouts.get(0).key());
+        assertEquals(List.of(), timeouts.get(0).result().records());
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+    }
+
+    private static GroupMetadataManagerTestContext shareGroupPartitionInitializationContext(
+        Uuid fooTopicId,
+        String fooTopicName
+    ) {
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+        // Use the default assignment interval to show that it does not delay the first assignment.
+        return new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, true)
-            .withShareGroupAssignor(assignor)
+            .withShareGroupAssignor(new SimpleAssignor())
             .withMetadataImage(metadataImage)
             .build();
+    }
 
-        // The member joins the group and gets no assignment yet. The share partitions start initializing.
-        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result1 = context.shareGroupHeartbeat(
+    private void joinShareGroupBeforePartitionInitialization(
+        GroupMetadataManagerTestContext context,
+        String groupId,
+        String memberId,
+        Uuid fooTopicId,
+        String fooTopicName
+    ) {
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -36139,59 +36522,25 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of())),
-            result1.response().getKey()
+            result.response().getKey()
         );
         verifyShareGroupHeartbeatInitializeRequest(
-            result1.response().getValue(),
+            result.response().getValue(),
             Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)),
             groupId,
             2,
             true
         );
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+    }
 
-        // Assignor for epoch 2 is scheduled on executor.
+    private static void processTasksAndAssertInitializedPartitionsAssigned(
+        GroupMetadataManagerTestContext context,
+        String groupId,
+        String memberId,
+        Uuid fooTopicId
+    ) {
         assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-
-        // The share partitions are initialized while the assignor is running.
-        context.groupMetadataManager.initializeShareGroupState(groupId, Map.of(fooTopicId, Set.of(0, 1, 2, 3, 4, 5)))
-            .records()
-            .forEach(context::replay);
-
-        // Assignor completes on executor. The share partitions were still initializing when the run
-        // was scheduled, so nothing is assigned.
-        assertEquals(
-            List.of(
-                new MockCoordinatorExecutor.ExecutorResult<>(
-                    GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId),
-                    new CoordinatorResult<>(List.of(
-                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
-                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())
-                    ))
-                )
-            ),
-            context.processTasks()
-        );
-
-        // The member heartbeats again and gets no assignment yet. The group epoch is bumped to
-        // assign the initialized share partitions.
-        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result2 = context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(1));
-
-        assertResponseEquals(
-            new ShareGroupHeartbeatResponseData()
-                .setMemberId(memberId)
-                .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000),
-            result2.response().getKey()
-        );
-
-        // Assignor for epoch 3 is scheduled on executor.
-        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
-
-        // Assignor completes on executor and assigns the initialized share partitions.
         assertEquals(
             List.of(
                 new MockCoordinatorExecutor.ExecutorResult<>(
@@ -36200,24 +36549,23 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                             mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
                         )),
-                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds())
+                        GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds())
                     ))
                 )
             ),
             context.processTasks()
         );
+    }
 
-        // The member heartbeats again and receives the assignment.
-        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result3 = context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(2));
-
+    private static void assertShareGroupHeartbeatReceivesInitializedPartitions(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result,
+        String memberId,
+        Uuid fooTopicId
+    ) {
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(3)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -36225,7 +36573,7 @@ public class GroupMetadataManagerTest {
                             .setTopicId(fooTopicId)
                             .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                     ))),
-            result3.response().getKey()
+            result.response().getKey()
         );
     }
 
@@ -36759,6 +37107,10 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Member joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -36896,7 +37248,8 @@ public class GroupMetadataManagerTest {
         context.commit();
 
         // Member 2 joins with the share protocol, creating a new share group. The stale assignor
-        // run is cancelled and replaced.
+        // run is cancelled. No new run is scheduled since the share partitions of the new share
+        // group are not initialized yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -36905,7 +37258,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(List.of(fooTopicName)));
 
         assertEquals(List.of(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)), context.executor.cancelledTasks());
-        assertTrue(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
+        assertFalse(context.executor.isScheduled(GroupMetadataManager.groupTargetAssignmentUpdateKey(groupId)));
     }
 
     @Test
@@ -36928,6 +37281,10 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .withMetadataImage(metadataImage)
             .build();
+
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
 
         // Member joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
@@ -37180,6 +37537,10 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(metadataImage)
             .build();
 
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
+
         // Member 1 joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -37321,6 +37682,10 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .withMetadataImage(metadataImage)
             .build();
+
+        replayInitializedSharePartitions(context, groupId, List.of(
+            mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5))
+        ));
 
         // Member joins the group and gets no assignment yet.
         context.shareGroupHeartbeat(

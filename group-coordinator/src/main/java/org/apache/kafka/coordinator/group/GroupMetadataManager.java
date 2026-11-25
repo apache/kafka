@@ -309,11 +309,11 @@ public class GroupMetadataManager {
 
         private static UpdateTargetAssignmentResult<Assignment> fromLastTargetAssignment(
             ShareGroup group,
-            ShareGroupMember member
+            Optional<ShareGroupMember> member
         ) {
             return new UpdateTargetAssignmentResult<>(
                 group.assignmentEpoch(),
-                group.targetAssignment(member.memberId())
+                member.map(m -> group.targetAssignment(m.memberId())).orElse(Assignment.EMPTY)
             );
         }
     }
@@ -3164,7 +3164,7 @@ public class GroupMetadataManager {
         UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
             group,
             groupEpoch,
-            updatedMember,
+            Optional.of(updatedMember),
             subscriptionType,
             records
         );
@@ -4700,16 +4700,17 @@ public class GroupMetadataManager {
      *
      * @param group            The ShareGroup.
      * @param groupEpoch       The group epoch.
-     * @param updatedMember    The updated member.
+     * @param updatedMember    The updated member, or empty when no member triggered the update.
      * @param subscriptionType The group subscription type.
      * @param records          The list to accumulate any new records.
-     * @return The new target assignment if it was computed in this call, otherwise the last
-     *         target assignment.
+     * @return The new target assignment of the updated member if it was computed in this call,
+     *         otherwise its last target assignment. If no member is supplied, the member
+     *         assignment is empty.
      */
     private UpdateTargetAssignmentResult<Assignment> maybeUpdateTargetAssignment(
         ShareGroup group,
         int groupEpoch,
-        ShareGroupMember updatedMember,
+        Optional<ShareGroupMember> updatedMember,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -4737,6 +4738,22 @@ public class GroupMetadataManager {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
+        ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
+            groupId,
+            ShareGroupStatePartitionMetadataInfo.EMPTY
+        );
+
+        if (group.targetAssignment().isEmpty() && statePartitionMetadata.initializedTopics().isEmpty()) {
+            // The group has no target assignment, so there is nothing to revoke, and none of its
+            // share partitions are initialized, so the assignor could only compute an empty
+            // assignment. Skip the run so that no assignment timestamp is recorded and the assignment
+            // interval does not delay the assignment once share partitions are initialized.
+            // initializeShareGroupState triggers a run at that point.
+            log.debug("[GroupId {}] Skipping the target assignment update for epoch {} until share partitions are initialized.",
+                groupId, groupEpoch);
+            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+        }
+
         boolean offloadAssignor = shareGroupAssignorOffloadEnable(groupId);
 
         UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
@@ -4746,12 +4763,7 @@ public class GroupMetadataManager {
                 group.targetAssignment(),
                 ShareGroupMember::instanceId
             );
-        updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
-
-        ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
-            groupId,
-            ShareGroupStatePartitionMetadataInfo.EMPTY
-        );
+        updatedMember.ifPresent(member -> updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member));
 
         // Capture the current metadata image, since metadata updates may replace it while an
         // offloaded assignor run is in flight.
@@ -4829,7 +4841,9 @@ public class GroupMetadataManager {
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
 
-            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = updatedMember
+                .map(member -> assignmentResult.targetAssignment().get(member.memberId()))
+                .orElse(null);
             if (newMemberAssignment != null) {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
@@ -6313,7 +6327,8 @@ public class GroupMetadataManager {
 
     /**
      * Handles an initialize share group state request. This is usually part of
-     * shareGroupHeartbeat code flow.
+     * shareGroupHeartbeat code flow. It also schedules a timer that triggers a target assignment
+     * update once the returned records have been replayed.
      * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
      * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
@@ -6335,6 +6350,16 @@ public class GroupMetadataManager {
             log.debug("[GroupId {}] Could not initialize the share group state: {}", groupId, ex.getMessage());
             return new CoordinatorResult<>(List.of(), null);
         }
+
+        // The initialized share partitions can only be assigned once the records below have been
+        // replayed, so the assignor run is triggered from a timer rather than from here.
+        timer.schedule(
+            shareGroupTargetAssignmentAfterInitializationKey(groupId),
+            0,
+            TimeUnit.MILLISECONDS,
+            false,
+            () -> maybeUpdateShareGroupTargetAssignmentAfterInitialization(groupId)
+        );
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupStatePartitionMetadata.get(groupId);
         Map<Uuid, InitMapValue> enrichedTopicPartitionMap = attachInitValue(topicPartitionMap);
@@ -6373,6 +6398,44 @@ public class GroupMetadataManager {
             )),
             null
         );
+    }
+
+    /**
+     * Starts a target assignment update for a share group after share partitions have been
+     * initialized, if the group has members and the group epoch is ahead of the assignment epoch.
+     * This lets the coordinator start computing a new share group's first assignment without
+     * waiting for another heartbeat. The usual checks for an in-flight run and the assignment
+     * interval still apply.
+     *
+     * @param groupId The group id.
+     * @return A CoordinatorResult with the target assignment records if the assignor ran
+     *         synchronously, otherwise no records.
+     */
+    private CoordinatorResult<Void, CoordinatorRecord> maybeUpdateShareGroupTargetAssignmentAfterInitialization(
+        String groupId
+    ) {
+        ShareGroup group;
+        try {
+            group = shareGroup(groupId);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Skipping the target assignment after share partition initialization: {}",
+                groupId, ex.getMessage());
+            return EMPTY_RESULT;
+        }
+
+        if (group.isEmpty()) {
+            return EMPTY_RESULT;
+        }
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        maybeUpdateTargetAssignment(
+            group,
+            group.groupEpoch(),
+            Optional.empty(),
+            group.subscriptionType(),
+            records
+        );
+        return new CoordinatorResult<>(records, null);
     }
 
     /**
@@ -10706,6 +10769,20 @@ public class GroupMetadataManager {
      */
     static String consumerGroupSyncKey(String groupId, String memberId) {
         return "sync-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a share group key for the timer that updates the target assignment after share
+     * partitions have been initialized.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the timer key.
+     */
+    static String shareGroupTargetAssignmentAfterInitializationKey(String groupId) {
+        return "share-assignment-after-initialization-" + groupId;
     }
 
     /**
