@@ -11975,6 +11975,7 @@ public class GroupMetadataManagerTest {
             .setMembers(List.of(memberMetadata))
             .setProtocolType("consumer")
             .setProtocol("range")
+            .setLeader(memberMetadata.memberId())
             .setCurrentStateTimestamp(context.time.milliseconds());
 
         context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord(
@@ -11999,12 +12000,44 @@ public class GroupMetadataManagerTest {
                         .setGroupInstanceId(memberMetadata.groupInstanceId())
                         .setClientId(memberMetadata.clientId())
                         .setClientHost(memberMetadata.clientHost())
-                        .setMemberAssignment(memberMetadata.assignment())
+                        .setMemberAssignment(EMPTY_ASSIGNMENT)
                 ))
         );
 
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
             context.describeGroups(List.of("group-id"));
+
+        assertEquals(expectedDescribedGroups, describedGroups);
+
+        // The member rejoins, which completes the join phase.
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
+            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withGroupInstanceId(memberMetadata.groupInstanceId())
+                .withMemberId(memberMetadata.memberId())
+                .withDefaultProtocolTypeAndProtocols()
+                .build()
+        );
+        assertTrue(joinResult.joinFuture.isDone());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        expectedDescribedGroups = List.of(
+            new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-id")
+                .setGroupState(COMPLETING_REBALANCE.toString())
+                .setProtocolType(groupMetadataValue.protocolType())
+                .setProtocolData("")
+                .setMembers(List.of(
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId(memberMetadata.memberId())
+                        .setGroupInstanceId(memberMetadata.groupInstanceId())
+                        .setClientId(memberMetadata.clientId())
+                        .setClientHost(memberMetadata.clientHost())
+                        .setMemberAssignment(EMPTY_ASSIGNMENT)
+                ))
+        );
+
+        describedGroups = context.describeGroups(List.of("group-id"));
 
         assertEquals(expectedDescribedGroups, describedGroups);
     }
