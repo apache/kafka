@@ -18,7 +18,13 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testDLQBlankTopicNameIsValid
 - testDLQConfigCustomValues
 - testDLQConfigDefaults
+- testDLQEmptyTopicNameIsAcceptedByValidate
 - testDLQTopicNameCannotStartWithDoubleUnderscore
+- testDLQTopicNameMaxLength
+- testDLQTopicNameNotValidatedWhenAbsent
+- testDLQTopicNameReservedPrefixReportedBeforeInvalidTopicName
+- testDLQTopicNameWithInvalidTopicName
+- testDLQTopicNameWithValidTopicName
 - testEvaluateDoesNotModifyInput
 - testEvaluateEmptyPropsReturnsEmpty
 - testEvaluateMaxBoundedValueAboveMaxIsCapped
