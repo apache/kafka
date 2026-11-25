@@ -188,6 +188,26 @@ class ReviewersTrailerTest(unittest.TestCase):
             self.assertTrue(edited.startswith("Text\n\n" + last + "\n"), repr(edited))
             self.assertIn("Reviewers: New Person <new@example.com>", parsed_trailers(edited))
 
+    def test_blank_lines_with_spaces_after_the_trailer_are_ignored(self):
+        for tail in ("   \n", "\t\n\n", "\r\n\t\r\n"):
+            edited = add_reviewer("Text\n\nReviewers: A <a@example.com>\n" + tail).edited_body()
+            self.assertEqual(["Reviewers: A <a@example.com>, New Person <new@example.com>"], parsed_trailers(edited))
+            self.assertEqual(1, edited.count("Reviewers:"))
+
+    def test_space_before_the_colon_is_the_same_trailer(self):
+        first = add_reviewer("Text\n\nReviewers : A <a@example.com>\n").edited_body()
+        self.assertEqual("Text\n\nReviewers: A <a@example.com>, New Person <new@example.com>\n", first)
+        self.assertIsNone(add_reviewer(first).edited_body())
+
+    def test_description_is_left_alone_when_git_reads_it_differently(self):
+        # git skips "#" lines at the end, so its trailer block is above the heading.
+        for body in ("Text\n\nSigned-off-by: X <x@example.com>\n\n## Notes\n",
+                     "Text\n\nReviewers: A <a@example.com>\n\n## Notes\n"):
+            gh = FakeGh(body)
+            result = gh.run("pr-reviewers-trailer.py", REVIEWER_LOGIN="newperson")
+            self.assertEqual(1, result.returncode, body)
+            self.assertIsNone(gh.edited_body())
+
     def test_lower_case_reviewers_trailer_keeps_its_reviewers(self):
         edited = add_reviewer("Text\n\nreviewers: A <a@example.com>\n").edited_body()
         self.assertEqual("Text\n\nReviewers: A <a@example.com>, New Person <new@example.com>\n", edited)

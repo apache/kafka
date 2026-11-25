@@ -16,6 +16,7 @@
 from collections import defaultdict
 from io import BytesIO
 import json
+import re
 import logging
 import os
 import subprocess
@@ -84,7 +85,7 @@ def parse_trailers(title, body) -> Dict:
 
 def reviewers_lines(body: str) -> List[str]:
     """Lines of the body that look like a Reviewers trailer."""
-    return [line for line in body.split("\n") if line.lstrip().lower().startswith("reviewers:")]
+    return [line for line in body.split("\n") if re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)]
 
 
 if __name__ == "__main__":

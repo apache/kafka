@@ -82,7 +82,7 @@ def parse_trailers(title, body) -> Dict:
 
 def reviewers_lines(body: str) -> List[str]:
     """Lines of the body that look like a Reviewers trailer."""
-    return [line for line in body.split("\n") if line.lstrip().lower().startswith("reviewers:")]
+    return [line for line in body.split("\n") if re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)]
 
 
 def resolve_reviewer(login: str) -> tuple:
@@ -222,12 +222,17 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     paragraph. Returns None if git does not read the result as expected.
     """
     newline = "\r\n" if "\r\n" in body else "\n"
-    lines = body.rstrip("\r\n").split("\n")
+    lines = body.split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if lines:
+        lines[-1] = lines[-1].rstrip("\r")
     last_paragraph = max((i + 1 for i, line in enumerate(lines) if not line.strip()), default=0)
-    had_trailers = bool(parse_trailers(title, body))
+    old_trailers = parse_trailers(title, body)
+    had_trailers = bool(old_trailers)
 
     # Remove the existing Reviewers trailer and its continuation lines.
-    found = [i for i in range(last_paragraph, len(lines)) if lines[i].lower().startswith("reviewers:")]
+    found = [i for i in range(last_paragraph, len(lines)) if re.match(r"reviewers\s*:", lines[i], re.IGNORECASE)]
     if found:
         end = found[-1] + 1
         while end < len(lines) and lines[end][:1] in (" ", "\t"):
@@ -243,9 +248,16 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     else:
         new_body = rest + (newline if in_trailer_block else newline * 2) + folded + newline
 
+    # Check the result with git. The code above finds the last paragraph by
+    # itself, and git has more rules (for example it skips "#" lines).
     expected = " ".join(reviewers.split())
-    if parse_trailers(title, new_body).get("reviewers", [])[-1:] != [expected]:
-        logger.error("git does not read the new Reviewers trailer as expected; leaving the body unchanged.")
+    new_trailers = parse_trailers(title, new_body)
+    new_reviewers = new_trailers.pop("reviewers", [])
+    old_trailers.pop("reviewers", None)
+    if (new_reviewers[-1:] != [expected]
+            or len(reviewers_lines(new_body)) != len(new_reviewers)
+            or new_trailers != old_trailers):
+        logger.error("git does not read the new description as expected; leaving the body unchanged.")
         return None
     return new_body
 
