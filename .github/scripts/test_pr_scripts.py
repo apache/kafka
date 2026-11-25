@@ -91,8 +91,8 @@ def add_reviewer(body):
 
 def parsed_trailers(body):
     message = (TITLE + "\n\n" + body).encode()
-    out = subprocess.run(["git", "interpret-trailers", "--parse"], input=message, capture_output=True)
-    return out.stdout.decode().splitlines()
+    out = subprocess.run(["git", "interpret-trailers", "--no-divider", "--parse"], input=message, capture_output=True)
+    return [" ".join(line.split()) for line in out.stdout.decode().split("\n") if line]
 
 
 # What a contributor may write. The tools must leave all of it alone.
@@ -157,8 +157,40 @@ class PrFormatTest(unittest.TestCase):
         next_line = "Some body\n\nReviewers: A <a@example.com>\nCo-Authored-By: Bot <b@example.com>\n"
         self.assertEqual(0, FakeGh(next_line).run("pr-format.py").returncode)
 
+    def test_linter_reads_trailers_below_a_markdown_rule(self):
+        body = "Intro\n\n---\n\nMore text\n\nReviewers: A <a@example.com>\n"
+        approved = [{"authorAssociation": "MEMBER", "state": "APPROVED"}]
+        self.assertEqual(0, FakeGh(body, approved).run("pr-format.py").returncode)
+
+    def test_linter_reads_a_folded_trailer_with_crlf(self):
+        body = "Text\r\n\r\nReviewers: A <a@example.com>,\r\n B <b@example.com>\r\n"
+        approved = [{"authorAssociation": "MEMBER", "state": "APPROVED"}]
+        result = FakeGh(body, approved).run("pr-format.py")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
 
 class ReviewersTrailerTest(unittest.TestCase):
+
+    def test_markdown_rule_is_not_a_patch_divider(self):
+        body = "Intro\n\n---\n\nMore text\n"
+        self.assertEqual(body + "\nReviewers: New Person <new@example.com>\n", add_reviewer(body).edited_body())
+
+    def test_folded_trailer_with_crlf_is_updated(self):
+        body = "Text\r\n\r\nReviewers: A <a@example.com>,\r\n B <b@example.com>\r\n"
+        edited = add_reviewer(body).edited_body()
+        self.assertTrue(edited.startswith("Text\r\n\r\nReviewers: A <a@example.com>, B <b@example.com>,\r\n"), repr(edited))
+        self.assertEqual(["Reviewers: A <a@example.com>, B <b@example.com>, New Person <new@example.com>"],
+                         parsed_trailers(edited))
+
+    def test_last_paragraph_that_looks_like_trailers_is_kept_byte_for_byte(self):
+        for last in ("https://issues.apache.org/jira/browse/KAFKA-1", "Fixes:#1", "Text with a hard break  "):
+            edited = add_reviewer("Text\n\n" + last + "\n").edited_body()
+            self.assertTrue(edited.startswith("Text\n\n" + last + "\n"), repr(edited))
+            self.assertIn("Reviewers: New Person <new@example.com>", parsed_trailers(edited))
+
+    def test_lower_case_reviewers_trailer_keeps_its_reviewers(self):
+        edited = add_reviewer("Text\n\nreviewers: A <a@example.com>\n").edited_body()
+        self.assertEqual("Text\n\nReviewers: A <a@example.com>, New Person <new@example.com>\n", edited)
 
     def test_author_text_is_kept_byte_for_byte(self):
         edited = add_reviewer(AUTHOR_TEXT + "\n").edited_body()

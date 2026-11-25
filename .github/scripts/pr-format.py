@@ -22,7 +22,7 @@ import subprocess
 import shlex
 import sys
 import tempfile
-from typing import Dict, Optional, TextIO
+from typing import List, Dict, Optional, TextIO
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -62,19 +62,29 @@ def write_commit(io: TextIO, title: str, body: str):
 
 
 def parse_trailers(title, body) -> Dict:
+    """Return the trailers that git reads from the message. Keys are in lower case."""
     trailers = defaultdict(list)
 
     with tempfile.NamedTemporaryFile() as fp:
         write_commit(fp, title, body)
-        cmd = f"git interpret-trailers --trim-empty --parse {fp.name}"
+        # --no-divider: a "---" line is a Markdown rule here, not the start of a patch.
+        cmd = f"git interpret-trailers --no-divider --trim-empty --parse {fp.name}"
         p = subprocess.run(shlex.split(cmd), capture_output=True)
         fp.close()
 
-    for line in p.stdout.decode().splitlines():
+    # Split on "\n" only. With CRLF line endings git leaves a "\r" inside a folded value.
+    for line in p.stdout.decode().split("\n"):
+        if ":" not in line:
+            continue
         key, value = line.split(":", 1)
-        trailers[key].append(value.strip())
+        trailers[key.strip().lower()].append(" ".join(value.split()))
 
     return trailers
+
+
+def reviewers_lines(body: str) -> List[str]:
+    """Lines of the body that look like a Reviewers trailer."""
+    return [line for line in body.split("\n") if line.lstrip().lower().startswith("reviewers:")]
 
 
 if __name__ == "__main__":
@@ -108,7 +118,7 @@ if __name__ == "__main__":
 
     gh_json = json.loads(p.stdout)
     title = gh_json["title"]
-    body = gh_json["body"]
+    body = gh_json["body"] or ""
     reviews = gh_json["reviews"]
 
     checks = [] # (bool (0=ok, 1=error), message)
@@ -134,9 +144,8 @@ if __name__ == "__main__":
     # Check for Reviewers
     # git reads trailers only from the last paragraph. A "Reviewers:" line
     # anywhere else is plain text, and the people on it get no credit.
-    reviewers_in_body = parse_trailers(title, body).get("Reviewers", [])
-    reviewers_lines = [line for line in body.splitlines() if line.startswith("Reviewers:")]
-    check(len(reviewers_lines) <= len(reviewers_in_body), "Every 'Reviewers:' line is a trailer",
+    reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
+    check(len(reviewers_lines(body)) <= len(reviewers_in_body), "Every 'Reviewers:' line is a trailer",
           "'Reviewers:' must be in the last paragraph. Move the text below it above it.")
 
     approved = has_approval(reviews)

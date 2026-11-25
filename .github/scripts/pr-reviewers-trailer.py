@@ -60,19 +60,29 @@ def write_commit(io: TextIO, title: str, body: str):
 
 
 def parse_trailers(title, body) -> Dict:
+    """Return the trailers that git reads from the message. Keys are in lower case."""
     trailers = defaultdict(list)
 
     with tempfile.NamedTemporaryFile() as fp:
         write_commit(fp, title, body)
-        cmd = f"git interpret-trailers --trim-empty --parse {fp.name}"
+        # --no-divider: a "---" line is a Markdown rule here, not the start of a patch.
+        cmd = f"git interpret-trailers --no-divider --trim-empty --parse {fp.name}"
         p = subprocess.run(shlex.split(cmd), capture_output=True)
         fp.close()
 
-    for line in p.stdout.decode().splitlines():
+    # Split on "\n" only. With CRLF line endings git leaves a "\r" inside a folded value.
+    for line in p.stdout.decode().split("\n"):
+        if ":" not in line:
+            continue
         key, value = line.split(":", 1)
-        trailers[key].append(value.strip())
+        trailers[key.strip().lower()].append(" ".join(value.split()))
 
     return trailers
+
+
+def reviewers_lines(body: str) -> List[str]:
+    """Lines of the body that look like a Reviewers trailer."""
+    return [line for line in body.split("\n") if line.lstrip().lower().startswith("reviewers:")]
 
 
 def resolve_reviewer(login: str) -> tuple:
@@ -204,30 +214,40 @@ def fold_reviewers(reviewers: str) -> str:
 
 
 def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[str]:
-    """Set the Reviewers trailer of the body using git interpret-trailers.
+    """Set the Reviewers trailer of the body.
 
-    Only the trailer block (the last paragraph) is changed. Everything the
-    author wrote above it is kept as is. Returns None if git fails.
+    git is used only to read the trailers. The new body is built from the
+    original text, so every byte that the author wrote is kept. Only the
+    Reviewers trailer is removed and written again at the end of the last
+    paragraph. Returns None if git does not read the result as expected.
     """
-    trailer = f"Reviewers: {reviewers}"
-    # git reads the first paragraph as the commit subject, so pass the title too.
-    subject = f"{title}\n\n"
-    with tempfile.NamedTemporaryFile() as fp:
-        fp.write(subject.encode())
-        fp.write(body.rstrip().encode())
-        fp.write(b"\n")
-        fp.flush()
-        cmd = f"git interpret-trailers --if-exists replace --trailer {shlex.quote(trailer)} {fp.name}"
-        p = subprocess.run(shlex.split(cmd), capture_output=True)
-        fp.close()
+    newline = "\r\n" if "\r\n" in body else "\n"
+    lines = body.rstrip("\r\n").split("\n")
+    last_paragraph = max((i + 1 for i, line in enumerate(lines) if not line.strip()), default=0)
+    had_trailers = bool(parse_trailers(title, body))
 
-    # git writes the trailer on a single line, as the last line of the message.
-    updated = p.stdout.decode()
-    head, sep, tail = updated.rpartition(trailer)
-    if p.returncode != 0 or not sep or tail.strip() or not head.startswith(subject):
-        logger.error(f"Unexpected output from git interpret-trailers; leaving the body unchanged.\nSTDERR: {p.stderr.decode()}")
+    # Remove the existing Reviewers trailer and its continuation lines.
+    found = [i for i in range(last_paragraph, len(lines)) if lines[i].lower().startswith("reviewers:")]
+    if found:
+        end = found[-1] + 1
+        while end < len(lines) and lines[end][:1] in (" ", "\t"):
+            end += 1
+        del lines[found[-1]:end]
+
+    # Join the trailer block if there still is one. Otherwise start a new paragraph.
+    in_trailer_block = had_trailers and len(lines) > last_paragraph
+    rest = "\n".join(lines).rstrip("\r\n")
+    folded = fold_reviewers(reviewers).replace("\n", newline)
+    if not rest:
+        new_body = folded + newline
+    else:
+        new_body = rest + (newline if in_trailer_block else newline * 2) + folded + newline
+
+    expected = " ".join(reviewers.split())
+    if parse_trailers(title, new_body).get("reviewers", [])[-1:] != [expected]:
+        logger.error("git does not read the new Reviewers trailer as expected; leaving the body unchanged.")
         return None
-    return head[len(subject):] + fold_reviewers(reviewers) + "\n"
+    return new_body
 
 
 def gh_pr_view(pr_number: str, fields: str) -> Dict:
@@ -270,11 +290,10 @@ if __name__ == "__main__":
     # and an edit made between reading the body and writing it back is lost.
     gh_json = gh_pr_view(pr_number, "title,body")
     title = gh_json["title"]
-    body = gh_json["body"]
+    body = gh_json["body"] or ""
 
-    existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
-    reviewers_lines = [line for line in body.splitlines() if line.startswith("Reviewers:")]
-    if len(reviewers_lines) > len(existing_reviewers):
+    existing_reviewers = parse_trailers(title, body).get("reviewers", [])
+    if len(reviewers_lines(body)) > len(existing_reviewers):
         # There is text below the Reviewers trailer, so git does not read it.
         # Adding a second trailer would hide the problem. The PR linter reports it.
         logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
