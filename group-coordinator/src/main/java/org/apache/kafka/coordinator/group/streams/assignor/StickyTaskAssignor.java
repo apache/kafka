@@ -584,7 +584,8 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     /**
      * Steps 1 and 2 of {@link #assignStandby}: places the standbys that make their task more rack-diverse and returns
-     * the processes they went to per task.
+     * the processes they went to per task. Step 2 places standbys round-robin across the tasks; a task that gets none
+     * in a round drops out.
      */
     private static Map<TaskId, List<ProcessState>> assignRackAwareStandbys(final LocalState localState, final List<TaskId> standbyTasks) {
         // A process has room while one of its members is below the per-member quota. Loads and room change only when a
@@ -602,27 +603,34 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final TaskId task : standbyTasks) {
             final List<ProcessState> standbys = new ArrayList<>();
             rackAwareStandbys.put(task, standbys);
-            placeRackAwareStandbys(localState, picker, task, standbys, true);
+            placeRackAwareStandbys(localState, picker, task, standbys, localState.numStandbyReplicas, true);
         }
 
         // 2. assigning remaining standby tasks in a new rack to the least loaded client
-        for (final TaskId task : standbyTasks) {
-            placeRackAwareStandbys(localState, picker, task, rackAwareStandbys.get(task), false);
+        for (int replica = 0; replica < localState.numStandbyReplicas; replica++) {
+            for (final TaskId task : standbyTasks) {
+                final List<ProcessState> standbys = rackAwareStandbys.get(task);
+                if (standbys.size() == replica) {
+                    placeRackAwareStandbys(localState, picker, task, standbys, replica + 1, false);
+                }
+            }
         }
         return rackAwareStandbys;
     }
 
     /**
      * Places standbys of {@code task} while they make it more rack-diverse and adds their processes to {@code standbys},
-     * which holds those placed by an earlier call. Among the candidates of a pick, a standby goes to the previous active
-     * member, else the least-loaded previous standby member, each while below the quota, else to the least-loaded
-     * candidate. With {@code stickyOnly}, stops at the first standby with no previous member to go to.
+     * which holds those placed by an earlier call, until it has {@code maxStandbys}. Among the candidates of a pick, a
+     * standby goes to the previous active member, else the least-loaded previous standby member, each while below the
+     * quota, else to the least-loaded candidate. With {@code stickyOnly}, stops at the first standby with no previous
+     * member to go to.
      */
     private static void placeRackAwareStandbys(
         final LocalState localState,
         final RackAwareStandbyPicker<ProcessState> picker,
         final TaskId task,
         final List<ProcessState> standbys,
+        final int maxStandbys,
         final boolean stickyOnly
     ) {
         final List<ProcessState> holders = new ArrayList<>(1 + standbys.size());
@@ -630,7 +638,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         holders.addAll(standbys);
         picker.startTask(holders);
 
-        while (standbys.size() < localState.numStandbyReplicas) {
+        while (standbys.size() < maxStandbys) {
             final RackAwareStandbyPicker.Pick<ProcessState> pick = picker.pick();
             if (pick == null) {
                 return;
