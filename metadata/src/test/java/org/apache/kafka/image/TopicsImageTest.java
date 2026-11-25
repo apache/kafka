@@ -993,6 +993,17 @@ public class TopicsImageTest {
             delta.localChanges(localId).mirrorTopicStates()
         );
 
+        // The topic-level deltas report the same changes: the cleared association is detected because the
+        // delta compares against the topic image in the parent TopicsImage, not against its own fresh image.
+        assertEquals(
+            Map.of(topicId, new TopicImage.NoMirror()),
+            delta.changedTopic(topicId).localChanges(localId).mirrorTopicStates()
+        );
+        assertEquals(
+            Map.of(otherTopicId, new TopicImage.ActiveMirror("test-mirror", MirrorPartitionState.PAUSED.value())),
+            delta.changedTopic(otherTopicId).localChanges(localId).mirrorTopicStates()
+        );
+
         TopicsImage finalImage = delta.apply();
         assertEquals(snapshotImage, finalImage);
         TopicImage topic = finalImage.getTopic(topicId);

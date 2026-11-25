@@ -48,8 +48,23 @@ public final class TopicDelta {
     private boolean mirrorRecordReplayed;
     private TopicImage.Mirror mirror;
 
+    /**
+     * The topic image in the parent {@code TopicsImage} before this delta is applied. Used to detect mirror
+     * association changes; see {@link #localChanges(int)}.
+     *
+     * <p>This is usually the same as {@code image}. It differs when a TopicRecord is replayed into a
+     * {@code TopicsDelta}, for example when replaying a snapshot: the delta is created around a fresh, unmirrored
+     * image, while the topic may have been associated with a mirror in the parent image.</p>
+     */
+    private final TopicImage prevImage;
+
     public TopicDelta(TopicImage image) {
+        this(image, image);
+    }
+
+    public TopicDelta(TopicImage image, TopicImage prevImage) {
         this.image = image;
+        this.prevImage = prevImage;
     }
 
     public TopicImage image() {
@@ -136,7 +151,7 @@ public final class TopicDelta {
      * state to make brokers re-process the mirror partitions (e.g. when recovering failed partitions).
      * </p>
      */
-    Optional<TopicImage.Mirror> mirrorTopicStateChange(TopicImage prevImage) {
+    public Optional<TopicImage.Mirror> mirrorTopicStateChange(TopicImage prevImage) {
         TopicImage.Mirror prevMirror = prevImage == null ? new TopicImage.NoMirror() : prevImage.mirror();
         TopicImage.Mirror newMirror = mirror();
         if (!mirrorRecordReplayed && prevMirror.equals(newMirror)) {
@@ -226,7 +241,12 @@ public final class TopicDelta {
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
         Map<Uuid, TopicImage.Mirror> mirrorTopicChanges = new HashMap<>();
 
-        mirrorTopicStateChange(image).ifPresent(mirror -> mirrorTopicChanges.put(id(), mirror));
+        // Compare against the topic image in the parent TopicsImage rather than this delta's own image.
+        // When a broker loads a snapshot after being offline, its local metadata log may contain a stale
+        // mirror association that was removed while it was offline. Comparing against the parent image
+        // ensures that this removal is detected.
+        // Example: local log (mirror-A, MIRRORING) --> fetched snapshot or incremental update (null, UNKNOWN).
+        mirrorTopicStateChange(prevImage).ifPresent(mirror -> mirrorTopicChanges.put(id(), mirror));
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {

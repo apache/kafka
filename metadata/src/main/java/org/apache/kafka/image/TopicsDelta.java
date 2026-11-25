@@ -72,7 +72,8 @@ public final class TopicsDelta {
 
     public void replay(TopicRecord record) {
         TopicDelta delta = new TopicDelta(
-            new TopicImage(record.name(), record.topicId(), Map.of()));
+            new TopicImage(record.name(), record.topicId(), Map.of()),
+            image.getTopic(record.topicId()));
         changedTopics.put(record.topicId(), delta);
         createdTopics.put(record.name(), record.topicId());
     }
@@ -272,12 +273,7 @@ public final class TopicsDelta {
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
             directoryIds.putAll(changes.directoryIds());
-
-            // Compare against the existing topics image rather than the topic delta's image. When a broker loads a snapshot
-            // after being offline, its local metadata log may contain a stale mirror association that was removed while it
-            // was offline. Comparing against the existing image ensures that this removal is detected.
-            // Example: local log (mirror-A, MIRRORING) --> fetched snapshot or incremental update (null, UNKNOWN).
-            delta.mirrorTopicStateChange(image.getTopic(delta.id())).ifPresent(mirror -> mirrorTopicChanges.put(delta.id(), mirror));
+            mirrorTopicChanges.putAll(changes.mirrorTopicStates());
         }
 
         // Add all of the removed topic partitions to the set of locally removed partitions
