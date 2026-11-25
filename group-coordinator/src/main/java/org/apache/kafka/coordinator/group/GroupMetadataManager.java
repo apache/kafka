@@ -7772,14 +7772,14 @@ public class GroupMetadataManager {
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return cleanupNotNeeded(classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture));
             } else if (group.type() == STREAMS && group.isEmpty()) {
+                // A classic join converts this empty streams group to classic and deletes its streams
+                // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
+                // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
+                // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
+                // A join with a known member id keeps the group, so it needs no cleanup.
                 if (!topologyCleanupHandled
                     && UNKNOWN_MEMBER_ID.equals(request.memberId())
                     && ((StreamsGroup) group).mayHaveTopologyDescription()) {
-                    // A classic join converts this empty streams group to classic and deletes its streams
-                    // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
-                    // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
-                    // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
-                    // A join with a known member id keeps the group, so it needs no cleanup.
                     return new CoordinatorResult<>(List.of(), Boolean.TRUE);
                 }
                 // Empty streams groups are converted to classic groups in classicGroupJoinToClassicGroup.
