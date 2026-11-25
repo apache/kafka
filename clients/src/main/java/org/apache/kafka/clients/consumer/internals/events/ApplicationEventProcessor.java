@@ -753,7 +753,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                     event.assignedPartitions(), event.addedPartitions());
             } else if (requestManagers.streamsMembershipManager.isPresent()) {
                 requestManagers.streamsMembershipManager.get().applyAssignment(
-                    event.assignedPartitions(), event.addedPartitions());
+                    event.assignedPartitions(), 
+                    event.addedPartitions(),
+                    ((StreamsApplyAssignmentEvent) event).assignment()
+                );
             } else {
                 log.warn("Neither ConsumerMembershipManager nor StreamsMembershipManager present " +
                     "when processing ApplyAssignmentEvent");
