@@ -22,7 +22,6 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.DataPlaneAcceptor
-import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.Logging
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
@@ -37,7 +36,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.ConfigUtils
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
-import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
+import org.apache.kafka.server.{DynamicThreadPool, KafkaRaftManager, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig
 import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicLogConfig, DynamicProducerStateManagerConfig, ServerConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}

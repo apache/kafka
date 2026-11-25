@@ -1074,6 +1074,18 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(5 * 1024 * 1024, config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
   }
+
+  @Test
+  def testKafkaConfigForwardsReconfigurablesToDynamicConfig(): Unit = {
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    val reconfigurable: Reconfigurable = mock(classOf[Reconfigurable])
+
+    config.addReconfigurable(reconfigurable)
+    assertTrue(config.dynamicConfig.reconfigurables.contains(reconfigurable))
+
+    config.removeReconfigurable(reconfigurable)
+    assertFalse(config.dynamicConfig.reconfigurables.contains(reconfigurable))
+  }
 }
 
 class TestDynamicThreadPool extends BrokerReconfigurable {

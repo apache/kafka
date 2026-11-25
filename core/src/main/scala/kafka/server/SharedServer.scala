@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
@@ -36,7 +35,7 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.{SupportedConfigChecker, ListenerInfo, MetadataRecordSerde}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
-import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
+import org.apache.kafka.server.{KafkaRaftManager, ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -307,7 +306,7 @@ class SharedServer(
           time,
           metrics,
           externalKRaftMetrics,
-          Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
+          Optional.of(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
           bootstrapServers,
           listenerEndpoints,

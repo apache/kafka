@@ -214,6 +214,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getList(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG);
     }
 
+    public String saslMechanismControllerProtocol() {
+        return getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG);
+    }
+
     public ListenerName interBrokerListenerName() {
         return interBrokerListenerNameAndSecurityProtocol().getKey();
     }

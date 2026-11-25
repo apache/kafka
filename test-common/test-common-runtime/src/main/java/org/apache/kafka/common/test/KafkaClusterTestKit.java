@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
@@ -49,6 +48,7 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.KafkaRaftManager;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;

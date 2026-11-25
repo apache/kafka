@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
-import kafka.raft.KafkaRaftManager
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, KafkaRequestHandlerPoolFactory}
 import kafka.utils.Logging
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -39,13 +38,14 @@ import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, QuorumConfig, RaftClient, RaftManager}
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.SimpleApiVersionManager
+import org.apache.kafka.server.{KafkaRaftManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -105,7 +105,7 @@ class TestRaftServer(
       time,
       metrics,
       _ => {},
-      Some(threadNamePrefix),
+      Optional.of(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
