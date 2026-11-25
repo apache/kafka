@@ -7332,39 +7332,81 @@ class KafkaApisTest extends Logging {
     verify(sharePartitionManager).newContext(any(), any(), any(), any(), any(), any(), any())
   }
 
+  // Returns an Authorizer which allows all actions and records the names of the topics it is asked to authorize.
+  private def mockAllowAllAuthorizer(authorizedTopicNames: mutable.Set[String]): Authorizer = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any(), any())).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1).asScala
+      actions.foreach { action =>
+        if (action.resourcePattern.resourceType == ResourceType.TOPIC)
+          authorizedTopicNames += action.resourcePattern.name
+      }
+      actions.map(_ => AuthorizationResult.ALLOWED).asJava
+    }
+    authorizer
+  }
+
   @Test
   def testHandleShareFetchRequestUnknownTopicIdWithAuthorizer(): Unit = {
-    // No topic is added to the metadata cache, so the topic ID of the request cannot be resolved to a name.
+    val topicName = "foo"
     val topicId = Uuid.randomUuid()
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    // Not added to the metadata cache, so the topic ID cannot be resolved to a name.
+    val unknownTopicId = Uuid.randomUuid()
+    val unknownTopicIdPartition = new TopicIdPartition(unknownTopicId, new TopicPartition(null, 0))
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(1, util.List.of(new TopicIdPartition(topicId, new TopicPartition(null, 0))))
+      new ShareSessionContext(1, util.List.of(topicIdPartition, unknownTopicIdPartition))
     )
+
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
+        topicIdPartition,
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(memoryRecords(10, 0))
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
+      ))
+    )
+
+    when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData()
       .setGroupId("group")
       .setMemberId(Uuid.randomUuid().toString)
       .setShareSessionEpoch(1)
-      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
-        .setTopicId(topicId)
-        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
-          new ShareFetchRequestData.FetchPartition()
-            .setPartitionIndex(0)
-            .setAcknowledgementBatches(util.List.of(
-              new ShareFetchRequestData.AcknowledgementBatch()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setAcknowledgeTypes(util.List.of(1.toByte))
-            ))
-        ).iterator))
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(
+        new ShareFetchRequestData.FetchTopic()
+          .setTopicId(topicId)
+          .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(0)
+          ).iterator)),
+        new ShareFetchRequestData.FetchTopic()
+          .setTopicId(unknownTopicId)
+          .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(0)
+              .setAcknowledgementBatches(util.List.of(
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setFirstOffset(0)
+                  .setLastOffset(9)
+                  .setAcknowledgeTypes(util.List.of(1.toByte))
+              ))
+          ).iterator))
       ).iterator))
 
-    // With an authorizer, AuthHelper builds a ResourcePattern per topic name, which rejects with a null name.
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    when(authorizer.authorize(any(), any())).thenAnswer { invocation =>
-      invocation.getArgument[util.List[Action]](1).asScala.map(_ => AuthorizationResult.ALLOWED).asJava
-    }
+    // With an authorizer, AuthHelper builds a ResourcePattern per topic name.
+    val authorizedTopicNames = mutable.Set[String]()
+    val authorizer = mockAllowAllAuthorizer(authorizedTopicNames)
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
@@ -7374,15 +7416,111 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
     assertEquals(Errors.NONE.code, response.data.errorCode)
-    assertEquals(1, response.data.responses.size)
-    val topicResponse = response.data.responses.stream.findFirst.get
-    assertEquals(topicId, topicResponse.topicId)
+    val responses = response.data.responses.asScala
+    assertEquals(2, responses.size)
+
+    val topicResponse = responses.find(_.topicId == topicId).get
     assertEquals(1, topicResponse.partitions.size)
     assertEquals(0, topicResponse.partitions.get(0).partitionIndex)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, topicResponse.partitions.get(0).errorCode)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, topicResponse.partitions.get(0).acknowledgeErrorCode)
+    assertEquals(Errors.NONE.code, topicResponse.partitions.get(0).errorCode)
+
+    val unknownTopicResponse = responses.find(_.topicId == unknownTopicId).get
+    assertEquals(1, unknownTopicResponse.partitions.size)
+    assertEquals(0, unknownTopicResponse.partitions.get(0).partitionIndex)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, unknownTopicResponse.partitions.get(0).errorCode)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, unknownTopicResponse.partitions.get(0).acknowledgeErrorCode)
+
+    // Only the known topic is authorized, and only its partition is fetched.
+    assertEquals(Set(topicName), authorizedTopicNames)
+    verify(sharePartitionManager).fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(),
+      ArgumentMatchers.eq(util.List.of(topicIdPartition)))
     verify(sharePartitionManager, never()).acknowledge(any(), any(), any())
-    verify(sharePartitionManager, never()).fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), any())
+  }
+
+  @Test
+  def testHandleShareFetchRequestUnknownTopicIdInShareSessionWithAuthorizer(): Unit = {
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    // Not added to the metadata cache, so the topic ID cannot be resolved to a name.
+    val unknownTopicId = Uuid.randomUuid()
+    val unknownTopicIdPartition = new TopicIdPartition(unknownTopicId, new TopicPartition(null, 0))
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
+    val groupId = "group"
+    val memberId = Uuid.randomUuid().toString
+
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
+        topicIdPartition,
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(memoryRecords(10, 0))
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
+      ))
+    )
+
+    // The share session holds the partition of the known topic, plus a partition with a null topic name
+    // which is what ShareSession.update caches when a subsequent request adds an unresolved topic ID.
+    val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
+    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false))
+    cachedSharePartitions.mustAdd(new CachedSharePartition(unknownTopicIdPartition, true))
+
+    when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
+
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId)
+      .setShareSessionEpoch(1)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(
+        new ShareFetchRequestData.FetchTopic()
+          .setTopicId(unknownTopicId)
+          .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(0)
+          ).iterator))
+      ).iterator))
+
+    // With an authorizer, AuthHelper builds a ResourcePattern per topic name.
+    val authorizedTopicNames = mutable.Set[String]()
+    val authorizer = mockAllowAllAuthorizer(authorizedTopicNames)
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(1, new ShareSession(
+        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+    )
+
+    kafkaApis = createKafkaApis(authorizer = Option(authorizer))
+    kafkaApis.handleShareFetchRequest(request)
+
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    val responses = response.data.responses.asScala
+    assertEquals(2, responses.size)
+
+    val topicResponse = responses.find(_.topicId == topicId).get
+    assertEquals(1, topicResponse.partitions.size)
+    assertEquals(0, topicResponse.partitions.get(0).partitionIndex)
+    assertEquals(Errors.NONE.code, topicResponse.partitions.get(0).errorCode)
+
+    val unknownTopicResponse = responses.find(_.topicId == unknownTopicId).get
+    assertEquals(1, unknownTopicResponse.partitions.size)
+    assertEquals(0, unknownTopicResponse.partitions.get(0).partitionIndex)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, unknownTopicResponse.partitions.get(0).errorCode)
+
+    // Only the known topic is authorized, and only its partition is fetched.
+    assertEquals(Set(topicName), authorizedTopicNames)
+    verify(sharePartitionManager).fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(),
+      ArgumentMatchers.eq(util.List.of(topicIdPartition)))
   }
 
   @Test
@@ -7626,7 +7764,7 @@ class KafkaApisTest extends Logging {
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
-        topicIdPartition, new ShareAcknowledgeResponseData.PartitionData().setPartitionIndex(0). setErrorCode(Errors.NONE.code)
+        topicIdPartition, new ShareAcknowledgeResponseData.PartitionData().setPartitionIndex(0).setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -7653,12 +7791,10 @@ class KafkaApisTest extends Logging {
       ).iterator))
 
     // With an authorizer, AuthHelper builds a ResourcePattern per topic name.
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    when(authorizer.authorize(any(), any())).thenAnswer { invocation =>
-      invocation.getArgument[util.List[Action]](1).asScala.map(_ => AuthorizationResult.ALLOWED).asJava
-    }
+    val authorizedTopicNames = mutable.Set[String]()
+    val authorizer = mockAllowAllAuthorizer(authorizedTopicNames)
 
-    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
 
     kafkaApis = createKafkaApis(authorizer = Option(authorizer))
@@ -7670,7 +7806,9 @@ class KafkaApisTest extends Logging {
     assertEquals(2, responses.size)
     assertEquals(Errors.NONE.code, responses.find(topicId).partitions.get(0).errorCode)
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responses.find(unknownTopicId).partitions.get(0).errorCode)
-    // Only the partition of the known topic is acknowledged.
+
+    // Only the partition of the known topic is acknowledged, and only its partition is fetched.
+    assertEquals(Set(topicName), authorizedTopicNames)
     verify(sharePartitionManager).acknowledge(any(), any(), ArgumentMatchers.eq(util.Map.of(topicIdPartition,
       util.List.of(new ShareAcknowledgementBatch(0, 9, util.List.of(1.toByte))))))
   }
