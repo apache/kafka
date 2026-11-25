@@ -976,8 +976,25 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "Member 2 did not pick up updated task.offset.interval.ms within the timeout period.")
 
       // Verify both members picked up change of `acceptable.recovery.lag`
-      assertEquals(5_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag change")
-      assertEquals(5_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag change")
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = streamsGroupHeartbeatResponse1.memberEpoch()
+        )
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse1.acceptableRecoveryLag() == 5_000
+      }, "Member 1 did not pick up updated acceptable.recovery.lag within the timeout period.")
+
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = streamsGroupHeartbeatResponse2.memberEpoch()
+        )
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.acceptableRecoveryLag() == 5_000
+      }, "Member 2 did not pick up updated acceptable.recovery.lag within the timeout period.")
 
     } finally {
       admin.close()
