@@ -18,7 +18,7 @@ import os
 
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.performance import PerformanceService
-from kafkatest.version import V_2_5_0, V_3_5_0, DEV_BRANCH
+from kafkatest.version import V_2_5_0, V_3_5_0, DEV_BRANCH, get_version
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -69,7 +69,6 @@ class ConsumerPerformanceService(PerformanceService):
         self.security_config = kafka.security_config.client_config()
         self.topic = topic
         self.messages = messages
-        self.version = version
         self.settings = settings
 
         # These less-frequently used settings can be updated manually after instantiation
@@ -81,9 +80,9 @@ class ConsumerPerformanceService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
-    def java_class_name(self):
+    def java_class_name(self, node):
         # Kafka 3.5.0 moved ConsumerPerformance from kafka.tools to org.apache.kafka.tools.
-        if self.version < V_3_5_0:
+        if get_version(node) < V_3_5_0:
             return "kafka.tools.ConsumerPerformance"
         return "org.apache.kafka.tools.ConsumerPerformance"
 

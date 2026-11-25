@@ -26,9 +26,9 @@ class PerformanceService(KafkaPathResolverMixin, BackgroundThreadService):
         self.stop_timeout_sec = stop_timeout_sec
         self.root = root
 
-    def java_class_name(self):
+    def java_class_name(self, node):
         """
-        Returns the name of the Java class which this service creates.  Subclasses should override
+        Returns the name of the Java class which this service runs on the given node. Subclasses should override
         this method, so that we know the name of the java process to stop.  If it is not
         overridden, we will kill all java processes in PerformanceService#stop_node (for backwards
         compatibility.)
@@ -36,14 +36,14 @@ class PerformanceService(KafkaPathResolverMixin, BackgroundThreadService):
         return ""
 
     def stop_node(self, node):
-        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=True, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(node), clean_shutdown=True, allow_fail=True)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
                         (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
-        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(node), clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf -- %s" % self.root, allow_fail=False)
 
 

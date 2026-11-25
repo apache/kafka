@@ -68,7 +68,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         for node in self.nodes:
             node.version = version
 
-    def java_class_name(self):
+    def java_class_name(self, node):
         return "org.apache.kafka.tools.ProducerPerformance"
 
     def start_cmd(self, node):
