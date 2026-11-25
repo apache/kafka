@@ -891,6 +891,8 @@ kafka.coordinator.transaction.TransactionStateManagerTest:
 - testValidateTransactionTimeout
 kafka.docker.KafkaDockerWrapperTest:
 - testFormatStorageCmd
+- testFormatStorageCmdWithInitialControllers
+- testFormatStorageCmdWithStorageFormatArgs
 - testGetLog4jConfigsFromEnv
 - testGetLog4jConfigsFromEnvInvalidEnvVariable
 - testGetLog4jConfigsFromEnvWithEmptyEnvVariable
