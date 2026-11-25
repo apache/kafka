@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -31,10 +30,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -73,15 +68,10 @@ public class PauseResumeIntegrationTest {
     private static Properties producerConfig;
     private static Properties consumerConfig;
 
-    private static final Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE =
-        Materialized.as(Stores.inMemoryKeyValueStore("store"));
-
     private static final String INPUT_STREAM_1 = "input-stream-1";
     private static final String INPUT_STREAM_2 = "input-stream-2";
     private static final String OUTPUT_STREAM_1 = "output-stream-1";
     private static final String OUTPUT_STREAM_2 = "output-stream-2";
-    private static final String TOPOLOGY1 = "topology1";
-    private static final String TOPOLOGY2 = "topology2";
 
     private static final List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
         asList(pair("A", 100L), pair("B", 200L), pair("A", 300L), pair("C", 400L), pair("C", -50L));
@@ -96,8 +86,6 @@ public class PauseResumeIntegrationTest {
 
     private String appId;
     private KafkaStreams kafkaStreams, kafkaStreams2;
-    @SuppressWarnings("deprecation")
-    private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
     @BeforeAll
     public static void startCluster() throws Exception {
@@ -136,7 +124,7 @@ public class PauseResumeIntegrationTest {
 
     @AfterEach
     public void shutdown() throws InterruptedException {
-        for (final KafkaStreams streams : Arrays.asList(kafkaStreams, kafkaStreams2, streamsNamedTopologyWrapper)) {
+        for (final KafkaStreams streams : Arrays.asList(kafkaStreams, kafkaStreams2)) {
             if (streams != null) {
                 streams.close(Duration.ofSeconds(30));
             }
@@ -189,107 +177,6 @@ public class PauseResumeIntegrationTest {
         assertFalse(kafkaStreams.isPaused());
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
         assertTopicSize(OUTPUT_STREAM_1, 5);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
-        final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
-
-        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
-        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
-        assertTopicSize(OUTPUT_STREAM_1, 5);
-        assertTopicSize(OUTPUT_STREAM_2, 5);
-
-        streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-        assertFalse(streamsNamedTopologyWrapper.isPaused());
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 5);
-        assertTopicSize(OUTPUT_STREAM_2, 10);
-
-        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA2);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
-        final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
-
-        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.RUNNING, STARTUP_TIMEOUT);
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
-        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
-
-        streamsNamedTopologyWrapper.pause();
-        assertTrue(streamsNamedTopologyWrapper.isPaused());
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        waitUntilStreamsHasPolled(streamsNamedTopologyWrapper, 2);
-        assertTopicSize(OUTPUT_STREAM_1, 5);
-        assertTopicSize(OUTPUT_STREAM_2, 5);
-
-        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streamsNamedTopologyWrapper.isPaused());
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA2);
-        assertTopicSize(OUTPUT_STREAM_1, 10);
-        assertTopicSize(OUTPUT_STREAM_2, 5);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldAllowForNamedTopologiesToStartPaused() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
-        final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
-        final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
-
-        streamsNamedTopologyWrapper.pauseNamedTopology(TOPOLOGY1);
-        streamsNamedTopologyWrapper.start(asList(builder1.build(), builder2.build()));
-        waitForApplicationState(singletonList(streamsNamedTopologyWrapper), State.REBALANCING, STARTUP_TIMEOUT);
-
-        assertFalse(streamsNamedTopologyWrapper.isPaused());
-        assertTrue(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-
-        produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
-        produceToInputTopics(INPUT_STREAM_2, STANDARD_INPUT_DATA);
-
-        assertTopicSize(OUTPUT_STREAM_1, 0);
-        assertTopicSize(OUTPUT_STREAM_2, 0);
-
-        streamsNamedTopologyWrapper.resumeNamedTopology(TOPOLOGY1);
-        assertFalse(streamsNamedTopologyWrapper.isPaused());
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY1));
-        assertFalse(streamsNamedTopologyWrapper.isNamedTopologyPaused(TOPOLOGY2));
-
-        awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
-        awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
     }
 
     @Test
@@ -386,23 +273,5 @@ public class PauseResumeIntegrationTest {
     private void awaitOutput(final String topicName, final int count, final List<KeyValue<String, Long>> output)
         throws Exception {
         assertEquals(output, waitUntilMinKeyValueRecordsReceived(consumerConfig, topicName, count));
-    }
-
-    @SuppressWarnings("deprecation")
-    private NamedTopologyBuilder getNamedTopologyBuilder1() {
-        final NamedTopologyBuilder builder1 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY1);
-        builder1.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
-        return builder1;
-    }
-
-    @SuppressWarnings("deprecation")
-    private NamedTopologyBuilder getNamedTopologyBuilder2() {
-        final NamedTopologyBuilder builder2 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY2);
-        builder2.stream(INPUT_STREAM_2)
-            .groupBy((k, v) -> k)
-            .count(IN_MEMORY_STORE)
-            .toStream()
-            .to(OUTPUT_STREAM_2);
-        return builder2;
     }
 }

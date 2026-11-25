@@ -30,7 +30,6 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +56,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class TopologyMetadata {
     private Logger log;
@@ -615,14 +613,6 @@ public class TopologyMetadata {
         } else {
             return builder;
         }
-    }
-
-    @SuppressWarnings("deprecation")
-    public Collection<NamedTopology> allNamedTopologies() {
-        return builders.values()
-            .stream()
-            .map(InternalTopologyBuilder::namedTopology)
-            .collect(Collectors.toSet());
     }
 
 

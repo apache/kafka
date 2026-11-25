@@ -20,7 +20,7 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
- * Indicates that the {@link org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology} being
+ * Indicates that the named topology being
  * looked up does not exist in this application
  */
 @InterfaceAudience.Public

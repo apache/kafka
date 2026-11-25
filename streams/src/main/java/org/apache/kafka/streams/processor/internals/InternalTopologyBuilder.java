@@ -37,7 +37,6 @@ import org.apache.kafka.streams.processor.api.ProcessorWrapper;
 import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import org.slf4j.Logger;
@@ -188,9 +187,6 @@ public class InternalTopologyBuilder {
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
-
-    @SuppressWarnings("deprecation")
-    private NamedTopology namedTopology;
 
     // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
     //  this up front and make it final, but for now we have to wait for the global app configs passed in to rewriteTopology
@@ -420,22 +416,12 @@ public class InternalTopologyBuilder {
         topologyConfigs = new TopologyConfig(topologyName, applicationConfig, topologyOverrides);
     }
 
-    @SuppressWarnings("deprecation")
-    public final synchronized void setNamedTopology(final NamedTopology namedTopology) {
-        this.namedTopology = namedTopology;
-    }
-
     public synchronized TopologyConfig topologyConfigs() {
         return topologyConfigs;
     }
 
     public String topologyName() {
         return topologyName;
-    }
-
-    @SuppressWarnings("deprecation")
-    public NamedTopology namedTopology() {
-        return namedTopology;
     }
 
     public final synchronized InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
