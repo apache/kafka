@@ -801,28 +801,6 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void testRemoveSensor() {
-        final String sensorName = "sensor1";
-        final String scope = "scope";
-        final String entity = "entity";
-        final String operation = "put";
-
-        final Sensor sensor1 = streamsMetrics.addSensor(sensorName, RecordingLevel.DEBUG);
-        streamsMetrics.removeSensor(sensor1);
-
-        final Sensor sensor1a = streamsMetrics.addSensor(sensorName, RecordingLevel.DEBUG, sensor1);
-        streamsMetrics.removeSensor(sensor1a);
-
-        final Sensor sensor2 = streamsMetrics.addLatencyRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
-        streamsMetrics.removeSensor(sensor2);
-
-        final Sensor sensor3 = streamsMetrics.addRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
-        streamsMetrics.removeSensor(sensor3);
-
-        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
-    }
-
-    @Test
     public void testMultiLevelSensorRemoval() {
         final Metrics registry = new Metrics();
         final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, THREAD_ID1, time);

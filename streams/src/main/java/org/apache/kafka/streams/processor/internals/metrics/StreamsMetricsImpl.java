@@ -87,7 +87,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private final Metrics metrics;
-    private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;
 
     private final Version version;
@@ -175,7 +174,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
-        this.parentSensors = new HashMap<>();
     }
 
     public Version version() {
@@ -986,24 +984,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     /**
-     * Deletes a sensor and its parents, if any
+     * Deletes a sensor
      */
     @Override
     public void removeSensor(final Sensor sensor) {
         Objects.requireNonNull(sensor, "Sensor is null");
         metrics.removeSensor(sensor.name());
-
-        final Sensor parent = parentSensors.remove(sensor);
-        if (parent != null) {
-            metrics.removeSensor(parent.name());
-        }
-    }
-
-    /**
-     * Visible for testing
-     */
-    Map<Sensor, Sensor> parentSensors() {
-        return Collections.unmodifiableMap(parentSensors);
     }
 
     private static String groupNameFromScope(final String scopeName) {
