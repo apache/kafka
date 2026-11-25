@@ -1533,6 +1533,7 @@ org.apache.kafka.streams.kstream.internals.SuppressHeadersScenarioTest:
 - windowedFinalResultsTombstoneIsDropped
 org.apache.kafka.streams.kstream.internals.SuppressScenarioTest:
 - shouldImmediatelyEmitEventsWithZeroEmitAfter
+- shouldNotEmitStaleValueWhenDownstreamUpdatesUpstreamStoreDuringEviction
 - shouldSupportFinalResultsForSessionWindows
 - shouldSupportFinalResultsForSlidingWindows
 - shouldSupportFinalResultsForTimeWindows
@@ -7566,12 +7567,14 @@ org.apache.kafka.streams.state.internals.TimeOrderedCachingPersistentWindowStore
 - shouldThrowOnNullInstantInViewFetch
 org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest:
 - shouldAcceptData
+- shouldAllowPutFromEvictionCallback
 - shouldCommit
 - shouldDeserializeEachValuePartWithItsOwnHeadersWhenHeadersEnabled
 - shouldDeserializeEvictedValueWithBufferedHeadersNotEvictionTriggerHeaders
 - shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp
 - shouldInit
 - shouldKeepPriorValueHeadersWhenOnlyThePlainBytesOfPriorAndOldValueMatch
+- shouldNotEmitStaleValueWhenCallbackUpdatesNotYetEvictedKey
 - shouldNotRestoreUnrecognizedVersionRecord
 - shouldNotWritePriorValueHeadersWhenPriorAndOldValueShareAnArray
 - shouldPreservePriorValueTimestampAndHeadersAcrossRestoreWhenHeadersEnabled
