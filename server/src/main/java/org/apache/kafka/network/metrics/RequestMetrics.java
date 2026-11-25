@@ -129,13 +129,13 @@ public class RequestMetrics {
 
     public Optional<Meter> deprecatedRequestRate(ApiKeys apiKey, short version, ClientInformation clientInformation) {
         if (apiKey.isVersionDeprecated(version)) {
-            return Optional.of(deprecatedRequestRate(version, clientInformation));
+            return Optional.of(deprecatedRequestRateMeter(version, clientInformation));
         } else {
             return Optional.empty();
         }
     }
 
-    Meter deprecatedRequestRate(short version, ClientInformation clientInformation) {
+    Meter deprecatedRequestRateMeter(short version, ClientInformation clientInformation) {
         DeprecatedRequestRateKey key = new DeprecatedRequestRateKey(version, truncated(clientInformation));
         if (!deprecatedRequestRateInternal.containsKey(key) && deprecatedRequestRateInternal.size() >= MAX_DEPRECATED_REQUEST_RATE_METERS) {
             key = new DeprecatedRequestRateKey(version, OVERFLOW_CLIENT_INFORMATION);
