@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
-import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -37,7 +36,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class AbstractLegacyRecordBatchTest {
 
@@ -230,9 +228,9 @@ public class AbstractLegacyRecordBatchTest {
         };
 
         // Check V0
-        try {
+        IllegalArgumentException e1 = assertThrows(IllegalArgumentException.class, () -> {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
-                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
+                    Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
@@ -241,9 +239,9 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals("ZStandard compression is not supported for magic 0", e1.getMessage());
 
         // Check V1
-        try {
+        IllegalArgumentException e2 = assertThrows(IllegalArgumentException.class, () -> {
             MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
-                Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
+                    Compression.zstd().build(), TimestampType.CREATE_TIME, simpleRecords);
 
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);

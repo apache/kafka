@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
-import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;

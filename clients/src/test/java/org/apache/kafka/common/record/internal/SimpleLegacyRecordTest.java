@@ -21,7 +21,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
