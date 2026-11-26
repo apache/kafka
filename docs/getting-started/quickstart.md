@@ -37,9 +37,9 @@ cd kafka_2.13-4.4.0
 
 ## Step 2: Start the Kafka environment
 
-NOTE: Your local environment must have Java 17+ installed.
+You can start the broker using the downloaded files or a Docker image. Running the broker in Docker does not require Java on the host.
 
-Kafka can be run using local scripts and downloaded files or the docker image.
+The downloaded scripts, including the command-line examples in the following steps, run on the host from the directory extracted in Step 1. They require Java 17 or later even if the broker is running in Docker.
 
 ### Using downloaded files
 
