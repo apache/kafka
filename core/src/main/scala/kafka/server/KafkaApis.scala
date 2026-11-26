@@ -3391,11 +3391,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     shareFetchData.forEach { tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp}
 
     // Kafka share consumers need READ permission on each topic they are fetching.
+    // The authorizer checks by topic name so filter out topics whose name is unknown.
+    // They have already been given UNKNOWN_TOPIC_ID errors, in the erroneous partitions
+    // of the share fetch context for fetching, and in getAcknowledgeBatchesFromShareFetchRequest
+    // for piggybacked acknowledgements.
     val authorizedTopics = authHelper.filterByAuthorized(
       request.context,
       READ,
       TOPIC,
-      topicIdPartitionSeq.asJava,
+      topicIdPartitionSeq.filter(_.topicPartition.topic != null).asJava,
       (tp: TopicIdPartition) => tp.topicPartition.topic
     ).asScala
 
@@ -3717,11 +3721,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // Kafka share consumers need READ permission on each topic they are acknowledging.
+    // The authorizer checks by topic name so filter out topics whose name is unknown.
+    // They are given UNKNOWN_TOPIC_ID errors by getAcknowledgeBatchesFromShareAcknowledgeRequest.
     val authorizedTopics = authHelper.filterByAuthorized(
       request.context,
       READ,
       TOPIC,
-      topicIdPartitionSeq.asJava,
+      topicIdPartitionSeq.filter(_.topicPartition.topic != null).asJava,
       (tp: TopicIdPartition) => tp.topicPartition.topic
     ).asScala
 
