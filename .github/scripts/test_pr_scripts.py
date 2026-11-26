@@ -244,11 +244,56 @@ class ReviewersTrailerTest(unittest.TestCase):
     def test_edit_of_the_description_adds_no_trailer(self):
         for body in ("Fix the thing.\n",
                      "Fix the thing.\n\nReviewers: A <a@example.com>\n",
-                     "Fix the thing.\n\nReviewers: A <a@example.com>\nReviewers: B <b@example.com>\n",
                      "Fix the thing.\n\nReviewers: A <a@example.com>\n\nText below.\n"):
             gh = FakeGh(body)
             self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode, body)
             self.assertIsNone(gh.edited_body(), body)
+
+    def test_edit_of_the_description_merges_two_reviewers_trailers(self):
+        # The tool added the first line. A committer typed the second one.
+        body = ("Fix the thing.\n\n"
+                "Reviewers: A <a@example.com>, B <b@example.com>\n"
+                "Reviewers: Carol With A Long Name <carol@example.com>, Dave With A Long Name <dave@example.com>\n")
+        gh = FakeGh(body)
+        self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode)
+        self.assertEqual(
+            "Fix the thing.\n\n"
+            "Reviewers: A <a@example.com>, B <b@example.com>,\n"
+            " Carol With A Long Name <carol@example.com>,\n"
+            " Dave With A Long Name <dave@example.com>\n",
+            gh.edited_body())
+
+    def test_review_merges_two_reviewers_trailers(self):
+        edited = add_reviewer("Fix the thing.\n\n"
+                              "Reviewers: A <a@example.com>\n"
+                              "Reviewers: B <b@example.com>\n").edited_body()
+        self.assertEqual(
+            "Fix the thing.\n\n"
+            "Reviewers: A <a@example.com>, B <b@example.com>,\n"
+            " New Person <new@example.com>\n",
+            edited)
+
+    def test_merge_keeps_other_trailers_and_folded_lines(self):
+        edited = add_reviewer("Fix the thing.\r\n\r\n"
+                              "Reviewers: A <a@example.com>,\r\n"
+                              " B <b@example.com>\r\n"
+                              "Co-authored-by: X <x@example.com>\r\n"
+                              "Reviewers: C <c@example.com>\r\n").edited_body()
+        self.assertEqual(
+            "Fix the thing.\r\n\r\n"
+            "Co-authored-by: X <x@example.com>\r\n"
+            "Reviewers: A <a@example.com>, B <b@example.com>, C <c@example.com>,\r\n"
+            " New Person <new@example.com>\r\n",
+            edited)
+
+    def test_a_name_written_twice_is_kept_once(self):
+        gh = FakeGh("Fix the thing.\n\n"
+                    "Reviewers: A <a@example.com>, B <b@example.com>\n"
+                    "Reviewers: B <b@example.com>, C <c@example.com>\n")
+        self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode)
+        self.assertEqual(
+            "Fix the thing.\n\nReviewers: A <a@example.com>, B <b@example.com>, C <c@example.com>\n",
+            gh.edited_body())
 
     def test_lower_case_reviewers_trailer_keeps_its_reviewers(self):
         edited = add_reviewer("Text\n\nreviewers: A <a@example.com>\n").edited_body()

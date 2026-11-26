@@ -142,7 +142,8 @@ the trailer already folded, with a leading space on each continuation line. It r
 when someone reviews or comments, and also when the PR body is edited.
 
 To add a reviewer by hand, write the names after "Reviewers:" in the last paragraph,
-separated by commas. The script takes care of the line breaks.
+separated by commas. The script takes care of the line breaks. If the last
+paragraph has more than one "Reviewers:" line, the script joins them into one.
 
 The scripts have tests that run without network access. The
 [pr-scripts-test.yml](pr-scripts-test.yml) workflow runs them when the scripts change.

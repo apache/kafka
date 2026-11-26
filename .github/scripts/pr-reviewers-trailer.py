@@ -234,8 +234,8 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
 
     git is used only to read the trailers. The new body is built from the
     original text, so every byte that the author wrote is kept. Only the
-    Reviewers trailer is removed and written again at the end of the last
-    paragraph. Returns None if git does not read the result as expected.
+    Reviewers trailers are removed, and one trailer is written at the end
+    of the last paragraph. Returns None if git does not read the result as expected.
     """
     newline = "\r\n" if "\r\n" in body else "\n"
     lines = body.split("\n")
@@ -247,13 +247,14 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     old_trailers = parse_trailers(title, body)
     had_trailers = bool(old_trailers)
 
-    # Remove the existing Reviewers trailer and its continuation lines.
+    # Remove every Reviewers trailer in the last paragraph, with its
+    # continuation lines. The caller passes the names of all of them.
     found = [i for i in range(last_paragraph, len(lines)) if re.match(r"reviewers\s*:", lines[i], re.IGNORECASE)]
-    if found:
-        end = found[-1] + 1
+    for start in reversed(found):
+        end = start + 1
         while end < len(lines) and lines[end][:1] in (" ", "\t"):
             end += 1
-        del lines[found[-1]:end]
+        del lines[start:end]
 
     # Join the trailer block if there still is one. Otherwise start a new paragraph.
     in_trailer_block = had_trailers and len(lines) > last_paragraph
@@ -270,7 +271,7 @@ def update_reviewers_trailer(title: str, body: str, reviewers: str) -> Optional[
     new_trailers = parse_trailers(title, new_body)
     new_reviewers = new_trailers.pop("reviewers", [])
     old_trailers.pop("reviewers", None)
-    if (new_reviewers[-1:] != [expected]
+    if (new_reviewers != [expected]
             or reviewers_trailer_is_misplaced(title, new_body)
             or new_trailers != old_trailers):
         logger.error("git does not read the new description as expected; leaving the body unchanged.")
@@ -337,14 +338,20 @@ if __name__ == "__main__":
         logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
         exit(0)
     # Drop empty names, for example after a comma at the end of the line.
-    names = [name.strip() for name in ", ".join(existing_reviewers).split(",") if name.strip()]
+    # A description can have more than one Reviewers trailer, for example
+    # when a committer adds a line by hand. They become one trailer. A name
+    # that is written twice is kept once.
+    names = []
+    for name in ", ".join(existing_reviewers).split(","):
+        if name.strip() and name.strip() not in names:
+            names.append(name.strip())
     new_value = ", ".join(names)
     if not reviewer_login:
-        if len(existing_reviewers) != 1 or not names:
-            logger.info("No single Reviewers trailer to format; nothing to do.")
+        if not names:
+            logger.info("No Reviewers trailer to format; nothing to do.")
             exit(0)
         newline = "\r\n" if "\r\n" in body else "\n"
-        if fold_reviewers(new_value).replace("\n", newline) in body:
+        if len(existing_reviewers) == 1 and fold_reviewers(new_value).replace("\n", newline) in body:
             # Only the trailer text matters here. Do not touch a description
             # whose trailer already has the standard format.
             logger.info("Reviewers trailer already has the standard format; nothing to do.")
