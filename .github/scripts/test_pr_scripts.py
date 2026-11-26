@@ -165,7 +165,7 @@ class PrFormatTest(unittest.TestCase):
 
         # The run page shows an example only when the check fails.
         self.assertIn("Reviewers: Name &lt;email&gt;, Name &lt;email&gt;", above.stderr)
-        self.assertNotIn("How to fix", ok.stderr)
+        self.assertNotIn("To fix the", ok.stderr)
         # The status check message is one short line.
         self.assertEqual(1, len(above.stdout.strip().split("\n")))
         self.assertLessEqual(len(above.stdout.strip()), 140)

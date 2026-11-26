@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     if reviewers_misplaced:
         # The status check message has to be short. The example goes to the run page.
-        logger.debug("\nHow to fix the 'Reviewers:' trailer. The description must end like this:\n")
+        logger.debug("\nTo fix the 'Reviewers:' trailer, end the description like this:\n")
         logger.debug("<pre>")
         logger.debug("The text of the description.")
         logger.debug("")
