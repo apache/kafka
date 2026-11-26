@@ -138,6 +138,69 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     testDowngradeFromEmptyConsumerToClassicGroup()
   }
 
+  @ClusterTest
+  def testClassicMemberJoinToEmptyConsumerGroupWithKnownMemberId(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    val topicName = "foo"
+    val topicId = createTopic(
+      topic = topicName,
+      numPartitions = 3
+    )
+
+    // Create a consumer group by joining a member.
+    val groupId = "grp"
+    val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+
+    // The member leaves the group.
+    leaveGroup(
+      groupId = groupId,
+      memberId = memberId,
+      useNewProtocol = true,
+      version = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
+    )
+
+    // A classic member joining with a member id that the group does not know is rejected.
+    assertEquals(
+      Errors.UNKNOWN_MEMBER_ID.code,
+      sendJoinRequest(groupId = groupId, memberId = memberId).errorCode
+    )
+
+    // An offset commit of another group writes to the same __consumer_offsets partition.
+    commitOffset(
+      groupId = "other-grp",
+      memberId = "",
+      memberEpoch = -1,
+      topic = topicName,
+      topicId = topicId,
+      partition = 0,
+      offset = 1000L,
+      expectedError = Errors.NONE
+    )
+
+    // The empty consumer group is still there once that write is committed.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.EMPTY.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+    assertEquals(
+      List((groupId, Errors.NONE.code, ConsumerGroupState.EMPTY.toString)),
+      consumerGroupDescribe(List(groupId)).map(group => (group.groupId, group.errorCode, group.groupState))
+    )
+  }
+
   @ClusterTest(
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")

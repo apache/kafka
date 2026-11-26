@@ -6525,10 +6525,15 @@ public class GroupMetadataManager {
         // Group is created if it does not exist and the member id is UNKNOWN. if member
         // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
         ClassicGroup group;
-        if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
-        } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+        // Only a request with an unknown member id can create the classic group below, so only
+        // such a request deletes an empty consumer or streams group to make room for it. A request
+        // with a known member id is rejected with UNKNOWN_MEMBER_ID and keeps the group.
+        if (isUnknownMember) {
+            if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
+            } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+            }
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {

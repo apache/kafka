@@ -12068,6 +12068,32 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testClassicGroupJoinWithEmptyConsumerGroupAndKnownMemberId() throws Exception {
+        String consumerGroupId = "consumer-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(consumerGroupId)
+            .withMemberId(memberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+            joinResult.joinFuture.get()
+        );
+        assertEquals(List.of(), joinResult.records);
+        // The empty consumer group is kept because the join does not create a classic group.
+        assertEquals(10, context.groupMetadataManager.consumerGroup(consumerGroupId).groupEpoch());
+    }
+
+    @Test
     public void testConsumerGroupHeartbeatWithStableClassicGroup() {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
@@ -23057,6 +23083,32 @@ public class GroupMetadataManagerTest {
         // The streams group is removed without replaying its tombstones. It must no longer be
         // subscribed to the topics of its topology.
         assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic(topicName));
+    }
+
+    @Test
+    public void testClassicGroupJoinWithEmptyStreamsGroupAndKnownMemberId() throws Exception {
+        String streamsGroupId = "streams-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(streamsGroupId)
+            .withMemberId(memberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+            joinResult.joinFuture.get()
+        );
+        assertEquals(List.of(), joinResult.records);
+        // The empty streams group is kept because the join does not create a classic group.
+        assertEquals(10, context.groupMetadataManager.streamsGroup(streamsGroupId).groupEpoch());
     }
 
     @Test
