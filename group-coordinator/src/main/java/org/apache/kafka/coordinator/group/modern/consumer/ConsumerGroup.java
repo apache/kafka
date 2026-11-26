@@ -1299,8 +1299,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
-        // A classic group at generation 0 has no assignment. Like a new group, it starts with an empty
-        // target assignment at the initial epoch.
+        // When the classic group is at generation 0, the target assignment epoch is bumped to 1, to keep
+        // new members out of epoch 0 when the assignor is offloaded and the new target assignment is not
+        // ready yet. Epoch 0 is reserved to signal a joining member in consumer group heartbeats and
+        // cannot be given to a member.
         int targetAssignmentEpoch = Math.max(classicGroup.generationId(), 1);
         int groupEpoch = switch (classicGroup.currentState()) {
             case EMPTY, STABLE, DEAD -> targetAssignmentEpoch;
