@@ -215,6 +215,8 @@ allprojects {
       force 'org.lz4:lz4-java:1.11.4'
       force 'at.yawk.lz4:lz4-java:1.11.4'
       force 'org.lz4:lz4-java:1.11.2'
+      force 'at.yawk.lz4:lz4-java:1.11.4'
+      force 'org.lz4:lz4-java:1.11.2'
     }
   }
   tasks.register('printAllDependencies', DependencyReportTask) {}
