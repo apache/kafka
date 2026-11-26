@@ -3271,6 +3271,9 @@ project(':streams:upgrade-system-tests-0110') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3293,6 +3296,9 @@ project(':streams:upgrade-system-tests-10') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
@@ -3317,6 +3323,9 @@ project(':streams:upgrade-system-tests-11') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3339,6 +3348,9 @@ project(':streams:upgrade-system-tests-20') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
@@ -3363,6 +3375,9 @@ project(':streams:upgrade-system-tests-21') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3385,6 +3400,9 @@ project(':streams:upgrade-system-tests-22') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
@@ -3409,6 +3427,9 @@ project(':streams:upgrade-system-tests-23') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3431,6 +3452,9 @@ project(':streams:upgrade-system-tests-24') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
@@ -3455,6 +3479,9 @@ project(':streams:upgrade-system-tests-25') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3477,6 +3504,9 @@ project(':streams:upgrade-system-tests-26') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
@@ -3501,6 +3531,9 @@ project(':streams:upgrade-system-tests-27') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3523,6 +3556,9 @@ project(':streams:upgrade-system-tests-28') {
     constraints {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-54512')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54513')
       }
     }
 
