@@ -3305,6 +3305,9 @@ project(':streams:upgrade-system-tests-0110') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3357,6 +3360,9 @@ project(':streams:upgrade-system-tests-10') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3411,6 +3417,9 @@ project(':streams:upgrade-system-tests-11') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3463,6 +3472,9 @@ project(':streams:upgrade-system-tests-20') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3517,6 +3529,9 @@ project(':streams:upgrade-system-tests-21') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3569,6 +3584,9 @@ project(':streams:upgrade-system-tests-22') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3623,6 +3641,9 @@ project(':streams:upgrade-system-tests-23') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3675,6 +3696,9 @@ project(':streams:upgrade-system-tests-24') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3729,6 +3753,9 @@ project(':streams:upgrade-system-tests-25') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3781,6 +3808,9 @@ project(':streams:upgrade-system-tests-26') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3835,6 +3865,9 @@ project(':streams:upgrade-system-tests-27') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3888,6 +3921,9 @@ project(':streams:upgrade-system-tests-28') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-19032')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3910,6 +3946,9 @@ project(':streams:upgrade-system-tests-30') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3934,6 +3973,9 @@ project(':streams:upgrade-system-tests-31') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3956,6 +3998,9 @@ project(':streams:upgrade-system-tests-32') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -3980,6 +4025,9 @@ project(':streams:upgrade-system-tests-33') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -4002,6 +4050,9 @@ project(':streams:upgrade-system-tests-34') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -4026,6 +4077,9 @@ project(':streams:upgrade-system-tests-35') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -4048,6 +4102,9 @@ project(':streams:upgrade-system-tests-36') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -4072,6 +4129,9 @@ project(':streams:upgrade-system-tests-37') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -4094,6 +4154,9 @@ project(':streams:upgrade-system-tests-38') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -4118,6 +4181,9 @@ project(':streams:upgrade-system-tests-39') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -4140,6 +4206,9 @@ project(':streams:upgrade-system-tests-40') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -4164,6 +4233,9 @@ project(':streams:upgrade-system-tests-41') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -4186,6 +4258,9 @@ project(':streams:upgrade-system-tests-42') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
@@ -4225,6 +4300,9 @@ project(':streams:upgrade-system-tests-44') {
     constraints {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-108106')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-93451')
       }
     }
 
