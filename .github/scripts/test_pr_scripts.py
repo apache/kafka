@@ -160,7 +160,15 @@ class PrFormatTest(unittest.TestCase):
         self.assertIn(message, above.stdout)
 
         next_line = "Some body\n\nReviewers: A <a@example.com>\nCo-Authored-By: Bot <b@example.com>\n"
-        self.assertEqual(0, FakeGh(next_line).run("pr-format.py").returncode)
+        ok = FakeGh(next_line).run("pr-format.py")
+        self.assertEqual(0, ok.returncode)
+
+        # The run page shows an example only when the check fails.
+        self.assertIn("Reviewers: Name &lt;email&gt;, Name &lt;email&gt;", above.stderr)
+        self.assertNotIn("How to fix", ok.stderr)
+        # The status check message is one short line.
+        self.assertEqual(1, len(above.stdout.strip().split("\n")))
+        self.assertLessEqual(len(above.stdout.strip()), 140)
 
     def test_linter_reads_trailers_below_a_markdown_rule(self):
         body = "Intro\n\n---\n\nMore text\n\nReviewers: A <a@example.com>\n"

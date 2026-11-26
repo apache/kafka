@@ -160,7 +160,8 @@ if __name__ == "__main__":
     check("Committer Checklist" not in body, "Old PR template text not present", "Old PR template text should be removed")
 
     # Check for Reviewers
-    check(not reviewers_trailer_is_misplaced(title, body), "Every 'Reviewers:' line is a trailer",
+    reviewers_misplaced = reviewers_trailer_is_misplaced(title, body)
+    check(not reviewers_misplaced, "Every 'Reviewers:' line is a trailer",
           "'Reviewers:' must be in the last paragraph, with only trailers in it. Move other text above, and leave an empty line.")
     reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
 
@@ -184,6 +185,19 @@ if __name__ == "__main__":
     logger.debug("Validation results:")
     for err, msg in checks:
         logger.debug(f"* {msg}")
+
+    if reviewers_misplaced:
+        # The status check message has to be short. The example goes to the run page.
+        logger.debug("\nHow to fix the 'Reviewers:' trailer. The description must end like this:\n")
+        logger.debug("<pre>")
+        logger.debug("The text of the description.")
+        logger.debug("")
+        logger.debug("Co-authored-by: Name &lt;email&gt;")
+        logger.debug("Reviewers: Name &lt;email&gt;, Name &lt;email&gt;")
+        logger.debug("</pre>\n")
+        logger.debug("* The trailers are the last paragraph, after an empty line.")
+        logger.debug("* The paragraph has only trailers. Each trailer is on its own line.")
+        logger.debug("* There is no text below the trailers.")
 
     for err, msg in checks:
         # Just output the first error for the status message. STDOUT becomes the status check message
