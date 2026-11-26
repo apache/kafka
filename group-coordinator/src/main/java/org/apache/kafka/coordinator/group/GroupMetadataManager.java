@@ -7772,11 +7772,14 @@ public class GroupMetadataManager {
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return cleanupNotNeeded(classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture));
             } else if (group.type() == STREAMS && group.isEmpty()) {
-                if (!topologyCleanupHandled && ((StreamsGroup) group).mayHaveTopologyDescription()) {
-                    // A classic join converts this empty streams group to classic and deletes its streams
-                    // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
-                    // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
-                    // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
+                // A classic join converts this empty streams group to classic and deletes its streams
+                // metadata. If the topology-description plugin (KIP-1331) may still hold a topology for the
+                // group, that data would be orphaned. So change nothing and return TRUE. The caller deletes
+                // the topology from the plugin, then calls again with topologyCleanupHandled = true to convert.
+                // A join with a known member id keeps the group, so it needs no cleanup.
+                if (!topologyCleanupHandled
+                    && UNKNOWN_MEMBER_ID.equals(request.memberId())
+                    && ((StreamsGroup) group).mayHaveTopologyDescription()) {
                     return new CoordinatorResult<>(List.of(), Boolean.TRUE);
                 }
                 // Empty streams groups are converted to classic groups in classicGroupJoinToClassicGroup.
@@ -7834,10 +7837,15 @@ public class GroupMetadataManager {
         // is specified but the group does not exist, the request is rejected with
         // UNKNOWN_MEMBER_ID.
         ClassicGroup group;
-        if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
-        } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+        // Only a request with an unknown member id can create the classic group below, so only
+        // such a request deletes an empty consumer or streams group to make room for it. A request
+        // with a known member id is rejected with UNKNOWN_MEMBER_ID and keeps the group.
+        if (isUnknownMember) {
+            if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
+            } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+            }
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
