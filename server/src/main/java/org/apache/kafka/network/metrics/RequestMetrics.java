@@ -55,6 +55,10 @@ public class RequestMetrics {
     private static final String REQUEST_BYTES = "RequestBytes";
     private static final String ERRORS_PER_SEC = "ErrorsPerSec";
 
+    static final int MAX_DEPRECATED_REQUEST_RATE_METERS = 1000;
+    static final int MAX_CLIENT_INFORMATION_TAG_LENGTH = 128;
+    private static final ClientInformation OVERFLOW_CLIENT_INFORMATION = new ClientInformation("_overflow_", "_overflow_");
+
     // time a request spent in a request queue
     public final Histogram requestQueueTimeHist;
     // time a request takes to be processed at the local broker
@@ -125,11 +129,32 @@ public class RequestMetrics {
 
     public Optional<Meter> deprecatedRequestRate(ApiKeys apiKey, short version, ClientInformation clientInformation) {
         if (apiKey.isVersionDeprecated(version)) {
-            return Optional.of(deprecatedRequestRateInternal.computeIfAbsent(new DeprecatedRequestRateKey(version, clientInformation),
-                k -> metricsGroup.newMeter(DEPRECATED_REQUESTS_PER_SEC, "requests", TimeUnit.SECONDS, tagsWithVersionAndClientInfo(version, clientInformation))));
+            return Optional.of(deprecatedRequestRateMeter(version, clientInformation));
         } else {
             return Optional.empty();
         }
+    }
+
+    Meter deprecatedRequestRateMeter(short version, ClientInformation clientInformation) {
+        DeprecatedRequestRateKey key = new DeprecatedRequestRateKey(version, truncated(clientInformation));
+        if (!deprecatedRequestRateInternal.containsKey(key) && deprecatedRequestRateInternal.size() >= MAX_DEPRECATED_REQUEST_RATE_METERS) {
+            key = new DeprecatedRequestRateKey(version, OVERFLOW_CLIENT_INFORMATION);
+        }
+        return deprecatedRequestRateInternal.computeIfAbsent(key,
+            k -> metricsGroup.newMeter(DEPRECATED_REQUESTS_PER_SEC, "requests", TimeUnit.SECONDS, tagsWithVersionAndClientInfo(k.version, k.clientInformation)));
+    }
+
+    private static ClientInformation truncated(ClientInformation clientInformation) {
+        String softwareName = clientInformation.softwareName();
+        String softwareVersion = clientInformation.softwareVersion();
+        if (softwareName.length() <= MAX_CLIENT_INFORMATION_TAG_LENGTH && softwareVersion.length() <= MAX_CLIENT_INFORMATION_TAG_LENGTH) {
+            return clientInformation;
+        }
+        return new ClientInformation(truncated(softwareName), truncated(softwareVersion));
+    }
+
+    private static String truncated(String value) {
+        return value.length() <= MAX_CLIENT_INFORMATION_TAG_LENGTH ? value : value.substring(0, MAX_CLIENT_INFORMATION_TAG_LENGTH);
     }
 
     public void markErrorMeter(Errors error, int count) {
