@@ -4511,9 +4511,7 @@ public class UnifiedLogTest {
     private static List<Record> allRecords(UnifiedLog log) {
         List<Record> recordsFound = new ArrayList<>();
         for (LogSegment logSegment : log.logSegments()) {
-            for (RecordBatch batch : logSegment.log().batches()) {
-                recordsFound.addAll(TestUtils.records(batch));
-            }
+            recordsFound.addAll(TestUtils.records(logSegment.log()));
         }
         return recordsFound;
     }

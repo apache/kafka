@@ -936,11 +936,9 @@ public class ChunkedRecordAccumulatorTest {
                 "batch must produce a non-empty record set after close; chunks were deallocated prematurely");
 
         int count = 0;
-        for (RecordBatch rb : records.batches()) {
-            for (Record r : TestUtils.records(rb)) {
-                count++;
-                assertNotNull(r.value());
-            }
+        for (Record r : TestUtils.records(records)) {
+            count++;
+            assertNotNull(r.value());
         }
         assertEquals(1, count, "expected exactly 1 record after close");
 
