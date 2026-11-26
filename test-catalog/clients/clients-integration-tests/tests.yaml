@@ -164,6 +164,7 @@ org.apache.kafka.clients.consumer.ConsumerBounceTest:
 - testClassicConsumerConsumptionWithBrokerFailures
 - testClassicConsumerReceivesFatalExceptionWhenGroupPassesMaxSize
 - testClassicConsumerSeekAndCommitWithBrokerFailures
+- testClassicRebalanceCompletesWhenOverCapacityMemberIsRejected
 - testClassicSubscribeWhenTopicUnavailable
 org.apache.kafka.clients.consumer.ConsumerIntegrationTest:
 - testAsyncConsumerWithConsumerProtocolDisabled
