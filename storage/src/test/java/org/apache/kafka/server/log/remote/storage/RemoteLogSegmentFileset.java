@@ -19,6 +19,8 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import org.slf4j.Logger;
@@ -35,7 +37,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static java.lang.String.format;
 import static java.util.Arrays.stream;
@@ -217,9 +218,10 @@ public final class RemoteLogSegmentFileset {
     }
 
     public List<Record> getRecords() throws IOException {
-        return StreamSupport
-                .stream(FileRecords.open(files.get(SEGMENT)).records().spliterator(), false)
-                .toList();
+        try (FileRecords fileRecords = FileRecords.open(files.get(SEGMENT));
+             CloseableIterator<Record> records = fileRecords.records()) {
+            return Utils.toList(records);
+        }
     }
 
     public void copy(final Transferer transferer, final LogSegmentData data) throws IOException {

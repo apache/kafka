@@ -18,6 +18,8 @@ package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -25,8 +27,6 @@ import java.util.Iterator;
 import java.util.Optional;
 
 public abstract class AbstractRecords implements Records {
-
-    private final Iterable<Record> records = this::recordsIterator;
 
     @Override
     public boolean hasMatchingMagic(byte magic) {
@@ -61,8 +61,8 @@ public abstract class AbstractRecords implements Records {
      * @return An iterator over the records
      */
     @Override
-    public Iterable<Record> records() {
-        return records;
+    public CloseableIterator<Record> records() {
+        return new RecordsIterator();
     }
 
     @Override
@@ -70,34 +70,47 @@ public abstract class AbstractRecords implements Records {
         return new DefaultRecordsSend<>(this);
     }
 
-    private Iterator<Record> recordsIterator() {
-        return new AbstractIterator<>() {
-            private final Iterator<? extends RecordBatch> batches = batches().iterator();
-            private Iterator<Record> records;
+    private class RecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
+        private final Iterator<? extends RecordBatch> batches = batches().iterator();
+        private CloseableIterator<Record> records;
 
-            @Override
-            protected Record makeNext() {
-                if (records != null && records.hasNext())
-                    return records.next();
-
-                if (batches.hasNext()) {
-                    records = batches.next().iterator();
-                    return makeNext();
-                }
-
-                return allDone();
+        @Override
+        protected Record makeNext() {
+            while (records == null || !records.hasNext()) {
+                closeCurrentBatch();
+                if (!batches.hasNext())
+                    return allDone();
+                records = batches.next().streamingIterator(BufferSupplier.NO_CACHING);
             }
-        };
+
+            return records.next();
+        }
+
+        private void closeCurrentBatch() {
+            if (records != null) {
+                CloseableIterator<Record> current = records;
+                records = null;
+                current.close();
+            }
+        }
+
+        @Override
+        public void close() {
+            allDone();
+            closeCurrentBatch();
+        }
     }
 
     public static int estimateSizeInBytes(byte magic,
                                           long baseOffset,
                                           CompressionType compressionType,
-                                          Iterable<Record> records) {
+                                          Iterator<Record> records) {
         int size = 0;
         if (magic <= RecordBatch.MAGIC_VALUE_V1) {
-            for (Record record : records)
+            while (records.hasNext()) {
+                Record record = records.next();
                 size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
+            }
         } else {
             size = DefaultRecordBatch.sizeInBytes(baseOffset, records);
         }

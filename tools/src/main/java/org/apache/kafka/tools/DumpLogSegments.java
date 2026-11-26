@@ -45,6 +45,8 @@ import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
@@ -290,8 +292,11 @@ public class DumpLogSegments {
                         matchingBatch.get().lastOffset());
                 } else {
                     RecordBatch batch = matchingBatch.get();
-                    for (Record record : batch) {
-                        maxTimestamp = Math.max(maxTimestamp, record.timestamp());
+                    try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                        while (iterator.hasNext()) {
+                            Record record = iterator.next();
+                            maxTimestamp = Math.max(maxTimestamp, record.timestamp());
+                        }
                     }
 
                     if (maxTimestamp != entry.timestamp()) {
@@ -390,24 +395,27 @@ public class DumpLogSegments {
                                          boolean skipRecordMetadata,
                                          boolean printContents,
                                          MessageParser<?, ?> parser) {
-        for (Record record : batch) {
-            long previousOffset = lastOffset.get();
-            if (record.offset() != previousOffset + 1) {
-                Map<Long, Long> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
-                    .computeIfAbsent(file.getAbsolutePath(), k -> new TreeMap<>());
-                nonConsecutivePairsSeq.put(previousOffset, record.offset());
-            }
-            lastOffset.set(record.offset());
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                long previousOffset = lastOffset.get();
+                if (record.offset() != previousOffset + 1) {
+                    Map<Long, Long> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
+                        .computeIfAbsent(file.getAbsolutePath(), k -> new TreeMap<>());
+                    nonConsecutivePairsSeq.put(previousOffset, record.offset());
+                }
+                lastOffset.set(record.offset());
 
-            if (!skipRecordMetadata) {
-                printRecordMetadata(batch, record);
-            }
+                if (!skipRecordMetadata) {
+                    printRecordMetadata(batch, record);
+                }
 
-            if (printContents && !batch.isControlBatch()) {
-                String prefix = skipRecordMetadata ? RECORD_INDENT + " " : " ";
-                printRecordContents(parser, record, prefix);
+                if (printContents && !batch.isControlBatch()) {
+                    String prefix = skipRecordMetadata ? RECORD_INDENT + " " : " ";
+                    printRecordContents(parser, record, prefix);
+                }
+                System.out.println();
             }
-            System.out.println();
         }
     }
 

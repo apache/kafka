@@ -282,7 +282,7 @@ public class MemoryRecordsBuilderTest {
                         voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList())));
 
             MemoryRecords built = builder.build();
-            List<Record> records = TestUtils.toList(built.records());
+            List<Record> records = TestUtils.records(built);
             assertEquals(1, records.size());
             LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(records.get(0));
 
@@ -383,7 +383,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(logAppendTime, record.timestamp());
             }
         }
@@ -424,7 +424,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(expectedTimestamps[i++], record.timestamp());
             }
         }
@@ -440,7 +440,7 @@ public class MemoryRecordsBuilderTest {
                 RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.append(1L, "key".getBytes(), "value".getBytes());
         MemoryRecords memoryRecords = builder.build();
-        List<Record> records = TestUtils.toList(memoryRecords.records());
+        List<Record> records = TestUtils.records(memoryRecords);
         assertEquals(1, records.size());
     }
 
@@ -465,7 +465,7 @@ public class MemoryRecordsBuilderTest {
         assertFalse(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
 
         MemoryRecords memRecords = builder.build();
-        List<Record> records = TestUtils.toList(memRecords.records());
+        List<Record> records = TestUtils.records(memRecords);
         assertEquals(1, records.size());
 
         Record record = records.get(0);
@@ -506,7 +506,7 @@ public class MemoryRecordsBuilderTest {
                 assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
             } else {
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                for (Record record : batch)
+                for (Record record : TestUtils.records(batch))
                     assertEquals(i++, record.timestamp());
             }
         }

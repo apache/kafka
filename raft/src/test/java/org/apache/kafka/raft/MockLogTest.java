@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.test.TestUtils;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
@@ -226,7 +226,7 @@ public class MockLogTest {
             assertTrue(batch.isControlBatch());
         }
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
             assertEquals(deserializedData, messageData);
             extractRecords.add(record.value());
@@ -262,7 +262,7 @@ public class MockLogTest {
             Integer.MAX_VALUE
         ).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             extractRecords.add(record.value());
         }
 
@@ -293,7 +293,7 @@ public class MockLogTest {
         ).records;
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             extractRecords.add(record.value());
         }
         assertEquals(List.of(recordOne.value(), recordTwo.value()), extractRecords);
@@ -1084,7 +1084,7 @@ public class MockLogTest {
             )
         );
         int recordCount = 0;
-        var iterator = records.records().iterator();
+        var iterator = TestUtils.records(records).iterator();
         while (iterator.hasNext()) {
             recordCount++;
             iterator.next();
@@ -1104,7 +1104,7 @@ public class MockLogTest {
             Integer.MAX_VALUE
         ).records;
         int recordCount = 0;
-        var iterator = records.records().iterator();
+        var iterator = TestUtils.records(records).iterator();
         while (iterator.hasNext()) {
             recordCount++;
             iterator.next();
@@ -1124,7 +1124,7 @@ public class MockLogTest {
             1
         ).records;
         int recordCount = 0;
-        var iterator = records.records().iterator();
+        var iterator = TestUtils.records(records).iterator();
         while (iterator.hasNext()) {
             recordCount++;
             iterator.next();
@@ -1156,7 +1156,7 @@ public class MockLogTest {
         // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
         // [0..R-1] converted to an utf-8 string with empty keys and headers.
         int count = 0;
-        for (Record record : info.records.records()) {
+        for (Record record : TestUtils.records(info.records)) {
             byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
             assertEquals(ByteBuffer.wrap(expectedValue), record.value());
             count += 1;
@@ -1180,7 +1180,7 @@ public class MockLogTest {
                 isolation,
                 Integer.MAX_VALUE
             ).records;
-            for (Record record : records.records()) {
+            for (Record record : TestUtils.records(records)) {
                 foundRecord = true;
 
                 if (firstReadOffset < 0L) {
@@ -1245,7 +1245,7 @@ public class MockLogTest {
                 assertEquals(currentOffset, batch.baseOffset());
                 assertEquals(currentOffset + batch.countOrNull() - 1, batch.lastOffset());
 
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     assertEquals(currentOffset, record.offset());
                     assertEquals(expectedRecords.get(currentOffset), new SimpleRecord(record));
                     currentOffset += 1;

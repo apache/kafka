@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package kafka.server.share;
-
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.GapWindow;
 import kafka.server.share.SharePartition.SharePartitionState;
@@ -49,6 +48,8 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -86,7 +87,6 @@ import org.mockito.Mockito;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -8641,9 +8641,9 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append records from offset 10.
-            memoryRecords(10, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(10, 2)).forEach(builder::append);
             // Append records from offset 15.
-            memoryRecords(15, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(15, 2)).forEach(builder::append);
         }
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -8719,15 +8719,15 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 0, 2)) {
             // Append only 2 records for 0 offset batch starting from offset 1.
-            memoryRecords(1, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(1, 2)).forEach(builder::append);
         }
         // Do not include batch from offset 5. And compact batch starting at offset 20.
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 20, 2)) {
             // Append 2 records for 20 offset batch starting from offset 20.
-            memoryRecords(20, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(20, 2)).forEach(builder::append);
             // And append 2 records matching the end offset of the batch.
-            memoryRecords(33, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(33, 2)).forEach(builder::append);
         }
         // Send the full batch at offset 40.
         memoryRecordsBuilder(buffer, 40, 5).close();
@@ -8735,11 +8735,11 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 50, 2)) {
             // Append 5 records for 50 offset batch starting from offset 51.
-            memoryRecords(51, 5).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(51, 5)).forEach(builder::append);
             // Append 2 records for in middle of the batch.
-            memoryRecords(58, 2).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(58, 2)).forEach(builder::append);
             // And append 1 record prior to the end offset.
-            memoryRecords(63, 1).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(63, 1)).forEach(builder::append);
         }
         buffer.flip();
         records = MemoryRecords.readableRecords(buffer);
@@ -8806,7 +8806,7 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append only 4 records for 5th offset batch starting from offset 6.
-            memoryRecords(6, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(6, 4)).forEach(builder::append);
         }
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -8920,7 +8920,7 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append only 4 records for 5th offset batch starting from offset 6.
-            memoryRecords(6, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(6, 4)).forEach(builder::append);
         }
         buffer.flip();
         records = MemoryRecords.readableRecords(buffer);
@@ -9189,15 +9189,15 @@ public class SharePartitionTest {
 
         // Record batch is a control batch but doesn't contain any records.
         recordBatch = mock(RecordBatch.class);
-        Iterator batchIterator = mock(Iterator.class);
+        CloseableIterator batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(false);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertFalse(sharePartition.containsAbortMarker(recordBatch));
 
         // Record batch is a control batch which contains a record of type ControlRecordType.ABORT.
         recordBatch = mock(RecordBatch.class);
-        batchIterator = mock(Iterator.class);
+        batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(true);
         DefaultRecord record = mock(DefaultRecord.class);
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -9208,13 +9208,14 @@ public class SharePartitionTest {
         buffer.flip();
         when(record.key()).thenReturn(buffer);
         when(batchIterator.next()).thenReturn(record);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertTrue(sharePartition.containsAbortMarker(recordBatch));
+        Mockito.verify(batchIterator).close();
 
         // Record batch is a control batch which contains a record of type ControlRecordType.COMMIT.
         recordBatch = mock(RecordBatch.class);
-        batchIterator = mock(Iterator.class);
+        batchIterator = mock(CloseableIterator.class);
         when(batchIterator.hasNext()).thenReturn(true);
         record = mock(DefaultRecord.class);
         buffer = ByteBuffer.allocate(4096);
@@ -9225,7 +9226,7 @@ public class SharePartitionTest {
         buffer.flip();
         when(record.key()).thenReturn(buffer);
         when(batchIterator.next()).thenReturn(record);
-        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(batchIterator);
         when(recordBatch.isControlBatch()).thenReturn(true);
         assertFalse(sharePartition.containsAbortMarker(recordBatch));
     }
@@ -10643,9 +10644,9 @@ public class SharePartitionTest {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, 5, 2)) {
             // Append records from offset 10.
-            memoryRecords(10, 4).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(10, 4)).forEach(builder::append);
             // Append records from offset 19.
-            memoryRecords(16, 5).records().forEach(builder::append);
+            TestUtils.records(memoryRecords(16, 5)).forEach(builder::append);
         }
 
         buffer.flip();

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.util.Iterator;
 import java.util.Optional;
@@ -93,10 +94,11 @@ public interface Records extends TransferableRecords {
 
     /**
      * Get an iterator over the records in this log. Note that this generally requires decompression,
-     * and should therefore be used with care.
+     * and should therefore be used with care. Callers must close the iterator, including when
+     * iteration stops before all records have been read.
      * @return The record iterator
      */
-    Iterable<Record> records();
+    CloseableIterator<Record> records();
 
     /**
      * Return a slice of records from this instance, which is a view into this set starting from the given position

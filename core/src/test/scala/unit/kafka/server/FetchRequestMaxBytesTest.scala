@@ -118,7 +118,8 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
       FetchRequest.Builder.forConsumer(requestVersion, Int.MaxValue, 0,
         Map(testTopicPartition ->
           new PartitionData(Uuid.ZERO_UUID, fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(requestVersion))
-    val records = FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, requestVersion).get(testTopicPartition)).records()
+    val records = org.apache.kafka.test.TestUtils.records(
+      FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, requestVersion).get(testTopicPartition)))
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)

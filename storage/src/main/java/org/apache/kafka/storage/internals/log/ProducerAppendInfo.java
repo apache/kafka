@@ -25,13 +25,14 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -203,14 +204,15 @@ public class ProducerAppendInfo {
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, short transactionVersion) {
         if (batch.isControlBatch()) {
-            Iterator<Record> recordIterator = batch.iterator();
-            if (recordIterator.hasNext()) {
-                Record record = recordIterator.next();
-                EndTransactionMarker endTxnMarker = EndTransactionMarker.deserialize(record);
-                return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp(), transactionVersion);
-            } else {
-                // An empty control batch means the entire transaction has been cleaned from the log, so no need to append
-                return Optional.empty();
+            try (CloseableIterator<Record> recordIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                if (recordIterator.hasNext()) {
+                    Record record = recordIterator.next();
+                    EndTransactionMarker endTxnMarker = EndTransactionMarker.deserialize(record);
+                    return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp(), transactionVersion);
+                } else {
+                    // An empty control batch means the entire transaction has been cleaned from the log, so no need to append
+                    return Optional.empty();
+                }
             }
         } else {
             LogOffsetMetadata firstOffsetMetadata = firstOffsetMetadataOpt.orElse(new LogOffsetMetadata(batch.baseOffset()));

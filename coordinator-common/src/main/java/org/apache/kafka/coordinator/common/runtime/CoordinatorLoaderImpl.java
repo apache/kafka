@@ -25,6 +25,8 @@ import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.KafkaScheduler;
@@ -228,70 +230,76 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
     ) {
         for (MutableRecordBatch batch : memoryRecords.batches()) {
             if (batch.isControlBatch()) {
-                for (Record record : batch) {
-                    loadStats.numRecords++;
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        loadStats.numRecords++;
 
-                    ControlRecordType controlRecord = ControlRecordType.parse(record.key());
-                    if (controlRecord == ControlRecordType.COMMIT) {
-                        if (LOG.isTraceEnabled()) {
-                            LOG.trace("Replaying end transaction marker from {} at offset {} to commit" +
-                                " transaction with producer id {} and producer epoch {}.",
-                                tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                        ControlRecordType controlRecord = ControlRecordType.parse(record.key());
+                        if (controlRecord == ControlRecordType.COMMIT) {
+                            if (LOG.isTraceEnabled()) {
+                                LOG.trace("Replaying end transaction marker from {} at offset {} to commit" +
+                                    " transaction with producer id {} and producer epoch {}.",
+                                    tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                            }
+                            coordinator.replayEndTransactionMarker(
+                                    batch.producerId(),
+                                    batch.producerEpoch(),
+                                    TransactionResult.COMMIT
+                            );
+                        } else if (controlRecord == ControlRecordType.ABORT) {
+                            if (LOG.isTraceEnabled()) {
+                                LOG.trace("Replaying end transaction marker from {} at offset {} to abort" +
+                                    " transaction with producer id {} and producer epoch {}.",
+                                    tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                            }
+                            coordinator.replayEndTransactionMarker(
+                                    batch.producerId(),
+                                    batch.producerEpoch(),
+                                    TransactionResult.ABORT
+                            );
                         }
-                        coordinator.replayEndTransactionMarker(
-                                batch.producerId(),
-                                batch.producerEpoch(),
-                                TransactionResult.COMMIT
-                        );
-                    } else if (controlRecord == ControlRecordType.ABORT) {
-                        if (LOG.isTraceEnabled()) {
-                            LOG.trace("Replaying end transaction marker from {} at offset {} to abort" +
-                                " transaction with producer id {} and producer epoch {}.",
-                                tp, record.offset(), batch.producerId(), batch.producerEpoch());
-                        }
-                        coordinator.replayEndTransactionMarker(
-                                batch.producerId(),
-                                batch.producerEpoch(),
-                                TransactionResult.ABORT
-                        );
                     }
                 }
             } else {
-                for (Record record : batch) {
-                    loadStats.numRecords++;
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        loadStats.numRecords++;
 
-                    Optional<T> coordinatorRecordOpt = Optional.empty();
-                    try {
-                        coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
-                    } catch (Deserializer.UnknownRecordTypeException ex) {
-                        LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
-                            " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
-                    } catch (RuntimeException ex) {
-                        String msg = String.format("Deserializing record %s from %s failed.", record, tp);
-                        LOG.error(msg, ex);
-                        throw new RuntimeException(msg, ex);
-                    }
-
-                    coordinatorRecordOpt.ifPresent(coordinatorRecord -> {
+                        Optional<T> coordinatorRecordOpt = Optional.empty();
                         try {
-                            if (LOG.isTraceEnabled()) {
-                                LOG.trace("Replaying record {} from {} at offset {} with producer id {}" +
-                                    " and producer epoch {}.", coordinatorRecord, tp, record.offset(), batch.producerId(), batch.producerEpoch());
-                            }
-                            coordinator.replay(
-                                record.offset(),
-                                batch.producerId(),
-                                batch.producerEpoch(),
-                                coordinatorRecord
-                            );
+                            coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
+                        } catch (Deserializer.UnknownRecordTypeException ex) {
+                            LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
+                                " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
                         } catch (RuntimeException ex) {
-                            String msg = String.format("Replaying record %s from %s at offset %d with producer id %d and" +
-                                " producer epoch %d failed.", coordinatorRecord, tp, record.offset(),
-                                batch.producerId(), batch.producerEpoch());
+                            String msg = String.format("Deserializing record %s from %s failed.", record, tp);
                             LOG.error(msg, ex);
                             throw new RuntimeException(msg, ex);
                         }
-                    });
+
+                        coordinatorRecordOpt.ifPresent(coordinatorRecord -> {
+                            try {
+                                if (LOG.isTraceEnabled()) {
+                                    LOG.trace("Replaying record {} from {} at offset {} with producer id {}" +
+                                        " and producer epoch {}.", coordinatorRecord, tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                                }
+                                coordinator.replay(
+                                    record.offset(),
+                                    batch.producerId(),
+                                    batch.producerEpoch(),
+                                    coordinatorRecord
+                                );
+                            } catch (RuntimeException ex) {
+                                String msg = String.format("Replaying record %s from %s at offset %d with producer id %d and" +
+                                    " producer epoch %d failed.", coordinatorRecord, tp, record.offset(),
+                                    batch.producerId(), batch.producerEpoch());
+                                LOG.error(msg, ex);
+                                throw new RuntimeException(msg, ex);
+                            }
+                        });
+                    }
                 }
             }
 
