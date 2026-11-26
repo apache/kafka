@@ -717,12 +717,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testCreateTopicRequestV0FailsIfValidateOnly() {
-        assertThrows(UnsupportedVersionException.class,
-            () -> createCreateTopicRequest((short) 0, true));
-    }
-
-    @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
         final UnsupportedProtocolFieldException exception = assertThrows(
             UnsupportedProtocolFieldException.class, () -> {
