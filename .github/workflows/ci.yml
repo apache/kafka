@@ -1,0 +1,115 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI
+name: CI
+
+# Kafka 3.9 has no upstream GitHub Actions build (upstream runs Jenkins). This workflow runs the
+# same validation and test commands as the Jenkinsfile for pushes and pull requests on the
+# aiven-patches/3.9 branch.
+on:
+  push:
+    branches:
+      - 'aiven-patches/**'
+  pull_request:
+    types: [ opened, synchronize, ready_for_review, reopened ]
+    branches:
+      - 'aiven-patches/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Compile and Check (JDK 17, Scala 2.13)
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4.3.0
+        with:
+          gradle-version: wrapper
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Compile and validate
+        run: |
+          ./gradlew -PscalaVersion=2.13 clean check -x test \
+            --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
+      - name: Archive check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-reports
+          path: |
+            **/build/reports/**/*.html
+            **/build/reports/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
+  test:
+    needs: [validate]
+    if: ${{ ! github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - java: 8
+            scala: '2.12'
+          - java: 17
+            scala: '2.13'
+    name: JUnit tests (JDK ${{ matrix.java }}, Scala ${{ matrix.scala }})
+    timeout-minutes: 330
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4.3.0
+        with:
+          gradle-version: wrapper
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: JUnit tests
+        run: |
+          ./gradlew -PscalaVersion=${{ matrix.scala }} test \
+            --profile --continue -PkeepAliveMode="session" \
+            -PtestLoggingEvents=started,passed,skipped,failed \
+            -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10
+      - name: Archive JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports-${{ matrix.java }}
+          path: |
+            **/build/reports/tests/*
+            **/build/test-results/**/TEST-*.xml
+          compression-level: 9
+          if-no-files-found: ignore
