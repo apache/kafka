@@ -440,7 +440,9 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupJoinOnStreamsGroup
 - testClassicGroupJoinToConsumerGroupFailsOnMalformedSubscriptionMetadata
 - testClassicGroupJoinWithEmptyConsumerGroup
+- testClassicGroupJoinWithEmptyConsumerGroupAndKnownMemberId
 - testClassicGroupJoinWithEmptyStreamsGroup
+- testClassicGroupJoinWithEmptyStreamsGroupAndKnownMemberId
 - testClassicGroupJoinWithNonEmptyStreamsGroup
 - testClassicGroupLeaveOnShareGroup
 - testClassicGroupLeaveOnStreamsGroup
