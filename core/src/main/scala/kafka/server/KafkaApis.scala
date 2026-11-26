@@ -798,10 +798,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
     }
 
-    val partitionResult = authHelper.partitionByAuthorized(request.context,
-        DESCRIBE, TOPIC, offsetRequest.topics, (t: ListOffsetsRequestData.ListOffsetsTopic) => t.name)
-    val authorizedRequestInfo = partitionResult.authorized.asScala
-    val unauthorizedRequestInfo = partitionResult.unauthorized.asScala
+    val (authorizedRequestInfo, unauthorizedRequestInfo) =
+      if (offsetRequest.replicaId != ListOffsetsRequest.CONSUMER_REPLICA_ID &&
+          !authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+        (Seq.empty[ListOffsetsRequestData.ListOffsetsTopic], offsetRequest.topics.asScala.toSeq)
+      } else {
+        val partitionResult = authHelper.partitionByAuthorized(request.context,
+          DESCRIBE, TOPIC, offsetRequest.topics, (t: ListOffsetsRequestData.ListOffsetsTopic) => t.name)
+        (partitionResult.authorized.asScala.toSeq, partitionResult.unauthorized.asScala.toSeq)
+      }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.map(topic =>
       new ListOffsetsTopicResponse()
