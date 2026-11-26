@@ -447,7 +447,7 @@ public class ConsumerMetadataTest {
             assertEquals(partitionMetadata.leaderEpoch, updatedPartMetadata.leaderEpoch);
             assertEquals(partitionMetadata.replicaIds, updatedPartMetadata.replicaIds);
             assertEquals(partitionMetadata.inSyncReplicaIds, updatedPartMetadata.inSyncReplicaIds);
-            assertEquals(partitionMetadata.offlineReplicaIds, partitionMetadata.offlineReplicaIds);
+            assertEquals(partitionMetadata.offlineReplicaIds, updatedPartMetadata.offlineReplicaIds);
         }
     }
 }
