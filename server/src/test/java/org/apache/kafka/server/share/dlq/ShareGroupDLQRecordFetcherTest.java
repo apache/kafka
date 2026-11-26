@@ -31,10 +31,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,6 +49,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,7 +108,7 @@ class ShareGroupDLQRecordFetcherTest {
     // hardcoded, so budget-boundary tests can align a budget precisely with a record's own size.
     private static int recordSizeInBytes(SimpleRecord simpleRecord) {
         MemoryRecords batch = MemoryRecords.withRecords(Compression.NONE, simpleRecord);
-        return batch.batches().iterator().next().iterator().next().sizeInBytes();
+        return TestUtils.records(batch).iterator().next().sizeInBytes();
     }
 
     // ---- helpers ----
@@ -294,9 +298,9 @@ class ShareGroupDLQRecordFetcherTest {
         assertEquals(2, result.size());
         assertRecord(result, 0L, "k0", "v0");
         assertRecord(result, 1L, "k1", "v1");
-        verify(beyond1, never()).iterator();
+        verify(beyond1, never()).streamingIterator(any());
         verify(beyond1, never()).isCompressed();
-        verify(beyond2, never()).iterator();
+        verify(beyond2, never()).streamingIterator(any());
         verify(beyond2, never()).isCompressed();
         verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
     }
@@ -315,7 +319,7 @@ class ShareGroupDLQRecordFetcherTest {
         assertEquals(2, result.size());
         assertRecord(result, 0L, "k0", "v0");
         assertRecord(result, 1L, "k1", "v1");
-        verify(beyond, never()).iterator();
+        verify(beyond, never()).streamingIterator(any());
     }
 
     @Test
@@ -326,13 +330,14 @@ class ShareGroupDLQRecordFetcherTest {
         when(legacy.magic()).thenReturn(RecordBatch.MAGIC_VALUE_V1);
         when(legacy.lastOffset()).thenReturn(5L);
         when(legacy.isCompressed()).thenReturn(false);
-        when(legacy.iterator()).thenAnswer(invocation -> List.<Record>of().iterator());
+        when(legacy.streamingIterator(BufferSupplier.NO_CACHING))
+                .thenReturn(CloseableIterator.wrap(Collections.emptyIterator()));
         whenReadAsync(done(successWithBatches(legacy)));
 
         fetch(param(0L, 1L));
 
         verify(legacy, never()).baseOffset();
-        verify(legacy, times(1)).iterator();
+        verify(legacy).streamingIterator(BufferSupplier.NO_CACHING);
     }
 
     @Test

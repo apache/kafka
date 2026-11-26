@@ -321,9 +321,8 @@ public class ShareGroupDLQRecordFetcher {
 
     private long collectFromBatch(RecordBatch batch, long readFrom) {
         if (!batch.isCompressed()) {
-            // No decompression risk to bound: the on-wire size already bounds what's in memory, so no
-            // cap applies (unlike the compressed cases below, capping this would reject legitimately
-            // large uncompressed records for no safety benefit).
+            // No decompression step needs bounding: the on-wire size already bounds what's in memory.
+            // The records we retain still count toward the cumulative collection budget.
             return collectUncompressed(batch, readFrom);
         }
         if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
@@ -335,33 +334,9 @@ public class ShareGroupDLQRecordFetcher {
     }
 
     private long collectUncompressed(RecordBatch batch, long readFrom) {
-        long nextOffset = readFrom;
-        for (Record record : batch) {
-            // A fetch can return a batch whose base offset is below the requested offset, so skip
-            // any record at or before the read position to avoid re-processing and dragging
-            // nextOffset backwards.
-            if (record.offset() < readFrom) continue;
-            if (record.offset() > endOffset) return nextOffset;
-            long recordSize = record.sizeInBytes();
-            if (recordSize > maxDecompressedBytes) {
-                // This one record can never fit within maxDecompressedBytes, in this fetch or any other -
-                // exclude it permanently rather than leaving it for a retry that could never succeed.
-                nextOffset = Math.max(nextOffset, record.offset() + 1);
-                lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
-                continue;
-            }
-            if (collectedBytes + recordSize > maxDecompressedBytes) {
-                // Fits on its own, but not alongside what's already been collected this fetch - stop here
-                // and leave this record, and everything after it, untouched for a fresh fetch to attempt.
-                deferredRemainder = true;
-                return nextOffset;
-            }
-            recordMap.put(record.offset(), record);
-            collectedBytes += recordSize;
-            nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
-            lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            return collectWithCumulativeCap(iterator, readFrom);
         }
-        return nextOffset;
     }
 
     /**
@@ -475,34 +450,40 @@ public class ShareGroupDLQRecordFetcher {
      * record has already been decompressed, whether to keep it or discard it.
      */
     private long collectWithCumulativeCap(RecordBatch batch, long readFrom) {
-        long nextOffset = readFrom;
         try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
-            while (iterator.hasNext()) {
-                Record record = iterator.next();
-                if (record.offset() < readFrom) continue;
-                if (record.offset() > endOffset) return nextOffset;
+            return collectWithCumulativeCap(iterator, readFrom);
+        }
+    }
 
-                long recordSize = record.sizeInBytes();
-                if (recordSize > maxDecompressedBytes) {
-                    // This one record can never fit within maxDecompressedBytes, in this fetch or any
-                    // other - exclude it permanently rather than leaving it for a retry that could never
-                    // succeed.
-                    nextOffset = Math.max(nextOffset, record.offset() + 1);
-                    lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
-                    continue;
-                }
-                if (collectedBytes + recordSize > maxDecompressedBytes) {
-                    // Fits on its own, but not alongside what's already been collected this fetch - stop
-                    // here and leave it, and everything after it, untouched for a fresh fetch to attempt.
-                    deferredRemainder = true;
-                    return nextOffset;
-                }
+    // The caller owns and closes the iterator.
+    private long collectWithCumulativeCap(CloseableIterator<Record> iterator, long readFrom) {
+        long nextOffset = readFrom;
+        while (iterator.hasNext()) {
+            Record record = iterator.next();
+            // A fetch can return a batch whose base offset is below the requested offset, so skip
+            // any record before the read position to avoid re-processing and dragging nextOffset backwards.
+            if (record.offset() < readFrom) continue;
+            if (record.offset() > endOffset) return nextOffset;
 
-                recordMap.put(record.offset(), record);
-                collectedBytes += recordSize;
+            long recordSize = record.sizeInBytes();
+            if (recordSize > maxDecompressedBytes) {
+                // This one record can never fit within maxDecompressedBytes, in this fetch or any other -
+                // exclude it permanently rather than leaving it for a retry that could never succeed.
                 nextOffset = Math.max(nextOffset, record.offset() + 1);
                 lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
+                continue;
             }
+            if (collectedBytes + recordSize > maxDecompressedBytes) {
+                // Fits on its own, but not alongside what's already been collected this fetch - stop here
+                // and leave this record, and everything after it, untouched for a fresh fetch to attempt.
+                deferredRemainder = true;
+                return nextOffset;
+            }
+
+            recordMap.put(record.offset(), record);
+            collectedBytes += recordSize;
+            nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
+            lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
         }
         return nextOffset;
     }

@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.internal.{FileRecords, MemoryRecords, Memo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionPartitionAndLeaderEpoch, TransactionalIdAndProducerIdEpoch, TransactionalIdCoordinatorEpochAndMetadata, TransactionalIdCoordinatorEpochAndTransitMetadata, TxnMetadataCacheEntry, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
@@ -47,6 +48,7 @@ import org.apache.kafka.common.errors.InvalidRegularExpression
 import java.util
 import java.util.Optional
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 import scala.collection.mutable
 
 
@@ -491,17 +493,19 @@ class TransactionStateManager(brokerId: Int,
                 s" while loading transaction state from $topicPartition. Ignoring it. " +
                 s"It could be a left over from an aborted upgrade."
             memRecords.batches.forEach { batch =>
-              for (record <- batch.asScala) {
-                require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.read(record.key(), record.value()) match {
-                  case v: TransactionLog.UnknownKeyVersion =>
-                    warn(unknownVersionWarning("key", v.version()))
-                  case v: TransactionLog.UnknownValueVersion =>
-                    warn(unknownVersionWarning("value", v.version()))
-                  case r: TransactionLog.TxnTombstone =>
-                    loadedTransactions.remove(r.transactionId())
-                  case r: TransactionLog.TxnRecord =>
-                    loadedTransactions.put(r.transactionId(), r.metadata())
+              Using.resource(batch.streamingIterator(BufferSupplier.NO_CACHING)) { records =>
+                for (record <- records.asScala) {
+                  require(record.hasKey, "Transaction state log's key should not be null")
+                  TransactionLog.read(record.key(), record.value()) match {
+                    case v: TransactionLog.UnknownKeyVersion =>
+                      warn(unknownVersionWarning("key", v.version()))
+                    case v: TransactionLog.UnknownValueVersion =>
+                      warn(unknownVersionWarning("value", v.version()))
+                    case r: TransactionLog.TxnTombstone =>
+                      loadedTransactions.remove(r.transactionId())
+                    case r: TransactionLog.TxnRecord =>
+                      loadedTransactions.put(r.transactionId(), r.metadata())
+                  }
                 }
               }
               currOffset = batch.nextOffset

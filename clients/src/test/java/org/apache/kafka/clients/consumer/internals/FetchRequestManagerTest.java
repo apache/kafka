@@ -2349,7 +2349,7 @@ public class FetchRequestManagerTest {
             for (int v = 0; v < 3; v++)
                 builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
             MemoryRecords records = builder.build();
-            for (Record record : records.records())
+            for (Record record : TestUtils.records(records))
                 expectedBytes += record.sizeInBytes();
 
             fetchPartitionData.put(tp, new FetchResponseData.PartitionData()
@@ -2392,7 +2392,7 @@ public class FetchRequestManagerTest {
         MemoryRecords records = builder.build();
 
         int expectedBytes = 0;
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             if (record.offset() >= 1)
                 expectedBytes += record.sizeInBytes();
         }
@@ -2437,7 +2437,7 @@ public class FetchRequestManagerTest {
         collectFetch();
 
         int expectedBytes = 0;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             expectedBytes += record.sizeInBytes();
 
         assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
@@ -2484,7 +2484,7 @@ public class FetchRequestManagerTest {
 
         // we should have ignored the record at the wrong offset
         int expectedBytes = 0;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             expectedBytes += record.sizeInBytes();
 
         assertEquals(expectedBytes, (Double) fetchSizeAverage.metricValue(), EPSILON);
