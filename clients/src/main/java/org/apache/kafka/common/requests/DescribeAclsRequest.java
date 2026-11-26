@@ -63,10 +63,10 @@ public class DescribeAclsRequest extends AbstractRequest {
     private DescribeAclsRequest(DescribeAclsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_ACLS, version);
         this.data = data;
-        normalizeAndValidate();
+        validate();
     }
 
-    private void normalizeAndValidate() {
+    private void validate() {
         if (data.patternTypeFilter() == PatternType.UNKNOWN.code()
                 || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
                 || data.permissionType() == AclPermissionType.UNKNOWN.code()

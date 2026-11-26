@@ -1027,7 +1027,7 @@ public class RequestResponseTest {
         assertEquals(1, createCreatePartitionsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createCreateTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createCreateTopicResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createDeleteAclsResponse(DELETE_ACLS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(1, createDeleteAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createDeleteGroupsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createDeleteTopicsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeAclsResponse().errorCounts().get(Errors.NONE));
@@ -1193,7 +1193,7 @@ public class RequestResponseTest {
             case TXN_OFFSET_COMMIT: return createTxnOffsetCommitResponse();
             case DESCRIBE_ACLS: return createDescribeAclsResponse();
             case CREATE_ACLS: return createCreateAclsResponse();
-            case DELETE_ACLS: return createDeleteAclsResponse(version);
+            case DELETE_ACLS: return createDeleteAclsResponse();
             case DESCRIBE_CONFIGS: return createDescribeConfigsResponse(version);
             case ALTER_CONFIGS: return createAlterConfigsResponse();
             case ALTER_REPLICA_LOG_DIRS: return createAlterReplicaLogDirsResponse();
@@ -3109,7 +3109,7 @@ public class RequestResponseTest {
         return new DeleteAclsRequest.Builder(data).build(version);
     }
 
-    private DeleteAclsResponse createDeleteAclsResponse(short version) {
+    private DeleteAclsResponse createDeleteAclsResponse() {
         List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
         filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
                 new DeleteAclsResponseData.DeleteAclsMatchingAcl()

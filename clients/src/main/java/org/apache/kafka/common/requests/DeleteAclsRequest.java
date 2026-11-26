@@ -62,10 +62,10 @@ public class DeleteAclsRequest extends AbstractRequest {
     private DeleteAclsRequest(DeleteAclsRequestData data, short version) {
         super(ApiKeys.DELETE_ACLS, version);
         this.data = data;
-        normalizeAndValidate();
+        validate();
     }
 
-    private void normalizeAndValidate() {
+    private void validate() {
         final boolean unknown = data.filters().stream().anyMatch(filter ->
                 filter.patternTypeFilter() == PatternType.UNKNOWN.code()
                         || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
