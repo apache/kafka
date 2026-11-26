@@ -278,6 +278,93 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
     )
   )
+  def testUpgradeFromClassicGroupRebalancingFromCompletingRebalance(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(topic = "foo", numPartitions = 3)
+
+    // Classic member 1 joins the classic group and gets foo-0, foo-1 and foo-2 at generation 1.
+    val groupId = "grp"
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2))
+    )
+
+    // Member 1 rejoins with the partitions that it owns, which starts a rebalance. The group
+    // waits for the assignment of member 1 at generation 2.
+    assertEquals(
+      2,
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId1,
+        metadata = metadata(List(0, 1, 2))
+      ).generationId
+    )
+
+    // Classic member 2 joins before member 1 sends its assignment, which starts a rebalance.
+    val memberId2 = sendJoinRequest(
+      groupId = groupId,
+      metadata = metadata(List.empty)
+    ).memberId
+
+    // The JoinGroup of member 2 is answered only when the join phase completes. Member 1 does not
+    // rejoin, so the request waits until the conversion below answers it. It is sent in a Future so
+    // that the test can go on meanwhile.
+    val joinFuture2 = Future {
+      sendJoinRequest(
+        groupId = groupId,
+        memberId = memberId2,
+        metadata = metadata(List.empty)
+      )
+    }
+
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List(groupId))
+      ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+    // The joining request with a consumer group member 3 is accepted and converts the group.
+    val memberId3 = Uuid.randomUuid.toString
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId3,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // The pending join request of classic member 2 is asked to rejoin.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setMemberId(memberId2)
+        .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code)
+        .setProtocolName(null),
+      Await.result(joinFuture2, Duration.Inf)
+    )
+
+    // The group has become a consumer group. Member 1 keeps the partitions that it owns, and the
+    // other members get none of them until member 1 revokes them.
+    assertEquals(
+      Map(memberId1 -> List(0, 1, 2), memberId2 -> List.empty, memberId3 -> List.empty),
+      consumerGroupDescribe(List(groupId)).head.members.asScala.map { member =>
+        member.memberId -> member.assignment.topicPartitions.asScala
+          .flatMap(_.partitions.asScala.map(_.toInt))
+          .toList
+          .sorted
+      }.toMap
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
+    )
+  )
   def testUpgradeMigrationPolicy(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
