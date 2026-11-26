@@ -209,6 +209,8 @@ allprojects {
       force 'io.netty:netty-handler:4.2.21.Final'
       force 'io.netty:netty-codec-compression:4.2.21.Final'
       force 'io.netty:netty-handler:4.2.21.Final'
+      force 'at.yawk.lz4:lz4-java:1.11.4'
+      force 'org.lz4:lz4-java:1.11.1'
     }
   }
   tasks.register('printAllDependencies', DependencyReportTask) {}
