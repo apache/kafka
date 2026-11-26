@@ -44,8 +44,18 @@ then
   then
     if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]]
     then
-      echo "KAFKA_ADVERTISED_LISTENERS is not supported on a KRaft controller."
-      exit 1
+      # A controller may advertise its controller listeners only, which a dynamic quorum (KIP-853) needs.
+      IFS=',' read -ra advertised_listeners <<< "$KAFKA_ADVERTISED_LISTENERS"
+      for listener in "${advertised_listeners[@]}"
+      do
+        listener_name="${listener%%://*}"
+        listener_name="${listener_name// /}"
+        if [[ ",${KAFKA_CONTROLLER_LISTENER_NAMES-}," != *",${listener_name},"* ]]
+        then
+          echo "KAFKA_ADVERTISED_LISTENERS on a KRaft controller may only list listeners from KAFKA_CONTROLLER_LISTENER_NAMES."
+          exit 1
+        fi
+      done
     else
       # Unset in case env variable is set with empty value
       unset KAFKA_ADVERTISED_LISTENERS

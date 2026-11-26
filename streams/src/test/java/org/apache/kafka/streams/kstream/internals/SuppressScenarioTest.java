@@ -35,6 +35,7 @@ import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
@@ -44,8 +45,13 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
@@ -403,6 +409,66 @@ public class SuppressScenarioTest {
                 asList(
                     new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L)
+                )
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotEmitStaleValueWhenDownstreamUpdatesUpstreamStoreDuringEviction() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        // A downstream processor that writes into the (cached) upstream window store while the suppress buffer is
+        // evicting re-enters the buffer: the store flushes the update right away into suppress again.
+        final KTable<Windowed<String>, Long> valueCounts = builder
+            .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
+            .groupByKey(Grouped.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10L), ZERO))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("win-store"));
+        final KStream<Windowed<String>, Long> suppressed = valueCounts
+            .suppress(untilWindowCloses(unbounded()))
+            .toStream();
+        suppressed
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+        suppressed.process(
+            () -> new Processor<Windowed<String>, Long, Void, Void>() {
+                private TimestampedWindowStore<String, Long> store;
+                private boolean updated = false;
+
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    store = context.getStateStore("win-store");
+                }
+
+                @Override
+                public void process(final Record<Windowed<String>, Long> record) {
+                    if (!updated) {
+                        updated = true;
+                        // while "A" is emitted, update the window of "B" that is about to be evicted as well
+                        store.put("B", ValueAndTimestamp.make(99L, 1L), 0L);
+                    }
+                }
+            },
+            "win-store"
+        );
+
+        final Properties cacheConfig = new Properties();
+        cacheConfig.putAll(config);
+        // a cache of 1 byte flushes (and thereby forwards) every update to the window store right away
+        cacheConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 1L);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(cacheConfig).build()) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+            inputTopic.pipeInput("A", "v", 0L);
+            inputTopic.pipeInput("B", "v", 1L);
+            // closes both windows at once, so a single evictWhile call evicts "A" and "B"
+            inputTopic.pipeInput("C", "v", 20L);
+            verify(
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("[A@0/10]", 1L, 0L),
+                    new KeyValueTimestamp<>("[B@0/10]", 99L, 1L)
                 )
             );
         }

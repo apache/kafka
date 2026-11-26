@@ -22,6 +22,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import org.slf4j.Logger;
@@ -662,11 +664,19 @@ public final class GroupConfig extends AbstractConfig {
         );
 
         // DLQ validation (KIP-1191)
-        // DLQ topic name must not start with "__" (reserved for internal topics)
+        // DLQ topic name must not start with "__" (reserved for internal topics) and must be a valid topic name.
         String dlqTopicName = (String) parsed.get(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
-        if (dlqTopicName != null && !dlqTopicName.isEmpty() && dlqTopicName.startsWith("__")) {
-            throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
-                ": DLQ topic name must not start with '__'");
+        if (dlqTopicName != null && !dlqTopicName.isEmpty()) {
+            if (dlqTopicName.startsWith("__")) {
+                throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
+                    ": DLQ topic name must not start with '__'");
+            }
+            try {
+                Topic.validate(dlqTopicName);
+            } catch (InvalidTopicException invalidTopicException) {
+                throw new InvalidConfigurationException(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG +
+                    ": DLQ topic name is not valid - " + invalidTopicException.getMessage());
+            }
         }
     }
 

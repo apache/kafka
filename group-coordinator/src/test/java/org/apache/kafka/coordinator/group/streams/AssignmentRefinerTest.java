@@ -254,6 +254,13 @@ public class AssignmentRefinerTest {
     // ---------------------------------------------------------------------------------------------------------------
 
     @Test
+    public void shouldTreatOnlySubtopologiesWithAChangelogAsStateful() {
+        // A changelog is the only signal of state that reaches the coordinator, so a subtopology without one is handled
+        // exactly like a stateless one.
+        assertEquals(Set.of(STATEFUL), AssignmentRefinerImpl.statefulSubtopologies(subtopologies()));
+    }
+
+    @Test
     public void shouldIndexTheMemberProcessingATaskAsItsActiveHolder() {
         // No offsets reported for an active task means the restore has finished and the member is processing it.
         final Map<String, StreamsGroupMember> members = Map.of(
@@ -3125,7 +3132,7 @@ public class AssignmentRefinerTest {
         return AssignmentRefinerImpl.indexCurrentAssignment(
             members,
             taskOffsets,
-            subtopologies(),
+            AssignmentRefinerImpl.statefulSubtopologies(subtopologies()),
             ACCEPTABLE_RECOVERY_LAG
         );
     }
@@ -3157,11 +3164,12 @@ public class AssignmentRefinerTest {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
             targetAssignment,
+            new AssignmentRefinerImpl.TargetStandbyHolders(
+                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             members,
             heartbeatVersions,
             keepActiveTasks,
-            subtopologies(),
-            load(members)
+            AssignmentRefinerImpl.statefulSubtopologies(subtopologies())
         );
     }
 
@@ -3180,7 +3188,7 @@ public class AssignmentRefinerTest {
     private static Map<String, AssignmentRefinerImpl.ProcessLoad> load(
         final Map<String, StreamsGroupMember> members
     ) {
-        return AssignmentRefinerImpl.indexProcessLoad(members, subtopologies());
+        return index(members, Map.of()).processLoad();
     }
 
     private static AssignmentRefinerImpl.WarmupPlan plan(
@@ -3204,7 +3212,6 @@ public class AssignmentRefinerTest {
             index(members, taskOffsets),
             members,
             heartbeatVersions.keySet().containsAll(members.keySet()),
-            load(members),
             numWarmupReplicas
         );
     }
@@ -3238,12 +3245,13 @@ public class AssignmentRefinerTest {
         final AssignmentRefinerImpl.CurrentAssignmentIndex currentAssignment = index(members, taskOffsets);
         return AssignmentRefinerImpl.filterStandbys(
             targetAssignment,
+            new AssignmentRefinerImpl.TargetStandbyHolders(
+                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             currentAssignment,
             decisions,
-            AssignmentRefinerImpl.planWarmups(
-                decisions, currentAssignment, members, true, load(members), numWarmupReplicas),
+            AssignmentRefinerImpl.planWarmups(decisions, currentAssignment, members, true, numWarmupReplicas),
             members,
-            subtopologies()
+            AssignmentRefinerImpl.statefulSubtopologies(subtopologies())
         );
     }
 

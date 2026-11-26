@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -293,9 +294,9 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
-    // The value 5 is aligned with ProducerStateEntry#NUM_BATCHES_TO_RETAIN.
-    private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
+    // max.in.flight.requests.per.connection must not exceed the number of batches the broker retains per producer
+    // when idempotence is enabled, otherwise a retry could fall out of the broker's deduplication window.
+    private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = RecordBatch.NUM_BATCHES_RETAINED_PER_PRODUCER;
 
     /** <code>max.in.flight.requests.per.connection</code> */
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
@@ -304,7 +305,8 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " message reordering after a failed send due to retries (i.e., if retries are enabled); "
                                                                             + " if retries are disabled or if <code>enable.idempotence</code> is set to true, ordering will be preserved."
                                                                             + " Additionally, enabling idempotence requires the value of this configuration to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ","
-                                                                            + " because broker only retains at most 5 batches for each producer. If the value is more than 5, previous batches may be removed on broker side.";
+                                                                            + " because broker only retains at most " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + " batches for each producer."
+                                                                            + " If the value is more than " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ", previous batches may be removed on broker side.";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -412,6 +414,15 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>metadata.cluster.check.enable</code> */
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+
+    /** <code>client.framework.name</code> */
+    public static final String CLIENT_FRAMEWORK_NAME_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_NAME_CONFIG;
+
+    /** <code>client.framework.version</code> */
+    public static final String CLIENT_FRAMEWORK_VERSION_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_VERSION_CONFIG;
+
+    /** <code>client.framework.id</code> */
+    public static final String CLIENT_FRAMEWORK_ID_CONFIG = CommonClientConfigs.CLIENT_FRAMEWORK_ID_CONFIG;
 
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
@@ -622,6 +633,21 @@ public class ProducerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CLIENT_FRAMEWORK_NAME_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_NAME_DOC)
+                                .define(CLIENT_FRAMEWORK_VERSION_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_VERSION_DOC)
+                                .define(CLIENT_FRAMEWORK_ID_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_FRAMEWORK_ID_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         Type.LIST,
                                         List.of(),
@@ -684,7 +710,7 @@ public class ProducerConfig extends AbstractConfig {
             final int inFlightConnection = this.getInt(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             if (MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < inFlightConnection) {
                 throw new ConfigException("To use the idempotent producer, " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
-                                          " must be set to at most 5. Current value is " + inFlightConnection + ".");
+                                          " must be set to at most " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE + ". Current value is " + inFlightConnection + ".");
             }
         }
 

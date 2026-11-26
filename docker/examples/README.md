@@ -188,6 +188,25 @@ Multi Node Cluster
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
         ```
+    - Dynamic quorum:
+        - Same as the Plaintext example, but the controllers form a dynamic quorum (KIP-853) instead of using static voters.
+        - `KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS` replaces `KAFKA_CONTROLLER_QUORUM_VOTERS`, and each node advertises its controller listener (`CONTROLLER://kafka-1:9093`) in `KAFKA_ADVERTISED_LISTENERS`.
+        - Every controller gets the same `STORAGE_FORMAT_ARGS="--initial-controllers ..."`. The directory ids in it were generated once with `bin/kafka-storage.sh random-uuid`.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/dynamic_quorum/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/dynamic_quorum/docker-compose.yml up
+        ```
+        - To describe the quorum:
+        ```
+        # Run from root of the repo
+        $ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:29092 describe --replication
+        ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
     - Plaintext:
@@ -244,6 +263,26 @@ Multi Node Cluster
         ```
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
+        ```
+    - Dynamic quorum:
+        - Same as the Plaintext example, but the controllers form a dynamic quorum (KIP-853) instead of using static voters.
+        - `KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS` replaces `KAFKA_CONTROLLER_QUORUM_VOTERS` on controllers and brokers.
+        - Controllers set `KAFKA_ADVERTISED_LISTENERS` to their controller listener only (`CONTROLLER://controller-1:9093`). Brokers format without `STORAGE_FORMAT_ARGS`.
+        - Every controller gets the same `STORAGE_FORMAT_ARGS="--initial-controllers ..."`. The directory ids in it were generated once with `bin/kafka-storage.sh random-uuid`.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/dynamic_quorum/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/dynamic_quorum/docker-compose.yml up
+        ```
+        - To describe the quorum:
+        ```
+        # Run from root of the repo
+        $ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:29092 describe --replication
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

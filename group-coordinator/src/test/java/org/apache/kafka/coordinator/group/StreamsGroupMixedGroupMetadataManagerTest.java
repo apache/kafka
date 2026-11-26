@@ -226,6 +226,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(topic.metadataImage())
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG, 2)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
                 .withMember(streamsGroupMemberBuilderWithDefaults(staticMemberId, staticInstanceId)
                     .setProcessId(staticProcessId)
@@ -522,6 +523,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false)
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(topic.metadataImage())
             .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
