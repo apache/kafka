@@ -36,6 +36,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -328,5 +329,77 @@ public class NamedCacheTest {
     @Test
     public void shouldReturnNullIfKeyIsNull() {
         assertNull(cache.get(null));
+    }
+
+    @Test
+    public void shouldServeEntryEvictedWhileItsFlushIsInProgress() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        final List<LRUCacheEntry> servedDuringFlush = new ArrayList<>();
+        cache.put(key, new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        cache.setListener(dirty -> {
+            cache.evict();
+            servedDuringFlush.add(cache.get(key));
+        });
+
+        cache.flush();
+
+        assertNotNull(servedDuringFlush.get(0));
+        assertArrayEquals(new byte[]{10}, servedDuringFlush.get(0).value());
+    }
+
+    @Test
+    public void shouldNotServeEntryEvictedWhileItsFlushWasInProgressAfterTheFlush() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        cache.put(key, new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        cache.setListener(dirty -> cache.evict());
+
+        cache.flush();
+
+        assertNull(cache.get(key));
+    }
+
+    @Test
+    public void shouldNotFlushEntryEvictedWhileItsFlushIsInProgressAgain() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        final List<ThreadCache.DirtyEntry> flushed = new ArrayList<>();
+        cache.put(key, new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        cache.setListener(dirty -> {
+            flushed.addAll(dirty);
+            cache.evict();
+        });
+
+        cache.flush();
+
+        assertEquals(1, flushed.size());
+        assertEquals(1, cache.flushes());
+    }
+
+    @Test
+    public void shouldNotServeEntryEvictedWhileItsFlushIsInProgressAfterItIsDeleted() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        final List<LRUCacheEntry> servedDuringFlush = new ArrayList<>();
+        cache.put(key, new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        cache.setListener(dirty -> {
+            cache.evict();
+            cache.delete(key);
+            servedDuringFlush.add(cache.get(key));
+        });
+
+        cache.flush();
+
+        assertNull(servedDuringFlush.get(0));
+    }
+
+    @Test
+    public void shouldMarkEntriesCleanWhenFlushListenerThrows() {
+        final Bytes key = Bytes.wrap(new byte[]{0});
+        cache.put(key, new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, "", rawKey, rawValue));
+        cache.setListener(dirty -> {
+            throw new RuntimeException("Simulating an error on flush");
+        });
+
+        assertThrows(RuntimeException.class, cache::flush);
+
+        assertFalse(cache.get(key).isDirty());
     }
 }

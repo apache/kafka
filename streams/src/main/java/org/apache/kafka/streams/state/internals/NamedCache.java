@@ -28,9 +28,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -44,6 +46,9 @@ class NamedCache {
     private final NavigableMap<Bytes, LRUNode> cache = new TreeMap<>();
     private Set<Bytes> dirtyKeys = new LinkedHashSet<>();
     private int dirtyKeysPeak;
+    // Entries that were evicted while a flush was still writing them to the underlying store.
+    // They are served until that flush completes, as the underlying store may not contain them yet.
+    private final Map<Bytes, LRUCacheEntry> evictedWhileFlushing = new HashMap<>();
     private ThreadCache.DirtyEntryFlushListener listener;
     private LRUNode tail;
     private LRUNode head;
@@ -104,7 +109,7 @@ class NamedCache {
 
         final LRUNode node = getInternal(key);
         if (node == null) {
-            return null;
+            return evictedWhileFlushing.get(key);
         }
         updateLRU(node);
         return node.entry;
@@ -151,16 +156,29 @@ class NamedCache {
                 throw new IllegalStateException("Key = " + key + " found in dirty key set, but entry is null");
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value(), node.entry));
-            node.entry.markClean();
             if (node.entry.value() == null) {
                 deleted.add(node.key);
             }
         }
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
+        // The entries stay dirty until the listener has written them, so that evict() does not drop them.
         resetDirtyKeys();
-        listener.apply(entries);
+        try {
+            listener.apply(entries);
+        } finally {
+            markFlushed(entries);
+        }
         for (final Bytes key : deleted) {
             delete(key);
+        }
+    }
+
+    private void markFlushed(final List<ThreadCache.DirtyEntry> entries) {
+        for (final ThreadCache.DirtyEntry entry : entries) {
+            entry.entry().markClean();
+            if (!evictedWhileFlushing.isEmpty() && evictedWhileFlushing.get(entry.key()) == entry.entry()) {
+                evictedWhileFlushing.remove(entry.key());
+            }
         }
     }
 
@@ -253,7 +271,12 @@ class NamedCache {
         remove(eldest);
         cache.remove(eldest.key);
         if (eldest.entry.isDirty()) {
-            flush(eldest);
+            if (dirtyKeys.contains(eldest.key)) {
+                flush(eldest);
+            } else {
+                // a dirty entry that is not in dirtyKeys is being written by an in-progress flush
+                evictedWhileFlushing.put(eldest.key, eldest.entry);
+            }
         }
         totalCacheSizeSensor.record(currentSizeBytes);
     }
@@ -273,6 +296,7 @@ class NamedCache {
     }
 
     synchronized LRUCacheEntry delete(final Bytes key) {
+        evictedWhileFlushing.remove(key);
         final LRUNode node = cache.remove(key);
 
         if (node == null) {
@@ -365,6 +389,7 @@ class NamedCache {
         listener = null;
         currentSizeBytes = 0;
         dirtyKeys.clear();
+        evictedWhileFlushing.clear();
         cache.clear();
         streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
     }
@@ -373,6 +398,7 @@ class NamedCache {
         head = tail = null;
         currentSizeBytes = 0;
         resetDirtyKeys();
+        evictedWhileFlushing.clear();
         cache.clear();
     }
 

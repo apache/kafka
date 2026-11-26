@@ -249,6 +249,47 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     }
 
     @Test
+    public void shouldNotCacheStaleValueWhenReadDuringItsOwnFlush() {
+        final InMemoryKeyValueStoreWithPutHook underlying = new InMemoryKeyValueStoreWithPutHook("store");
+        final CachingKeyValueStore cachingStore = new CachingKeyValueStore(underlying);
+        final ThreadCache smallCache = new ThreadCache(
+            new LogContext("testCache "),
+            1000,
+            new MockStreamsMetrics(new Metrics())
+        );
+        final InternalMockProcessorContext<?, ?> smallCacheContext = new InternalMockProcessorContext<>(
+            null,
+            null,
+            null,
+            null,
+            smallCache
+        );
+        smallCacheContext.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
+        cachingStore.init(smallCacheContext, null);
+        final int numOtherKeys = 50;
+        for (int i = 0; i < numOtherKeys; i++) {
+            underlying.put(bytesKey("other-" + i), bytesValue("other"));
+        }
+        cachingStore.put(bytesKey("first"), bytesValue("old"));
+        cachingStore.put(bytesKey("last"), bytesValue("old"));
+        cachingStore.commit(Map.of());
+
+        cachingStore.put(bytesKey("first"), bytesValue("new"));
+        cachingStore.put(bytesKey("last"), bytesValue("new"));
+        // while the flush writes "first", the reads evict both flushed entries
+        // and then read "last", which is not written yet
+        underlying.beforeNextPut = () -> {
+            for (int i = 0; i < numOtherKeys; i++) {
+                cachingStore.get(bytesKey("other-" + i));
+            }
+            cachingStore.get(bytesKey("last"));
+        };
+        cachingStore.commit(Map.of());
+
+        assertArrayEquals(bytesValue("new"), cachingStore.get(bytesKey("last")));
+    }
+
+    @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
@@ -788,4 +829,19 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         return i;
     }
 
+    private static final class InMemoryKeyValueStoreWithPutHook extends InMemoryKeyValueStore {
+        private Runnable beforeNextPut = () -> { };
+
+        private InMemoryKeyValueStoreWithPutHook(final String name) {
+            super(name);
+        }
+
+        @Override
+        public synchronized void put(final Bytes key, final byte[] value) {
+            final Runnable hook = beforeNextPut;
+            beforeNextPut = () -> { };
+            hook.run();
+            super.put(key, value);
+        }
+    }
 }
