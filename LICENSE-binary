@@ -240,7 +240,7 @@ jetty-servlets-9.4.57.v20241219
 jetty-util-9.4.57.v20241219
 jetty-util-ajax-9.4.57.v20241219
 jose4j-0.9.6
-lz4-java-1.10.1
+lz4-java-1.11.4
 maven-artifact-3.9.6
 metrics-core-4.1.12.1
 metrics-core-2.2.0
