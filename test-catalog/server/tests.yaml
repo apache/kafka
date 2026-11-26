@@ -32,6 +32,9 @@ org.apache.kafka.network.SocketServerConfigsTest:
 - testListenerListToEndPointsWithOneEndpoint
 - testListenerListToEndPointsWithUnderscores
 - testListenerListToEndPointsWithWildcard
+org.apache.kafka.network.metrics.RequestMetricsTest:
+- testDeprecatedRequestRateMetersAreLimited
+- testDeprecatedRequestRateTagsAreTruncated
 org.apache.kafka.security.authorizer.AuthorizerTest:
 - testAccessAllowedIfAllowAclExistsOnPrefixedResource
 - testAccessAllowedIfAllowAclExistsOnWildcardResource
