@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.SessionStore;
@@ -118,7 +117,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 aggregateBuilder.countAggregator,
                 countMerger),
             materializedInternal.queryableStoreName(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            new FullSessionWindowedSerde<>(materializedInternal.keySerde()),
             materializedInternal.valueSerde(),
             false);
     }
@@ -173,7 +172,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 mergerFromAggregator(reduceAggregator)
             ),
             materializedInternal.queryableStoreName(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            new FullSessionWindowedSerde<>(materializedInternal.keySerde()),
             materializedInternal.valueSerde(),
             false);
     }
@@ -242,7 +241,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 aggregator,
                 sessionMerger),
             materializedInternal.queryableStoreName(),
-            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            new FullSessionWindowedSerde<>(materializedInternal.keySerde()),
             materializedInternal.valueSerde(),
             false);
     }

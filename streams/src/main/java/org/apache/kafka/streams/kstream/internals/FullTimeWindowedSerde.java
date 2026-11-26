@@ -17,16 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
-import org.apache.kafka.streams.kstream.Windowed;
 
-class FullTimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+class FullTimeWindowedSerde<T> extends LateBoundWindowedSerde<T> {
     FullTimeWindowedSerde(final Serde<T> inner, final long windowSize) {
-        super(
-            new TimeWindowedSerializer<>(inner.serializer()),
-            new TimeWindowedDeserializer<>(inner.deserializer(), windowSize)
-        );
+        super(inner, TimeWindowedSerializer::new, deserializer -> new TimeWindowedDeserializer<>(deserializer, windowSize));
     }
 }

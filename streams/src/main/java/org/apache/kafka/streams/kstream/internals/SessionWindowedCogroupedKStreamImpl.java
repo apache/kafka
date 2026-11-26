@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -96,10 +95,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                     materializedInternal,
                     sessionWindows,
                     EmitStrategy.onWindowUpdate()),
-            materializedInternal.keySerde() != null ?
-                new WindowedSerdes.SessionWindowedSerde<>(
-                    materializedInternal.keySerde()) :
-                null,
+            new FullSessionWindowedSerde<>(materializedInternal.keySerde()),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             sessionWindows,

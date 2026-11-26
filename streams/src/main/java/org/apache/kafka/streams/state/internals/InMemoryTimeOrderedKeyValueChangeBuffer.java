@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -209,7 +210,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @SuppressWarnings("unchecked")
     @Override
     public void setSerdesIfNull(final SerdeGetter getter) {
-        keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
+        keySerde = WrappingNullableUtils.prepareKeySerde(keySerde, getter);
         valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
     }
     @Override
