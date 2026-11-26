@@ -46,6 +46,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -86,7 +87,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
      */
     static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
                                         final String conditionDetails) throws InterruptedException {
-        var maxWaitMs = 15_000L;
+        waitForCondition(testCondition, 15_000L, conditionDetails);
+    }
+
+    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+                                 final long maxWaitMs,
+                                 final String conditionDetails) throws InterruptedException {
         long endTime = System.currentTimeMillis() + maxWaitMs;
 
         while (System.currentTimeMillis() < endTime) {
@@ -319,6 +325,17 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Map<Integer, ControllerServer> controllers() {
             return Collections.unmodifiableMap(clusterTestKit.controllers());
+        }
+
+        @Override
+        public void ensureConsistentMetadata() throws InterruptedException {
+            Collection<KafkaBroker> brokers = aliveBrokers().values();
+            for (ControllerServer controller : controllers().values()) {
+                long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
+                waitForCondition(
+                    () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
+                    60000L, "Timeout waiting for controller metadata propagating to brokers");
+            }
         }
 
         public void format() throws Exception {
