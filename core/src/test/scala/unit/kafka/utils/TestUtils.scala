@@ -443,6 +443,10 @@ object TestUtils extends Logging {
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
   }
 
+  def records(records: Records): util.List[Record] = JTestUtils.records(records)
+
+  def records(batch: RecordBatch): util.List[Record] = JTestUtils.records(batch)
+
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: Compression = Compression.NONE,
