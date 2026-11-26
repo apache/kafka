@@ -1303,7 +1303,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // target assignment at the initial epoch.
         int targetAssignmentEpoch = Math.max(classicGroup.generationId(), 1);
         int groupEpoch = switch (classicGroup.currentState()) {
-            case EMPTY, DEAD -> targetAssignmentEpoch;
+            case EMPTY, STABLE, DEAD -> targetAssignmentEpoch;
             case PREPARING_REBALANCE -> targetAssignmentEpoch + 1; // We are expecting a new assignment.
             case COMPLETING_REBALANCE -> {
                 // We are expecting a new assignment. The generation was already bumped when the join
@@ -1314,7 +1314,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 // a second time to compute a new target assignment.
                 yield targetAssignmentEpoch + 1;
             }
-            case STABLE -> targetAssignmentEpoch;
         };
         consumerGroup.setGroupEpoch(groupEpoch);
         consumerGroup.setTargetAssignmentMetadata(targetAssignmentEpoch, 0L);
