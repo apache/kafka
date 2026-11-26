@@ -44,7 +44,6 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
@@ -1593,11 +1592,9 @@ public class UnifiedLog implements AutoCloseable {
 
             if (requireOffsetsMonotonic && !monotonic) {
                 StringJoiner offsets = new StringJoiner(",");
-                for (RecordBatch recordBatch : records.batches()) {
-                    try (CloseableIterator<Record> iterator = recordBatch.streamingIterator(BufferSupplier.NO_CACHING)) {
-                        while (iterator.hasNext()) {
-                            offsets.add(String.valueOf(iterator.next().offset()));
-                        }
+                try (CloseableIterator<Record> iterator = records.records()) {
+                    while (iterator.hasNext()) {
+                        offsets.add(String.valueOf(iterator.next().offset()));
                     }
                 }
                 throw new OffsetsOutOfOrderException("Out of order offsets found in append to " + topicPartition() + ": " + offsets);
