@@ -146,13 +146,18 @@ class PrFormatTest(unittest.TestCase):
         self.assertEqual(0, present.returncode, present.stderr)
 
     def test_linter_reports_text_below_the_reviewers_trailer(self):
-        message = "'Reviewers:' must be in the last paragraph. Move the text below it above it."
+        message = "'Reviewers:' must be in the last paragraph, with only trailers in it. Move other text above, and leave an empty line."
         for below in ("\nPlease backport to 4.2.\n",           # text after a blank line
                       "Please backport to 4.2.\n",             # text on the next line
                       "\nCo-Authored-By: Bot <b@example.com>\n"):  # trailer after a blank line
             result = FakeGh("Some body\n\nReviewers: A <a@example.com>\n" + below).run("pr-format.py")
             self.assertEqual(1, result.returncode, below)
             self.assertIn(message, result.stdout)
+
+        # Text directly above the trailers, with no empty line, is in the same paragraph.
+        above = FakeGh("Some body\n\nOne more note.\nReviewers: A <a@example.com>\n").run("pr-format.py")
+        self.assertEqual(1, above.returncode)
+        self.assertIn(message, above.stdout)
 
         next_line = "Some body\n\nReviewers: A <a@example.com>\nCo-Authored-By: Bot <b@example.com>\n"
         self.assertEqual(0, FakeGh(next_line).run("pr-format.py").returncode)

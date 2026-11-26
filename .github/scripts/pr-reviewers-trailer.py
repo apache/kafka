@@ -336,7 +336,7 @@ if __name__ == "__main__":
     if reviewers_trailer_is_misplaced(title, body):
         # There is text below the Reviewers trailer, so git does not read it.
         # Adding a second trailer would hide the problem. The PR linter reports it.
-        logger.info("A 'Reviewers:' line is not in the last paragraph; leaving the body unchanged.")
+        logger.info("git does not read a 'Reviewers:' line as a trailer; leaving the body unchanged.")
         exit(0)
     # Drop empty names, for example after a comma at the end of the line.
     # A description can have more than one Reviewers trailer, for example

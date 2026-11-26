@@ -127,7 +127,7 @@ The following checks are performed on our PRs:
 * Title starts with "KAFKA-", "MINOR", or "HOTFIX"
 * Body is not empty
 * Body includes "Reviewers:" if the PR is approved
-* "Reviewers:" is in the last paragraph, with no text below it
+* "Reviewers:" is in the last paragraph, and that paragraph has only trailers
 
 Our PR title and body become the commit subject and message when a PR is squashed
 and merged. This linting step will help to ensure that we have nice looking commits.

@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
     # Check for Reviewers
     check(not reviewers_trailer_is_misplaced(title, body), "Every 'Reviewers:' line is a trailer",
-          "'Reviewers:' must be in the last paragraph. Move the text below it above it.")
+          "'Reviewers:' must be in the last paragraph, with only trailers in it. Move other text above, and leave an empty line.")
     reviewers_in_body = parse_trailers(title, body).get("reviewers", [])
 
     approved = has_approval(reviews)
