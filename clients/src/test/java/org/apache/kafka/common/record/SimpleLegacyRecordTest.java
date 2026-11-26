@@ -21,6 +21,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +44,7 @@ public class SimpleLegacyRecordTest {
 
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        assertThrows(InvalidRecordException.class, () -> records.records().iterator().hasNext());
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(records).iterator().hasNext());
     }
 
     @Test
@@ -64,7 +65,7 @@ public class SimpleLegacyRecordTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        assertThrows(InvalidRecordException.class, () -> records.records().iterator().hasNext());
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(records).iterator().hasNext());
     }
 
     /* This scenario can happen if the record size field is corrupt and we end up allocating a buffer that is too small */

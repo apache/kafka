@@ -33,7 +33,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -136,7 +135,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public long baseOffset() {
-        return iterator().next().offset();
+        try (CloseableIterator<Record> records = streamingIterator(BufferSupplier.NO_CACHING)) {
+            return records.next().offset();
+        }
     }
 
     @Override
@@ -221,21 +222,15 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     /**
-     * Get an iterator for the nested entries contained within this batch. Note that
-     * if the batch is not compressed, then this method will return an iterator over the
-     * shallow record only (i.e. this object).
+     * Get an iterator over the records contained within this legacy batch.
+     * Compressed batches are fully decompressed and their decompression stream
+     * is closed before this method returns. For uncompressed batches, the iterator
+     * returns only the shallow record (this object).
+     *
      * @return An iterator over the records contained within this batch
      */
     @Override
-    public Iterator<Record> iterator() {
-        return iterator(BufferSupplier.NO_CACHING);
-    }
-
-    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
-        return iterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH);
-    }
-
-    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier, maxRecordBodySize);
 
@@ -267,14 +262,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
-        // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator(bufferSupplier);
-    }
-
-    @Override
-    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
-        // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator(bufferSupplier, maxRecordBodySize);
+        return streamingIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -530,19 +518,19 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         /**
-         * LegacyRecordBatch does not implement this iterator and would hence fallback to the normal iterator.
+         * Legacy batches cannot skip record bodies and decode the full records.
          *
          * @return An iterator over the records contained within this batch
          */
         @Override
         public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-            return CloseableIterator.wrap(iterator(bufferSupplier));
+            return streamingIterator(bufferSupplier);
         }
 
         @Override
         public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
             // legacy batches cannot cheaply skip the record body, so this is a full decode
-            return CloseableIterator.wrap(iterator(bufferSupplier, maxRecordBodySize));
+            return streamingIterator(bufferSupplier, maxRecordBodySize);
         }
 
         @Override

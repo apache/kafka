@@ -30,7 +30,7 @@ import java.util.OptionalLong;
  * many records otherwise. Newer versions (magic versions 2 and above) will generally contain many records
  * regardless of compression.
  */
-public interface RecordBatch extends Iterable<Record> {
+public interface RecordBatch {
 
     /**
      * The "magic" values
@@ -228,7 +228,7 @@ public interface RecordBatch extends Iterable<Record> {
     /**
      * Return a streaming iterator which basically delays decompression of the record stream until the records
      * are actually asked for using {@link Iterator#next()}. If the message format does not support streaming
-     * iteration, then the normal iterator is returned. Either way, callers should ensure that the iterator is closed.
+     * iteration, then the records are decoded eagerly. Callers must close the iterator.
      *
      * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
      *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)

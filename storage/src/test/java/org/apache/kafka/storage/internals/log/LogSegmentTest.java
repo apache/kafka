@@ -178,7 +178,7 @@ public class LogSegmentTest {
             MemoryRecords ms = v1Records(50, "hello", "there", "little", "bee");
             seg.append(53, ms);
             Records read = seg.read(41, 300).records;
-            checkEquals(ms.records().iterator(), read.records().iterator());
+            checkEquals(TestUtils.records(ms).iterator(), TestUtils.records(read).iterator());
         }
     }
 
@@ -222,7 +222,7 @@ public class LogSegmentTest {
             MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, ms2);
             FetchDataInfo read = seg.read(55, 200);
-            checkEquals(ms2.records().iterator(), read.records.records().iterator());
+            checkEquals(TestUtils.records(ms2).iterator(), TestUtils.records(read.records).iterator());
         }
     }
 
@@ -238,12 +238,12 @@ public class LogSegmentTest {
             // read at first offset
             FetchDataInfo read = seg.read(50, maxSize, maxPosition, minOneMessage);
             assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata);
-            assertFalse(read.records.records().iterator().hasNext());
+            assertFalse(TestUtils.records(read.records).iterator().hasNext());
 
             // read at last offset
             read = seg.read(51, maxSize, maxPosition, minOneMessage);
             assertEquals(new LogOffsetMetadata(51, 40, 39), read.fetchOffsetMetadata);
-            assertFalse(read.records.records().iterator().hasNext());
+            assertFalse(TestUtils.records(read.records).iterator().hasNext());
 
             // read at log-end-offset
             read = seg.read(52, maxSize, maxPosition, minOneMessage);
@@ -271,12 +271,12 @@ public class LogSegmentTest {
 
                 // check that we can read back both messages
                 FetchDataInfo read = seg.read(offset, 10000);
-                assertIterableEquals(List.of(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
+                assertIterableEquals(List.of(TestUtils.records(ms1).iterator().next(), TestUtils.records(ms2).iterator().next()), TestUtils.records(read.records));
 
                 // Now truncate off the last message
                 seg.truncateTo(offset + 1);
                 FetchDataInfo read2 = seg.read(offset, 10000);
-                assertIterableEquals(ms1.records(), read2.records.records());
+                assertIterableEquals(TestUtils.records(ms1), TestUtils.records(read2.records));
                 offset += 1;
             }
         }
@@ -456,7 +456,7 @@ public class LogSegmentTest {
             writeNonsenseToFile(indexFile, 5, (int) indexFile.length());
             seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
             for (int i = 0; i < 100; i++) {
-                Iterable<Record> records = seg.read(i, 1, Optional.of((long) seg.size()), true).records.records();
+                Iterable<Record> records = TestUtils.records(seg.read(i, 1, Optional.of((long) seg.size()), true).records);
                 assertEquals(i, records.iterator().next().offset());
             }
         }
@@ -644,7 +644,7 @@ public class LogSegmentTest {
             MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, ms2);
             FetchDataInfo read = seg.read(55, 200);
-            checkEquals(ms2.records().iterator(), read.records.records().iterator());
+            checkEquals(TestUtils.records(ms2).iterator(), TestUtils.records(read.records).iterator());
         }
     }
 
@@ -667,7 +667,7 @@ public class LogSegmentTest {
             MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, ms2);
             FetchDataInfo read = seg.read(55, 200);
-            checkEquals(ms2.records().iterator(), read.records.records().iterator());
+            checkEquals(TestUtils.records(ms2).iterator(), TestUtils.records(read.records).iterator());
             long oldSize = seg.log().sizeInBytes();
             long oldPosition = seg.log().channel().position();
             long oldFileSize = seg.log().file().length();
@@ -681,7 +681,7 @@ public class LogSegmentTest {
             segments.add(segReopen);
 
             FetchDataInfo readAgain = segReopen.read(55, 200);
-            checkEquals(ms2.records().iterator(), readAgain.records.records().iterator());
+            checkEquals(TestUtils.records(ms2).iterator(), TestUtils.records(readAgain.records).iterator());
             long size = segReopen.log().sizeInBytes();
             long position = segReopen.log().channel().position();
             long fileSize = segReopen.log().file().length();

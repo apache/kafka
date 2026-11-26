@@ -1601,7 +1601,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       .filter(entry => entry.getValue.replicaInfos.containsKey(topicPartition)).findAny().get().getKey
     // retrieve the path of the first segment
     val logFilePath = LogFileUtils.logFile(Paths.get(logDir).resolve(topicPartition.toString).toFile, 0).toPath
-    val firstSegmentRecordsSize = FileRecords.open(logFilePath.toFile).records().asScala.iterator.size
+    val firstSegmentRecordsSize = Using.resource(FileRecords.open(logFilePath.toFile)) { records =>
+      org.apache.kafka.test.TestUtils.records(records).size()
+    }
     assertTrue(firstSegmentRecordsSize > 0)
 
     // manually load the inactive segment file to corrupt the data

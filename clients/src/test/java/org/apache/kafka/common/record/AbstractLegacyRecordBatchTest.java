@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -64,7 +65,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
         long offset = firstOffset;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(offset++, record.offset());
     }
 
@@ -89,7 +90,7 @@ public class AbstractLegacyRecordBatchTest {
             batch.setLastOffset(0L);
 
             long offset = 0L;
-            for (Record record : batch)
+            for (Record record : TestUtils.records(batch))
                 assertEquals(offset++, record.offset());
         }
     }
@@ -108,7 +109,7 @@ public class AbstractLegacyRecordBatchTest {
         ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
         batch.setLastOffset(1L);
 
-        assertThrows(InvalidRecordException.class, batch::iterator);
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(batch));
     }
 
     @Test
@@ -189,7 +190,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
 
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(logAppendTime, record.timestamp());
     }
 
@@ -215,7 +216,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(createTime, recordBatches.get(0).maxTimestamp());
 
         long expectedTimestamp = 1L;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(expectedTimestamp++, record.timestamp());
     }
 
@@ -235,7 +236,7 @@ public class AbstractLegacyRecordBatchTest {
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
 
-            batch.iterator();
+            TestUtils.records(batch);
             fail("Can't reach here");
         } catch (IllegalArgumentException e) {
             assertEquals("ZStandard compression is not supported for magic 0", e.getMessage());
@@ -249,7 +250,7 @@ public class AbstractLegacyRecordBatchTest {
             ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
             batch.setLastOffset(1L);
 
-            batch.iterator();
+            TestUtils.records(batch);
             fail("Can't reach here");
         } catch (IllegalArgumentException e) {
             assertEquals("ZStandard compression is not supported for magic 1", e.getMessage());

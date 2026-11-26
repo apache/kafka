@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;

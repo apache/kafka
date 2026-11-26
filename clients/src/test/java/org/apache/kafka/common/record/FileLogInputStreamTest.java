@@ -101,7 +101,7 @@ public class FileLogInputStreamTest {
             buffer.flip();
 
             MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
-            List<Record> records = Utils.toList(memRecords.records().iterator());
+            List<Record> records = Utils.toList(TestUtils.records(memRecords).iterator());
             assertEquals(1, records.size());
             Record record0 = records.get(0);
             assertTrue(record0.hasMagic(magic));
@@ -309,7 +309,7 @@ public class FileLogInputStreamTest {
         assertEquals(baseOffset, batch.baseOffset());
         assertTrue(batch.isValid());
 
-        List<Record> batchRecords = TestUtils.toList(batch);
+        List<Record> batchRecords = TestUtils.records(batch);
         for (int i = 0; i < records.length; i++) {
             assertEquals(baseOffset + i, batchRecords.get(i).offset());
             assertEquals(records[i].key(), batchRecords.get(i).key());

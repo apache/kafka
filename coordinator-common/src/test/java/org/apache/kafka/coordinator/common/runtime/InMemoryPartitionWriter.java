@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
+import org.apache.kafka.test.TestUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -30,7 +31,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.StreamSupport;
 
 /**
  * An in-memory partition writer.
@@ -108,7 +108,7 @@ public class InMemoryPartitionWriter implements PartitionWriter {
             buffer.flip();
             state.entries.add(MemoryRecords.readableRecords(buffer));
             // Increment the end offset.
-            state.endOffset += StreamSupport.stream(batch.records().spliterator(), false).count();
+            state.endOffset += TestUtils.records(batch).size();
             if (autoCommit) commit(tp, state.endOffset);
             return state.endOffset;
         } finally {

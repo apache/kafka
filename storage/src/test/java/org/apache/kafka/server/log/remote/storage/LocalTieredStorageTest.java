@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -278,7 +279,7 @@ public final class LocalTieredStorageTest {
 
                 try {
                     final FileRecords records = FileRecords.open(fileset.getFile(SEGMENT));
-                    final Iterator<Record> it = records.records().iterator();
+                    final Iterator<Record> it = TestUtils.records(records).iterator();
 
                     assertEquals(wrap(bytes), it.next().value());
 
@@ -368,7 +369,7 @@ public final class LocalTieredStorageTest {
         final FileRecords records = FileRecords.open(snapshot.getFile(id, SEGMENT));
         final List<ByteBuffer> buffers = new ArrayList<>();
 
-        for (Record record: records.records()) {
+        for (Record record: TestUtils.records(records)) {
             buffers.add(record.value());
         }
 
@@ -461,7 +462,7 @@ public final class LocalTieredStorageTest {
         public void verifyFetchedLogSegment(final RemoteLogSegmentId id, final int startPosition, final byte[] expected) {
             try (final InputStream in = remoteStorage.fetchLogSegment(newMetadata(id), startPosition)) {
                 final ByteBuffer buffer = ByteBuffer.wrap(readFully(in));
-                Iterator<Record> records = MemoryRecords.readableRecords(buffer).records().iterator();
+                Iterator<Record> records = TestUtils.records(MemoryRecords.readableRecords(buffer)).iterator();
 
                 assertTrue(records.hasNext());
                 assertEquals(ByteBuffer.wrap(expected), records.next().value());

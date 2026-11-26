@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.Iterator;
 import java.util.Objects;
 
 import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
@@ -146,11 +145,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         @Override
         public byte magic() {
             return magic;
-        }
-
-        @Override
-        public Iterator<Record> iterator() {
-            return loadFullBatch().iterator();
         }
 
         @Override

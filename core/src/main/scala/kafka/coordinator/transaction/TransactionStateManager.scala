@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecords
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
@@ -49,6 +50,7 @@ import org.apache.kafka.common.errors.InvalidRegularExpression
 import java.util.Optional
 
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 import scala.collection.mutable
 
 
@@ -505,21 +507,23 @@ class TransactionStateManager(brokerId: Int,
                 MemoryRecords.readableRecords(buffer)
             }
             memRecords.batches.forEach { batch =>
-              for (record <- batch.asScala) {
-                require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.readTxnRecordKey(record.key) match {
-                  case Left(version) =>
-                    warn(s"Unknown message key with version $version" +
-                      s" while loading transaction state from $topicPartition. Ignoring it. " +
-                      "It could be a left over from an aborted upgrade.")
-                  case Right(transactionalId) =>
-                    // load transaction metadata along with transaction state
-                    TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
-                      case None =>
-                        loadedTransactions.remove(transactionalId)
-                      case Some(txnMetadata) =>
-                        loadedTransactions.put(transactionalId, txnMetadata)
-                    }
+              Using.resource(batch.streamingIterator(BufferSupplier.NO_CACHING)) { records =>
+                for (record <- records.asScala) {
+                  require(record.hasKey, "Transaction state log's key should not be null")
+                  TransactionLog.readTxnRecordKey(record.key) match {
+                    case Left(version) =>
+                      warn(s"Unknown message key with version $version" +
+                        s" while loading transaction state from $topicPartition. Ignoring it. " +
+                        "It could be a left over from an aborted upgrade.")
+                    case Right(transactionalId) =>
+                      // load transaction metadata along with transaction state
+                      TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
+                        case None =>
+                          loadedTransactions.remove(transactionalId)
+                        case Some(txnMetadata) =>
+                          loadedTransactions.put(transactionalId, txnMetadata)
+                      }
+                  }
                 }
               }
               currOffset = batch.nextOffset
