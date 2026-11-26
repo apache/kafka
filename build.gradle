@@ -3299,6 +3299,9 @@ project(':streams:upgrade-system-tests-0110') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3345,6 +3348,9 @@ project(':streams:upgrade-system-tests-10') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
@@ -3393,6 +3399,9 @@ project(':streams:upgrade-system-tests-11') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3439,6 +3448,9 @@ project(':streams:upgrade-system-tests-20') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
@@ -3487,6 +3499,9 @@ project(':streams:upgrade-system-tests-21') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3533,6 +3548,9 @@ project(':streams:upgrade-system-tests-22') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
@@ -3581,6 +3599,9 @@ project(':streams:upgrade-system-tests-23') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3627,6 +3648,9 @@ project(':streams:upgrade-system-tests-24') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
@@ -3675,6 +3699,9 @@ project(':streams:upgrade-system-tests-25') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3721,6 +3748,9 @@ project(':streams:upgrade-system-tests-26') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
@@ -3769,6 +3799,9 @@ project(':streams:upgrade-system-tests-27') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
       }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3815,6 +3848,9 @@ project(':streams:upgrade-system-tests-28') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-59889')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-77310')
       }
     }
 
