@@ -26602,7 +26602,7 @@ public class GroupMetadataManagerTest {
     public void testClassicGroupJoinDetectsEmptyStreamsGroupWithStoredTopology() {
         // classicGroupJoin must signal topology cleanup when an empty streams group has a stored
         // description topology epoch set (i.e. the plugin may still hold topology data). The caller
-        // is expected to run the plugin cleanup before re-invoking with topologyCleanupHandled=true.
+        // is expected to run the plugin cleanup before re-invoking with preConversionStepDone=true.
         String groupId = "streams-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
@@ -26620,16 +26620,16 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext.JoinResult result =
             context.sendClassicGroupJoin(request, false, false, false);
 
-        // Detection fired: needsTopologyCleanup is true, no coordinator records emitted, and
+        // Detection fired: the step is DELETE_STREAMS_TOPOLOGY, no coordinator records emitted, and
         // responseFuture is left untouched (the join is not completed — cleanup must happen first).
-        assertTrue(result.needsTopologyCleanup);
+        assertEquals(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY), result.step);
         assertEquals(List.of(), result.records);
         assertFalse(result.joinFuture.isDone());
     }
 
     @Test
-    public void testClassicGroupJoinDoesNotDetectWhenTopologyCleanupHandled() {
-        // When topologyCleanupHandled=true the detection predicate is suppressed, so classicGroupJoin
+    public void testClassicGroupJoinSkipsStepWhenPreConversionStepDone() {
+        // When preConversionStepDone=true the detection predicate is suppressed, so classicGroupJoin
         // must proceed with the conversion even when storedDescriptionTopologyEpoch is set. This is
         // the re-invocation path after the caller has already run the plugin cleanup.
         String groupId = "streams-group-id";
@@ -26645,21 +26645,21 @@ public class GroupMetadataManagerTest {
             .withDefaultProtocolTypeAndProtocols()
             .build();
 
-        // topologyCleanupHandled=true suppresses detection; the join proceeds to conversion.
+        // preConversionStepDone=true suppresses detection; the join proceeds to conversion.
         GroupMetadataManagerTestContext.JoinResult result =
             context.sendClassicGroupJoin(request, false, false, true);
 
-        // No cleanup signal: needsTopologyCleanup is false and conversion records were emitted.
-        assertFalse(result.needsTopologyCleanup);
+        // No cleanup signal: no step is returned and conversion records were emitted.
+        assertEquals(Optional.empty(), result.step);
         assertFalse(result.records.isEmpty());
     }
 
     @Test
     public void testClassicGroupJoinDoesNotDetectForNonEligibleGroups() {
         // The detection predicate must fire only for an empty streams group whose stored epoch is
-        // non-NONE. Under topologyCleanupHandled=false (the value production passes on every classic
+        // non-NONE. Under preConversionStepDone=false (the value production passes on every classic
         // join with a plugin configured) each of the following must fall through to a normal join —
-        // needsTopologyCleanup=false — rather than signalling cleanup:
+        // no step returned — rather than signalling cleanup:
         //   (a) no such group,
         //   (b) a non-streams (classic) group,
         //   (c) a non-empty streams group,
@@ -26668,12 +26668,12 @@ public class GroupMetadataManagerTest {
 
         // (a) Missing group.
         GroupMetadataManagerTestContext missing = new GroupMetadataManagerTestContext.Builder().build();
-        assertFalse(sendJoinForCleanupDetection(missing, groupId).needsTopologyCleanup);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(missing, groupId).step);
 
         // (b) Classic group.
         GroupMetadataManagerTestContext classic = new GroupMetadataManagerTestContext.Builder().build();
         classic.createClassicGroup(groupId);
-        assertFalse(sendJoinForCleanupDetection(classic, groupId).needsTopologyCleanup);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(classic, groupId).step);
 
         // (c) Non-empty streams group (a live member), even with a stored epoch set.
         String memberId = Uuid.randomUuid().toString();
@@ -26687,7 +26687,7 @@ public class GroupMetadataManagerTest {
             .build();
         nonEmpty.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
-        assertFalse(sendJoinForCleanupDetection(nonEmpty, groupId).needsTopologyCleanup);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(nonEmpty, groupId).step);
 
         // (d) Empty streams group at stored == NONE (nothing in the plugin to clean up).
         GroupMetadataManagerTestContext storedNone = new GroupMetadataManagerTestContext.Builder()
@@ -26695,7 +26695,7 @@ public class GroupMetadataManagerTest {
             .build();
         storedNone.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 10, 0L, -1, AssignmentConfigsImpl.DEFAULT, StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
-        assertFalse(sendJoinForCleanupDetection(storedNone, groupId).needsTopologyCleanup);
+        assertEquals(Optional.empty(), sendJoinForCleanupDetection(storedNone, groupId).step);
     }
 
     private static GroupMetadataManagerTestContext.JoinResult sendJoinForCleanupDetection(

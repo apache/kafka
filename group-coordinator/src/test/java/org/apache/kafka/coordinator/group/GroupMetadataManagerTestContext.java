@@ -302,17 +302,17 @@ public class GroupMetadataManagerTestContext {
         CompletableFuture<JoinGroupResponseData> joinFuture;
         List<CoordinatorRecord> records;
         CompletableFuture<Void> appendFuture;
-        // Whether classicGroupJoin signalled that streams-topology cleanup is needed before conversion.
-        boolean needsTopologyCleanup;
+        // The step classicGroupJoin returned to run before conversion, or empty if the join was handled.
+        Optional<ClassicGroupConversionStep> step;
 
         public JoinResult(
             CompletableFuture<JoinGroupResponseData> joinFuture,
-            CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult
+            CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> coordinatorResult
         ) {
             this.joinFuture = joinFuture;
             this.records = coordinatorResult.records();
             this.appendFuture = coordinatorResult.appendFuture();
-            this.needsTopologyCleanup = coordinatorResult.response();
+            this.step = coordinatorResult.response();
         }
     }
 
@@ -940,7 +940,7 @@ public class GroupMetadataManagerTestContext {
         JoinGroupRequestData request,
         boolean requireKnownMemberId,
         boolean supportSkippingAssignment,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         // requireKnownMemberId is true: version >= 4 (See JoinGroupRequest#requiresKnownMemberId())
         // supportSkippingAssignment is true: version >= 9 (See JoinGroupRequest#supportsSkippingAssignment())
@@ -970,11 +970,11 @@ public class GroupMetadataManagerTestContext {
         );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
+        CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture,
-            topologyCleanupHandled
+            preConversionStepDone
         );
 
         if (coordinatorResult.replayRecords()) {

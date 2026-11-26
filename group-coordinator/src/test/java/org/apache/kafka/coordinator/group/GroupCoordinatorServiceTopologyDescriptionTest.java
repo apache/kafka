@@ -2108,11 +2108,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
         // The first classic-group-join detects the empty streams group with a stored topology and
-        // returns true (cleanup needed, no conversion); the second runs after cleanup and converts,
-        // returning false.
+        // returns the DELETE_STREAMS_TOPOLOGY step (no conversion); the second runs after cleanup
+        // and converts, returning no step.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+            .thenReturn(CompletableFuture.completedFuture(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY)))
+            .thenReturn(CompletableFuture.completedFuture(Optional.<ClassicGroupConversionStep>empty()));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // classicGroupJoin completes responseFuture internally; with a mock runtime that operation
@@ -2140,10 +2140,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("boom")));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
-        // The single classic-group-join detects the empty streams group and returns true; the
-        // post-cleanup conversion never runs because the plugin delete fails.
+        // The single classic-group-join detects the empty streams group and returns the
+        // DELETE_STREAMS_TOPOLOGY step; the post-cleanup conversion never runs because the
+        // plugin delete fails.
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY)));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData resp = service.joinGroup(
@@ -2168,7 +2169,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         // Every join detects the empty streams group with a stored topology (cleanup needed).
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY)));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData first = service.joinGroup(
@@ -2196,7 +2197,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+            .thenReturn(CompletableFuture.completedFuture(Optional.of(ClassicGroupConversionStep.DELETE_STREAMS_TOPOLOGY)));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         JoinGroupResponseData resp = service.joinGroup(
@@ -2213,9 +2214,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         // The single classic-group-join finds an already-classic group, completes the response and
-        // returns false (no cleanup needed).
+        // returns no step (no cleanup needed).
         when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+            .thenReturn(CompletableFuture.completedFuture(Optional.<ClassicGroupConversionStep>empty()));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.joinGroup(requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING);

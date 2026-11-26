@@ -564,26 +564,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context                The request context.
      * @param request                The actual JoinGroup request.
      * @param responseFuture         The join group response future.
-     * @param topologyCleanupHandled True if an empty streams group can be converted to a
-     *                               classic group right away: its topology was already deleted
-     *                               from the plugin, or no plugin is configured.
+     * @param preConversionStepDone  True if the step returned by
+     *                               {@link Group#stepBeforeClassicConversion()} was already run,
+     *                               or does not apply, so the group can be converted right away.
      *
-     * @return A Result with a list of records to update the state machine. Its response is
-     *         true if the group is an empty streams group whose topology must first be deleted
-     *         from the plugin. In that case nothing is changed, and the caller must delete the
-     *         topology and call again with {@code topologyCleanupHandled = true}.
+     * @return A Result with a list of records to update the state machine. Its response is empty
+     *         if the join was handled. Otherwise it is the step returned by
+     *         {@link Group#stepBeforeClassicConversion()}: nothing is changed, and the caller
+     *         must run that step and call again with {@code preConversionStepDone = true}.
      */
-    public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<Optional<ClassicGroupConversionStep>, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture,
-        boolean topologyCleanupHandled
+        boolean preConversionStepDone
     ) {
         return groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture,
-            topologyCleanupHandled
+            preConversionStepDone
         );
     }
 
