@@ -64,9 +64,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             return targetAssignment;
         }
 
+        final Set<String> statefulSubtopologies = statefulSubtopologies(subtopologies);
         final CurrentAssignmentIndex currentAssignment =
-            indexCurrentAssignment(members, taskOffsets, subtopologies, acceptableRecoveryLag);
-        final TargetStandbyHolders targetStandbyHolders = new TargetStandbyHolders(targetAssignment, subtopologies);
+            indexCurrentAssignment(members, taskOffsets, statefulSubtopologies, acceptableRecoveryLag);
+        final TargetStandbyHolders targetStandbyHolders =
+            new TargetStandbyHolders(targetAssignment, statefulSubtopologies);
         final TaskDecisions decisions = analyzeTasks(
             currentAssignment,
             targetAssignment,
@@ -74,7 +76,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             members,
             heartbeatVersions,
             keepActiveTasks,
-            subtopologies
+            statefulSubtopologies
         );
         if (decisions.stagedMigrations().isEmpty()) {
             // Nothing is held back, so the remaining passes would patch nothing: warm-up tasks and withheld standbys
@@ -89,7 +91,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             numWarmupReplicas
         );
         final SortedMap<String, SortedSet<TaskId>> withheldStandbys = filterStandbys(
-            targetAssignment, targetStandbyHolders, currentAssignment, decisions, warmupPlan, members, subtopologies);
+            targetAssignment, targetStandbyHolders, currentAssignment, decisions, warmupPlan, members, statefulSubtopologies);
 
         return assemble(targetAssignment, currentAssignment, decisions, warmupPlan, withheldStandbys);
     }
@@ -116,8 +118,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        All members of the group.
      * @param taskOffsets
      *        The latest changelog offsets/end-offsets reported by the members.
-     * @param subtopologies
-     *        The resolved subtopologies, which tell whether a subtopology is stateful.
+     * @param statefulSubtopologies
+     *        The IDs of the stateful subtopologies.
      * @param acceptableRecoveryLag
      *        The lag at or below which a task's state counts as caught up.
      *
@@ -126,7 +128,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     static CurrentAssignmentIndex indexCurrentAssignment(
         final Map<String, StreamsGroupMember> members,
         final Map<String, MemberTaskOffsets> taskOffsets,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
+        final Set<String> statefulSubtopologies,
         final long acceptableRecoveryLag
     ) {
         final Map<TaskId, ActiveHolder> activeHolder = new HashMap<>();
@@ -144,7 +146,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             forEachStatefulActiveTask(
                 member.assignedTasks().activeTasksWithEpochs(),
-                subtopologies,
+                statefulSubtopologies,
                 task -> {
                     activeHolder.put(task, new ActiveHolder(
                         member.memberId(),
@@ -158,7 +160,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             forEachStatefulTask(
                 member.assignedTasks().standbyTasks(),
-                subtopologies,
+                statefulSubtopologies,
                 task -> {
                     addTaskCopy(taskCopies, task, member, TaskRole.STANDBY, offsets, acceptableRecoveryLag);
                     heldOnProcess.add(task);
@@ -168,7 +170,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             forEachStatefulTask(
                 member.assignedTasks().warmupTasks(),
-                subtopologies,
+                statefulSubtopologies,
                 task -> {
                     addTaskCopy(taskCopies, task, member, TaskRole.WARMUP, offsets, acceptableRecoveryLag);
                     heldOnProcess.add(task);
@@ -178,7 +180,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
             forEachStatefulReportedTask(
                 offsets.taskOffsets(),
-                subtopologies,
+                statefulSubtopologies,
                 task -> reportedByProcess.computeIfAbsent(member.processId(), __ -> new HashSet<>()).add(task)
             );
 
@@ -242,8 +244,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The version of the latest heartbeat of each member, which tells whether a member can be warmed up.
      * @param keepActiveTasks
      *        Whether every active task has to stay with the member that holds it, see {@link AssignmentRefiner#refine}.
-     * @param subtopologies
-     *        The resolved subtopologies, which tell whether a subtopology is stateful.
+     * @param statefulSubtopologies
+     *        The IDs of the stateful subtopologies.
      *
      * @return What was decided for the tasks that are not already in place.
      */
@@ -254,11 +256,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, StreamsGroupMember> members,
         final Map<String, Integer> heartbeatVersions,
         final boolean keepActiveTasks,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
+        final Set<String> statefulSubtopologies
     ) {
-        // The map is sorted, which gives the canonical task order that makes a derivation reproducible and leaves the
-        // warmup budget pass that follows a deterministic tie-break to fall back on.
-        final SortedMap<TaskId, String> targetOwners = statefulActiveOwners(targetAssignment, subtopologies);
+        final Map<TaskId, String> targetOwners = statefulActiveOwners(targetAssignment, statefulSubtopologies);
 
         final List<StagedMigration> stagedMigrations = new ArrayList<>();
         final List<TaskGrant> grantedTasks = new ArrayList<>();
@@ -333,6 +333,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
         }
 
+        // Sorting gives the canonical task order that makes a derivation reproducible.
+        stagedMigrations.sort(Comparator.comparing(StagedMigration::task));
+        grantedTasks.sort(Comparator.comparing(TaskGrant::task));
         return new TaskDecisions(List.copyOf(stagedMigrations), List.copyOf(grantedTasks));
     }
 
@@ -857,8 +860,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        How each staged migration is being warmed, from {@link #planWarmups}.
      * @param members
      *        All members of the group, used to resolve which process a member runs in.
-     * @param subtopologies
-     *        The resolved subtopologies, which tell whether a subtopology is stateful.
+     * @param statefulSubtopologies
+     *        The IDs of the stateful subtopologies.
      *
      * @return The standby placements to withhold, as the tasks to drop from each member's target assignment, in
      *         canonical order. A member with nothing withheld does not appear.
@@ -870,7 +873,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final TaskDecisions decisions,
         final WarmupPlan warmupPlan,
         final Map<String, StreamsGroupMember> members,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
+        final Set<String> statefulSubtopologies
     ) {
         final StandbyConflicts conflicts = indexStandbyConflicts(
             targetStandbyHolders,
@@ -889,7 +892,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 return;
             }
 
-            forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
+            forEachStatefulTask(tasks.standbyTasks(), statefulSubtopologies, task -> {
                 if (isStandbyWithheld(memberId, member.processId(), task, conflicts)) {
                     withheld.computeIfAbsent(memberId, __ -> new TreeSet<>()).add(task);
                 }
@@ -1105,13 +1108,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * Inverts the target assignment into a lookup from stateful task to the member that is to run it as an active task.
      */
-    private static SortedMap<TaskId, String> statefulActiveOwners(
+    private static Map<TaskId, String> statefulActiveOwners(
         final Map<String, TasksTuple> targetAssignment,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
+        final Set<String> statefulSubtopologies
     ) {
-        final SortedMap<TaskId, String> owners = new TreeMap<>();
+        final Map<TaskId, String> owners = new HashMap<>();
         targetAssignment.forEach((memberId, tasks) ->
-            forEachStatefulTask(tasks.activeTasks(), subtopologies, task -> owners.put(task, memberId)));
+            forEachStatefulTask(tasks.activeTasks(), statefulSubtopologies, task -> owners.put(task, memberId)));
         return owners;
     }
 
@@ -1134,11 +1137,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     private static void forEachStatefulActiveTask(
         final Map<String, Map<Integer, Integer>> activeTasksWithEpochs,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
+        final Set<String> statefulSubtopologies,
         final Consumer<TaskId> action
     ) {
         activeTasksWithEpochs.forEach((subtopologyId, partitionsWithEpochs) -> {
-            if (isStateful(subtopologies, subtopologyId)) {
+            if (statefulSubtopologies.contains(subtopologyId)) {
                 partitionsWithEpochs.keySet()
                     .forEach(partitionId -> action.accept(new TaskId(subtopologyId, partitionId)));
             }
@@ -1147,11 +1150,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     private static void forEachStatefulReportedTask(
         final Map<String, Map<Integer, Long>> reportedOffsets,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
+        final Set<String> statefulSubtopologies,
         final Consumer<TaskId> action
     ) {
         reportedOffsets.forEach((subtopologyId, offsetsByPartition) -> {
-            if (isStateful(subtopologies, subtopologyId)) {
+            if (statefulSubtopologies.contains(subtopologyId)) {
                 offsetsByPartition.keySet()
                     .forEach(partitionId -> action.accept(new TaskId(subtopologyId, partitionId)));
             }
@@ -1160,18 +1163,19 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
     private static void forEachStatefulTask(
         final Map<String, Set<Integer>> tasks,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
+        final Set<String> statefulSubtopologies,
         final Consumer<TaskId> action
     ) {
         tasks.forEach((subtopologyId, partitionIds) -> {
-            if (isStateful(subtopologies, subtopologyId)) {
+            if (statefulSubtopologies.contains(subtopologyId)) {
                 partitionIds.forEach(partitionId -> action.accept(new TaskId(subtopologyId, partitionId)));
             }
         });
     }
 
     /**
-     * Whether the subtopology has state the coordinator can reason about, which here means state with a changelog.
+     * The IDs of the subtopologies that have state the coordinator can reason about, which here means state with a
+     * changelog.
      *
      * <p>A changelog is the <em>only</em> signal of state that reaches the coordinator -- the topology metadata carries
      * changelog topics and nothing about stores -- so the two are not merely equal in effect, the broker has no way to
@@ -1180,12 +1184,14 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * exactly like a stateless task. This is narrower than "stateful" client-side, where a task can have state and no
      * changelog.
      */
-    private static boolean isStateful(
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
-        final String subtopologyId
-    ) {
-        final ConfiguredSubtopology subtopology = subtopologies.get(subtopologyId);
-        return subtopology != null && !subtopology.stateChangelogTopics().isEmpty();
+    static Set<String> statefulSubtopologies(final SortedMap<String, ConfiguredSubtopology> subtopologies) {
+        final Set<String> stateful = new HashSet<>();
+        subtopologies.forEach((subtopologyId, subtopology) -> {
+            if (!subtopology.stateChangelogTopics().isEmpty()) {
+                stateful.add(subtopologyId);
+            }
+        });
+        return stateful;
     }
 
     /**
@@ -1487,15 +1493,15 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     static final class TargetStandbyHolders {
 
         private final Map<String, TasksTuple> targetAssignment;
-        private final SortedMap<String, ConfiguredSubtopology> subtopologies;
+        private final Set<String> statefulSubtopologies;
         private Map<TaskId, Set<String>> holders;
 
         TargetStandbyHolders(
             final Map<String, TasksTuple> targetAssignment,
-            final SortedMap<String, ConfiguredSubtopology> subtopologies
+            final Set<String> statefulSubtopologies
         ) {
             this.targetAssignment = targetAssignment;
-            this.subtopologies = subtopologies;
+            this.statefulSubtopologies = statefulSubtopologies;
         }
 
         /**
@@ -1511,7 +1517,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         private Map<TaskId, Set<String>> statefulStandbyHolders() {
             final Map<TaskId, Set<String>> lookup = new HashMap<>();
             targetAssignment.forEach((memberId, tasks) ->
-                forEachStatefulTask(tasks.standbyTasks(), subtopologies,
+                forEachStatefulTask(tasks.standbyTasks(), statefulSubtopologies,
                     task -> lookup.computeIfAbsent(task, __ -> new HashSet<>()).add(memberId)));
             return lookup;
         }
