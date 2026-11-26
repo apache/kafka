@@ -25,8 +25,8 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.Batch;
@@ -76,12 +76,10 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
 
     private final FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde;
 
     private BatchFileReader(FileRecords fileRecords) {
         this.fileRecords = fileRecords;
         this.batchIterator = fileRecords.batchIterator();
-        this.serde = new MetadataRecordSerde();
     }
 
     @Override
@@ -149,7 +147,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
                 Record record = iterator.next();
                 try {
                     ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
-                    ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                    ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
                     messages.add(messageAndVersion);
                 } catch (Throwable e) {
                     throw new RuntimeException("unable to deserialize record at offset " + record.offset(), e);

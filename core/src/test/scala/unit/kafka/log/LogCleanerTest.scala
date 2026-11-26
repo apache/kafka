@@ -1256,7 +1256,7 @@ class LogCleanerTest extends Logging {
 
     // the last (active) segment has just one message
 
-    def distinctValuesBySegment = log.logSegments.asScala.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
+    def distinctValuesBySegment = log.logSegments.asScala.map(s => org.apache.kafka.test.TestUtils.records(s.log).asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
     val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
@@ -1370,10 +1370,10 @@ class LogCleanerTest extends Logging {
 
   /* extract all the offsets from a log */
   def offsetsInLog(log: UnifiedLog): Iterable[Long] =
-    log.logSegments.asScala.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
+    log.logSegments.asScala.flatMap(s => org.apache.kafka.test.TestUtils.records(s.log).asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
 
   def unkeyedMessageCountInLog(log: UnifiedLog) =
-    log.logSegments.asScala.map(s => s.log.records.asScala.filter(_.hasValue).count(m => !m.hasKey)).sum
+    log.logSegments.asScala.map(s => org.apache.kafka.test.TestUtils.records(s.log).asScala.filter(_.hasValue).count(m => !m.hasKey)).sum
 
   def abortCheckDone(topicPartition: TopicPartition): Unit = {
     throw new LogCleaningAbortedException()
@@ -1430,7 +1430,7 @@ class LogCleanerTest extends Logging {
     assertEquals(1, log.logSegments.asScala.head.log.batches.asScala.size, "one batch should be retained in the cleaned segment")
     val retainedBatch = log.logSegments.asScala.head.log.batches.asScala.head
     assertEquals(log.logSegments.asScala.last.baseOffset - 1, retainedBatch.lastOffset, "the retained batch should be the last batch")
-    assertFalse(retainedBatch.iterator.hasNext,  "the retained batch should be an empty batch")
+    assertFalse(org.apache.kafka.test.TestUtils.records(retainedBatch).iterator.hasNext,  "the retained batch should be an empty batch")
   }
 
   /**
@@ -1929,7 +1929,7 @@ class LogCleanerTest extends Logging {
 
     cleaner.clean(new LogToClean(log, 0, log.activeSegment.baseOffset, false))
 
-    for (segment <- log.logSegments.asScala; batch <- segment.log.batches.asScala; record <- batch.asScala) {
+    for (segment <- log.logSegments.asScala; batch <- segment.log.batches.asScala; record <- org.apache.kafka.test.TestUtils.records(batch).asScala) {
       assertTrue(record.hasMagic(batch.magic))
       val value = TestUtils.readString(record.value).toLong
       assertEquals(record.offset, value)
@@ -1949,7 +1949,7 @@ class LogCleanerTest extends Logging {
     val corruptedMessage = invalidCleanedMessage(offset, set)
     val records = MemoryRecords.readableRecords(corruptedMessage.buffer)
 
-    for (logEntry <- records.records.asScala) {
+    for (logEntry <- org.apache.kafka.test.TestUtils.records(records).asScala) {
       val offset = logEntry.offset
       val value = TestUtils.readString(logEntry.value).toLong
       assertEquals(offset, value)

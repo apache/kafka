@@ -200,7 +200,7 @@ object LogTestUtils {
   def keysInLog(log: UnifiedLog): Iterable[Long] = {
     for (logSegment <- log.logSegments.asScala;
          batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
-         record <- batch.asScala if record.hasValue && record.hasKey)
+         record <- org.apache.kafka.test.TestUtils.records(batch).asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toLong
   }
 

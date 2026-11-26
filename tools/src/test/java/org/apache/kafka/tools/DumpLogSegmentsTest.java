@@ -825,7 +825,7 @@ public class DumpLogSegmentsTest {
 
     private Record serializedRecord(ApiMessage key, ApiMessageAndVersion value) {
         byte[] valueBytes = value == null ? null : MessageUtil.toVersionPrefixedBytes(value.version(), value.message());
-        return TestUtils.records(TestUtils.singletonRecords(
+        return org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
             valueBytes,
             MessageUtil.toCoordinatorTypePrefixedBytes(key),
             Compression.NONE,
@@ -842,7 +842,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
@@ -946,7 +946,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.records(TestUtils.singletonRecords(
+                org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
@@ -981,7 +981,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
@@ -1014,7 +1014,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.records(TestUtils.singletonRecords(
+                org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,
@@ -1168,7 +1168,7 @@ public class DumpLogSegmentsTest {
             assertEquals(Optional.of(batch.compressionType().name), Optional.ofNullable(parsedBatch.get("compresscodec")));
 
             Iterator<String> parsedRecordIter = readBatchRecords(lines).iterator();
-            for (Record record : TestUtils.records(batch)) {
+            for (Record record : org.apache.kafka.test.TestUtils.records(batch)) {
                 assertTrue(parsedRecordIter.hasNext());
                 Map<String, String> parsedRecord = parseMetadataFields(parsedRecordIter.next());
                 assertEquals(Optional.of(record.offset()), optionalLong(parsedRecord.get("offset")));
@@ -1203,7 +1203,7 @@ public class DumpLogSegmentsTest {
         assertEquals(
             "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
             assertThrows(RuntimeException.class, () ->
-                parser.parse(TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
+                parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(null, null, Compression.NONE, RecordBatch.NO_TIMESTAMP,
                     RecordBatch.CURRENT_MAGIC_VALUE)).iterator().next())
             ).getMessage()
         );
@@ -1279,7 +1279,7 @@ public class DumpLogSegmentsTest {
         // An unknown record type should be handled and reported as such.
         assertParseResult(
             parser.parse(
-                TestUtils.records(TestUtils.singletonRecords(
+                org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
                     new byte[0],
                     ByteBuffer.allocate(2).putShort(Short.MAX_VALUE).array(),
                     Compression.NONE,

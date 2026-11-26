@@ -430,7 +430,7 @@ class UnifiedLogTest {
   def testAppendMessageWithNullPayload(): Unit = {
     val log = createLog(logDir, new LogConfig(new Properties))
     log.appendAsLeader(TestUtils.singletonRecords(value = null), 0)
-    val head = LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next()
+    val head = org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next()
     assertEquals(0, head.offset)
     assertFalse(head.hasValue, "Message payload should be null.")
   }
@@ -516,7 +516,7 @@ class UnifiedLogTest {
     val epoch = 0.toShort
     val log = createLog(logDir, new LogConfig(new Properties))
     log.appendAsLeader(TestUtils.singletonRecords(value = null), 0)
-    assertEquals(0, LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertEquals(0, org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next().offset)
     val append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime)
     append(10)
     // Kind of a hack, but renaming the index to a directory ensures that the append
@@ -525,7 +525,7 @@ class UnifiedLogTest {
     assertThrows(classOf[KafkaStorageException], () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
       mockTime.milliseconds(), coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
     assertThrows(classOf[KafkaStorageException], () => log.appendAsLeader(TestUtils.singletonRecords(value = null), 0))
-    assertThrows(classOf[KafkaStorageException], () => LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertThrows(classOf[KafkaStorageException], () => org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next().offset)
   }
 
   @Test
@@ -2594,7 +2594,7 @@ object UnifiedLogTest {
     val recordsFound = ListBuffer[Record]()
     for (logSegment <- log.logSegments.asScala) {
       for (batch <- logSegment.log.batches.asScala) {
-        recordsFound ++= batch.iterator().asScala
+        recordsFound ++= org.apache.kafka.test.TestUtils.records(batch).iterator().asScala
       }
     }
     recordsFound.toList
