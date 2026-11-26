@@ -23,21 +23,38 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
 public final class RequestUtils {
 
     private RequestUtils() {}
+
+    // Resource types that need a newer CreateAcls, DescribeAcls and DeleteAcls version than the baseline.
+    static final Map<Byte, Short> MIN_ACLS_VERSIONS = Map.of(ResourceType.CLUSTER_MIRROR.code(), (short) 4);
+
+    /**
+     * Throws {@link UnsupportedProtocolFieldException} if the given ACL resource type is not supported by the given
+     * CreateAcls, DescribeAcls or DeleteAcls version.
+     */
+    static void validateAclsResourceType(byte resourceType, ApiKeys apiKey, short version) {
+        Short minVersion = MIN_ACLS_VERSIONS.get(resourceType);
+        if (minVersion != null && version < minVersion)
+            throw new UnsupportedProtocolFieldException(ResourceType.fromCode(resourceType).name(), apiKey.name(), version, minVersion);
+    }
 
     public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?

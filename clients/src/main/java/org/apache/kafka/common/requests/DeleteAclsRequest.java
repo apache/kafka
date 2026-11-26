@@ -82,6 +82,8 @@ public class DeleteAclsRequest extends AbstractRequest {
             }
         }
 
+        data.filters().forEach(filter -> RequestUtils.validateAclsResourceType(filter.resourceTypeFilter(), apiKey(), version()));
+
         final boolean unknown = data.filters().stream().anyMatch(filter ->
                 filter.patternTypeFilter() == PatternType.UNKNOWN.code()
                         || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()

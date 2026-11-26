@@ -80,6 +80,8 @@ public class DescribeAclsRequest extends AbstractRequest {
             }
         }
 
+        RequestUtils.validateAclsResourceType(data.resourceTypeFilter(), apiKey(), version);
+
         if (data.patternTypeFilter() == PatternType.UNKNOWN.code()
                 || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
                 || data.permissionType() == AclPermissionType.UNKNOWN.code()

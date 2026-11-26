@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -32,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeAclsRequestTest {
     private static final short V1 = 1;
+    private static final short V3 = 3;
+    private static final short V4 = 4;
 
     private static final AclBindingFilter PREFIXED_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "prefix", PatternType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
@@ -42,9 +45,24 @@ public class DescribeAclsRequestTest {
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "foo", PatternType.LITERAL),
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
+    private static final AclBindingFilter CLUSTER_MIRROR_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.CLUSTER_MIRROR, "mirror", PatternType.LITERAL),
+        new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
     @Test
     public void shouldThrowIfUnknown() {
         assertThrows(IllegalArgumentException.class, () -> new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V1));
+    }
+
+    @Test
+    public void shouldThrowOnV3IfClusterMirror() {
+        assertThrows(UnsupportedVersionException.class, () -> new DescribeAclsRequest.Builder(CLUSTER_MIRROR_FILTER).build(V3));
+    }
+
+    @Test
+    public void shouldRoundTripClusterMirrorV4() {
+        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(CLUSTER_MIRROR_FILTER).build(V4);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V4);
+        assertRequestEquals(original, result);
     }
 
     @Test

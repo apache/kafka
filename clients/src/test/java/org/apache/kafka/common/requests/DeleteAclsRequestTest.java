@@ -39,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class DeleteAclsRequestTest {
     private static final short V0 = 0;
     private static final short V1 = 1;
+    private static final short V3 = 3;
+    private static final short V4 = 4;
 
     private static final AclBindingFilter LITERAL_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, "foo", PatternType.LITERAL),
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
@@ -52,6 +54,9 @@ public class DeleteAclsRequestTest {
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "prefix", PatternType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
+    private static final AclBindingFilter CLUSTER_MIRROR_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.CLUSTER_MIRROR, "mirror", PatternType.LITERAL),
+        new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
     @Test
     public void shouldThrowOnV0IfPrefixed() {
         assertThrows(UnsupportedVersionException.class, () -> new DeleteAclsRequest.Builder(requestData(PREFIXED_FILTER)).build(V0));
@@ -60,6 +65,18 @@ public class DeleteAclsRequestTest {
     @Test
     public void shouldThrowOnUnknownElements() {
         assertThrows(IllegalArgumentException.class, () -> new DeleteAclsRequest.Builder(requestData(UNKNOWN_FILTER)).build(V1));
+    }
+
+    @Test
+    public void shouldThrowOnV3IfClusterMirror() {
+        assertThrows(UnsupportedVersionException.class, () -> new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER, CLUSTER_MIRROR_FILTER)).build(V3));
+    }
+
+    @Test
+    public void shouldRoundTripClusterMirrorV4() {
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(CLUSTER_MIRROR_FILTER)).build(V4);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serialize(), V4);
+        assertRequestEquals(original, result);
     }
 
     @Test
