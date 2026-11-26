@@ -538,6 +538,22 @@ object RequestMetrics {
   val MessageConversionsTimeMs: String = "MessageConversionsTimeMs"
   val TemporaryMemoryBytes: String = "TemporaryMemoryBytes"
   val ErrorsPerSec: String = "ErrorsPerSec"
+
+  private[network] val MaxDeprecatedRequestRateMeters: Int = 1000
+  private[network] val MaxClientInformationTagLength: Int = 128
+  private val OverflowClientInformation = new ClientInformation("_overflow_", "_overflow_")
+
+  private def truncated(clientInformation: ClientInformation): ClientInformation = {
+    val softwareName = clientInformation.softwareName
+    val softwareVersion = clientInformation.softwareVersion
+    if (softwareName.length <= MaxClientInformationTagLength && softwareVersion.length <= MaxClientInformationTagLength)
+      clientInformation
+    else
+      new ClientInformation(truncated(softwareName), truncated(softwareVersion))
+  }
+
+  private def truncated(value: String): String =
+    if (value.length <= MaxClientInformationTagLength) value else value.substring(0, MaxClientInformationTagLength)
 }
 
 private case class DeprecatedRequestRateKey(version: Short, clientInformation: ClientInformation)
@@ -589,8 +605,14 @@ class RequestMetrics(name: String) {
 
   def deprecatedRequestRate(apiKey: ApiKeys, version: Short, clientInformation: ClientInformation): Option[Meter] =
     if (apiKey.isVersionDeprecated(version)) {
-      Some(deprecatedRequestRateInternal.getAndMaybePut(DeprecatedRequestRateKey(version, clientInformation),
-        metricsGroup.newMeter(DeprecatedRequestsPerSec, "requests", TimeUnit.SECONDS, tagsWithVersionAndClientInfo(version, clientInformation))))
+      val requestedKey = DeprecatedRequestRateKey(version, truncated(clientInformation))
+      val key =
+        if (deprecatedRequestRateInternal.contains(requestedKey) || deprecatedRequestRateInternal.size < MaxDeprecatedRequestRateMeters)
+          requestedKey
+        else
+          DeprecatedRequestRateKey(version, OverflowClientInformation)
+      Some(deprecatedRequestRateInternal.getAndMaybePut(key,
+        metricsGroup.newMeter(DeprecatedRequestsPerSec, "requests", TimeUnit.SECONDS, tagsWithVersionAndClientInfo(key.version, key.clientInformation))))
     } else None
 
   private def tagsWithVersion(version: Short): java.util.Map[String, String] = {
