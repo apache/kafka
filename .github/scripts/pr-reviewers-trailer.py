@@ -95,7 +95,8 @@ def reviewers_trailer_is_misplaced(title: str, body: str) -> bool:
     anywhere else is plain text, and the people on it get no credit.
     """
     lines = body.split("\n")
-    is_reviewers = [bool(re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)) for line in lines]
+    # A "Reviewers:" line with no value is not counted. git drops an empty trailer.
+    is_reviewers = [bool(re.match(r"\s*reviewers\s*:\s*\S", line, re.IGNORECASE)) for line in lines]
     if any(is_reviewers[:last_paragraph_start(lines)]):
         return True
     return sum(is_reviewers) > len(parse_trailers(title, body).get("reviewers", []))
@@ -341,17 +342,23 @@ if __name__ == "__main__":
     # A description can have more than one Reviewers trailer, for example
     # when a committer adds a line by hand. They become one trailer. A name
     # that is written twice is kept once.
+    # Only a piece with an email or a GitHub handle is one person. A name
+    # such as "Smith, John <j@x.org>" has a comma inside, and "Smith" alone
+    # must not be dropped as a duplicate.
     names = []
     for name in ", ".join(existing_reviewers).split(","):
-        if name.strip() and name.strip() not in names:
-            names.append(name.strip())
+        name = name.strip()
+        is_person = "<" in name or "(github:" in name
+        if name and not (is_person and name in names):
+            names.append(name)
     new_value = ", ".join(names)
     if not reviewer_login:
         if not names:
             logger.info("No Reviewers trailer to format; nothing to do.")
             exit(0)
         newline = "\r\n" if "\r\n" in body else "\n"
-        if len(existing_reviewers) == 1 and fold_reviewers(new_value).replace("\n", newline) in body:
+        standard = newline + fold_reviewers(new_value).replace("\n", newline) + newline
+        if len(existing_reviewers) == 1 and standard in newline + body.rstrip() + newline:
             # Only the trailer text matters here. Do not touch a description
             # whose trailer already has the standard format.
             logger.info("Reviewers trailer already has the standard format; nothing to do.")

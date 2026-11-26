@@ -98,7 +98,8 @@ def reviewers_trailer_is_misplaced(title: str, body: str) -> bool:
     anywhere else is plain text, and the people on it get no credit.
     """
     lines = body.split("\n")
-    is_reviewers = [bool(re.match(r"\s*reviewers\s*:", line, re.IGNORECASE)) for line in lines]
+    # A "Reviewers:" line with no value is not counted. git drops an empty trailer.
+    is_reviewers = [bool(re.match(r"\s*reviewers\s*:\s*\S", line, re.IGNORECASE)) for line in lines]
     if any(is_reviewers[:last_paragraph_start(lines)]):
         return True
     return sum(is_reviewers) > len(parse_trailers(title, body).get("reviewers", []))

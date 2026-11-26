@@ -231,8 +231,7 @@ class ReviewersTrailerTest(unittest.TestCase):
         folded = add_reviewer("Fix the thing.\n\nReviewers: Alice <alice@example.com>, Bob <bob@example.com>\n").edited_body()
         for body in (folded,
                      folded.replace("\n", "\r\n"),
-                     "Fix the thing.\n\nReviewers: A <a@example.com>\nGenerated-by: Some Tool\n",
-                     "Fix the thing.\n\nReviewers: A <a@example.com>, B <b@example.com>,\n"):
+                     "Fix the thing.\n\nReviewers: A <a@example.com>\nGenerated-by: Some Tool\n"):
             gh = FakeGh(body)
             self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode, repr(body))
             self.assertIsNone(gh.edited_body(), repr(body))
@@ -240,6 +239,30 @@ class ReviewersTrailerTest(unittest.TestCase):
     def test_comma_at_the_end_of_the_trailer_is_dropped(self):
         edited = add_reviewer("Fix the thing.\n\nReviewers: A <a@example.com>,\n").edited_body()
         self.assertEqual("Fix the thing.\n\nReviewers: A <a@example.com>, New Person <new@example.com>\n", edited)
+
+    def test_edit_of_the_description_drops_a_comma_at_the_end(self):
+        gh = FakeGh("Fix the thing.\n\nReviewers: A <a@example.com>,\n")
+        self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode)
+        self.assertEqual("Fix the thing.\n\nReviewers: A <a@example.com>\n", gh.edited_body())
+
+    def test_empty_reviewers_line_does_not_block_a_review(self):
+        for body in ("Fix the thing.\n\nReviewers:\n",
+                     "Fix the thing.\n\nReviewers:\nReviewers: A <a@example.com>\n"):
+            edited = add_reviewer(body).edited_body()
+            self.assertIsNotNone(edited, body)
+            self.assertIn("New Person <new@example.com>", parsed_trailers(edited)[-1], body)
+            self.assertEqual(1, edited.count("Reviewers:"), body)
+
+    def test_a_name_with_a_comma_is_not_cut(self):
+        gh = FakeGh("Fix the thing.\n\n"
+                    "Reviewers: Smith, John <john@example.com>\n"
+                    "Reviewers: Smith, Jane <jane@example.com>\n")
+        self.assertEqual(0, gh.run("pr-reviewers-trailer.py").returncode)
+        self.assertEqual(
+            "Fix the thing.\n\n"
+            "Reviewers: Smith, John <john@example.com>, Smith,\n"
+            " Jane <jane@example.com>\n",
+            gh.edited_body())
 
     def test_edit_of_the_description_adds_no_trailer(self):
         for body in ("Fix the thing.\n",
