@@ -244,10 +244,6 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public FetchRequest build(short version) {
-            if (version < 3) {
-                maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
-            }
-
             FetchRequestData fetchRequestData = new FetchRequestData();
             fetchRequestData.setMaxWaitMs(maxWait);
             fetchRequestData.setMinBytes(minBytes);
