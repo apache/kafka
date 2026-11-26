@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -197,25 +196,6 @@ public class ShareFetchBuffer implements AutoCloseable {
             prunePendingAcknowledgementFetches();
             pendingAcknowledgementFetches.forEach(cf -> partitions.add(cf.partition));
 
-            return partitions;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Returns the partitions which have a completed fetch with an error in the buffer, which the application has
-     * not polled yet.
-     */
-    Set<TopicIdPartition> partitionsWithBufferedErrors() {
-        lock.lock();
-        try {
-            final Set<TopicIdPartition> partitions = new HashSet<>();
-            completedFetches.forEach(cf -> {
-                if (cf.partitionData.errorCode() != Errors.NONE.code()) {
-                    partitions.add(cf.partition);
-                }
-            });
             return partitions;
         } finally {
             lock.unlock();

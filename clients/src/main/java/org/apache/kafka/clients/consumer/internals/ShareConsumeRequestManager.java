@@ -171,7 +171,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         resolveShareSessionLeaders(cluster);
 
         Set<Integer> missingNodes = new HashSet<>();
-        for (TopicPartition partition : partitionsToFetch()) {
+        for (TopicPartition partition : subscriptions.fetchablePartitions()) {
             TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
             if (tip == null) {
                 continue;
@@ -359,29 +359,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgements);
             return true;
         }
-    }
-
-    /**
-     * Returns the fetchable partitions, except those with a buffered error which the application has not polled.
-     * Like the classic and async consumers, which do not fetch a partition with buffered data, this keeps an error
-     * which is returned immediately, such as an authorization failure, from making the consumer fetch the partition
-     * in a loop and fill the buffer with errors.
-     */
-    private List<TopicPartition> partitionsToFetch() {
-        Set<TopicIdPartition> partitionsWithErrors = shareFetchBuffer.partitionsWithBufferedErrors();
-        if (partitionsWithErrors.isEmpty()) {
-            return subscriptions.fetchablePartitions();
-        }
-        return subscriptions.fetchablePartitions().stream()
-            .filter(partition -> {
-                TopicIdPartition tip = shareSessionTopicIdMap.get(partition);
-                if (tip != null && partitionsWithErrors.contains(tip)) {
-                    log.trace("Skipping fetch for partition {} because its buffered error has not been polled", tip);
-                    return false;
-                }
-                return true;
-            })
-            .collect(Collectors.toList());
     }
 
     /**
@@ -1075,7 +1052,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         requestVersion)
                 );
 
-                if (!partitionData.acquiredRecords().isEmpty()) {
+                if (!partitionData.acquiredRecords().isEmpty() || ShareFetchCollector.isErrorReturnedToApplication(partitionError)) {
                     fetchMoreRecords = false;
                 }
             }

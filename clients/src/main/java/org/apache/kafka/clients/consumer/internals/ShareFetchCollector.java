@@ -184,4 +184,27 @@ public class ShareFetchCollector<K, V> {
                     + " while fetching from topic-partition " + tp.topicPartition());
         }
     }
+
+    /**
+     * Returns whether {@link #collect(ShareFetchBuffer)} returns the error of a partition to the application as an
+     * exception, rather than returning no record for the partition. This must match {@link #handleInitializeErrors}.
+     */
+    static boolean isErrorReturnedToApplication(final Errors error) {
+        switch (error) {
+            case FENCED_LEADER_EPOCH:
+            case INCONSISTENT_TOPIC_ID:
+            case KAFKA_STORAGE_ERROR:
+            case NONE:
+            case NOT_LEADER_OR_FOLLOWER:
+            case OFFSET_NOT_AVAILABLE:
+            case REPLICA_NOT_AVAILABLE:
+            case UNKNOWN_LEADER_EPOCH:
+            case UNKNOWN_SERVER_ERROR:
+            case UNKNOWN_TOPIC_ID:
+            case UNKNOWN_TOPIC_OR_PARTITION:
+                return false;
+            default:
+                return true;
+        }
+    }
 }
