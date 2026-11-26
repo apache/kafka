@@ -7826,7 +7826,7 @@ public class GroupMetadataManager {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
-        CoordinatorResult<Void, CoordinatorRecord> result = EMPTY_RESULT;
+        CoordinatorResult<Void, CoordinatorRecord> result;
         List<CoordinatorRecord> records = new ArrayList<>();
 
         String groupId = request.groupId();
@@ -7860,10 +7860,12 @@ public class GroupMetadataManager {
 
         if (!acceptJoiningMember(group, memberId)) {
             group.remove(memberId);
+            timer.cancel(classicGroupHeartbeatKey(groupId, memberId));
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
             );
+            result = maybeCompleteJoinPhase(group);
         } else if (isUnknownMember) {
             result = classicGroupJoinNewMember(
                 context,
