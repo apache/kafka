@@ -3285,6 +3285,9 @@ project(':streams:upgrade-system-tests-0110') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3319,6 +3322,9 @@ project(':streams:upgrade-system-tests-10') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
       }
     }
 
@@ -3355,6 +3361,9 @@ project(':streams:upgrade-system-tests-11') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3389,6 +3398,9 @@ project(':streams:upgrade-system-tests-20') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
       }
     }
 
@@ -3425,6 +3437,9 @@ project(':streams:upgrade-system-tests-21') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3459,6 +3474,9 @@ project(':streams:upgrade-system-tests-22') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
       }
     }
 
@@ -3495,6 +3513,9 @@ project(':streams:upgrade-system-tests-23') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3529,6 +3550,9 @@ project(':streams:upgrade-system-tests-24') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
       }
     }
 
@@ -3565,6 +3589,9 @@ project(':streams:upgrade-system-tests-25') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3599,6 +3626,9 @@ project(':streams:upgrade-system-tests-26') {
       }
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
+      }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
       }
     }
 
@@ -3635,6 +3665,9 @@ project(':streams:upgrade-system-tests-27') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3670,6 +3703,9 @@ project(':streams:upgrade-system-tests-28') {
       implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
         because('CVE-2026-91777')
       }
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3688,6 +3724,13 @@ project(':streams:upgrade-system-tests-30') {
 
   dependencies {
     testImplementation libs.kafkaStreams_30
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3704,6 +3747,13 @@ project(':streams:upgrade-system-tests-31') {
 
   dependencies {
     testImplementation libs.kafkaStreams_31
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3720,6 +3770,13 @@ project(':streams:upgrade-system-tests-32') {
 
   dependencies {
     testImplementation libs.kafkaStreams_32
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3736,6 +3793,13 @@ project(':streams:upgrade-system-tests-33') {
 
   dependencies {
     testImplementation libs.kafkaStreams_33
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3752,6 +3816,13 @@ project(':streams:upgrade-system-tests-34') {
 
   dependencies {
     testImplementation libs.kafkaStreams_34
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3768,6 +3839,13 @@ project(':streams:upgrade-system-tests-35') {
 
   dependencies {
     testImplementation libs.kafkaStreams_35
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3784,6 +3862,13 @@ project(':streams:upgrade-system-tests-36') {
 
   dependencies {
     testImplementation libs.kafkaStreams_36
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3800,6 +3885,13 @@ project(':streams:upgrade-system-tests-37') {
 
   dependencies {
     testImplementation libs.kafkaStreams_37
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3816,6 +3908,13 @@ project(':streams:upgrade-system-tests-38') {
 
   dependencies {
     testImplementation libs.kafkaStreams_38
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3832,6 +3931,13 @@ project(':streams:upgrade-system-tests-39') {
 
   dependencies {
     testImplementation libs.kafkaStreams_39
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3848,6 +3954,13 @@ project(':streams:upgrade-system-tests-40') {
 
   dependencies {
     testImplementation libs.kafkaStreams_40
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3864,6 +3977,13 @@ project(':streams:upgrade-system-tests-41') {
 
   dependencies {
     testImplementation libs.kafkaStreams_41
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3880,6 +4000,13 @@ project(':streams:upgrade-system-tests-42') {
 
   dependencies {
     testImplementation libs.kafkaStreams_42
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3912,6 +4039,13 @@ project(':streams:upgrade-system-tests-44') {
 
   dependencies {
     testImplementation libs.kafkaStreams_44
+
+    constraints {
+      implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
+        because('CVE-2026-108106')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
