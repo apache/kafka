@@ -3133,7 +3133,7 @@ public class RequestResponseTest {
             .setErrorMessage("No security"));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(0)
-            .setFilterResults(filterResults), version);
+            .setFilterResults(filterResults));
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(short version) {

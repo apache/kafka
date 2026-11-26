@@ -69,15 +69,13 @@ class AclApis(authHelper: AuthHelper,
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setErrorCode(Errors.SECURITY_DISABLED.code)
             .setErrorMessage("No Authorizer is configured on the broker")
-            .setThrottleTimeMs(requestThrottleMs),
-          describeAclsRequest.version))
+            .setThrottleTimeMs(requestThrottleMs)))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(auth.get.acls(filter))),
-          describeAclsRequest.version))
+            .setResources(DescribeAclsResponse.aclsResources(auth.get.acls(filter)))))
     }
     CompletableFuture.completedFuture[Unit](())
   }
@@ -165,8 +163,7 @@ class AclApis(authHelper: AuthHelper,
             new DeleteAclsResponse(
               new DeleteAclsResponseData()
                 .setThrottleTimeMs(requestThrottleMs)
-                .setFilterResults(filterResults),
-              deleteAclsRequest.version))
+                .setFilterResults(filterResults)))
         }
     }
   }
