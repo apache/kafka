@@ -3319,6 +3319,9 @@ project(':streams:upgrade-system-tests-0110') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3377,6 +3380,9 @@ project(':streams:upgrade-system-tests-10') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
@@ -3437,6 +3443,9 @@ project(':streams:upgrade-system-tests-11') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3495,6 +3504,9 @@ project(':streams:upgrade-system-tests-20') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
@@ -3555,6 +3567,9 @@ project(':streams:upgrade-system-tests-21') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3613,6 +3628,9 @@ project(':streams:upgrade-system-tests-22') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
@@ -3673,6 +3691,9 @@ project(':streams:upgrade-system-tests-23') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3731,6 +3752,9 @@ project(':streams:upgrade-system-tests-24') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
@@ -3791,6 +3815,9 @@ project(':streams:upgrade-system-tests-25') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3849,6 +3876,9 @@ project(':streams:upgrade-system-tests-26') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
@@ -3909,6 +3939,9 @@ project(':streams:upgrade-system-tests-27') {
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
       }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
+      }
     }
 
     testRuntimeOnly libs.junitJupiter
@@ -3967,6 +4000,9 @@ project(':streams:upgrade-system-tests-28') {
       }
       implementation('org.xerial.snappy:snappy-java:1.1.10.9') {
         because('CVE-2026-116590')
+      }
+      implementation('com.fasterxml.jackson.core:jackson-core:2.18.12') {
+        because('CVE-2026-68494')
       }
     }
 
