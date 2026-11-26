@@ -453,7 +453,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // Record copy enabled: the DLQ fetcher must read the original records back to copy their key/value.
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
-        // Tiered source topic: one segment per record, 45s total retention and 5s local retention so inactive
+        // Tiered source topic: one segment per record, 45s total retention and 10s local retention so inactive
         // segments are offloaded to remote storage and then deleted locally shortly after, while the remote
         // segments comfortably survive the rest of the test.
         createRemoteStorageSourceTopic(sourceTopic, 45_000L, 10_000L);
@@ -464,26 +464,39 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // earliest *local* offset has advanced past them, so reading those offsets must now hit remote storage.
         // The last record stays in the active (never-offloaded) segment, so the earliest local offset should
         // reach recordCount - 1. A generous timeout (well inside the 45s remote retention) absorbs remote-log
-        // metadata-manager startup; it normally resolves a few seconds after the 5s local retention elapses.
+        // metadata-manager startup; it normally resolves a few seconds after the 10s local retention elapses.
         waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) >= recordCount - 1,
             30_000L, 500L,
             () -> "Source records were not tiered to remote storage and removed locally in time");
 
-        // Produce some more which stay in local.
-        produceTo(sourceTopic, 0, recordCount);
+        // The first batch is tiered. Stop local retention from being shorter than the total retention (-2 means
+        // "use retention.ms") so the second batch is not tiered while the test is still rejecting it.
+        alterTopicConfig(sourceTopic, TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
 
-        // Reject every record. Both the share fetch (to deliver them) and the DLQ record fetcher (to copy them)
-        // must read the tiered offsets back from remote storage.
-        rejectRecords(groupId, sourceTopic, recordCount * 2);
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+            groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+            shareConsumer.subscribe(Set.of(sourceTopic));
+
+            // Reject the tiered records first. The share fetch (to deliver them) and the DLQ record fetcher
+            // (to copy them) must read the tiered offsets back from remote storage. Doing this before the
+            // second produce also guarantees the member has its assignment and is fetching: the assignment
+            // arrives a few heartbeats after joining, which would otherwise eat into the local retention of
+            // the second batch.
+            rejectRecords(shareConsumer, recordCount);
+
+            // Produce some more which stay in local, and reject them right away while still local.
+            produceTo(sourceTopic, 0, recordCount);
+            rejectRecords(shareConsumer, recordCount);
+        }
+
+        // Make sure not all offsets from second produce were tiered before being rejected. Checked right after
+        // rejecting: local retention eventually tiers this batch too, so a later check could lose that race.
+        assertTrue(earliestLocalOffset(sourceTopic, 0) < recordCount * 2 - 1,
+            "Offsets from second produce were tiered before being rejected");
 
         // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
         // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
         verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount * 2), true);
-
-        // Make sure not all offsets from second produce are tiered.
-        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) < recordCount * 2 - 1,
-            30_000L, 500L,
-            () -> "Offsets from second produce were tiered");
 
         verifyDlqMetrics(groupId, recordCount * 2);
     }
@@ -1062,6 +1075,22 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
             TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
         cluster.createTopic(topic, 1, (short) 1, configs);
+    }
+
+    // Sets a single topic config and waits until the new value is visible on the topic.
+    private void alterTopicConfig(String topic, String configName, String value) throws Exception {
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        try (Admin admin = createAdminClient()) {
+            admin.incrementalAlterConfigs(
+                Map.of(resource, List.of(new AlterConfigOp(new ConfigEntry(configName, value), AlterConfigOp.OpType.SET))),
+                new AlterConfigsOptions()
+            ).all().get();
+            waitForCondition(() -> {
+                Config config = admin.describeConfigs(List.of(resource)).all().get().get(resource);
+                ConfigEntry entry = config.get(configName);
+                return entry != null && entry.value().equals(value);
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> configName + "=" + value + " did not propagate on topic " + topic);
+        }
     }
 
     // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after

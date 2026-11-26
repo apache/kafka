@@ -106,6 +106,14 @@ class ShareConsumerDLQTieredStorageTest(VerifiableShareConsumerTest):
             }
         })
 
+    def alter_topic_config(self, topic, config_name, value):
+        """Set a single dynamic topic config via kafka-configs.sh."""
+        node = self.kafka.nodes[0]
+        cmd = "%s --bootstrap-server %s --entity-type topics --entity-name %s --alter --add-config %s=%s" % \
+              (self.kafka.path.script("kafka-configs.sh", node), self.kafka.bootstrap_servers(), topic,
+               config_name, value)
+        node.account.ssh(cmd)
+
     def setup_dlq_group_config(self, dlq_topic, copy_record_enable=None):
         wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
                    timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
@@ -198,14 +206,22 @@ class ShareConsumerDLQTieredStorageTest(VerifiableShareConsumerTest):
                    timeout_sec=self.default_timeout_sec, backoff_sec=1,
                    err_msg="Source records were not tiered to remote storage and removed locally in time")
 
-        # Second batch stays in the active (local-only) segment for the rest of the test.
-        local_producer = self.produce_messages(source_topic, self.record_count)
+        # The first batch is tiered. Stop local retention from being shorter than the total retention (-2 means
+        # "use retention.ms") so the second batch is not tiered while the test is still rejecting it.
+        self.alter_topic_config(source_topic, "local.retention.ms", "-2")
 
         total = self.record_count * 2
         consumer = self.setup_share_group(source_topic, group_id=self.share_group_id,
                                            acknowledgement_mode="sync", ack_pattern=["reject"])
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+        # The member only receives its assignment a few heartbeats after joining (assignor offloading).
+        # Rejecting the tiered batch proves the member is assigned and fetching before the second batch
+        # is produced, so that batch is rejected well within local_retention_ms instead of racing it.
+        self.await_all_rejected(consumer, self.record_count)
+
+        # Second batch stays in the active (local-only) segment for the rest of the test.
+        local_producer = self.produce_messages(source_topic, self.record_count)
         self.await_all_rejected(consumer, total)
 
         # Check before the DLQ read below: local_retention_ms eventually tiers this batch too, and a
