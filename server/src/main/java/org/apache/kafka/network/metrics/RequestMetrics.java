@@ -55,8 +55,8 @@ public class RequestMetrics {
     private static final String REQUEST_BYTES = "RequestBytes";
     private static final String ERRORS_PER_SEC = "ErrorsPerSec";
 
-    static final int MAX_DEPRECATED_REQUEST_RATE_METERS = 100;
-    static final int MAX_CLIENT_INFORMATION_TAG_LENGTH = 64;
+    static final int MAX_DEPRECATED_REQUEST_RATE_METERS = 1000;
+    static final int MAX_CLIENT_INFORMATION_TAG_LENGTH = 128;
     private static final ClientInformation OVERFLOW_CLIENT_INFORMATION = new ClientInformation("_overflow_", "_overflow_");
 
     // time a request spent in a request queue
