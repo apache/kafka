@@ -25,8 +25,8 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.KafkaScheduler;
@@ -271,8 +271,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                         try {
                             coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
                         } catch (Deserializer.UnknownRecordTypeException ex) {
-                            LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
-                                " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
+                            LOG.warn("Unknown record type {} while loading records from {}." +
+                                " Ignoring it. It could be left over from an aborted upgrade.", ex.unknownType(), tp);
                         } catch (RuntimeException ex) {
                             String msg = String.format("Deserializing record %s from %s failed.", record, tp);
                             LOG.error(msg, ex);

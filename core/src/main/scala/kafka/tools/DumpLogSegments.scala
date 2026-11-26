@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, GroupMetadataValueJsonConverter, CoordinatorRecordJsonConverters => GroupCoordinatorRecordJsonConverters, CoordinatorRecordType => GroupCoordinatorRecordType}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde
@@ -52,6 +53,7 @@ import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFile
 import org.apache.kafka.tools.api.{Decoder, StringDecoder}
 
 import java.nio.ByteBuffer
+import scala.util.Using
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -218,8 +220,10 @@ object DumpLogSegments {
           case Some(batch) if batch.lastOffset != entry.offset =>
             timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset, batch.lastOffset)
           case Some(batch) =>
-            for (record <- batch.asScala)
-              maxTimestamp = math.max(maxTimestamp, record.timestamp)
+            Using.resource(batch.streamingIterator(BufferSupplier.NO_CACHING)) { records =>
+              for (record <- records.asScala)
+                maxTimestamp = math.max(maxTimestamp, record.timestamp)
+            }
 
             if (maxTimestamp != entry.timestamp)
               timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
@@ -286,43 +290,45 @@ object DumpLogSegments {
       for (batch <- fileRecords.batches.asScala) {
         printBatchLevel(batch, validBytes)
         if (isDeepIteration) {
-          for (record <- batch.asScala) {
-            if (lastOffset == -1)
+          Using.resource(batch.streamingIterator(BufferSupplier.NO_CACHING)) { records =>
+            for (record <- records.asScala) {
+              if (lastOffset == -1)
+                lastOffset = record.offset
+              else if (record.offset != lastOffset + 1) {
+                var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
+                nonConsecutivePairsSeq ::= (lastOffset, record.offset)
+                nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
+              }
               lastOffset = record.offset
-            else if (record.offset != lastOffset + 1) {
-              var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-              nonConsecutivePairsSeq ::= (lastOffset, record.offset)
-              nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
-            }
-            lastOffset = record.offset
 
-            var prefix = s"$RecordIndent "
-            if (!skipRecordMetadata) {
-              print(s"${prefix}offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
-                s"keySize: ${record.keySize} valueSize: ${record.valueSize}")
-              prefix = " "
-
-              if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-                print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
-              }
-              record match {
-                case r: AbstractLegacyRecordBatch => print(s" isValid: ${r.isValid} crc: ${r.checksum}}")
-                case _ =>
-              }
-
-              if (batch.isControlBatch) {
-                printControlRecord(record)
-              }
-            }
-            if (printContents && !batch.isControlBatch) {
-              val (key, payload) = parser.parse(record)
-              key.foreach { key =>
-                print(s"${prefix}key: $key")
+              var prefix = s"$RecordIndent "
+              if (!skipRecordMetadata) {
+                print(s"${prefix}offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
+                  s"keySize: ${record.keySize} valueSize: ${record.valueSize}")
                 prefix = " "
+
+                if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+                  print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+                }
+                record match {
+                  case r: AbstractLegacyRecordBatch => print(s" isValid: ${r.isValid} crc: ${r.checksum}}")
+                  case _ =>
+                }
+
+                if (batch.isControlBatch) {
+                  printControlRecord(record)
+                }
               }
-              payload.foreach(payload => print(s" payload: $payload"))
+              if (printContents && !batch.isControlBatch) {
+                val (key, payload) = parser.parse(record)
+                key.foreach { key =>
+                  print(s"${prefix}key: $key")
+                  prefix = " "
+                }
+                payload.foreach(payload => print(s" payload: $payload"))
+              }
+              println()
             }
-            println()
           }
         }
         validBytes += batch.sizeInBytes

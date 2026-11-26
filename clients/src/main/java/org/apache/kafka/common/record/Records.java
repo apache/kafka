@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.CloseableIterator;
 
 import java.util.Iterator;
 import java.util.Optional;
