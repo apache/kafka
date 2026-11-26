@@ -1066,7 +1066,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // retrieve the path of the first segment
     val logFilePath = LogFileUtils.logFile(Paths.get(logDir).resolve(topicPartition.toString).toFile, 0).toPath
     val firstSegmentRecordsSize = Using.resource(FileRecords.open(logFilePath.toFile)) { records =>
-      TestUtils.records(records).size()
+      org.apache.kafka.test.TestUtils.records(records).size()
     }
     assertTrue(firstSegmentRecordsSize > 0)
 

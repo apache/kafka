@@ -107,7 +107,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
   }
 
   protected def records(partitionData: FetchResponseData.PartitionData): Seq[Record] = {
-    TestUtils.records(FetchResponse.recordsOrFail(partitionData)).asScala.toBuffer
+    org.apache.kafka.test.TestUtils.records(FetchResponse.recordsOrFail(partitionData)).asScala.toBuffer
   }
 
 }
