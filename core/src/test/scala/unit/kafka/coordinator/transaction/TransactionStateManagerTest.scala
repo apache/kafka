@@ -1007,7 +1007,7 @@ class TransactionStateManagerTest {
     val expiredTransactionalIds = mutable.Set.empty[String]
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
-        records.records.forEach { record =>
+        org.apache.kafka.test.TestUtils.records(records).forEach { record =>
           TransactionLog.readTxnRecordKey(record.key) match {
             case Right(transactionalId) =>
               assertNull(record.value)
@@ -1341,7 +1341,7 @@ class TransactionStateManagerTest {
     val logMock: UnifiedLog = mock(classOf[UnifiedLog])
     val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
 
-    val endOffset = startOffset + records.records.asScala.size
+    val endOffset = startOffset + org.apache.kafka.test.TestUtils.records(records).size()
 
     when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))

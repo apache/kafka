@@ -678,10 +678,10 @@ class DumpLogSegmentsTest {
   }
 
   private def serializedRecord(key: ApiMessage, value: ApiMessageAndVersion): Record = {
-    TestUtils.singletonRecords(
+    org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
       key = MessageUtil.toCoordinatorTypePrefixedBytes(key),
       value = if (value == null) null else MessageUtil.toVersionPrefixedBytes(value.version, value.message)
-    ).records.iterator.next
+    )).iterator.next
   }
 
   @Test
@@ -693,7 +693,7 @@ class DumpLogSegmentsTest {
       "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
-        () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
+        () => parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(key = null, value = null)).iterator.next)
       ).getMessage
     )
 
@@ -815,10 +815,10 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(
-        TestUtils.singletonRecords(
+        org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
           key = ByteBuffer.allocate(2).putShort(Short.MaxValue).array(),
           value = Array.empty
-        ).records.iterator.next
+        )).iterator.next
       )
     )
 
@@ -851,7 +851,7 @@ class DumpLogSegmentsTest {
       "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
-        () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
+        () => parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(key = null, value = null)).iterator.next)
       ).getMessage
     )
 
@@ -894,10 +894,10 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(
-        TestUtils.singletonRecords(
+        org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
           key = ByteBuffer.allocate(2).putShort(Short.MaxValue).array(),
           value = Array.empty
-        ).records.iterator.next
+        )).iterator.next
       )
     )
 
@@ -1043,7 +1043,7 @@ class DumpLogSegmentsTest {
       assertEquals(Some(batch.compressionType.name), parsedBatch.get("compresscodec"))
 
       val parsedRecordIter = readBatchRecords(lines).iterator
-      for (record <- batch.asScala) {
+      for (record <- org.apache.kafka.test.TestUtils.records(batch).asScala) {
         assertTrue(parsedRecordIter.hasNext)
         val parsedRecord = parseMetadataFields(parsedRecordIter.next())
         assertEquals(Some(record.offset), parsedRecord.get("offset").map(_.toLong))
@@ -1079,7 +1079,7 @@ class DumpLogSegmentsTest {
       "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
-        () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
+        () => parser.parse(org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(key = null, value = null)).iterator.next)
       ).getMessage
     )
 
@@ -1162,10 +1162,10 @@ class DumpLogSegmentsTest {
         None
       ),
       parser.parse(
-        TestUtils.singletonRecords(
+        org.apache.kafka.test.TestUtils.records(TestUtils.singletonRecords(
           key = ByteBuffer.allocate(2).putShort(Short.MaxValue).array(),
           value = Array.empty
-        ).records.iterator.next
+        )).iterator.next
       )
     )
 

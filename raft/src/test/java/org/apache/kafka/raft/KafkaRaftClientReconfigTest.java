@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -47,6 +46,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -135,7 +135,7 @@ public class KafkaRaftClientReconfigTest {
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
-        Iterator<Record> recordIterator = batch.iterator();
+        Iterator<Record> recordIterator = TestUtils.records(batch).iterator();
         Record record = recordIterator.next();
         RaftClientTestContext.verifyLeaderChangeMessage(
             local.id(),
@@ -198,7 +198,7 @@ public class KafkaRaftClientReconfigTest {
         Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
-        Iterator<Record> recordIterator = batch.iterator();
+        Iterator<Record> recordIterator = TestUtils.records(batch).iterator();
         Record record = recordIterator.next();
         RaftClientTestContext.verifyLeaderChangeMessage(
             local.id(),
@@ -2454,7 +2454,7 @@ public class KafkaRaftClientReconfigTest {
         var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
-        var recordsIterator = batch.iterator();
+        var recordsIterator = TestUtils.records(batch).iterator();
         var controlRecord = recordsIterator.next();
         verifyKRaftVersionRecord(
             KRaftVersion.KRAFT_VERSION_1.featureLevel(),
@@ -2562,7 +2562,7 @@ public class KafkaRaftClientReconfigTest {
         var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
-        var recordsIterator = batch.iterator();
+        var recordsIterator = TestUtils.records(batch).iterator();
         var controlRecord = recordsIterator.next();
         assertEquals(ControlRecordType.KRAFT_VOTERS, ControlRecordType.parse(controlRecord.key()));
         ControlRecordUtils.deserializeVotersRecord(controlRecord.value());

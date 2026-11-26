@@ -194,7 +194,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
-    for (segment <- log.logSegments.asScala; record <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; record <- org.apache.kafka.test.TestUtils.records(segment.log).asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
       key -> value

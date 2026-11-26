@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
 
@@ -244,7 +243,7 @@ class LocalLogTest {
     @Test
     public void testLogAppend() throws IOException {
         FetchDataInfo fetchDataInfoBeforeAppend = readRecords(1);
-        assertFalse(fetchDataInfoBeforeAppend.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfoBeforeAppend.records).iterator().hasNext());
 
         MOCK_TIME.sleep(1);
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
@@ -252,8 +251,8 @@ class LocalLogTest {
         assertEquals(2L, log.logEndOffset());
         assertEquals(0L, log.recoveryPoint());
         FetchDataInfo fetchDataInfo = readRecords(0L);
-        assertEquals(2L, Utils.toList(fetchDataInfo.records.records()).size());
-        assertEquals(keyValues, recordsToKvs(fetchDataInfo.records.records()));
+        assertEquals(2L, TestUtils.records(fetchDataInfo.records).size());
+        assertEquals(keyValues, recordsToKvs(TestUtils.records(fetchDataInfo.records)));
     }
 
     @Test
@@ -384,7 +383,7 @@ class LocalLogTest {
         assertEquals(0L, log.recoveryPoint());
         assertEquals(newOffset, log.logEndOffset());
         FetchDataInfo fetchDataInfo = readRecords(newOffset);
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
     }
 
     @Test
@@ -409,7 +408,7 @@ class LocalLogTest {
         assertEquals(0L, log.recoveryPoint());
         assertEquals(10L, log.logEndOffset());
         FetchDataInfo fetchDataInfo = readRecords(10L);
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
     }
 
     @Test
@@ -424,28 +423,28 @@ class LocalLogTest {
 
         // case-0: valid case, `startOffset` < `maxOffsetMetadata.offset`
         var fetchDataInfo = readRecords(3L, new LogOffsetMetadata(4L, 4L, 0));
-        assertEquals(1, Utils.toList(fetchDataInfo.records.records()).size());
+        assertEquals(1, TestUtils.records(fetchDataInfo.records).size());
         assertEquals(new LogOffsetMetadata(3, 2L, 69), fetchDataInfo.fetchOffsetMetadata);
 
         // case-1: `startOffset` == `maxOffsetMetadata.offset`
         fetchDataInfo = readRecords(4L, new LogOffsetMetadata(4L, 4L, 0));
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
         assertEquals(new LogOffsetMetadata(4L, 4L, 0), fetchDataInfo.fetchOffsetMetadata);
 
         // case-2: `startOffset` > `maxOffsetMetadata.offset`
         fetchDataInfo = readRecords(5L, new LogOffsetMetadata(4L, 4L, 0));
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
         assertEquals(new LogOffsetMetadata(5L, 4L, 69), fetchDataInfo.fetchOffsetMetadata);
 
         // case-3: `startOffset` < `maxMessageOffset.offset` but `maxMessageOffset.messageOnlyOffset` is true
         fetchDataInfo = readRecords(3L, new LogOffsetMetadata(4L, -1L, -1));
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
         assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata);
 
         // case-4: `startOffset` < `maxMessageOffset.offset`, `maxMessageOffset.messageOnlyOffset` is false, but
         // `maxOffsetMetadata.segmentBaseOffset` < `startOffset.segmentBaseOffset`
         fetchDataInfo = readRecords(3L, new LogOffsetMetadata(4L, 0L, 40));
-        assertFalse(fetchDataInfo.records.records().iterator().hasNext());
+        assertFalse(TestUtils.records(fetchDataInfo.records).iterator().hasNext());
         assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata);
     }
 
@@ -469,8 +468,8 @@ class LocalLogTest {
         assertEquals(0L, log.recoveryPoint());
         assertEquals(7L, log.logEndOffset());
         FetchDataInfo fetchDataInfo = readRecords(6L);
-        assertEquals(1, Utils.toList(fetchDataInfo.records.records()).size());
-        assertEquals(List.of(new KeyValue("", "a")), recordsToKvs(fetchDataInfo.records.records()));
+        assertEquals(1, TestUtils.records(fetchDataInfo.records).size());
+        assertEquals(List.of(new KeyValue("", "a")), recordsToKvs(TestUtils.records(fetchDataInfo.records)));
 
         // Verify that we can still append to the active segment
         SimpleRecord record = new SimpleRecord(MOCK_TIME.milliseconds(), "a".getBytes());
@@ -656,8 +655,8 @@ class LocalLogTest {
                 1L);
         assertEquals(2, log.logEndOffset(), "Expect two records in the log");
         FetchDataInfo readResult = readRecords(0L);
-        assertEquals(2L, Utils.toList(readResult.records.records()).size());
-        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).toList(), recordsToKvs(readResult.records.records()));
+        assertEquals(2L, TestUtils.records(readResult.records).size());
+        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).toList(), recordsToKvs(TestUtils.records(readResult.records)));
 
         // roll so that active segment is empty
         log.roll(0L);

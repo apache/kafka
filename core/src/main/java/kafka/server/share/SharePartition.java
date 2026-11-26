@@ -38,6 +38,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -3235,12 +3237,13 @@ public class SharePartition implements AutoCloseable {
         if (!batch.isControlBatch())
             return false;
 
-        Iterator<Record> batchIterator = batch.iterator();
-        if (!batchIterator.hasNext())
-            return false;
+        try (CloseableIterator<Record> batchIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            if (!batchIterator.hasNext())
+                return false;
 
-        Record firstRecord = batchIterator.next();
-        return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            Record firstRecord = batchIterator.next();
+            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+        }
     }
 
     // Visible for testing. Should only be used for testing purposes.

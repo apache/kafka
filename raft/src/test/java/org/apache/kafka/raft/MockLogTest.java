@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.test.TestUtils;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
@@ -219,7 +219,7 @@ public class MockLogTest {
             assertTrue(batch.isControlBatch());
         }
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             LeaderChangeMessage deserializedData = ControlRecordUtils.deserializeLeaderChangeMessage(record);
             assertEquals(deserializedData, messageData);
             extractRecords.add(record.value());
@@ -251,7 +251,7 @@ public class MockLogTest {
 
         Records records = log.read(5L, Isolation.UNCOMMITTED).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             extractRecords.add(record.value());
         }
 
@@ -278,7 +278,7 @@ public class MockLogTest {
         Records records = log.read(0, Isolation.UNCOMMITTED).records;
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
+        for (Record record : TestUtils.records(records)) {
             extractRecords.add(record.value());
         }
         assertEquals(List.of(recordOne.value(), recordTwo.value()), extractRecords);
@@ -1003,7 +1003,7 @@ public class MockLogTest {
             foundRecord = false;
 
             Records records = log.read(currentStart, isolation).records;
-            for (Record record : records.records()) {
+            for (Record record : TestUtils.records(records)) {
                 foundRecord = true;
 
                 if (firstReadOffset < 0L) {
@@ -1064,7 +1064,7 @@ public class MockLogTest {
                 assertEquals(currentOffset, batch.baseOffset());
                 assertEquals(currentOffset + batch.countOrNull() - 1, batch.lastOffset());
 
-                for (Record record : batch) {
+                for (Record record : TestUtils.records(batch)) {
                     assertEquals(currentOffset, record.offset());
                     assertEquals(expectedRecords.get(currentOffset), new SimpleRecord(record));
                     currentOffset += 1;

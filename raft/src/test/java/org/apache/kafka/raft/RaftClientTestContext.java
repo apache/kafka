@@ -1743,7 +1743,7 @@ public final class RaftClientTestContext {
         String[] expected,
         Records actual
     ) {
-        List<Record> recordList = Utils.toList(actual.records());
+        List<Record> recordList = TestUtils.records(actual);
         assertEquals(expected.length, recordList.size());
         for (int i = 0; i < expected.length; i++) {
             Record record = recordList.get(i);

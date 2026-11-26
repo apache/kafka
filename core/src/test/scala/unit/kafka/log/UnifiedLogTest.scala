@@ -112,7 +112,7 @@ class UnifiedLogTest {
         FetchIsolation.HIGH_WATERMARK,
         false)
       assertEquals(expectedSize, readInfo.records.sizeInBytes)
-      assertEquals(expectedOffsets, readInfo.records.records.asScala.map(_.offset))
+      assertEquals(expectedOffsets, org.apache.kafka.test.TestUtils.records(readInfo.records).asScala.map(_.offset))
     }
 
     val records = TestUtils.records(List(
@@ -342,7 +342,7 @@ class UnifiedLogTest {
       case FetchIsolation.TXN_COMMITTED => log.lastStableOffset
     }
 
-    for (record <- readInfo.records.records.asScala)
+    for (record <- org.apache.kafka.test.TestUtils.records(readInfo.records).asScala)
       assertTrue(record.offset < upperBoundOffset)
 
     assertEquals(batchBaseOffset, readInfo.fetchOffsetMetadata.messageOffset)
@@ -1629,7 +1629,7 @@ class UnifiedLogTest {
     for (i <- values.indices) {
       val read = LogTestUtils.readLog(log, i, 1).records.batches.iterator.next()
       assertEquals(i, read.lastOffset, "Offset read should match order appended.")
-      val actual = read.iterator.next()
+      val actual = org.apache.kafka.test.TestUtils.records(read).iterator.next()
       assertNull(actual.key, "Key should be null")
       assertEquals(ByteBuffer.wrap(values(i)), actual.value, "Values not equal")
     }
@@ -1657,7 +1657,7 @@ class UnifiedLogTest {
     }
     for (i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
-      val read = LogTestUtils.readLog(log, i, 100).records.records.iterator.next()
+      val read = org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, i, 100).records).iterator.next()
       assertEquals(messageIds(idx), read.offset, "Offset read should match message id.")
       assertEquals(records(idx), new SimpleRecord(read), "Message should match appended.")
     }
@@ -1714,7 +1714,7 @@ class UnifiedLogTest {
         LogTestUtils.readLog(log, i, 1),
         LogTestUtils.readLog(log, i, 100000),
         LogTestUtils.readLog(log, i, 100)
-      ).map(_.records.records.iterator.next())
+      ).map(result => org.apache.kafka.test.TestUtils.records(result.records).iterator.next())
       reads.foreach { read =>
         assertEquals(messageIds(idx), read.offset, "Offset read should match message id.")
         assertEquals(records(idx), new SimpleRecord(read), "Message should match appended.")
@@ -1810,15 +1810,15 @@ class UnifiedLogTest {
       val head = messages.iterator.next()
       assertEquals(offset, head.lastOffset, "Offsets not equal")
 
-      val expected = messageSets(i).records.iterator.next()
-      val actual = head.iterator.next()
+      val expected = org.apache.kafka.test.TestUtils.records(messageSets(i)).iterator.next()
+      val actual = org.apache.kafka.test.TestUtils.records(head).iterator.next()
       assertEquals(expected.key, actual.key, s"Keys not equal at offset $offset")
       assertEquals(expected.value, actual.value, s"Values not equal at offset $offset")
       assertEquals(expected.timestamp, actual.timestamp, s"Timestamps not equal at offset $offset")
       offset = head.lastOffset + 1
     }
     val lastRead = LogTestUtils.readLog(log, startOffset = numMessages, maxLength = 1024*1024).records
-    assertEquals(0, lastRead.records.asScala.size, "Should be no more messages")
+    assertEquals(0, org.apache.kafka.test.TestUtils.records(lastRead).asScala.size, "Should be no more messages")
 
     // check that rolling the log forced a flushed, the flush is async so retry in case of failure
     TestUtils.retry(1000L) {
@@ -1839,7 +1839,7 @@ class UnifiedLogTest {
     log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), 0)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), new SimpleRecord("alpha".getBytes), new SimpleRecord("beta".getBytes)), 0)
 
-    def read(offset: Int) = LogTestUtils.readLog(log, offset, 4096).records.records
+    def read(offset: Int) = org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, offset, 4096).records)
 
     /* we should always get the first message in the compressed set when reading any offset in the set */
     assertEquals(0, read(0).iterator.next().offset, "Read at offset 0 should produce 0")
@@ -2813,7 +2813,7 @@ class UnifiedLogTest {
   def testAppendMessageWithNullPayload(): Unit = {
     val log = createLog(logDir, new LogConfig(new Properties))
     log.appendAsLeader(TestUtils.singletonRecords(value = null), 0)
-    val head = LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next()
+    val head = org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next()
     assertEquals(0, head.offset)
     assertFalse(head.hasValue, "Message payload should be null.")
   }
@@ -2899,7 +2899,7 @@ class UnifiedLogTest {
     val epoch = 0.toShort
     val log = createLog(logDir, new LogConfig(new Properties))
     log.appendAsLeader(TestUtils.singletonRecords(value = null), 0)
-    assertEquals(0, LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertEquals(0, org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next().offset)
     val append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime)
     append(10)
     // Kind of a hack, but renaming the index to a directory ensures that the append
@@ -2908,7 +2908,7 @@ class UnifiedLogTest {
     assertThrows(classOf[KafkaStorageException], () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
       mockTime.milliseconds(), coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
     assertThrows(classOf[KafkaStorageException], () => log.appendAsLeader(TestUtils.singletonRecords(value = null), 0))
-    assertThrows(classOf[KafkaStorageException], () => LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertThrows(classOf[KafkaStorageException], () => org.apache.kafka.test.TestUtils.records(LogTestUtils.readLog(log, 0, 4096).records).iterator.next().offset)
   }
 
   @Test
@@ -3111,7 +3111,7 @@ class UnifiedLogTest {
       assertTrue(log.logStartOffset <= hw)
       log.logSegments.forEach { segment =>
         val segmentFetchInfo = segment.read(segment.baseOffset, Int.MaxValue)
-        val segmentLastOffsetOpt = segmentFetchInfo.records.records.asScala.lastOption.map(_.offset)
+        val segmentLastOffsetOpt = org.apache.kafka.test.TestUtils.records(segmentFetchInfo.records).asScala.lastOption.map(_.offset)
         segmentLastOffsetOpt.foreach { lastOffset =>
           assertTrue(lastOffset >= hw)
         }
@@ -5444,7 +5444,7 @@ object UnifiedLogTest {
     val recordsFound = ListBuffer[Record]()
     for (logSegment <- log.logSegments.asScala) {
       for (batch <- logSegment.log.batches.asScala) {
-        recordsFound ++= batch.iterator().asScala
+        recordsFound ++= org.apache.kafka.test.TestUtils.records(batch).iterator().asScala
       }
     }
     recordsFound.toList

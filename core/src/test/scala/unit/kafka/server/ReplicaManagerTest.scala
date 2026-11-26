@@ -903,7 +903,7 @@ class ReplicaManagerTest {
 
       assertEquals(Errors.NONE, fetchData.error)
       assertEquals(OptionalLong.of(numRecords + 1), fetchData.lastStableOffset)
-      assertEquals(numRecords + 1, fetchData.records.records.asScala.size)
+      assertEquals(numRecords + 1, org.apache.kafka.test.TestUtils.records(fetchData.records).size())
       assertTrue(fetchData.abortedTransactions.isPresent)
       assertEquals(1, fetchData.abortedTransactions.get.size)
 
@@ -5803,7 +5803,7 @@ class ReplicaManagerTest {
     assertEquals(tpId0, fetch.head._1)
     val fetchInfo = fetch.head._2.info
     assertEquals(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, fetchInfo.fetchOffsetMetadata)
-    assertFalse(fetchInfo.records.records().iterator().hasNext)
+    assertTrue(org.apache.kafka.test.TestUtils.records(fetchInfo.records).isEmpty)
     assertFalse(fetchInfo.firstEntryIncomplete)
     assertFalse(fetchInfo.abortedTransactions.isPresent)
     assertFalse(fetchInfo.delayedRemoteStorageFetch.isPresent)

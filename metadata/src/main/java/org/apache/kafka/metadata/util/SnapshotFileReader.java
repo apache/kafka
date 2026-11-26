@@ -23,6 +23,8 @@ import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -58,7 +60,6 @@ public final class SnapshotFileReader implements AutoCloseable {
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde = new MetadataRecordSerde();
     private long lastOffset = -1L;
     private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
@@ -128,38 +129,43 @@ public final class SnapshotFileReader implements AutoCloseable {
     }
 
     private void handleControlBatch(FileChannelRecordBatch batch) {
-        for (Record record : batch) {
-            try {
-                short typeId = ControlRecordType.parseTypeId(record.key());
-                ControlRecordType type = ControlRecordType.fromTypeId(typeId);
-                switch (type) {
-                    case LEADER_CHANGE:
-                        LeaderChangeMessage message = new LeaderChangeMessage();
-                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        listener.handleLeaderChange(new LeaderAndEpoch(
-                            OptionalInt.of(message.leaderId()),
-                            batch.partitionLeaderEpoch()
-                        ));
-                        break;
-                    default:
-                        log.error("Ignoring control record with type {} at offset {}",
-                            type, record.offset());
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                try {
+                    ControlRecordType type = ControlRecordType.parse(record.key());
+                    switch (type) {
+                        case LEADER_CHANGE:
+                            LeaderChangeMessage message = new LeaderChangeMessage();
+                            message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                            listener.handleLeaderChange(new LeaderAndEpoch(
+                                OptionalInt.of(message.leaderId()),
+                                batch.partitionLeaderEpoch()
+                            ));
+                            break;
+                        default:
+                            log.error("Ignoring control record with type {} at offset {}",
+                                type, record.offset());
+                    }
+                } catch (Throwable e) {
+                    log.error("unable to read control record at offset {}", record.offset(), e);
                 }
-            } catch (Throwable e) {
-                log.error("unable to read control record at offset {}", record.offset(), e);
             }
         }
     }
 
     private void handleMetadataBatch(FileChannelRecordBatch batch) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
-        for (Record record : batch) {
-            ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
-            try {
-                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
-                messages.add(messageAndVersion);
-            } catch (Throwable e) {
-                log.error("unable to read metadata record at offset {}", record.offset(), e);
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
+                try {
+                    ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
+                    messages.add(messageAndVersion);
+                } catch (Throwable e) {
+                    log.error("unable to read metadata record at offset {}", record.offset(), e);
+                }
             }
         }
         listener.handleCommit(

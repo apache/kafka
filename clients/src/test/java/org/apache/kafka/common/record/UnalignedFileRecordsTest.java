@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ public class UnalignedFileRecordsTest {
         records2.writeTo(channel, 0, records2.sizeInBytes());
 
         channel.close();
-        Iterator<Record> records = MemoryRecords.readableRecords(channel.buffer()).records().iterator();
+        Iterator<Record> records = TestUtils.records(MemoryRecords.readableRecords(channel.buffer())).iterator();
         for (byte[] value : values) {
             assertTrue(records.hasNext());
             assertEquals(records.next().value(), ByteBuffer.wrap(value));

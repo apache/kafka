@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -123,10 +124,10 @@ class TransactionLogTest {
             txnMetadata.addPartitions(topicPartitions);
         }
 
-        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+        var record = TestUtils.records(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
             TransactionLog.keyToBytes(txnMetadata.transactionalId()),
             TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
-        )).records().iterator().next();
+        ))).iterator().next();
         var txnIdResult = assertInstanceOf(TxnKeyResult.TransactionalId.class, readTxnRecordKey(record.key()));
         var deserialized = TransactionLog.readTxnRecordValue(txnIdResult.id(), record.value()).get();
 
