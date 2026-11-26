@@ -8724,7 +8724,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Propagate the assignment and the error to all members. A member gets an empty assignment
+     * Propagate the assignment or the error to all members. A member gets an empty assignment
      * with an error.
      *
      * @param group  The group.

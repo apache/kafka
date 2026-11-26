@@ -10804,6 +10804,89 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testPrepareRebalanceInCompletingRebalance() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of("foo")
+            ))))
+        );
+        byte[] assignment1 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+            List.of(new TopicPartition("foo", 0))
+        )));
+        byte[] assignment2 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+            List.of(new TopicPartition("foo", 1))
+        )));
+
+        // The group is stable at generation 1.
+        ClassicGroup group = context.createClassicGroup("group-id");
+        group.add(
+            new ClassicGroupMember(
+                "member-id-1",
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                assignment1
+            )
+        );
+        group.add(
+            new ClassicGroupMember(
+                "member-id-2",
+                Optional.empty(),
+                "client-id",
+                "client-host",
+                10000,
+                5000,
+                "consumer",
+                protocols,
+                assignment2
+            )
+        );
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        group.transitionTo(STABLE);
+        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment()));
+        context.commit();
+        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+
+        // The group waits for the assignment of the leader at generation 2, and member 2 waits for
+        // its assignment.
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+        GroupMetadataManagerTestContext.SyncResult syncResult = context.sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId("member-id-2")
+                .withGenerationId(2)
+                .build()
+        );
+        assertFalse(syncResult.syncFuture.isDone());
+
+        // A rebalance starts before the leader sends its assignment. Member 2 is asked to rejoin
+        // with no assignment.
+        context.groupMetadataManager.prepareRebalance(group, "test");
+        assertEquals(
+            new SyncGroupResponseData()
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
+                .setAssignment(EMPTY_ASSIGNMENT),
+            syncResult.syncFuture.get()
+        );
+
+        // The group is rebalancing and the members keep their assignment of generation 1.
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+        assertArrayEquals(assignment1, group.member("member-id-1").assignment());
+        assertArrayEquals(assignment2, group.member("member-id-2").assignment());
+    }
+
+    @Test
     public void testJoinGroupFromUnchangedLeaderShouldRebalance() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -12855,89 +12938,6 @@ public class GroupMetadataManagerTest {
         describedGroups = context.describeGroups(List.of("group-id"));
 
         assertEquals(expectedDescribedGroups, describedGroups);
-    }
-
-    @Test
-    public void testPrepareRebalanceInCompletingRebalance() throws Exception {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
-        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                List.of("foo")
-            ))))
-        );
-        byte[] assignment1 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-            List.of(new TopicPartition("foo", 0))
-        )));
-        byte[] assignment2 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-            List.of(new TopicPartition("foo", 1))
-        )));
-
-        // The group is stable at generation 1.
-        ClassicGroup group = context.createClassicGroup("group-id");
-        group.add(
-            new ClassicGroupMember(
-                "member-id-1",
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols,
-                assignment1
-            )
-        );
-        group.add(
-            new ClassicGroupMember(
-                "member-id-2",
-                Optional.empty(),
-                "client-id",
-                "client-host",
-                10000,
-                5000,
-                "consumer",
-                protocols,
-                assignment2
-            )
-        );
-        group.transitionTo(PREPARING_REBALANCE);
-        group.initNextGeneration();
-        group.transitionTo(STABLE);
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment()));
-        context.commit();
-        group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
-
-        // The group waits for the assignment of the leader at generation 2, and member 2 waits for
-        // its assignment.
-        group.transitionTo(PREPARING_REBALANCE);
-        group.initNextGeneration();
-        GroupMetadataManagerTestContext.SyncResult syncResult = context.sendClassicGroupSync(
-            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId("member-id-2")
-                .withGenerationId(2)
-                .build()
-        );
-        assertFalse(syncResult.syncFuture.isDone());
-
-        // A rebalance starts before the leader sends its assignment. Member 2 is asked to rejoin
-        // with no assignment.
-        context.groupMetadataManager.prepareRebalance(group, "test");
-        assertEquals(
-            new SyncGroupResponseData()
-                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
-                .setAssignment(EMPTY_ASSIGNMENT),
-            syncResult.syncFuture.get()
-        );
-
-        // The group is rebalancing and the members keep their assignment of generation 1.
-        assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertArrayEquals(assignment1, group.member("member-id-1").assignment());
-        assertArrayEquals(assignment2, group.member("member-id-2").assignment());
     }
 
     @Test
