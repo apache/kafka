@@ -204,6 +204,7 @@ allprojects {
 
     resolutionStrategy {
       force 'io.netty:netty-handler:4.2.21.Final'
+      force 'io.netty:netty-handler:4.2.21.Final'
     }
   }
   tasks.register('printAllDependencies', DependencyReportTask) {}
