@@ -2766,6 +2766,8 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
+        boolean hasRackIdChanged = !Objects.equals(member.rackId(), updatedMember.rackId());
+
         boolean bumpGroupEpoch =
             // Bumping the group epoch signals that the target assignment should be updated. We bump
             // the group epoch when the member has changed its subscribed topic names or the member
@@ -2776,7 +2778,8 @@ public class GroupMetadataManager {
             // assignment must be recomputed with the new assignor.
             subscribedTopicNamesChanged ||
             updateRegularExpressionStatus == UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED ||
-            preferredServerAssignorChanged;
+            preferredServerAssignorChanged ||
+            hasRackIdChanged;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -2954,7 +2957,10 @@ public class GroupMetadataManager {
             records
         );
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionStatus.regexUpdated();
+        boolean hasRackIdChanged = !Objects.equals(member.rackId(), updatedMember.rackId());
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged ||
+            updateRegularExpressionStatus.regexUpdated() ||
+            hasRackIdChanged;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
