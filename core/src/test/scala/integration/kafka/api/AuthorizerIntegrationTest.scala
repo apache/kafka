@@ -358,7 +358,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createListOffsetsRequest = {
-    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+    requests.ListOffsetsRequest.Builder.forConsumer(IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(java.util.List.of(new ListOffsetsTopic()
         .setName(tp.topic)
         .setPartitions(java.util.List.of(new ListOffsetsPartition()

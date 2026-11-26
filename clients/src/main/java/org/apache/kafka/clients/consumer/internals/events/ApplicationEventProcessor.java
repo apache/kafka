@@ -348,7 +348,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final ListOffsetsEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
-            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch());
         future.whenComplete(complete(event.future()));
     }
 

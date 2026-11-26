@@ -4349,7 +4349,7 @@ class KafkaApisTest extends Logging {
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
         .setCurrentLeaderEpoch(currentLeaderEpoch.get))))
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
@@ -10699,7 +10699,7 @@ class KafkaApisTest extends Logging {
       callback.accept(util.List.of(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(util.List.of(partitionResponse))))
     })
 
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     kafkaApis = createKafkaApis()

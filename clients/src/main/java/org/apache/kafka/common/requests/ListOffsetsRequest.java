@@ -58,13 +58,11 @@ public class ListOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
         private final ListOffsetsRequestData data;
 
-        public static Builder forConsumer(boolean requireTimestamp,
-                                          IsolationLevel isolationLevel) {
-            return forConsumer(requireTimestamp, isolationLevel, false, false, false, false);
+        public static Builder forConsumer(IsolationLevel isolationLevel) {
+            return forConsumer(isolationLevel, false, false, false, false);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp,
-                                          IsolationLevel isolationLevel,
+        public static Builder forConsumer(IsolationLevel isolationLevel,
                                           boolean requireMaxTimestamp,
                                           boolean requireEarliestLocalTimestamp,
                                           boolean requireTieredStorageTimestamp,
@@ -80,8 +78,6 @@ public class ListOffsetsRequest extends AbstractRequest {
                 minVersion = 7;
             else if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
-            else if (requireTimestamp)
-                minVersion = 1;
             return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
         }
 

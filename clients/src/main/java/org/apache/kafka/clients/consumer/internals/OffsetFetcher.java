@@ -127,7 +127,7 @@ public class OffsetFetcher {
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
-                    timer, true, false).fetchedOffsets;
+                    timer, false).fetchedOffsets;
 
             return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
@@ -137,7 +137,6 @@ public class OffsetFetcher {
 
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  Timer timer,
-                                                 boolean requireTimestamps,
                                                  boolean updatePartitionEndOffsetsFlag) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
@@ -145,7 +144,7 @@ public class OffsetFetcher {
 
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
-            RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
+            RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch);
 
             future.addListener(new RequestFutureListener<>() {
                 @Override
@@ -235,7 +234,7 @@ public class OffsetFetcher {
                     .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, updatePartitionEndOffsetsFlag);
+            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, updatePartitionEndOffsetsFlag);
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
@@ -258,7 +257,7 @@ public class OffsetFetcher {
             final Map<TopicPartition, ListOffsetsPartition> resetTimestamps = entry.getValue();
             subscriptions.setNextAllowedRetry(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps);
             future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
@@ -331,12 +330,9 @@ public class OffsetFetcher {
      * Search the offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @param requireTimestamps  true if we should fail with an UnsupportedVersionException if the broker does
-     *                           not support fetching precise timestamps for offsets
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
-                                                                    final boolean requireTimestamps) {
+    private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch) {
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
@@ -348,7 +344,7 @@ public class OffsetFetcher {
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
-            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue());
             future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
@@ -425,14 +421,12 @@ public class OffsetFetcher {
      *
      * @param node               The node to send the ListOffsetRequest to.
      * @param timestampsToSearch The mapping from partitions to the target timestamps.
-     * @param requireTimestamp   True if we require a timestamp in the response.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
-                                                                  final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
-                                                                  boolean requireTimestamp) {
+                                                                  final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel)
+                .forConsumer(isolationLevel)
                 .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
                 .setTimeoutMs(requestTimeoutMs);
 

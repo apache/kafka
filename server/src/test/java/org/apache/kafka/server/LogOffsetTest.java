@@ -77,7 +77,7 @@ public class LogOffsetTest {
     public void testGetOffsetsForUnknownTopic() throws IOException {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         ListOffsetsRequest request = ListOffsetsRequest.Builder
-            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+            .forConsumer(IsolationLevel.READ_UNCOMMITTED)
             .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP))
             .build((short) 1);
         ListOffsetsResponse response = sendListOffsetsRequest(request);

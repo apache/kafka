@@ -1425,8 +1425,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
                     timestampsToSearch,
-                    calculateDeadlineMs(time, timeout),
-                    true);
+                    calculateDeadlineMs(time, timeout));
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
@@ -1486,8 +1485,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
                     timestampToSearch,
-                    calculateDeadlineMs(time, timeout),
-                    false);
+                    calculateDeadlineMs(time, timeout));
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.

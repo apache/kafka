@@ -206,10 +206,8 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             );
         });
         // Isolation level will always be READ_UNCOMMITTED when finding the partition end offset.
-        return ListOffsetsRequest.Builder.forConsumer(
-            true,
-            IsolationLevel.READ_UNCOMMITTED
-        ).setTargetTimes(List.copyOf(topicsMap.values()));
+        return ListOffsetsRequest.Builder.forConsumer(IsolationLevel.READ_UNCOMMITTED)
+            .setTargetTimes(List.copyOf(topicsMap.values()));
     }
 
     /**
