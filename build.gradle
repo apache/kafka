@@ -3266,6 +3266,13 @@ project(':streams:upgrade-system-tests-0110') {
 
   dependencies {
     testImplementation libs.kafkaStreams_0110
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3282,6 +3289,13 @@ project(':streams:upgrade-system-tests-10') {
 
   dependencies {
     testImplementation libs.kafkaStreams_10
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3298,6 +3312,13 @@ project(':streams:upgrade-system-tests-11') {
 
   dependencies {
     testImplementation libs.kafkaStreams_11
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3314,6 +3335,13 @@ project(':streams:upgrade-system-tests-20') {
 
   dependencies {
     testImplementation libs.kafkaStreams_20
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3330,6 +3358,13 @@ project(':streams:upgrade-system-tests-21') {
 
   dependencies {
     testImplementation libs.kafkaStreams_21
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3346,6 +3381,13 @@ project(':streams:upgrade-system-tests-22') {
 
   dependencies {
     testImplementation libs.kafkaStreams_22
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3362,6 +3404,13 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testImplementation libs.kafkaStreams_23
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3378,6 +3427,13 @@ project(':streams:upgrade-system-tests-24') {
 
   dependencies {
     testImplementation libs.kafkaStreams_24
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3394,6 +3450,13 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testImplementation libs.kafkaStreams_25
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3410,6 +3473,13 @@ project(':streams:upgrade-system-tests-26') {
 
   dependencies {
     testImplementation libs.kafkaStreams_26
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3426,6 +3496,13 @@ project(':streams:upgrade-system-tests-27') {
 
   dependencies {
     testImplementation libs.kafkaStreams_27
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
@@ -3442,6 +3519,13 @@ project(':streams:upgrade-system-tests-28') {
 
   dependencies {
     testImplementation libs.kafkaStreams_28
+
+    constraints {
+      implementation('com.fasterxml.jackson.core:jackson-databind:2.18.12') {
+        because('CVE-2026-54512')
+      }
+    }
+
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }
