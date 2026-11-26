@@ -140,7 +140,7 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
     @Test
     public void shouldNotCommitHealthyTaskInputPastAbortedOutputs() throws Exception {
         // Phase 1: build a changelog of STATE_KEYS records for 1_0, so restoring it in phase 2 takes many fetches.
-        final KafkaStreams phase1 = streams("phase1", null);
+        final KafkaStreams phase1 = streams("phase1", null, true);
         phase1.start();
         for (int i = 0; i < STATE_KEYS; i++) {
             producer.send(new ProducerRecord<>(STATE_INPUT, 0, "k-" + i, "v"));
@@ -157,7 +157,7 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
         final FaultRule restoreDelay = proxy.delayOn(ApiKeys.FETCH, RESTORE_FETCH_DELAY)
             .forClient(restoreConsumer()).everyTime();
         final RestoreTracker restores = new RestoreTracker();
-        final KafkaStreams phase2 = streams("phase2", restores);
+        final KafkaStreams phase2 = streams("phase2", restores, false);
 
         final AtomicBoolean producing = new AtomicBoolean(true);
         final AtomicLong produced = new AtomicLong();
@@ -230,7 +230,8 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
         );
     }
 
-    private KafkaStreams streams(final String clientId, final StateRestoreListener restoreListener) {
+    private KafkaStreams streams(final String clientId, final StateRestoreListener restoreListener,
+                                 final boolean oneRecordPerChangelogBatch) {
         final StreamsBuilder builder = new StreamsBuilder();
         // 0_0: forwards each record with its input offset as the value, so each output can be matched to its input.
         builder.stream(INPUT, Consumed.with(Serdes.String(), Serdes.String()))
@@ -248,7 +249,7 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
             .groupByKey()
             .count(Materialized.as(STORE));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig(clientId));
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig(clientId, oneRecordPerChangelogBatch));
         if (restoreListener != null) {
             streams.setGlobalStateRestoreListener(restoreListener);
         }
@@ -256,7 +257,7 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
         return streams;
     }
 
-    private Properties streamsConfig(final String clientId) {
+    private Properties streamsConfig(final String clientId, final boolean oneRecordPerChangelogBatch) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         props.put(StreamsConfig.CLIENT_ID_CONFIG, clientId);
@@ -271,7 +272,9 @@ public class HealthyTaskAbortOnCorruptionIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG), 500);
         // One record per changelog batch and one batch per restore fetch, so the delayed restore lasts for many fetches.
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 0);
+        if (oneRecordPerChangelogBatch) {
+            props.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 0);
+        }
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG), 1);
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.FETCH_MAX_BYTES_CONFIG), 1);
         return props;
