@@ -12892,6 +12892,32 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testClassicGroupJoinWithEmptyConsumerGroupAndKnownMemberId() throws Exception {
+        String consumerGroupId = "consumer-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(consumerGroupId)
+            .withMemberId(memberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+            joinResult.joinFuture.get()
+        );
+        assertEquals(List.of(), joinResult.records);
+        // The empty consumer group is kept because the join does not create a classic group.
+        assertEquals(10, context.groupMetadataManager.consumerGroup(consumerGroupId).groupEpoch());
+    }
+
+    @Test
     public void testConsumerGroupHeartbeatWithStableClassicGroup() {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
@@ -24852,6 +24878,32 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testClassicGroupJoinWithEmptyStreamsGroupAndKnownMemberId() throws Exception {
+        String streamsGroupId = "streams-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupId, 10))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(streamsGroupId)
+            .withMemberId(memberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+            joinResult.joinFuture.get()
+        );
+        assertEquals(List.of(), joinResult.records);
+        // The empty streams group is kept because the join does not create a classic group.
+        assertEquals(10, context.groupMetadataManager.streamsGroup(streamsGroupId).groupEpoch());
+    }
+
+    @Test
     public void testClassicGroupJoinWithNonEmptyStreamsGroup() throws Exception {
         String streamsGroupId = "streams-group-id";
         String memberId = Uuid.randomUuid().toString();
@@ -24939,7 +24991,8 @@ public class GroupMetadataManagerTest {
         //   (a) no such group,
         //   (b) a non-streams (classic) group,
         //   (c) a non-empty streams group,
-        //   (d) an empty streams group whose stored epoch is NONE (nothing in the plugin).
+        //   (d) an empty streams group whose stored epoch is NONE (nothing in the plugin),
+        //   (e) a join with a known member id, which does not convert the group.
         String groupId = "group-id";
 
         // (a) Missing group.
@@ -24972,6 +25025,19 @@ public class GroupMetadataManagerTest {
         storedNone.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 10, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
         assertFalse(sendJoinForCleanupDetection(storedNone, groupId).needsTopologyCleanup);
+
+        // (e) Empty streams group with a stored epoch set, joined with a known member id.
+        GroupMetadataManagerTestContext knownMember = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
+            .build();
+        knownMember.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 10, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+        JoinGroupRequestData knownMemberRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(memberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        assertFalse(knownMember.sendClassicGroupJoin(knownMemberRequest, false, false, false).needsTopologyCleanup);
     }
 
     private static GroupMetadataManagerTestContext.JoinResult sendJoinForCleanupDetection(

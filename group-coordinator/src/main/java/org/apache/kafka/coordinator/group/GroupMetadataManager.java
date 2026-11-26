@@ -7053,6 +7053,7 @@ public class GroupMetadataManager {
     ) {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
         if (!topologyCleanupHandled
+            && UNKNOWN_MEMBER_ID.equals(request.memberId())
             && group != null
             && group.type() == STREAMS
             && group.isEmpty()
@@ -7060,6 +7061,7 @@ public class GroupMetadataManager {
             // Converting this empty streams group to classic would tombstone its streams metadata and
             // orphan any topology the description plugin still holds. Signal the caller to run the
             // plugin cleanup first; the conversion happens on the re-invocation with the flag set.
+            // A join with a known member id keeps the group, so it needs no cleanup.
             return new CoordinatorResult<>(List.of(), Boolean.TRUE);
         }
         if (group != null) {
@@ -7121,10 +7123,15 @@ public class GroupMetadataManager {
         // Group is created if it does not exist and the member id is UNKNOWN. if member
         // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
         ClassicGroup group;
-        if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
-        } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
-            log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+        // Only a request with an unknown member id can create the classic group below, so only
+        // such a request deletes an empty consumer or streams group to make room for it. A request
+        // with a known member id is rejected with UNKNOWN_MEMBER_ID and keeps the group.
+        if (isUnknownMember) {
+            if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
+            } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
+                log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
+            }
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
