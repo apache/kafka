@@ -773,6 +773,23 @@ LIST_OFFSETS (2)
 </td>  
 <td>
 
+ClusterAction
+</td>  
+<td>
+
+Cluster
+</td>  
+<td>
+
+A follower must have ClusterAction on the Cluster resource in order to list offsets with a replica id.
+</td> </tr>  
+<tr>  
+<td>
+
+LIST_OFFSETS (2)
+</td>  
+<td>
+
 Describe
 </td>  
 <td>

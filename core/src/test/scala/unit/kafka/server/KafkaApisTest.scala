@@ -4398,12 +4398,12 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleListOffsetRequest(request)
 
+    verify(replicaManager, never()).fetchOffset(any(), any(), any(), anyInt(), any(), anyInt(), anyShort(),
+      any(), any(), anyInt())
     val response = verifyNoThrottling[ListOffsetsResponse](request)
     val partitionData = response.topics.asScala.find(_.name == tp.topic).get
       .partitions.asScala.find(_.partitionIndex == tp.partition).get
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, partitionData.errorCode)
-    verify(replicaManager, never()).fetchOffset(any(), any(), any(), anyInt(), any(), anyInt(), anyShort(),
-      any(), any(), anyInt())
   }
 
   @Test
