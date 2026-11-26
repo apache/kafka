@@ -57,7 +57,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{InvalidRecordException, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
@@ -447,6 +447,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         nonExistingTopicResponses += topicIdPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
         try {
+          // The records field is nullable in the schema, but the append path requires records.
+          if (memoryRecords == null)
+            throw new InvalidRecordException(
+              s"Produce requests with version ${produceRequest.version} must not have null records")
           ProduceRequest.validateRecords(produceRequest.version, memoryRecords)
           authorizedRequestInfo += (topicIdPartition -> memoryRecords)
         } catch {

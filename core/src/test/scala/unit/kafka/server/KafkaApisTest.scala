@@ -2847,6 +2847,47 @@ class KafkaApisTest extends Logging {
     assertEquals(ApiKeys.SHARE_FETCH, capturedRequest.header.apiKey)
   }
 
+  // Scenario: a produce request has a partition with null records (nullable in the schema).
+  // Expected: the partition gets INVALID_RECORD in a response and nothing is appended.
+  @Test
+  def testProduceWithNullRecordsReturnsInvalidRecord(): Unit = {
+    val topic = "topic"
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
+    addTopicToMetadataCache(topic, numPartitions = 2, numBrokers = 3, topicId = topicId)
+
+    for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
+      reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val produceData = new ProduceRequestData.TopicProduceData()
+        .setPartitionData(util.List.of(new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(null)))
+      if (version >= 13) {
+        produceData.setTopicId(topicId)
+      } else {
+        produceData.setName(topic)
+      }
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          util.List.of(produceData).iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+        .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
+        any[Long])).thenReturn(0)
+      when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+      val response = verifyNoThrottling[ProduceResponse](request)
+      val partitionResponse = response.data.responses.asScala.head.partitionResponses.asScala.head
+      assertEquals(Errors.INVALID_RECORD, Errors.forCode(partitionResponse.errorCode))
+      verify(replicaManager, never).handleProduceAppend(
+        anyLong, anyShort, anyBoolean, any(), any(), any(), any(), any(), any())
+    }
+  }
+
   @Test
   def testProduceResponseContainsNewLeaderOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"

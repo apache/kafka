@@ -32,10 +32,12 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -134,6 +136,25 @@ public class ProduceRequestTest {
                 false);
         assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
+    }
+
+    // Scenario: records is nullable in the schema, so a request can carry a partition with null records.
+    // Expected: describing the request and building its error response do not throw.
+    @Test
+    public void testNullRecordsAreSafeToDescribeAndToAnswer() {
+        ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                new ProduceRequestData.TopicProduceData()
+                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(null))))))
+            .setAcks((short) 1)
+            .setTimeoutMs(5000)).build();
+
+        assertEquals(Collections.singletonList(0), new ArrayList<>(request.partitionSizes().values()));
+        assertEquals("{acks=1,timeout=5000,numPartitions=1}", request.toString(false));
+        assertDoesNotThrow(() -> request.toString(true));
+        assertEquals(1, request.getErrorResponse(0, new RuntimeException()).data().responses().size());
     }
 
     @Test
