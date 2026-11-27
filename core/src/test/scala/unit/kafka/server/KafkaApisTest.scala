@@ -4379,6 +4379,34 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testReplicaListOffsetWithoutClusterAction(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER,
+      Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
+    authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TOPIC,
+      tp.topic, AuthorizationResult.ALLOWED)
+
+    val targetTimes = util.List.of(new ListOffsetsTopic()
+      .setName(tp.topic)
+      .setPartitions(util.List.of(new ListOffsetsPartition()
+        .setPartitionIndex(tp.partition)
+        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP))))
+    val listOffsetRequest = ListOffsetsRequest.Builder.forReplica(ApiKeys.LIST_OFFSETS.latestVersion, 1)
+      .setTargetTimes(targetTimes).build()
+    val request = buildRequest(listOffsetRequest)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleListOffsetRequest(request)
+
+    verify(replicaManager, never()).fetchOffset(any(), any(), any(), anyInt(), any(), anyInt(), anyShort(),
+      any(), any(), anyInt())
+    val response = verifyNoThrottling[ListOffsetsResponse](request)
+    val partitionData = response.topics.asScala.find(_.name == tp.topic).get
+      .partitions.asScala.find(_.partitionIndex == tp.partition).get
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, partitionData.errorCode)
+  }
+
+  @Test
   def testListOffsetMaxTimestampWithUnsupportedVersion(): Unit = {
     testConsumerListOffsetWithUnsupportedVersion(ListOffsetsRequest.MAX_TIMESTAMP, 6)
   }
