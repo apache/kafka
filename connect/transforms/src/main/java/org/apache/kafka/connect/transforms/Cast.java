@@ -278,7 +278,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 case FLOAT32 -> castToFloat32(value);
                 case FLOAT64 -> castToFloat64(value);
                 case BOOLEAN -> castToBoolean(value);
-                case STRING -> castToString(value);
+                case STRING -> castToString(schema, value);
                 default -> throw new DataException(targetType + " is not supported in the Cast transformation.");
             };
         } catch (NumberFormatException e) {
@@ -363,9 +363,9 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             throw new DataException("Unexpected type in Cast transformation: " + value.getClass());
     }
 
-    private static String castToString(Object value) {
+    private static String castToString(Schema schema, Object value) {
         if (value instanceof java.util.Date dateValue) {
-            return Values.dateFormatFor(dateValue).format(dateValue);
+            return Values.dateFormatFor(schema, dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer byteBuffer) {
             return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
         } else if (value instanceof byte[] rawBytes) {

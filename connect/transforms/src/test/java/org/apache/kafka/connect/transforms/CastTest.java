@@ -276,6 +276,17 @@ public class CastTest {
     }
 
     @Test
+    public void castWholeMidnightTimestampRecordValueWithSchemaStringKeepsTimeComponent() {
+        Date midnight = new Date(MILLIS_PER_DAY * 20089);
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "string"));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                Timestamp.SCHEMA, midnight));
+
+        assertEquals(Schema.Type.STRING, transformed.valueSchema().type());
+        assertEquals(Values.dateFormatFor(Timestamp.SCHEMA, midnight).format(midnight), transformed.value());
+    }
+
+    @Test
     public void castWholeRecordDefaultValue() {
         // Validate default value in schema is correctly converted
         xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int32"));
