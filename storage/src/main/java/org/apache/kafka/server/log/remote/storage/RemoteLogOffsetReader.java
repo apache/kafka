@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
@@ -69,7 +70,8 @@ public class RemoteLogOffsetReader implements Callable<Void> {
         } catch (Exception e) {
             // NOTE: All the exceptions from the secondary storage are caught instead of only the KafkaException.
             LOGGER.error("Error occurred while reading the remote log offset for {}", tp, e);
-            result = new OffsetResultHolder.FileRecordsOrError(Optional.of(e), Optional.empty());
+            Exception error = e instanceof RemoteLogMetadataNotReadyException ? new ReplicaNotAvailableException(e.getMessage(), e) : e;
+            result = new OffsetResultHolder.FileRecordsOrError(Optional.of(error), Optional.empty());
         }
         callback.accept(result);
         return null;
