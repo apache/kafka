@@ -158,7 +158,7 @@ Default Value:
 
   * #### org.apache.kafka.automatic.config.providers
 
-This system property controls the automatic loading of ConfigProvider implementations in Apache Kafka. ConfigProviders are used to dynamically supply configuration values from sources such as files, directories, or environment variables. This property accepts a comma-separated list of ConfigProvider names. By default, all built-in ConfigProviders are enabled, including **FileConfigProvider** , **DirectoryConfigProvider** , and **EnvVarConfigProvider**.
+This system property controls the automatic loading of ConfigProvider implementations in Apache Kafka. ConfigProviders are used to dynamically supply configuration values from sources such as files, directories, or environment variables. This property accepts a comma-separated list of ConfigProvider names. By default, all configured ConfigProvider implementations are enabled, including non-built-in implementations. Built-in implementations include **FileConfigProvider** , **DirectoryConfigProvider** , and **EnvVarConfigProvider**.
 
 If users want to disable all automatic ConfigProviders, they need to explicitly set the system property as shown below. Disabling automatic ConfigProviders is recommended in environments where configuration data comes from untrusted sources or where increased security is required. For more details, see [CVE-2024-31141](/community/cve-list/#CVE-2024-31141).
 
@@ -195,7 +195,6 @@ Default Value:
 </th>  
 <td>
 
-All built-in ConfigProviders are enabled
+All configured ConfigProvider implementations are enabled, including non-built-in implementations
 </td></tr> </table>
-
 
