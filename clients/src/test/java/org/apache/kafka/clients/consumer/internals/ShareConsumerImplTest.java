@@ -109,6 +109,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -390,6 +391,40 @@ public class ShareConsumerImplTest {
         // Check that only 1 ShareFetchEvent is sent per poll
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler, times(1)).add(argThat(event -> event instanceof ShareFetchEvent));
+    }
+
+    @Test
+    public void testAcknowledgementsSentWhenFetchCollectorThrows() {
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
+        consumer = newConsumer(subscriptions);
+
+        String topic = "test-topic";
+        TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topic);
+        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
+        batch.addRecord(new ConsumerRecord<>(topic, 0, 0, "key1", "value1"));
+        batch.addRecord(new ConsumerRecord<>(topic, 0, 1, "key2", "value2"));
+
+        // The first fetch returns records, and the second fetch throws an error which was buffered behind them
+        ShareFetch<String, String> firstFetch = ShareFetch.empty();
+        firstFetch.add(tip, batch);
+        doReturn(firstFetch)
+            .doThrow(new TopicAuthorizationException(Set.of("other-topic")))
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        List<String> topics = List.of(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+
+        assertEquals(2, consumer.poll(Duration.ofMillis(100)).count());
+
+        // The second poll implicitly acknowledges the records and then throws. The acknowledgments must still be sent.
+        assertThrows(TopicAuthorizationException.class, () -> consumer.poll(Duration.ofMillis(100)));
+        verify(applicationEventHandler, times(1)).add(argThat(event ->
+            event instanceof ShareAcknowledgeAsyncEvent &&
+                ((ShareAcknowledgeAsyncEvent) event).acknowledgementsMap().get(tip) != null &&
+                ((ShareAcknowledgeAsyncEvent) event).acknowledgementsMap().get(tip).acknowledgements().size() == 2));
+        verify(applicationEventHandler, never()).add(argThat(event -> event instanceof ShareFetchEvent));
     }
 
     @Test
