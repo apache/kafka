@@ -138,7 +138,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -969,7 +968,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testTopicRefreshInMetadata() throws InterruptedException {
+    public void testTopicRefreshInMetadata() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "3000");
@@ -979,29 +978,26 @@ public class KafkaProducerTest {
         long refreshBackoffMaxMs = 500L;
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
-        final Time time = Time.SYSTEM;
+        final Time time = new MockTime();
         final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, metadataIdleMs,
                 new LogContext(), new ClusterResourceListeners());
         final String topic = "topic";
-        try (KafkaProducer<String, String> producer = kafkaProducer(configs,
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(time, metadata), null, time)) {
+        final MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of()));
+        MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
+            singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
+        // Queue several refreshes which all report the topic as unknown
+        for (int i = 0; i < 3; i++) {
+            client.prepareMetadataUpdate(updateResponse);
+        }
+        client.setWakeupHook(() -> time.sleep(refreshBackoffMs));
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
 
-            AtomicBoolean running = new AtomicBoolean(true);
-            Thread t = new Thread(() -> {
-                long startTimeMs = System.currentTimeMillis();
-                while (running.get()) {
-                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 100)
-                        Thread.yield();
-                    MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
-                            singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
-                    metadata.updateWithCurrentRequestVersion(updateResponse, false, time.milliseconds());
-                }
-            });
-            t.start();
             Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause());
-            running.set(false);
-            t.join();
+            // The producer kept refreshing metadata until it timed out, consuming every queued update
+            assertFalse(client.hasPendingMetadataUpdates());
         }
     }
 
@@ -1015,28 +1011,29 @@ public class KafkaProducerTest {
         long refreshBackoffMaxMs = 500L;
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
-        final Time time = Time.SYSTEM;
-        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, metadataIdleMs,
-                new LogContext(), new ClusterResourceListeners());
+        final MockTime time = new MockTime();
+        final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs,
+            metadataExpireMs, metadataIdleMs, new LogContext(), new ClusterResourceListeners());
         final String topic = "topic";
-        MockClient client = new MockClient(time, metadata);
+        final MockClient client = new MockClient(time, metadata);
         // Seed initial metadata, then update with the topic marked as UNKNOWN_TOPIC_OR_PARTITION
         client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of()));
         MetadataResponse errorResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
                 singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
         client.prepareMetadataUpdate(errorResponse);
+        client.setWakeupHook(() -> time.sleep(refreshBackoffMs));
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
 
-            // partitionsFor should time out via real wait() because the topic has an error
-            // and the Sender keeps replaying the same error metadata.
+            // partitionsFor should time out because the topic has an error
+            // and the MockClient keeps replaying the same error metadata.
             Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause());
         }
     }
 
     @Test
-    public void testTopicExpiryInMetadata() throws InterruptedException {
+    public void testTopicExpiryInMetadata() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "2000");
@@ -1045,7 +1042,7 @@ public class KafkaProducerTest {
         long refreshBackoffMaxMs = 500L;
         long metadataExpireMs = 1000L;
         long metadataIdleMs = 1000L;
-        final Time time = Time.SYSTEM;
+        final MockTime time = new MockTime();
         final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, metadataIdleMs,
                 new LogContext(), new ClusterResourceListeners());
         final String topic = "topic";
@@ -1054,26 +1051,22 @@ public class KafkaProducerTest {
         client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of()));
         // Queue a metadata response with the topic for the first partitionsFor call
         client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, Map.of(topic, 1)));
-        // Queue a follow-up without the topic so that after consumption, updateWithCurrentMetadata
-        // replays the empty response
-        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, Map.of()));
+        client.setWakeupHook(() -> time.sleep(refreshBackoffMs));
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
 
             // First call should succeed — the queued metadata response includes the topic
             assertNotNull(producer.partitionsFor(topic));
+            assertFalse(client.hasPendingMetadataUpdates());
 
-            // Wait for topic metadata to expire (metadataIdleMs = 1000ms)
-            Thread.sleep(1500);
+            time.sleep(metadataIdleMs + 1);
 
-            // Force a metadata update so the Sender consumes the queued empty response.
-            // This triggers retainTopic() which removes the expired topic from the snapshot.
-            metadata.requestUpdate(true);
-            // Give the Sender time to process the update
-            Thread.sleep(500);
+            // A metadata update without the topic removes the expired topic from the metadata
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of()));
+            assertNull(metadata.fetch().partitionCountForTopic(topic));
 
-            // partitionsFor should time out because the topic was expired and the Sender
-            // now replays empty metadata. The real wait() timeout kicks in after MAX_BLOCK_MS.
+            // partitionsFor should time out because the topic was expired and the MockClient
+            // now replays the metadata without the topic
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
         }
     }
