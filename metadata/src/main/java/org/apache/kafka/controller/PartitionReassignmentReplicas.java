@@ -54,9 +54,38 @@ class PartitionReassignmentReplicas {
         PartitionAssignment currentAssignment,
         PartitionAssignment targetAssignment
     ) {
+        this(currentAssignment, List.of(), targetAssignment);
+    }
+
+    /**
+     * Compute the reassignment that moves a partition from its current assignment to the
+     * target assignment.
+     *
+     * If a reassignment is already in progress, {@code currentAdding} holds the replicas it
+     * is still adding. Those replicas are part of the current replica list, but they have not
+     * necessarily joined the ISR yet. If the target keeps such a replica, it must remain an
+     * adding replica so that the new reassignment still waits for it to catch up. Otherwise
+     * the replica would silently become a regular replica, and the partition could complete
+     * the reassignment with an out-of-sync replica in its final replica list. If the target
+     * drops such a replica, it is treated like any other current replica that is not in the
+     * target, and is removed once the reassignment completes.
+     *
+     * @param currentAssignment The current assignment, including any replicas that an
+     *                          in-progress reassignment is adding.
+     * @param currentAdding     The replicas that an in-progress reassignment is still adding,
+     *                          or an empty list if no reassignment is in progress.
+     * @param targetAssignment  The requested target assignment.
+     */
+    PartitionReassignmentReplicas(
+        PartitionAssignment currentAssignment,
+        List<Integer> currentAdding,
+        PartitionAssignment targetAssignment
+    ) {
         Set<Integer> removing = calculateDifference(currentAssignment.replicas(), targetAssignment.replicas());
         this.removing = new ArrayList<>(removing);
-        Set<Integer> adding = calculateDifference(targetAssignment.replicas(), currentAssignment.replicas());
+        List<Integer> originalReplicas = new ArrayList<>(currentAssignment.replicas());
+        originalReplicas.removeAll(currentAdding);
+        Set<Integer> adding = calculateDifference(targetAssignment.replicas(), originalReplicas);
         this.adding = new ArrayList<>(adding);
         this.replicas = new ArrayList<>(targetAssignment.replicas());
         this.replicas.addAll(removing);
