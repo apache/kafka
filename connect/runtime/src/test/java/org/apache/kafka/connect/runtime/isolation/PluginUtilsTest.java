@@ -168,6 +168,7 @@ public class PluginUtilsTest {
             "org.apache.kafka.connect.sink.SinkConnector",
             "org.apache.kafka.connect.sink.SinkRecord",
             "org.apache.kafka.connect.sink.SinkTask",
+            "org.apache.kafka.connect.sink.ShareSinkTask",
             "org.apache.kafka.connect.sink.SinkTaskContext",
             "org.apache.kafka.connect.sink.ErrantRecordReporter",
             "org.apache.kafka.connect.source.",

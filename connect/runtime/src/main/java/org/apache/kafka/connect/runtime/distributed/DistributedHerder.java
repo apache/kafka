@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -959,6 +960,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
 
     private void validateSinkConnectorGroupId(Map<String, String> config, Map<String, ConfigValue> validatedConfig) {
+        if (SinkConnectorConfig.isShareMode(config)) {
+            try {
+                String groupId = shareSinkGroupId(config.get(ConnectorConfig.NAME_CONFIG), config);
+                if (workerGroupId.equals(groupId)) {
+                    String key = config.containsKey(SinkConnectorConfig.SHARE_GROUP_ID_CONFIG)
+                            ? SinkConnectorConfig.SHARE_GROUP_ID_CONFIG : ConnectorConfig.NAME_CONFIG;
+                    validatedConfig.get(key).addErrorMessage("Share group " + groupId
+                            + " conflicts with Connect worker group " + workerGroupId);
+                }
+            } catch (ConfigException e) {
+                // The base sink validation already reports an invalid share identity.
+            }
+            return;
+        }
         String overriddenConsumerGroupIdConfig = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + GROUP_ID_CONFIG;
         if (config.containsKey(overriddenConsumerGroupIdConfig)) {
             String consumerGroupId = config.get(overriddenConsumerGroupIdConfig);
@@ -1153,6 +1168,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             return null;
                         }
 
+                        if (isShareConsumerConfigUpdate(connName, config) && !refreshConfigSnapshot(workerSyncTimeoutMs)) {
+                            throw new ConnectException("Failed to read to end of config topic before changing share consumer configuration");
+                        }
+                        if (validateSinkConsumerChange(connName, config, configState) && checkRebalanceNeeded(callback)) {
+                            return null;
+                        }
+
                         if (initialOffsets == null) {
                             writeConnectorConfigAndComplete(connName, config, targetState, null, callback);
                         } else {
@@ -1163,6 +1185,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     forwardErrorAndTickThreadStages(callback)
             );
         }));
+    }
+
+    private boolean isShareConsumerConfigUpdate(String connName, Map<String, String> config) {
+        Map<String, String> previous = configState.connectorConfig(connName);
+        return previous != null && ((SinkConnectorConfig.isShareMode(previous) && connectorType(previous) == ConnectorType.SINK)
+                || (config.containsKey(SinkConnectorConfig.CONSUMER_TYPE_CONFIG) && connectorType(config) == ConnectorType.SINK));
     }
 
     /**

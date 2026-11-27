@@ -51,6 +51,13 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String TOPICS_REGEX_DEFAULT = "";
     private static final String TOPICS_REGEX_DISPLAY = "Topics regex";
 
+    public static final String CONSUMER_TYPE_CONFIG = "consumer.type";
+    public static final String CONSUMER_TYPE_DEFAULT = "consumer";
+    public static final String SHARE_CONSUMER_TYPE = "share";
+    public static final String SHARE_GROUP_ID_CONFIG = "share.group.id";
+    public static final String SHARE_PROCESSING_MAX_AGE_MS_CONFIG = "share.processing.max.age.ms";
+    public static final String SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG = "share.processing.cancel.grace.ms";
+
     public static final String DLQ_PREFIX = "errors.deadletterqueue.";
 
     public static final String DLQ_TOPIC_NAME_CONFIG = DLQ_PREFIX + "topic.name";
@@ -76,6 +83,14 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return baseConfigs
                 .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY)
                 .define(TOPICS_REGEX_CONFIG, ConfigDef.Type.STRING, TOPICS_REGEX_DEFAULT, new RegexValidator(), ConfigDef.Importance.HIGH, TOPICS_REGEX_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_REGEX_DISPLAY)
+                .define(CONSUMER_TYPE_CONFIG, Type.STRING, CONSUMER_TYPE_DEFAULT, ConfigDef.ValidString.in(CONSUMER_TYPE_DEFAULT, SHARE_CONSUMER_TYPE), Importance.HIGH,
+                        "Consumer type for this sink: consumer or share. Share mode requires a ShareSinkTask with durable put completion.", COMMON_GROUP, 5, ConfigDef.Width.SHORT, "Consumer type")
+                .define(SHARE_GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH,
+                        "Share group identity. Defaults to connect-share- followed by the connector name. Ordinary consumer offsets are not transferred.", COMMON_GROUP, 6, ConfigDef.Width.MEDIUM, "Share group ID")
+                .define(SHARE_PROCESSING_MAX_AGE_MS_CONFIG, Type.LONG, null, optionalRange(1), Importance.HIGH,
+                        "Maximum acquisition-to-finalisation processing time in milliseconds. Required in share mode; must be positive.", COMMON_GROUP, 7, ConfigDef.Width.MEDIUM, "Share processing maximum age")
+                .define(SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG, Type.LONG, null, optionalRange(0), Importance.HIGH,
+                        "Time in milliseconds to wait for execution to exit after cancellation is requested. Required in share mode; zero is allowed. Cancellation cannot force a connector's external writes to stop.", COMMON_GROUP, 8, ConfigDef.Width.MEDIUM, "Share processing cancellation grace")
                 .define(DLQ_TOPIC_NAME_CONFIG, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, Importance.MEDIUM, DLQ_TOPIC_NAME_DOC, ERROR_GROUP, 6, ConfigDef.Width.MEDIUM, DLQ_TOPIC_DISPLAY)
                 .define(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.SHORT, DLQ_TOPIC_REPLICATION_FACTOR_CONFIG_DEFAULT, Importance.MEDIUM, DLQ_TOPIC_REPLICATION_FACTOR_CONFIG_DOC, ERROR_GROUP, 7, ConfigDef.Width.MEDIUM, DLQ_TOPIC_REPLICATION_FACTOR_CONFIG_DISPLAY)
                 .define(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, ConfigDef.Type.BOOLEAN, DLQ_CONTEXT_HEADERS_ENABLE_DEFAULT, Importance.MEDIUM, DLQ_CONTEXT_HEADERS_ENABLE_DOC, ERROR_GROUP, 8, ConfigDef.Width.MEDIUM, DLQ_CONTEXT_HEADERS_ENABLE_DISPLAY);
@@ -95,6 +110,9 @@ public class SinkConnectorConfig extends ConnectorConfig {
 
     public SinkConnectorConfig(Plugins plugins, Map<String, String> props) {
         super(plugins, configDef(), props);
+        if (isShareMode(props)) {
+            validate(props);
+        }
     }
 
     /**
@@ -122,6 +140,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
      *                        entry if one for the problematic property does not already exist.
      */
     public static void validate(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        validateShareSettings(props, validatedConfig);
         final String topicsList = props.get(TOPICS_CONFIG);
         final String topicsRegex = props.get(TOPICS_REGEX_CONFIG);
         final String dlqTopic = props.getOrDefault(DLQ_TOPIC_NAME_CONFIG, "").trim();
@@ -162,6 +181,82 @@ public class SinkConnectorConfig extends ConnectorConfig {
                     addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, topicsRegex, errorMessage);
                 }
             }
+        }
+    }
+
+    public static boolean isShareMode(Map<String, String> props) {
+        String consumerType = props.get(CONSUMER_TYPE_CONFIG);
+        return consumerType != null && SHARE_CONSUMER_TYPE.equals(consumerType.trim());
+    }
+
+    private static ConfigDef.Validator optionalRange(long minimum) {
+        ConfigDef.Range range = ConfigDef.Range.atLeast(minimum);
+        return ConfigDef.LambdaValidator.with((name, value) -> {
+            if (value != null) {
+                range.ensureValid(name, value);
+            }
+        }, () -> "null or " + range);
+    }
+
+    private static void validateShareSettings(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        String consumerType = props.getOrDefault(CONSUMER_TYPE_CONFIG, CONSUMER_TYPE_DEFAULT);
+        consumerType = consumerType == null ? null : consumerType.trim();
+        if (!CONSUMER_TYPE_DEFAULT.equals(consumerType) && !SHARE_CONSUMER_TYPE.equals(consumerType)) {
+            addErrorMessage(validatedConfig, CONSUMER_TYPE_CONFIG, consumerType, "Consumer type must be consumer or share");
+        }
+        if (!isShareMode(props)) {
+            return;
+        }
+        String groupId = validateShareGroupId(props, validatedConfig);
+        validateShareProcessingLimits(props, validatedConfig);
+        validateShareDeliveryOptions(props, validatedConfig);
+        Map<String, Object> overrides = new LinkedHashMap<>();
+        props.forEach((key, value) -> {
+            if (key.startsWith(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)) {
+                overrides.put(key.substring(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX.length()), value);
+            }
+        });
+        ShareConsumerSettings.validationErrors(overrides, groupId).forEach((key, error) -> {
+            String property = CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + key;
+            addErrorMessage(validatedConfig, property, props.get(property), error);
+        });
+    }
+
+    private static String validateShareGroupId(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        try {
+            return ShareConsumerSettings.resolveGroupId(props.get(NAME_CONFIG), props);
+        } catch (ConfigException e) {
+            String key = props.containsKey(SHARE_GROUP_ID_CONFIG) ? SHARE_GROUP_ID_CONFIG : NAME_CONFIG;
+            addErrorMessage(validatedConfig, key, props.get(key), e.getMessage());
+            return null;
+        }
+    }
+
+    private static void validateShareProcessingLimits(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        for (String key : List.of(SHARE_PROCESSING_MAX_AGE_MS_CONFIG, SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG)) {
+            String rawValue = props.get(key);
+            try {
+                Object value = ConfigDef.parseType(key, rawValue, Type.LONG);
+                if (value == null) {
+                    throw new ConfigException(key, null, "An explicit processing limit is required in share mode");
+                }
+                optionalRange(key.equals(SHARE_PROCESSING_MAX_AGE_MS_CONFIG) ? 1 : 0).ensureValid(key, value);
+            } catch (ConfigException e) {
+                addErrorMessage(validatedConfig, key, rawValue, e.getMessage());
+            }
+        }
+    }
+
+    private static void validateShareDeliveryOptions(Map<String, String> props, Map<String, ConfigValue> validatedConfig) {
+        String tolerance = props.getOrDefault(ERRORS_TOLERANCE_CONFIG, ERRORS_TOLERANCE_DEFAULT.value());
+        if (!ERRORS_TOLERANCE_DEFAULT.value().equals(tolerance == null ? null : tolerance.trim())) {
+            addErrorMessage(validatedConfig, ERRORS_TOLERANCE_CONFIG, props.get(ERRORS_TOLERANCE_CONFIG), "Share mode requires errors.tolerance=none");
+        }
+        if (hasDlqTopicConfig(props)) {
+            addErrorMessage(validatedConfig, DLQ_TOPIC_NAME_CONFIG, props.get(DLQ_TOPIC_NAME_CONFIG), "Independent dead letter queue reporting is not supported in share mode");
+        }
+        if (!Utils.isBlank(props.get(TOPICS_REGEX_CONFIG))) {
+            addErrorMessage(validatedConfig, TOPICS_REGEX_CONFIG, props.get(TOPICS_REGEX_CONFIG), "Share mode requires an explicit topics list; regex subscription is not supported");
         }
     }
 
