@@ -34,7 +34,7 @@ The disk throughput is important. We have 8x7200 rpm SATA drives. In general dis
 
 ## OS
 
-Kafka should run well on any unix system and has been tested on Linux and Solaris. 
+Kafka is expected to run on Unix-like operating systems and is tested on Linux.
 
 We have seen a few issues running on Windows and Windows is not currently a well supported platform though we would be happy to change that. 
 
