@@ -20,6 +20,7 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.ArrayList;
@@ -85,11 +86,11 @@ public class SocketServerConfigs {
                     " This can be useful in some cases where external load balancers are used.", LISTENERS_CONFIG);
 
     public static final String SOCKET_SEND_BUFFER_BYTES_CONFIG = "socket.send.buffer.bytes";
-    public static final int SOCKET_SEND_BUFFER_BYTES_DEFAULT = 100 * 1024;
+    public static final int SOCKET_SEND_BUFFER_BYTES_DEFAULT = Selectable.USE_DEFAULT_BUFFER_SIZE;
     public static final String SOCKET_SEND_BUFFER_BYTES_DOC = "The SO_SNDBUF buffer of the socket server sockets. If the value is -1, the OS default will be used.";
 
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
-    public static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 100 * 1024;
+    public static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = Selectable.USE_DEFAULT_BUFFER_SIZE;
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The SO_RCVBUF buffer of the socket server sockets. If the value is -1, the OS default will be used.";
 
     public static final String SOCKET_REQUEST_MAX_BYTES_CONFIG = "socket.request.max.bytes";

@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
@@ -1310,7 +1311,7 @@ public class StreamsConfig extends AbstractConfig {
                     PROCESSOR_WRAPPER_CLASS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
                     Type.INT,
-                    32 * 1024,
+                    Selectable.USE_DEFAULT_BUFFER_SIZE,
                     atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     Importance.LOW,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
@@ -1363,7 +1364,7 @@ public class StreamsConfig extends AbstractConfig {
                     ROCKSDB_CONFIG_SETTER_CLASS_DOC)
             .define(SEND_BUFFER_CONFIG,
                     Type.INT,
-                    128 * 1024,
+                    Selectable.USE_DEFAULT_BUFFER_SIZE,
                     atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     Importance.LOW,
                     CommonClientConfigs.SEND_BUFFER_DOC)

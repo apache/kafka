@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -536,13 +537,13 @@ public class ConsumerConfig extends AbstractConfig {
                                         MAX_PARTITION_FETCH_BYTES_DOC)
                                 .define(SEND_BUFFER_CONFIG,
                                         Type.INT,
-                                        128 * 1024,
+                                        Selectable.USE_DEFAULT_BUFFER_SIZE,
                                         atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG,
                                         Type.INT,
-                                        64 * 1024,
+                                        Selectable.USE_DEFAULT_BUFFER_SIZE,
                                         atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.RECEIVE_BUFFER_DOC)
