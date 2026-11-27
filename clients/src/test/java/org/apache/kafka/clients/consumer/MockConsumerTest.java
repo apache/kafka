@@ -484,4 +484,53 @@ public class MockConsumerTest {
         assertEquals(2, capturedOnAssign.size());
         assertThrows(IllegalStateException.class, () -> capturedOnRevoke.get(0).assignment());
     }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSubscribeWithoutListenerRemovesListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        List<TopicPartition> assigned = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+        });
+        consumer.rebalance(List.of(tp0));
+        assertEquals(List.of(tp0), assigned);
+
+        consumer.subscribe(List.of("test"));
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(List.of(tp0), assigned);
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    public void testSubscribeToEmptyListKeepsListenerFromDeprecatedSubscribe() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        List<TopicPartition> assigned = new ArrayList<>();
+        List<TopicPartition> revoked = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revoked.addAll(partitions);
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+        });
+        consumer.rebalance(List.of(tp0));
+        assertEquals(List.of(tp0), assigned);
+
+        consumer.subscribe(List.of());
+        consumer.rebalance(List.of());
+        assertEquals(List.of(tp0), revoked);
+    }
 }

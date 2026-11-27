@@ -747,10 +747,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * opportunity to commit offsets before a rebalance finishes.
      *
      * <p>
-     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
-     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
-     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
-     * the reference/set a {@code null} listener.
+     * If a listener was previously registered via one of the deprecated {@code subscribe(topics, listener)}
+     * variants, this method removes it, unless the given list of topics is empty. A listener registered via
+     * {@link #setRebalanceListener(RebalanceListener)} is kept; to remove it, call
+     * {@link #setRebalanceListener(RebalanceListener)} with a {@code null} reference.
      *
      * @param topics The list of topics to subscribe to
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
@@ -801,10 +801,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * opportunity to commit offsets before a rebalance finishes.
      *
      * <p>
-     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
-     * {@link #subscribe(Pattern, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
-     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
-     * the reference/set a {@code null} listener.
+     * If a listener was previously registered via one of the deprecated {@code subscribe(topics, listener)}
+     * variants, this method removes it. A listener registered via
+     * {@link #setRebalanceListener(RebalanceListener)} is kept; to remove it, call
+     * {@link #setRebalanceListener(RebalanceListener)} with a {@code null} reference.
      *
      * @param pattern Pattern to subscribe to
      * @throws IllegalArgumentException If pattern is null
@@ -861,10 +861,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * opportunity to commit offsets before a rebalance finishes.
      *
      * <p>
-     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
-     * {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
-     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
-     * the reference/set a {@code null} listener.
+     * If a listener was previously registered via one of the deprecated {@code subscribe(topics, listener)}
+     * variants, this method removes it. A listener registered via
+     * {@link #setRebalanceListener(RebalanceListener)} is kept; to remove it, call
+     * {@link #setRebalanceListener(RebalanceListener)} with a {@code null} reference.
      *
      * @param pattern Pattern to subscribe to, that must be compatible with Google RE2/J.
      * @throws IllegalArgumentException If pattern is null or empty.

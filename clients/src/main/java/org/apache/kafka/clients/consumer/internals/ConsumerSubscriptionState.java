@@ -84,6 +84,10 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
         NONE, AUTO_TOPICS, AUTO_PATTERN, AUTO_PATTERN_RE2J, USER_ASSIGNED
     }
 
+    private enum ListenerSource {
+        SUBSCRIBE, SET_REBALANCE_LISTENER
+    }
+
     /* the type of subscription */
     private SubscriptionType subscriptionType;
 
@@ -340,8 +344,24 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     public synchronized void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
         if (listener != null) {
             Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
-            this.listenerContext.set(new ListenerContext(listener, consumer));
+            this.listenerContext.set(new ListenerContext(listener, consumer, ListenerSource.SET_REBALANCE_LISTENER));
         } else {
+            this.listenerContext.set(ListenerContext.NULL_LISTENER);
+        }
+    }
+
+    /**
+     * Sets the rebalance listener passed to {@code subscribe}. If the listener is {@code null}, removes the current
+     * listener only if it was also registered via {@code subscribe}, so a listener registered via
+     * {@link Consumer#setRebalanceListener(RebalanceListener)} is kept.
+     * @param listener the listener, or {@code null} if {@code subscribe} was called without a listener
+     * @param consumer the consumer instance to orchestrate callbacks in {@link RebalanceConsumer}. must not be null
+     */
+    public synchronized void setRebalanceListenerFromSubscribe(RebalanceListener listener, Consumer<?, ?> consumer) {
+        if (listener != null) {
+            Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
+            this.listenerContext.set(new ListenerContext(listener, consumer, ListenerSource.SUBSCRIBE));
+        } else if (this.listenerContext.get().source == ListenerSource.SUBSCRIBE) {
             this.listenerContext.set(ListenerContext.NULL_LISTENER);
         }
     }
@@ -1087,15 +1107,17 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
         private final RebalanceListener rebalanceListener;
         /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
         private final Consumer<?, ?> consumer;
+        /** Which API registered the listener */
+        private final ListenerSource source;
 
         private ListenerContext(RebalanceListener listener) {
-            this.rebalanceListener = listener;
-            this.consumer = null;
+            this(listener, null, ListenerSource.SET_REBALANCE_LISTENER);
         }
 
-        private ListenerContext(RebalanceListener listener, Consumer<?, ?> consumer) {
+        private ListenerContext(RebalanceListener listener, Consumer<?, ?> consumer, ListenerSource source) {
             this.rebalanceListener = listener;
             this.consumer = consumer;
+            this.source = source;
         }
     }
 
