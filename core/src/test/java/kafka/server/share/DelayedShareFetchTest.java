@@ -23,12 +23,14 @@ import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
@@ -79,6 +81,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -123,8 +126,12 @@ public class DelayedShareFetchTest {
     private static final FetchParams FETCH_PARAMS = new FetchParams(
         FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
         Optional.empty(), true);
+    private static final RemoteStorageFetchInfo REMOTE_STORAGE_FETCH_INFO = new RemoteStorageFetchInfo(
+        1024, false, new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 0)),
+        new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1024, Optional.empty()),
+        FetchIsolation.HIGH_WATERMARK);
     private static final FetchDataInfo REMOTE_FETCH_INFO = new FetchDataInfo(new LogOffsetMetadata(0, 0, 0),
-        MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(mock(RemoteStorageFetchInfo.class)));
+        MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(REMOTE_STORAGE_FETCH_INFO));
     private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
 
     private Timer mockTimer;
@@ -1782,6 +1789,179 @@ public class DelayedShareFetchTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    public void testRemoteStorageFetchMaxBytesResizedToRemoteFetchPartitions() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(true);
+        when(sp2.canAcquireRecords()).thenReturn(true);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+        sharePartitions.put(tp1, sp1);
+        sharePartitions.put(tp2, sp2);
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), List.of(tp0, tp1, tp2), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+        when(sp1.nextFetchOffset()).thenReturn(20L);
+        when(sp2.nextFetchOffset()).thenReturn(30L);
+
+        // Mocking local log read result for tp0 and tp1, and remote storage read result for tp2.
+        doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp0, tp1), Set.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Remote fetch related mocks. Remote fetch object does not complete within tryComplete in this mock.
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(remoteLogManager.asyncRead(any(), any())).thenReturn(mock(Future.class));
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        Partition p2 = mock(Partition.class);
+        when(p2.isLeader()).thenReturn(true);
+        when(replicaManager.getPartitionOrException(tp2.topicPartition())).thenReturn(p2);
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManagerLogReader(replicaManager)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
+            .withFetchId(fetchId)
+            .build();
+
+        // All the topic partitions are acquirable.
+        when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+        when(sp2.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // tp0 and tp1 are local log reads with no data and got released, hence the remote read of tp2 is
+        // topped up with the part of the request budget not allocated to it, raising both its byte caps to
+        // the full request max bytes.
+        List<RemoteFetch> remoteFetches = delayedShareFetch.pendingRemoteFetches().remoteFetches();
+        assertEquals(1, remoteFetches.size());
+        assertEquals(tp2, remoteFetches.get(0).topicIdPartition());
+        RemoteStorageFetchInfo resizedFetchInfo = remoteFetches.get(0).remoteFetchInfo();
+        assertEquals(FETCH_PARAMS.maxBytes, resizedFetchInfo.fetchMaxBytes());
+        assertEquals(FETCH_PARAMS.maxBytes, resizedFetchInfo.fetchInfo().maxBytes);
+        // The rest of the remote storage fetch info must be carried over unchanged.
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.topicIdPartition(), resizedFetchInfo.topicIdPartition());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.minOneMessage(), resizedFetchInfo.minOneMessage());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.fetchIsolation(), resizedFetchInfo.fetchIsolation());
+        assertEquals(REMOTE_STORAGE_FETCH_INFO.fetchInfo().fetchOffset, resizedFetchInfo.fetchInfo().fetchOffset);
+    }
+
+    @Test
+    public void testRemoteStorageFetchMaxBytesSplitAcrossRemoteFetchPartitions() {
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
+        // tp0 and tp1 have no data in the local log, tp2 and tp3 are in remote storage. The log read gave each of the
+        // 4 acquired partitions a quarter of the request max bytes.
+        DelayedShareFetch delayedShareFetch = delayedShareFetchWithRemoteStorageReads(List.of(tp0, tp1, tp2, tp3),
+            Map.of(tp0, MemoryRecords.EMPTY, tp1, MemoryRecords.EMPTY),
+            Map.of(tp2, FETCH_PARAMS.maxBytes / 4, tp3, FETCH_PARAMS.maxBytes / 4),
+            PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM));
+
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // As tp0 and tp1 have no data, their share is split across the remote reads, so each remote read gets half of
+        // the request max bytes.
+        assertEquals(Map.of(tp2, FETCH_PARAMS.maxBytes / 2, tp3, FETCH_PARAMS.maxBytes / 2),
+            remoteFetchMaxBytes(delayedShareFetch));
+    }
+
+    @Test
+    public void testRemoteStorageFetchMaxBytesUnchangedWhenAllAcquiredPartitionsAreRemote() {
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+        // All the acquired partitions are in remote storage, and the log read split the request max bytes across them,
+        // handing the remainder byte to tp0. The strategy hands the remainder byte to a different partition on each
+        // call, as the UNIFORM strategy may, so splitting the request max bytes again would hand it to another one.
+        int partitionMaxBytes = FETCH_PARAMS.maxBytes / 3;
+        Map<TopicIdPartition, Integer> remoteMaxBytes = Map.of(
+            tp0, partitionMaxBytes + FETCH_PARAMS.maxBytes % 3, tp1, partitionMaxBytes, tp2, partitionMaxBytes);
+        DelayedShareFetch delayedShareFetch = delayedShareFetchWithRemoteStorageReads(List.of(tp0, tp1, tp2), Map.of(),
+            remoteMaxBytes, uniformStrategyWithRotatingRemainder());
+
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // No partition was released, hence the remote reads already hold the whole request max bytes and keep their
+        // byte caps.
+        assertEquals(remoteMaxBytes, remoteFetchMaxBytes(delayedShareFetch));
+    }
+
+    @Test
+    public void testRemoteStorageFetchMaxBytesLeavesRequestBudgetForLocalPartitionData() {
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+        MemoryRecords tp0Records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(new byte[1000]));
+        // tp0 has data in the local log, tp1 has none and tp2 is in remote storage. The log read gave each of the 3
+        // acquired partitions a third of the request max bytes.
+        DelayedShareFetch delayedShareFetch = delayedShareFetchWithRemoteStorageReads(List.of(tp0, tp1, tp2),
+            Map.of(tp0, tp0Records, tp1, MemoryRecords.EMPTY), Map.of(tp2, FETCH_PARAMS.maxBytes / 3),
+            PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM));
+
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // The remote read gets all of the request max bytes except the bytes tp0 returned, which stay available for
+        // reading tp0 again once the remote fetch completes.
+        assertEquals(Map.of(tp2, FETCH_PARAMS.maxBytes - tp0Records.sizeInBytes()), remoteFetchMaxBytes(delayedShareFetch));
+    }
+
+    @Test
+    public void testRemoteStorageFetchMaxBytesLeavesShareOfPartitionNotReadInRequest() {
+        verifyRemoteStorageFetchMaxBytesLeavesShareOfPartitionNotReadInRequest(false);
+    }
+
+    @Test
+    public void testRemoteStorageFetchMaxBytesLeavesShareOfPartitionNotReadInRequestWithAsyncLogRead() {
+        verifyRemoteStorageFetchMaxBytesLeavesShareOfPartitionNotReadInRequest(true);
+    }
+
+    private void verifyRemoteStorageFetchMaxBytesLeavesShareOfPartitionNotReadInRequest(boolean asyncLogRead) {
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
+        CompletableFuture<Void> logReadCompletion = asyncLogRead ? new CompletableFuture<>() : CompletableFuture.completedFuture(null);
+        // The fetch offset metadata of tp0 is already known, hence tp0 is not read. tp1 has no data in the local log,
+        // tp2 and tp3 are in remote storage. The log read gave each of the 4 acquired partitions a quarter of the
+        // request max bytes.
+        DelayedShareFetch delayedShareFetch = delayedShareFetchWithRemoteStorageReads(List.of(tp0, tp1, tp2, tp3),
+            Map.of(tp1, MemoryRecords.EMPTY), Map.of(tp2, FETCH_PARAMS.maxBytes / 4, tp3, FETCH_PARAMS.maxBytes / 4),
+            PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM), logReadCompletion);
+        delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 10L, new LogOffsetMetadata(10L, 0, 0));
+
+        if (asyncLogRead) {
+            // The log read does not complete within tryComplete, hence its response is processed by the next
+            // tryComplete once the log read completes.
+            assertFalse(delayedShareFetch.tryComplete());
+            assertNotNull(delayedShareFetch.pendingFetch());
+            logReadCompletion.complete(null);
+        }
+        assertFalse(delayedShareFetch.tryComplete());
+
+        // How much data tp0 has is not known, hence its share of the request max bytes stays reserved for it, and the
+        // remote reads split only the share of tp1, so each remote read gets three eighths of the request max bytes.
+        assertEquals(Map.of(tp2, FETCH_PARAMS.maxBytes / 8 * 3, tp3, FETCH_PARAMS.maxBytes / 8 * 3),
+            remoteFetchMaxBytes(delayedShareFetch));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     public void testRemoteStorageFetchPartitionLeaderChanged() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
@@ -3389,6 +3569,110 @@ public class DelayedShareFetchTest {
         partitions.forEach(partition -> maxBytes.put(partition, 1));
         when(partitionMaxBytesStrategy.maxBytes(anyInt(), any(), anyInt())).thenReturn(maxBytes);
         return partitionMaxBytesStrategy;
+    }
+
+    /**
+     * Returns a strategy which splits the request max bytes like the UNIFORM strategy, except that it hands the
+     * remainder bytes to the first partition on its first call, to the second partition on its second call and so
+     * on, rather than to a random partition.
+     */
+    private static PartitionMaxBytesStrategy uniformStrategyWithRotatingRemainder() {
+        AtomicInteger calls = new AtomicInteger();
+        return (requestMaxBytes, partitions, acquiredPartitionsSize) -> {
+            int remainderIndex = calls.getAndIncrement() % partitions.size();
+            LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
+            int index = 0;
+            for (TopicIdPartition partition : partitions) {
+                int remainder = index == remainderIndex ? requestMaxBytes % acquiredPartitionsSize : 0;
+                partitionMaxBytes.put(partition, requestMaxBytes / acquiredPartitionsSize + remainder);
+                index++;
+            }
+            return partitionMaxBytes;
+        };
+    }
+
+    private DelayedShareFetch delayedShareFetchWithRemoteStorageReads(
+        List<TopicIdPartition> topicIdPartitions,
+        Map<TopicIdPartition, MemoryRecords> localRecords,
+        Map<TopicIdPartition, Integer> remoteMaxBytes,
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy
+    ) {
+        return delayedShareFetchWithRemoteStorageReads(topicIdPartitions, localRecords, remoteMaxBytes,
+            partitionMaxBytesStrategy, CompletableFuture.completedFuture(null));
+    }
+
+    /**
+     * Returns a DelayedShareFetch for the partitions, each of which is acquirable and fetched from offset 10. Once
+     * logReadCompletion completes, the log read returns the records in localRecords for the partitions in it, and a
+     * remote storage read with both byte caps set to the value in remoteMaxBytes for the partitions in it. The other
+     * partitions are not in the log read response. The remote storage reads do not complete.
+     */
+    @SuppressWarnings("unchecked")
+    private DelayedShareFetch delayedShareFetchWithRemoteStorageReads(
+        List<TopicIdPartition> topicIdPartitions,
+        Map<TopicIdPartition, MemoryRecords> localRecords,
+        Map<TopicIdPartition, Integer> remoteMaxBytes,
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy,
+        CompletableFuture<Void> logReadCompletion
+    ) {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        Uuid fetchId = Uuid.randomUuid();
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, LogReadResult> logReadResults = new LinkedHashMap<>();
+        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+            SharePartition sharePartition = mock(SharePartition.class);
+            when(sharePartition.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+            when(sharePartition.canAcquireRecords()).thenReturn(true);
+            when(sharePartition.nextFetchOffset()).thenReturn(10L);
+            sharePartitions.put(topicIdPartition, sharePartition);
+
+            Partition partition = mock(Partition.class);
+            when(partition.isLeader()).thenReturn(true);
+            when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition())).thenReturn(partition);
+
+            if (localRecords.containsKey(topicIdPartition)) {
+                logReadResults.put(topicIdPartition, logReadResult(
+                    new FetchDataInfo(new LogOffsetMetadata(10L, 0, 0), localRecords.get(topicIdPartition))));
+            } else if (remoteMaxBytes.containsKey(topicIdPartition)) {
+                int maxBytes = remoteMaxBytes.get(topicIdPartition);
+                RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(maxBytes, false, topicIdPartition,
+                    new FetchRequest.PartitionData(topicIdPartition.topicId(), 10L, 0, maxBytes, Optional.empty()),
+                    FetchIsolation.HIGH_WATERMARK);
+                logReadResults.put(topicIdPartition, logReadResult(new FetchDataInfo(new LogOffsetMetadata(10L, 0, 0),
+                    MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(remoteStorageFetchInfo))));
+            }
+        }
+
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(remoteLogManager.asyncRead(any(), any())).thenReturn(mock(Future.class));
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(), new CompletableFuture<>(),
+            topicIdPartitions, BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+        return DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManagerLogReader(replicaManager)
+            .withLogReader((fetchParams, partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes, readRemote) ->
+                logReadCompletion.thenApply(ignored -> new LinkedHashMap<>(logReadResults)))
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withFetchId(fetchId)
+            .build();
+    }
+
+    private static LogReadResult logReadResult(FetchDataInfo fetchDataInfo) {
+        return new LogReadResult(fetchDataInfo, Optional.empty(), -1L, -1L, -1L, -1L, -1L, OptionalLong.empty(),
+            OptionalInt.empty(), Errors.NONE);
+    }
+
+    /**
+     * Returns the fetchMaxBytes of each remote storage read scheduled by the DelayedShareFetch.
+     */
+    private static Map<TopicIdPartition, Integer> remoteFetchMaxBytes(DelayedShareFetch delayedShareFetch) {
+        Map<TopicIdPartition, Integer> remoteFetchMaxBytes = new LinkedHashMap<>();
+        delayedShareFetch.pendingRemoteFetches().remoteFetches().forEach(remoteFetch ->
+            remoteFetchMaxBytes.put(remoteFetch.topicIdPartition(), remoteFetch.remoteFetchInfo().fetchMaxBytes()));
+        return remoteFetchMaxBytes;
     }
 
     private Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLocalAndRemoteFetchResult(

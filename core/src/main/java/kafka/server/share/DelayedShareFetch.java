@@ -28,6 +28,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -755,7 +756,7 @@ public class DelayedShareFetch extends DelayedOperation {
         if (!remoteStorageFetchInfoMap.isEmpty()) {
             // Some data is in remote storage - initiate remote fetch
             // This will transition to remote fetch state (pendingRemoteFetchesOpt)
-            return maybeProcessRemoteFetch(topicPartitionData, remoteStorageFetchInfoMap);
+            return maybeProcessRemoteFetch(topicPartitionData, readResponse, remoteStorageFetchInfoMap);
         }
 
         // All data is fetched - update cached metadata for future requests
@@ -953,6 +954,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private boolean maybeProcessRemoteFetch(
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResponse,
         LinkedHashMap<TopicIdPartition, LogReadResult> remoteStorageFetchInfoMap
     ) {
         Set<TopicIdPartition> nonRemoteFetchTopicPartitions = new LinkedHashSet<>();
@@ -962,6 +964,12 @@ public class DelayedShareFetch extends DelayedOperation {
                 nonRemoteFetchTopicPartitions.add(topicIdPartition);
             }
         });
+        // The non-remote partitions are read again once the remote fetch completes, hence reserve the part of the
+        // request budget they need before deciding how much of it the remote reads can use. Compute it before the
+        // non-remote partitions are removed from partitionsAcquired below, as on the slow path topicPartitionData
+        // is partitionsAcquired.
+        long nonRemoteFetchReservedBytes = nonRemoteFetchReservedBytes(
+            topicPartitionData.size(), nonRemoteFetchTopicPartitions, readResponse);
         // Release fetch lock for the topic partitions that were acquired but were not a part of remote fetch and add
         // them to the delayed actions queue.
         releasePartitionLocksAndAddToActionQueue(nonRemoteFetchTopicPartitions, nonRemoteFetchTopicPartitions);
@@ -974,7 +982,7 @@ public class DelayedShareFetch extends DelayedOperation {
         // acquired). On the fast path partitionsAcquired only holds the remote partitions, so this is a
         // no-op there.
         nonRemoteFetchTopicPartitions.forEach(partitionsAcquired::remove);
-        processRemoteFetchOrException(remoteStorageFetchInfoMap);
+        processRemoteFetchOrException(remoteStorageFetchInfoMap, nonRemoteFetchReservedBytes);
         // Check if remote fetch can be completed.
         return maybeCompletePendingRemoteFetch();
     }
@@ -1004,20 +1012,32 @@ public class DelayedShareFetch extends DelayedOperation {
     /**
      * Throws an exception if a task for remote storage fetch could not be scheduled successfully else updates pendingRemoteFetchesOpt.
      * @param remoteStorageFetchInfoMap - The remote storage fetch information.
+     * @param nonRemoteFetchReservedBytes - The part of the request budget reserved for the non-remote partitions.
      */
     private void processRemoteFetchOrException(
-        LinkedHashMap<TopicIdPartition, LogReadResult> remoteStorageFetchInfoMap
+        LinkedHashMap<TopicIdPartition, LogReadResult> remoteStorageFetchInfoMap,
+        long nonRemoteFetchReservedBytes
     ) {
         LinkedHashMap<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadataMap = new LinkedHashMap<>();
         remoteStorageFetchInfoMap.forEach((topicIdPartition, logReadResult) -> fetchOffsetMetadataMap.put(
             topicIdPartition,
             logReadResult.info().fetchOffsetMetadata
         ));
+        // The byte caps of the remote reads were computed by dividing the request budget across all the acquired
+        // partitions. The non-remote partitions have been released, and are read again once the remote fetch
+        // completes with the request budget left after the remote reads. Hence, top up the remote reads with the
+        // part of the request budget which is neither allocated to them nor reserved for the non-remote partitions.
+        // This hands the remote reads the share of the non-remote partitions which have no data to return, without
+        // taking away the share of the ones which do, and keeps the remote caps within the request budget.
+        Map<TopicIdPartition, Integer> remoteFetchExtraBytes = remoteFetchExtraBytes(
+            remoteStorageFetchInfoMap, nonRemoteFetchReservedBytes);
 
         List<RemoteFetch> remoteFetches = new ArrayList<>();
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : remoteStorageFetchInfoMap.entrySet()) {
             TopicIdPartition remoteFetchTopicIdPartition = entry.getKey();
-            RemoteStorageFetchInfo remoteStorageFetchInfo = entry.getValue().info().delayedRemoteStorageFetch.get();
+            RemoteStorageFetchInfo remoteStorageFetchInfo = maybeTopUpRemoteStorageFetchInfo(
+                entry.getValue().info().delayedRemoteStorageFetch.get(),
+                remoteFetchExtraBytes.getOrDefault(remoteFetchTopicIdPartition, 0));
 
             Future<Void> remoteFetchTask;
             CompletableFuture<RemoteLogReadResult> remoteFetchResult = new CompletableFuture<>();
@@ -1039,6 +1059,105 @@ public class DelayedShareFetch extends DelayedOperation {
             remoteFetches.add(new RemoteFetch(remoteFetchTopicIdPartition, entry.getValue(), remoteFetchTask, remoteFetchResult, remoteStorageFetchInfo));
         }
         pendingRemoteFetchesOpt = Optional.of(new PendingRemoteFetches(remoteFetches, fetchOffsetMetadataMap));
+    }
+
+    /**
+     * Returns the part of the request budget to reserve for the non-remote partitions, which are released while the
+     * remote fetch is in flight and read again once it completes. A partition read in this request reserves the bytes
+     * its read returned. A partition not read in this request, as its fetch offset metadata was already known, reserves
+     * the share of the request budget the partition max bytes strategy assigns to it.
+     *
+     * @param acquiredPartitionsSize - The number of partitions acquired by this request.
+     * @param nonRemoteFetchTopicPartitions - The acquired partitions which are not read from remote storage.
+     * @param readResponse - The log read response of this request.
+     * @return The number of bytes to reserve for the non-remote partitions.
+     */
+    private long nonRemoteFetchReservedBytes(
+        int acquiredPartitionsSize,
+        Set<TopicIdPartition> nonRemoteFetchTopicPartitions,
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResponse
+    ) {
+        long reservedBytes = 0;
+        Set<TopicIdPartition> partitionsNotRead = new LinkedHashSet<>();
+        for (TopicIdPartition topicIdPartition : nonRemoteFetchTopicPartitions) {
+            LogReadResult logReadResult = readResponse.get(topicIdPartition);
+            if (logReadResult != null) {
+                reservedBytes += logReadResult.info().records.sizeInBytes();
+            } else {
+                partitionsNotRead.add(topicIdPartition);
+            }
+        }
+        // Erroneous partitions are not read again, hence they do not need a share.
+        Set<TopicIdPartition> partitionsToReserveShare = shareFetch.filterErroneousTopicPartitions(partitionsNotRead);
+        if (!partitionsToReserveShare.isEmpty()) {
+            for (int partitionMaxBytes : partitionMaxBytesStrategy.maxBytes(
+                shareFetch.fetchParams().maxBytes, partitionsToReserveShare, acquiredPartitionsSize).values()) {
+                reservedBytes += partitionMaxBytes;
+            }
+        }
+        return reservedBytes;
+    }
+
+    /**
+     * Returns the bytes to add to the byte cap of each remote read: the part of the request budget which is neither
+     * allocated to the remote reads nor reserved for the non-remote partitions, divided across the remote reads by
+     * the partition max bytes strategy. Empty if no part of the request budget is left over.
+     *
+     * @param remoteStorageFetchInfoMap - The remote storage fetch information.
+     * @param nonRemoteFetchReservedBytes - The part of the request budget reserved for the non-remote partitions.
+     * @return The bytes to add to the byte cap of each remote read.
+     */
+    private Map<TopicIdPartition, Integer> remoteFetchExtraBytes(
+        LinkedHashMap<TopicIdPartition, LogReadResult> remoteStorageFetchInfoMap,
+        long nonRemoteFetchReservedBytes
+    ) {
+        long remoteFetchAllocatedBytes = 0;
+        for (LogReadResult logReadResult : remoteStorageFetchInfoMap.values()) {
+            remoteFetchAllocatedBytes += effectiveMaxBytes(logReadResult.info().delayedRemoteStorageFetch.get());
+        }
+        long leftOverBytes = shareFetch.fetchParams().maxBytes - remoteFetchAllocatedBytes - nonRemoteFetchReservedBytes;
+        if (leftOverBytes <= 0) {
+            return Map.of();
+        }
+        return partitionMaxBytesStrategy.maxBytes(
+            (int) leftOverBytes, remoteStorageFetchInfoMap.keySet(), remoteStorageFetchInfoMap.size());
+    }
+
+    /**
+     * Returns the byte cap of a remote read, which RemoteLogManager.read takes as the minimum of fetchMaxBytes and
+     * the partition-level maxBytes.
+     */
+    private static int effectiveMaxBytes(RemoteStorageFetchInfo remoteStorageFetchInfo) {
+        return Math.min(remoteStorageFetchInfo.fetchMaxBytes(), remoteStorageFetchInfo.fetchInfo().maxBytes);
+    }
+
+    /**
+     * Returns a copy of the remote storage fetch info with its byte cap raised by extraBytes, or the remote storage
+     * fetch info itself if there are no extra bytes. Both fetchMaxBytes and the partition-level maxBytes are replaced,
+     * as the remote read is capped by the minimum of the two.
+     */
+    private static RemoteStorageFetchInfo maybeTopUpRemoteStorageFetchInfo(
+        RemoteStorageFetchInfo remoteStorageFetchInfo,
+        int extraBytes
+    ) {
+        if (extraBytes <= 0) {
+            return remoteStorageFetchInfo;
+        }
+        int maxBytes = effectiveMaxBytes(remoteStorageFetchInfo) + extraBytes;
+        FetchRequest.PartitionData partitionData = remoteStorageFetchInfo.fetchInfo();
+        return new RemoteStorageFetchInfo(
+            maxBytes,
+            remoteStorageFetchInfo.minOneMessage(),
+            remoteStorageFetchInfo.topicIdPartition(),
+            new FetchRequest.PartitionData(
+                partitionData.topicId,
+                partitionData.fetchOffset,
+                partitionData.logStartOffset,
+                maxBytes,
+                partitionData.currentLeaderEpoch,
+                partitionData.lastFetchedEpoch),
+            remoteStorageFetchInfo.fetchIsolation()
+        );
     }
 
     /**
