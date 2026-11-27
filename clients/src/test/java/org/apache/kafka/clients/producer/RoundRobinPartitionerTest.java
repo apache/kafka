@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -95,5 +96,35 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
+    }
+
+    @Test
+    public void testRoundRobinStartsFromInitialCounterValue() {
+        final String topic = "test";
+        final int numPartitions = 10;
+        List<PartitionInfo> partitions = new ArrayList<>();
+        for (int i = 0; i < numPartitions; i++) {
+            partitions.add(new PartitionInfo(topic, i, NODES[i % NODES.length], NODES, NODES));
+        }
+        Cluster cluster = new Cluster("clusterId", asList(NODES), partitions,
+            Collections.emptySet(), Collections.emptySet());
+
+        Partitioner partitioner = new FixedStartPartitioner(7);
+        for (int i = 0; i < 2 * numPartitions; i++) {
+            assertEquals((7 + i) % numPartitions, partitioner.partition(topic, null, null, null, null, cluster));
+        }
+    }
+
+    private static class FixedStartPartitioner extends RoundRobinPartitioner {
+        private final int initialCounterValue;
+
+        FixedStartPartitioner(int initialCounterValue) {
+            this.initialCounterValue = initialCounterValue;
+        }
+
+        @Override
+        int initialCounterValue() {
+            return initialCounterValue;
+        }
     }
 }
