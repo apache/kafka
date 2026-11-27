@@ -35,6 +35,7 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.LongConsumer;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
@@ -48,6 +49,7 @@ class NamedCache {
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
+    private final LongConsumer sizeChangeListener;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor hitRatioSensor;
@@ -60,6 +62,11 @@ class NamedCache {
     private long numFlushes = 0;
 
     NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
+        this(name, streamsMetrics, delta -> { });
+    }
+
+    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics, final LongConsumer sizeChangeListener) {
+        this.sizeChangeListener = sizeChangeListener;
         this.name = name;
         this.streamsMetrics = streamsMetrics;
         storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
@@ -136,7 +143,6 @@ class NamedCache {
         }
 
         final List<ThreadCache.DirtyEntry> entries = new ArrayList<>();
-        final List<Bytes> deleted = new ArrayList<>();
 
         // evicted already been removed from the cache so add it to the list of
         // flushed entries and remove from dirtyKeys.
@@ -152,16 +158,26 @@ class NamedCache {
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value(), node.entry));
             node.entry.markClean();
-            if (node.entry.value() == null) {
-                deleted.add(node.key);
-            }
         }
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
         resetDirtyKeys();
         listener.apply(entries);
-        for (final Bytes key : deleted) {
-            delete(key);
+        for (final ThreadCache.DirtyEntry flushed : entries) {
+            final LRUNode node = cache.get(flushed.key());
+            // A re-entrant listener may have replaced or removed the flushed entry. Evicted entries
+            // have already been charged out, and must not be subtracted again.
+            if (node != null && node.entry == flushed.entry() && !node.entry.isDirty()) {
+                if (node.entry.value() == null) {
+                    delete(node.key);
+                } else {
+                    node.entry.freeRawRecord();
+                    final long previousSize = node.size();
+                    node.update(node.entry);
+                    updateSize(node.size() - previousSize);
+                }
+            }
         }
+        totalCacheSizeSensor.record(currentSizeBytes);
     }
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
@@ -177,7 +193,7 @@ class NamedCache {
         if (node != null) {
             numOverwrites++;
 
-            currentSizeBytes -= node.size();
+            updateSize(-node.size());
             node.update(value);
             updateLRU(node);
         } else {
@@ -192,8 +208,13 @@ class NamedCache {
             dirtyKeys.add(key);
             dirtyKeysPeak = Math.max(dirtyKeysPeak, dirtyKeys.size());
         }
-        currentSizeBytes += node.size();
+        updateSize(node.size());
         totalCacheSizeSensor.record(currentSizeBytes);
+    }
+
+    private void updateSize(final long delta) {
+        currentSizeBytes += delta;
+        sizeChangeListener.accept(delta);
     }
 
     synchronized long sizeInBytes() {
@@ -249,7 +270,7 @@ class NamedCache {
             return;
         }
         final LRUNode eldest = tail;
-        currentSizeBytes -= eldest.size();
+        updateSize(-eldest.size());
         remove(eldest);
         cache.remove(eldest.key);
         if (eldest.entry.isDirty()) {
@@ -281,7 +302,7 @@ class NamedCache {
 
         remove(node);
         dirtyKeys.remove(key);
-        currentSizeBytes -= node.size();
+        updateSize(-node.size());
         totalCacheSizeSensor.record(currentSizeBytes);
         return node.entry();
     }
@@ -363,7 +384,7 @@ class NamedCache {
     synchronized void close() {
         head = tail = null;
         listener = null;
-        currentSizeBytes = 0;
+        updateSize(-currentSizeBytes);
         dirtyKeys.clear();
         cache.clear();
         streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
@@ -371,7 +392,7 @@ class NamedCache {
 
     synchronized void clear() {
         head = tail = null;
-        currentSizeBytes = 0;
+        updateSize(-currentSizeBytes);
         resetDirtyKeys();
         cache.clear();
     }
@@ -393,12 +414,15 @@ class NamedCache {
     static class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
+        // Each node owns its charge, even if callers reuse an entry instance for different keys.
+        private long entrySize;
         private LRUNode previous;
         private LRUNode next;
 
         LRUNode(final Bytes key, final LRUCacheEntry entry) {
             this.key = key;
             this.entry = entry;
+            entrySize = entry.size();
         }
 
         LRUCacheEntry entry() {
@@ -414,7 +438,7 @@ class NamedCache {
                 8 + // entry
                 8 + // previous
                 8 + // next
-                entry.size();
+                entrySize;
         }
 
         LRUNode next() {
@@ -427,6 +451,7 @@ class NamedCache {
 
         private void update(final LRUCacheEntry entry) {
             this.entry = entry;
+            entrySize = entry.size();
         }
     }
 

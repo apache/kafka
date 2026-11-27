@@ -1264,7 +1264,7 @@ public class CachingPersistentWindowStoreTest {
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
             cachingStore.put(bytesKey(kv), bytesValue(kv), DEFAULT_TIMESTAMP);
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC) +
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC, 0, 0) +
                 8 + // timestamp
                 4; // sequenceNumber
         }

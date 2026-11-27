@@ -763,7 +763,19 @@ public class TimeOrderedWindowStoreTest {
     public void shouldForwardDirtyItemToListenerWhenEvicted(final boolean hasIndex) {
         setUp(hasIndex);
         final int numRecords = addItemsToCache();
+        assertTrue(cache.evicts() > 0);
+        assertFalse(cacheListener.forwarded.isEmpty());
+        // Eviction forwards dirty entries, but later writes can remain cached. Do not depend on
+        // an extra index sentinel forcing another flush of the entire namespace.
+        cachingStore.commit(Map.of());
         assertEquals(numRecords, cacheListener.forwarded.size());
+        for (int i = 0; i < numRecords; i++) {
+            final String value = String.valueOf(i);
+            final Windowed<String> key = new Windowed<>(value,
+                new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+            assertEquals(value, cacheListener.forwarded.get(key).newValue);
+            assertArrayEquals(bytesValue(value), underlyingStore.fetch(bytesKey(value), DEFAULT_TIMESTAMP));
+        }
     }
 
     @ParameterizedTest
@@ -1286,7 +1298,7 @@ public class TimeOrderedWindowStoreTest {
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
             cachingStore.put(bytesKey(kv), bytesValue(kv), DEFAULT_TIMESTAMP);
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC) +
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), TOPIC, 0, 0) +
                 8 + // timestamp
                 4; // sequenceNumber
         }
