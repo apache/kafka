@@ -3587,6 +3587,55 @@ public abstract class ConsumerCoordinatorTest {
         }
     }
 
+    /**
+     * KAFKA-17734: close() must honor its timeout even if a JoinGroup response electing this member as
+     * leader is handled inline by the poll in maybeLeaveGroup() while no broker is available to serve
+     * the metadata refresh that onLeaderElected() waits for.
+     */
+    @Test
+    public void testCloseDoesNotBlockOnMetadataWhenElectedLeaderDuringClose() throws Exception {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.empty(), true)) {
+            // A rebalance starts: the JoinGroup request is sent, but its response is still in flight
+            // when the application decides to close the consumer.
+            coordinator.requestRejoin("test rebalance");
+            assertFalse(coordinator.poll(time.timer(0)));
+            assertEquals(1, client.inFlightRequestCount());
+
+            // The group now contains another member subscribed to a topic this consumer is not, so the
+            // elected leader has to refresh its metadata before it can perform the assignment.
+            Map<String, List<String>> memberSubscriptions = new HashMap<>();
+            memberSubscriptions.put(consumerId, singletonList(topic1));
+            memberSubscriptions.put(consumerId2, singletonList(topic2));
+            JoinGroupResponse joinResponse = joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE);
+
+            // When close() sends the LeaveGroup request, deliver the pending JoinGroup response ahead of
+            // the LeaveGroup response and make the brokers unreachable so that no metadata update can complete.
+            client.prepareResponse(body -> {
+                if (!(body instanceof LeaveGroupRequest))
+                    return false;
+                client.respond(request -> request instanceof JoinGroupRequest, joinResponse);
+                client.backoff(node, 60 * 60 * 1000L);
+                return true;
+            }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
+
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                Future<?> future = executor.submit(
+                    () -> coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT));
+                try {
+                    future.get(5, TimeUnit.SECONDS);
+                } catch (TimeoutException e) {
+                    fail("close() with a zero timeout did not return: it is blocked waiting for a metadata update");
+                }
+            } finally {
+                // Let a stuck close() finish so that the coordinator lock is released for the cleanup.
+                client.backoff(node, 0);
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
     @Test
     public void testHeartbeatThreadClose() throws Exception {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, groupInstanceId, true)) {
