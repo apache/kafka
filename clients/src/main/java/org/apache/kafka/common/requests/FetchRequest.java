@@ -40,8 +40,6 @@ import java.util.stream.Collectors;
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
 
-    // default values for older versions where a request level limit did not exist
-    public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
     public static final long INVALID_LOG_START_OFFSET = -1L;
 
     public static final int ORDINARY_CONSUMER_ID = -1;
@@ -156,7 +154,7 @@ public class FetchRequest extends AbstractRequest {
         private final long replicaEpoch;
         private final Map<TopicPartition, PartitionData> toFetch;
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
+        private int maxBytes = Integer.MAX_VALUE;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
         private List<TopicIdPartition> removed = List.of();
         private List<TopicIdPartition> replaced = List.of();
@@ -244,10 +242,6 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public FetchRequest build(short version) {
-            if (version < 3) {
-                maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
-            }
-
             FetchRequestData fetchRequestData = new FetchRequestData();
             fetchRequestData.setMaxWaitMs(maxWait);
             fetchRequestData.setMinBytes(minBytes);
