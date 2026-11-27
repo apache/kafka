@@ -199,7 +199,6 @@ public class UnifiedLog implements AutoCloseable {
      * @param remoteStorageSystemEnable flag to indicate whether the system level remote log storage is enabled or not.
      * @param logOffsetsListener listener invoked when the high watermark is updated
      */
-    @SuppressWarnings({"this-escape"})
     public UnifiedLog(long logStartOffset,
                       LocalLog localLog,
                       BrokerTopicStats brokerTopicStats,
@@ -209,6 +208,30 @@ public class UnifiedLog implements AutoCloseable {
                       Optional<Uuid> topicId,
                       boolean remoteStorageSystemEnable,
                       LogOffsetsListener logOffsetsListener) throws IOException {
+        this(logStartOffset, localLog, brokerTopicStats, producerIdExpirationCheckIntervalMs, leaderEpochCache,
+            producerStateManager, topicId, remoteStorageSystemEnable, logOffsetsListener, true);
+    }
+
+    /**
+     * Same as the constructor above, with control over when the log gauges are registered.
+     *
+     * @param registerMetrics if true the {@code kafka.log:type=Log} gauges are registered at the end of construction.
+     *                        If false the caller owns the registration and must call {@link #newMetrics()} once the
+     *                        log is known to be tracked. Metric names only contain the topic partition, so gauges of
+     *                        a log that is dropped right after loading (a stray or to-be-deleted directory found at
+     *                        startup) would otherwise collide with the gauges of a live replica of the same partition.
+     */
+    @SuppressWarnings({"this-escape"})
+    public UnifiedLog(long logStartOffset,
+                      LocalLog localLog,
+                      BrokerTopicStats brokerTopicStats,
+                      int producerIdExpirationCheckIntervalMs,
+                      LeaderEpochFileCache leaderEpochCache,
+                      ProducerStateManager producerStateManager,
+                      Optional<Uuid> topicId,
+                      boolean remoteStorageSystemEnable,
+                      LogOffsetsListener logOffsetsListener,
+                      boolean registerMetrics) throws IOException {
         this.logStartOffset = logStartOffset;
         this.localLog = localLog;
         this.brokerTopicStats = brokerTopicStats;
@@ -237,7 +260,8 @@ public class UnifiedLog implements AutoCloseable {
         initializeTopicId();
 
         logOffsetsListener.onHighWatermarkUpdated(highWatermarkMetadata.messageOffset);
-        newMetrics();
+        if (registerMetrics)
+            newMetrics();
     }
 
     /**
@@ -324,6 +348,50 @@ public class UnifiedLog implements AutoCloseable {
                                     ConcurrentMap<String, Integer> numRemainingSegments,
                                     boolean remoteStorageSystemEnable,
                                     LogOffsetsListener logOffsetsListener) throws IOException {
+        return create(dir,
+                config,
+                logStartOffset,
+                recoveryPoint,
+                scheduler,
+                brokerTopicStats,
+                time,
+                maxTransactionTimeoutMs,
+                producerStateManagerConfig,
+                producerIdExpirationCheckIntervalMs,
+                logDirFailureChannel,
+                lastShutdownClean,
+                topicId,
+                numRemainingSegments,
+                remoteStorageSystemEnable,
+                logOffsetsListener,
+                true);
+    }
+
+    /**
+     * Create a new UnifiedLog instance, optionally deferring the registration of the log gauges.
+     * See {@link #create(File, LogConfig, long, long, Scheduler, BrokerTopicStats, Time, int, ProducerStateManagerConfig, int,
+     * LogDirFailureChannel, boolean, Optional, ConcurrentMap, boolean, LogOffsetsListener)} for the other parameters.
+     * @param registerMetrics if false the gauges are not registered and the caller must call {@link #newMetrics()}
+     *                        once the log is known to be tracked, see the constructor for the rationale.
+     * @throws IOException if an I/O error occurs
+     */
+    public static UnifiedLog create(File dir,
+                                    LogConfig config,
+                                    long logStartOffset,
+                                    long recoveryPoint,
+                                    Scheduler scheduler,
+                                    BrokerTopicStats brokerTopicStats,
+                                    Time time,
+                                    int maxTransactionTimeoutMs,
+                                    ProducerStateManagerConfig producerStateManagerConfig,
+                                    int producerIdExpirationCheckIntervalMs,
+                                    LogDirFailureChannel logDirFailureChannel,
+                                    boolean lastShutdownClean,
+                                    Optional<Uuid> topicId,
+                                    ConcurrentMap<String, Integer> numRemainingSegments,
+                                    boolean remoteStorageSystemEnable,
+                                    LogOffsetsListener logOffsetsListener,
+                                    boolean registerMetrics) throws IOException {
         // create the log directory if it doesn't exist
         Files.createDirectories(dir.toPath());
         TopicPartition topicPartition = UnifiedLog.parseTopicPartitionName(dir);
@@ -378,7 +446,8 @@ public class UnifiedLog implements AutoCloseable {
                 producerStateManager,
                 topicId,
                 remoteStorageSystemEnable,
-                logOffsetsListener);
+                logOffsetsListener,
+                registerMetrics);
     }
 
     public long localLogStartOffset() {

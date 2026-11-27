@@ -1591,4 +1591,102 @@ public class LogManagerTest {
         assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
         assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
     }
+
+    @Test
+    public void testLoadLogRegistersMetricsForTrackedLog() throws IOException {
+        String testTopic = "test-tracked-metrics-topic";
+        File replicaDir = new File(logDir, testTopic + "-0");
+        replicaDir.mkdirs();
+
+        logManager.loadLog(replicaDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertEquals(5, logMetricsOfTopic(testTopic).size());
+    }
+
+    @Test
+    public void testLoadStrayDirDoesNotRegisterLogMetrics() throws IOException {
+        String testTopic = "test-stray-metrics-topic";
+        TopicPartition tp = new TopicPartition(testTopic, 0);
+        File strayDir = new File(logDir, UnifiedLog.logStrayDirName(tp));
+        strayDir.mkdirs();
+
+        logManager.loadLog(strayDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertEquals(Set.of(), logMetricsOfTopic(testTopic));
+    }
+
+    @Test
+    public void testLoadReplicaFlaggedStrayDoesNotRegisterLogMetrics() throws IOException {
+        String testTopic = "test-flagged-stray-metrics-topic";
+        File replicaDir = new File(logDir, testTopic + "-0");
+        replicaDir.mkdirs();
+
+        UnifiedLog loaded = logManager.loadLog(replicaDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> true);
+
+        assertTrue(loaded.dir().getName().endsWith(UnifiedLog.STRAY_DIR_SUFFIX), "expected rename to *-stray");
+        assertEquals(Set.of(), logMetricsOfTopic(testTopic));
+    }
+
+    @Test
+    public void testLoadDeleteDirDoesNotRegisterLogMetrics() throws IOException {
+        String testTopic = "test-delete-metrics-topic";
+        TopicPartition tp = new TopicPartition(testTopic, 0);
+        File deleteDir = new File(logDir, UnifiedLog.logDeleteDirName(tp));
+        deleteDir.mkdirs();
+
+        logManager.loadLog(deleteDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertEquals(Set.of(), logMetricsOfTopic(testTopic));
+    }
+
+    @Test
+    public void testLoadStrayDirKeepsLiveReplicaMetrics() throws IOException {
+        TopicPartition tp = new TopicPartition("test-collide-stray-topic", 0);
+        Set<MetricName> liveMetrics = createLiveLogAndGetMetrics(tp);
+
+        File strayDir = new File(logDir, UnifiedLog.logStrayDirName(tp));
+        strayDir.mkdirs();
+        logManager.loadLog(strayDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertEquals(liveMetrics, logMetricsOfTopic(tp.topic()));
+    }
+
+    @Test
+    public void testLoadDeleteDirKeepsLiveReplicaMetrics() throws IOException {
+        TopicPartition tp = new TopicPartition("test-collide-delete-topic", 0);
+        Set<MetricName> liveMetrics = createLiveLogAndGetMetrics(tp);
+
+        File deleteDir = new File(logDir, UnifiedLog.logDeleteDirName(tp));
+        deleteDir.mkdirs();
+        logManager.loadLog(deleteDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> false);
+
+        assertEquals(liveMetrics, logMetricsOfTopic(tp.topic()));
+    }
+
+    @Test
+    public void testLoadReplicaFlaggedStrayKeepsLiveReplicaMetrics() throws IOException {
+        TopicPartition tp = new TopicPartition("test-collide-flagged-topic", 0);
+        Set<MetricName> liveMetrics = createLiveLogAndGetMetrics(tp);
+
+        // The same partition is found in another log directory and flagged stray.
+        File otherDir = TestUtils.tempDirectory();
+        File replicaDir = new File(otherDir, tp.topic() + "-0");
+        replicaDir.mkdirs();
+        logManager.loadLog(replicaDir, true, Map.of(), Map.of(), LOG_CONFIG, Map.of(), new ConcurrentHashMap<>(), log -> true);
+
+        assertEquals(liveMetrics, logMetricsOfTopic(tp.topic()));
+    }
+
+    private Set<MetricName> createLiveLogAndGetMetrics(TopicPartition tp) throws IOException {
+        logManager.getOrCreateLog(tp, Optional.of(Uuid.randomUuid()));
+        Set<MetricName> metrics = logMetricsOfTopic(tp.topic());
+        assertEquals(5, metrics.size());
+        return metrics;
+    }
+
+    private Set<MetricName> logMetricsOfTopic(String topic) {
+        return KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
+                .filter(m -> m.getType().equals("Log") && m.getMBeanName().contains("topic=" + topic + ","))
+                .collect(Collectors.toSet());
+    }
 }
