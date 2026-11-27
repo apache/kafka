@@ -62,7 +62,7 @@ public class ChunkedByteBufferOutputStreamTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ChunkedByteBufferOutputStream(Collections.emptyList(), chunkSize, p));
 
-        // A chunk whose capacity doesn't match chunkSize violates the contract.
+        // A chunk whose capacity exceeds chunkSize violates the contract.
         List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
         assertThrows(IllegalArgumentException.class,
             () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p));
@@ -96,6 +96,47 @@ public class ChunkedByteBufferOutputStreamTest {
                 stream.deallocate();
             });
         }
+    }
+
+    /** A chunk smaller than the chunk size (handed out by the pool from leftover memory) is accepted and written across. */
+    @Test
+    public void testInitialCapacityIsFirstChunkCapacity() throws Exception {
+        int chunkSize = 16;
+        BufferPool p = pool(20, chunkSize);
+        List<ByteBuffer> whole = p.allocateChunks(chunkSize, 100);
+        List<ByteBuffer> remainder = p.allocateChunks(4, 100);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(remainder, chunkSize, p)) {
+            assertEquals(4, stream.initialCapacity());
+            stream.deallocate();
+        }
+        p.deallocate(whole.get(0));
+        assertEquals(20, p.availableMemory());
+    }
+
+    @Test
+    public void testSmallerChunkAccepted() throws Exception {
+        int chunkSize = 16;
+        BufferPool p = pool(20, chunkSize);
+        List<ByteBuffer> initial = p.allocateChunks(20, 100);
+        assertEquals(4, initial.get(1).capacity());
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(initial, chunkSize, p)) {
+            assertEquals(20, stream.attachedCapacity());
+            assertEquals(20, stream.remaining());
+
+            byte[] data = new byte[20];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = (byte) i;
+            }
+            stream.write(data, 0, data.length);
+            assertEquals(20, stream.position());
+            assertEquals(0, stream.remaining());
+
+            stream.close();
+            assertArrayEquals(data, stream.buffer().array());
+
+            stream.deallocate();
+        }
+        assertEquals(20, p.availableMemory());
     }
 
     @Test
@@ -227,7 +268,7 @@ public class ChunkedByteBufferOutputStreamTest {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
-            // A chunk whose capacity doesn't match chunkSize violates the contract, same as the constructor.
+            // A chunk whose capacity exceeds chunkSize violates the contract, same as the constructor.
             List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
             assertThrows(IllegalArgumentException.class, () -> stream.addBuffers(wrongSize));
 

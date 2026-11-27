@@ -26,15 +26,18 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,6 +118,213 @@ public class BufferPoolChunkAllocationTest {
     public void testRejectsRequestExceedingTotalMemory() {
         BufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(129, 100));
+    }
+
+    /**
+     * When the total memory is not a multiple of the chunk size, a request that fits in the total
+     * memory but not in whole chunks is served with the remainder chunk as the last chunk.
+     */
+    @Test
+    public void testAllocateRemainderChunkWhenTotalMemoryNotChunkAligned() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(100, chunkSize);
+        List<ByteBuffer> chunks = p.allocateChunks(80, 0);
+        assertEquals(2, chunks.size());
+        assertEquals(chunkSize, chunks.get(0).capacity());
+        assertEquals(36, chunks.get(1).capacity());
+        assertEquals(0, p.availableMemory());
+
+        for (ByteBuffer chunk : chunks) {
+            p.deallocate(chunk);
+        }
+        assertEquals(100, p.availableMemory());
+        assertEquals(0, p.unallocatedMemory());
+    }
+
+    /** Like whole chunks, the remainder chunk is reused once returned. */
+    @Test
+    public void testRemainderChunkIsReused() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(100, chunkSize);
+        List<ByteBuffer> first = p.allocateChunks(80, 0);
+        for (ByteBuffer chunk : first) {
+            p.deallocate(chunk);
+        }
+
+        List<ByteBuffer> second = p.allocateChunks(80, 0);
+        assertEquals(2, second.size());
+        assertSame(first.get(0), second.get(0));
+        assertSame(first.get(1), second.get(1));
+        assertEquals(0, p.availableMemory());
+    }
+
+    /** On an error allocating a whole chunk, the reserved remainder chunk is returned along with the rest. */
+    @Test
+    public void testRemainderChunkRefundedOnAllocationError() throws Exception {
+        int chunkSize = 64;
+        AtomicBoolean failAllocation = new AtomicBoolean(true);
+        BufferPool p = new BufferPool(100, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                if (failAllocation.get()) {
+                    throw new OutOfMemoryError();
+                }
+                return super.allocateByteBuffer(size);
+            }
+        };
+
+        assertThrows(OutOfMemoryError.class, () -> p.allocateChunks(80, 0));
+        assertEquals(100, p.availableMemory());
+
+        failAllocation.set(false);
+        List<ByteBuffer> chunks = p.allocateChunks(80, 0);
+        assertEquals(2, chunks.size());
+        assertEquals(36, chunks.get(1).capacity());
+        assertEquals(0, p.availableMemory());
+    }
+
+    /** The pooled remainder chunk is taken only once the free list doesn't cover the request. */
+    @Test
+    public void testPooledRemainderChunkTakenAfterFreeList() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(2L * chunkSize + 36, chunkSize);
+        ByteBuffer a = p.allocateChunks(chunkSize, 0).get(0);
+        ByteBuffer b = p.allocateChunks(chunkSize, 0).get(0);
+        ByteBuffer remainder = p.allocateChunks(10, 0).get(0);
+        assertEquals(36, remainder.capacity());
+        p.deallocate(remainder);
+        p.deallocate(a);
+        p.deallocate(b);
+
+        List<ByteBuffer> chunks = p.allocateChunks(2 * chunkSize, 0);
+        assertEquals(List.of(a, b), chunks);
+        assertEquals(36, p.availableMemory());
+        for (ByteBuffer chunk : chunks) {
+            p.deallocate(chunk);
+        }
+
+        assertEquals(List.of(a, b, remainder), p.allocateChunks(2 * chunkSize + 1, 0));
+        assertEquals(0, p.availableMemory());
+    }
+
+    /** On an error allocating the remainder chunk, all the reserved memory is refunded. */
+    @Test
+    public void testUnpooledRemainderChunkRefundedOnAllocationError() throws Exception {
+        int chunkSize = 64;
+        AtomicBoolean failRemainder = new AtomicBoolean(true);
+        BufferPool p = new BufferPool(100, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                if (size != chunkSize && failRemainder.get()) {
+                    throw new OutOfMemoryError();
+                }
+                return super.allocateByteBuffer(size);
+            }
+        };
+
+        assertThrows(OutOfMemoryError.class, () -> p.allocateChunks(80, 0));
+        assertEquals(100, p.availableMemory());
+
+        failRemainder.set(false);
+        List<ByteBuffer> chunks = p.allocateChunks(80, 0);
+        assertEquals(2, chunks.size());
+        assertEquals(36, chunks.get(1).capacity());
+        assertEquals(0, p.availableMemory());
+    }
+
+    /** The remainder chunk is not allocated until it is handed out. */
+    @Test
+    public void testRemainderChunkAllocatedOnlyWhenHandedOut() throws Exception {
+        int chunkSize = 64;
+        List<Integer> allocatedSizes = new ArrayList<>();
+        BufferPool p = new BufferPool(100, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                allocatedSizes.add(size);
+                return super.allocateByteBuffer(size);
+            }
+        };
+
+        ByteBuffer whole = p.allocateChunks(10, 0).get(0);
+        assertEquals(List.of(chunkSize), allocatedSizes);
+
+        ByteBuffer remainder = p.allocateChunks(10, 0).get(0);
+        assertEquals(List.of(chunkSize, 36), allocatedSizes);
+
+        // Once returned, both are pooled rather than allocated again.
+        p.deallocate(whole);
+        p.deallocate(remainder);
+        assertEquals(List.of(whole), p.allocateChunks(10, 0));
+        assertEquals(List.of(remainder), p.allocateChunks(10, 0));
+        assertEquals(List.of(chunkSize, 36), allocatedSizes);
+    }
+
+    /** The remainder chunk is used rather than blocking for a whole chunk. */
+    @Test
+    public void testAllocateRemainderChunkInsteadOfBlocking() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(100, chunkSize);
+        ByteBuffer held = p.allocateChunks(chunkSize, 0).get(0);
+
+        List<ByteBuffer> chunks = p.allocateChunks(10, 0);
+        assertEquals(1, chunks.size());
+        assertEquals(36, chunks.get(0).capacity());
+        assertEquals(0, p.availableMemory());
+
+        // Leaves nothing for a request that the remainder chunk does not cover.
+        p.deallocate(chunks.get(0));
+        assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(37, 0));
+        assertEquals(36, p.availableMemory());
+        p.deallocate(held);
+    }
+
+    /** A whole chunk is preferred over the remainder chunk. */
+    @Test
+    public void testAllocatePrefersWholeChunkOverRemainderChunk() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(100, chunkSize);
+        p.deallocate(p.allocateChunks(chunkSize, 0).get(0));
+
+        List<ByteBuffer> chunks = p.allocateChunks(10, 0);
+        assertEquals(1, chunks.size());
+        assertEquals(chunkSize, chunks.get(0).capacity());
+        // The remainder chunk is still available.
+        assertEquals(36, p.availableMemory());
+    }
+
+    /** A waiting request completes with the remainder chunk as the last chunk once enough memory is freed. */
+    @Test
+    public void testWaitingRequestCompletesWithRemainderChunk() throws Exception {
+        int chunkSize = 64;
+        BufferPool p = pool(100, chunkSize);
+        ByteBuffer whole = p.allocateChunks(chunkSize, 0).get(0);
+        ByteBuffer smaller = p.allocateChunks(36, 0).get(0);
+        assertEquals(0, p.availableMemory());
+
+        AtomicReference<List<ByteBuffer>> result = new AtomicReference<>();
+        AtomicReference<Throwable> err = new AtomicReference<>();
+        Thread t = new Thread(() -> {
+            try {
+                result.set(p.allocateChunks(80, MAX_BLOCK_TIME_MS));
+            } catch (Throwable th) {
+                err.set(th);
+            }
+        }, "chunked-waiter");
+        t.start();
+        TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
+
+        // A whole chunk alone does not cover the 80 bytes, so the waiter keeps waiting.
+        p.deallocate(whole);
+        TestUtils.waitForCondition(() -> p.availableMemory() == 0, "waiter should take the freed chunk");
+        assertEquals(1, p.queued());
+
+        p.deallocate(smaller);
+        t.join();
+        assertNull(err.get(), "waiter unexpectedly threw: " + err.get());
+        assertEquals(2, result.get().size());
+        assertEquals(chunkSize, result.get().get(0).capacity());
+        assertEquals(36, result.get().get(1).capacity());
+        assertEquals(0, p.availableMemory());
     }
 
     @Test

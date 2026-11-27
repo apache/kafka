@@ -40,7 +40,7 @@ import java.util.Deque;
 import java.util.List;
 
 /**
- * A {@link RecordAccumulator} variant that backs each batch with fixed-size chunks drawn from a
+ * A {@link RecordAccumulator} variant that backs each batch with chunks drawn from a
  * {@link BufferPool}, attaching more chunks on demand as records are appended instead of
  * reserving {@code batch.size} per batch up front. Buffered memory therefore scales with the data
  * actually written rather than with {@code active_partition_count × batch.size}.
