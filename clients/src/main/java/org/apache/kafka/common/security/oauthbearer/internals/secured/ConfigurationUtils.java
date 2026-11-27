@@ -51,6 +51,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 public class ConfigurationUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigurationUtils.class);
+    private static final String WILDCARD = "*";
 
     private final Map<String, ?> configs;
 
@@ -378,7 +379,8 @@ public class ConfigurationUtils {
             configName,
             configValue,
             ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG,
-            ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT
+            ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT,
+            true
         );
     }
 
@@ -390,7 +392,8 @@ public class ConfigurationUtils {
             configName,
             configValue,
             ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG,
-            ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT
+            ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT,
+            false
         );
     }
 
@@ -398,13 +401,14 @@ public class ConfigurationUtils {
                                              String configName,
                                              String configValue,
                                              String propertyName,
-                                             String propertyDefault) {
+                                             String propertyDefault,
+                                             boolean allowWildcard) {
         String[] allowedArray = System.getProperty(propertyName, propertyDefault).split(",");
         Set<String> allowed = Arrays.stream(allowedArray)
             .map(String::trim)
             .collect(Collectors.toSet());
 
-        if (!allowed.contains(configValue)) {
+        if (!allowed.contains(configValue) && !(allowWildcard && allowed.contains(WILDCARD))) {
             String message = String.format(
                 "The %s cannot be accessed due to restrictions. Update the system property '%s' to allow the %s to be accessed.",
                 resourceType,
