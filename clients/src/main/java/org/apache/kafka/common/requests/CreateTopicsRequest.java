@@ -38,9 +38,6 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         @Override
         public CreateTopicsRequest build(short version) {
-            if (data.validateOnly() && version == 0)
-                throw new UnsupportedProtocolFieldException("validateOnly", apiKey().name(), version, 1);
-
             final List<String> topicsWithDefaults = data.topics()
                 .stream()
                 .filter(topic -> topic.assignments().isEmpty())
@@ -93,9 +90,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
-        if (version() >= 2) {
-            response.setThrottleTimeMs(throttleTimeMs);
-        }
+        response.setThrottleTimeMs(throttleTimeMs);
         ApiError apiError = ApiError.fromThrowable(e);
         for (CreatableTopic topic : data.topics()) {
             response.topics().add(new CreatableTopicResult().

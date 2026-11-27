@@ -717,12 +717,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testCreateTopicRequestV0FailsIfValidateOnly() {
-        assertThrows(UnsupportedVersionException.class,
-            () -> createCreateTopicRequest((short) 0, true));
-    }
-
-    @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
         final UnsupportedProtocolFieldException exception = assertThrows(
             UnsupportedProtocolFieldException.class, () -> {
@@ -2759,13 +2753,9 @@ public class RequestResponseTest {
     }
 
     private CreateTopicsRequest createCreateTopicRequest(short version) {
-        return createCreateTopicRequest(version, version >= 1);
-    }
-
-    private CreateTopicsRequest createCreateTopicRequest(short version, boolean validateOnly) {
         CreateTopicsRequestData data = new CreateTopicsRequestData()
             .setTimeoutMs(123)
-            .setValidateOnly(validateOnly);
+            .setValidateOnly(true);
         data.topics().add(new CreatableTopic()
             .setNumPartitions(3)
             .setReplicationFactor((short) 5));
