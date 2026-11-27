@@ -17,26 +17,40 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 
 import org.apache.logging.log4j.Level;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
+import javax.security.auth.login.AppConfigurationEntry;
+
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
@@ -48,10 +62,88 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     private static final String EXPECTED_AUDIENCE = "https://legit.example/other-service";
 
+    @AfterEach
+    public void tearDown() {
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+    }
+
     @Override
     protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> builder.jwk().getKey();
-        return new BrokerJwtValidator(resolver);
+        return createBrokerJwtValidator(resolver);
+    }
+
+    private static BrokerJwtValidator createBrokerJwtValidator(CloseableVerificationKeyResolver resolver) {
+        return new BrokerJwtValidator() {
+            @Override
+            CloseableVerificationKeyResolver createCloseableVerificationKeyResolver(Map<String, ?> configs,
+                                                                                   String saslMechanism,
+                                                                                   List<AppConfigurationEntry> jaasConfigEntries) {
+                return resolver;
+            }
+        };
+    }
+
+    @Test
+    public void testCloseReleasesFactoryCreatedVerificationKeyResolver() throws Exception {
+        String file = tempFile("{\"keys\":[]}").toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
+                SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file,
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+
+        BrokerJwtValidator validator = new BrokerJwtValidator();
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        CloseableVerificationKeyResolver shared = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        shared.close();
+
+        // The validator still holds its reference, so the resolver stays cached.
+        try (CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertSame(shared, resolver);
+        }
+
+        validator.close();
+
+        // Closing the validator releases the last reference. The factory should return a new resolver.
+        try (CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())) {
+            assertNotSame(shared, resolver);
+        }
+    }
+
+    @Test
+    public void testCloseReleasesVerificationKeyResolverOnlyOnce() throws Exception {
+        CloseableVerificationKeyResolver resolver = mock(CloseableVerificationKeyResolver.class);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
+        validator.configure(getSaslConfigs(Map.of(
+                        SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                        SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE))),
+                OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        validator.close();
+        validator.close();
+
+        // Releasing the shared resolver twice would close it while other validators still use it.
+        verify(resolver, times(1)).close();
+    }
+
+    @Test
+    public void testCloseReleasesVerificationKeyResolverAfterConfigureFails() throws Exception {
+        CloseableVerificationKeyResolver resolver = mock(CloseableVerificationKeyResolver.class);
+        KafkaException error = new KafkaException("Could not refresh JWKS");
+        doThrow(error).when(resolver).configure(any(), any(), any());
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
+        Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+
+        assertSame(error, assertThrows(KafkaException.class,
+                () -> validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries())));
+
+        // The caller closes the validator after configure() fails, which must release the resolver.
+        validator.close();
+        verify(resolver, times(1)).close();
     }
 
     @Test
@@ -111,7 +203,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
@@ -128,7 +220,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     public void testConfigureFailsWhenExpectedIssuerUnset() throws Exception {
         PublicJsonWebKey jwk = createRsaJwk();
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         assertThrowsWithMessage(ConfigException.class,
                 () -> validator.configure(
                         getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)),
@@ -147,7 +239,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
@@ -163,7 +255,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     public void testConfigureFailsWhenExpectedAudienceUnset() throws Exception {
         PublicJsonWebKey jwk = createRsaJwk();
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         assertThrowsWithMessage(ConfigException.class,
                 () -> validator.configure(
                         getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER),
@@ -182,7 +274,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
@@ -205,7 +297,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
                 SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE, true));
@@ -226,7 +318,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE),
                 SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, true));
@@ -247,7 +339,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         String accessToken = builder.build();
 
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         // Neither expected.issuer nor expected.audience is set; both opt-outs are enabled so configuration succeeds.
         Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
                 SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, true,
@@ -275,7 +367,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     public void testConfigureFailsWhenNeitherExpectedSet() throws Exception {
         PublicJsonWebKey jwk = createRsaJwk();
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
-        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        BrokerJwtValidator validator = createBrokerJwtValidator(resolver);
         // With neither expected value set and no opt-out, configuration must fail fast. The audience guard runs
         // first, so its message is the one that surfaces.
         assertThrowsWithMessage(ConfigException.class,

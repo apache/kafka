@@ -58,7 +58,17 @@ public class DefaultJwtValidator implements JwtValidator {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         if (verificationKeyResolver.isPresent()) {
-            delegate = new BrokerJwtValidator(verificationKeyResolver.get());
+            CloseableVerificationKeyResolver resolver = verificationKeyResolver.get();
+            delegate = new BrokerJwtValidator() {
+                @Override
+                CloseableVerificationKeyResolver createCloseableVerificationKeyResolver(Map<String, ?> configs,
+                                                                                       String saslMechanism,
+                                                                                       List<AppConfigurationEntry> jaasConfigEntries) {
+                    // The code that supplied the resolver manages its lifecycle, so hand the delegate a key-only
+                    // resolver whose configure() and close() are no-ops.
+                    return resolver::resolveKey;
+                }
+            };
         } else {
             ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
 
