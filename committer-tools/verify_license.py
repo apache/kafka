@@ -35,6 +35,10 @@ LICENSE_DEP_PATTERN = re.compile(
     re.MULTILINE
 )
 
+# Constant: Regex to extract license file references from the LICENSE file.
+# Matches "licenses/<file>" but not URLs such as "http://www.apache.org/licenses/LICENSE-2.0".
+LICENSE_FILE_PATTERN = re.compile(r'(?<![\w./])licenses/([A-Za-z0-9_.+-]+)')
+
 def run_gradlew(project_dir):
     print("Running './gradlew clean releaseTarGz'")
     subprocess.run(["./gradlew", "clean", "releaseTarGz"], check=True, cwd=project_dir)
@@ -74,6 +78,12 @@ def get_libs_set(libs_dir):
 def get_license_deps(license_text):
     return set(LICENSE_DEP_PATTERN.findall(license_text))
 
+def get_license_file_refs(license_text):
+    return set(LICENSE_FILE_PATTERN.findall(license_text))
+
+def get_license_files(licenses_dir):
+    return set(os.listdir(licenses_dir))
+
 def main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Whether to skip executing ReleaseTarGz.")
@@ -102,11 +112,12 @@ def main():
         extracted = os.path.join(tmp_dir, extracted_dirs[0])
         print("Tarball extracted to:", extracted)
         
-        # Locate the LICENSE file and libs directory.
+        # Locate the LICENSE file, libs directory and licenses directory.
         license_path = os.path.join(extracted, "LICENSE")
         libs_dir = os.path.join(extracted, "libs")
-        if not os.path.exists(license_path) or not os.path.exists(libs_dir):
-            print("Error: LICENSE file or libs directory not found in the extracted project.")
+        licenses_dir = os.path.join(extracted, "licenses")
+        if not os.path.exists(license_path) or not os.path.exists(libs_dir) or not os.path.exists(licenses_dir):
+            print("Error: LICENSE file, libs directory or licenses directory not found in the extracted project.")
             sys.exit(1)
         
         with open(license_path, "r", encoding="utf-8") as f:
@@ -142,7 +153,27 @@ def main():
         else:
             print("\nNo extra dependencies in the LICENSE file.")
 
-        if missing_in_license or extra_in_license:
+        # Compare the license file references with the files in ./licenses.
+        license_file_refs = get_license_file_refs(license_text)
+        license_files = get_license_files(licenses_dir)
+        missing_license_files = license_file_refs - license_files
+        unreferenced_license_files = license_files - license_file_refs
+
+        if missing_license_files:
+            print("\nThe following files are referenced in the LICENSE file but not present in ./licenses. These should be added to the licenses folder:")
+            for fname in sorted(missing_license_files):
+                print(" -", fname)
+        else:
+            print("\nAll license files referenced in the LICENSE file are present in ./licenses.")
+
+        if unreferenced_license_files:
+            print("\nThe following files in ./licenses are not referenced in the LICENSE file. These should be removed from the licenses folder:")
+            for fname in sorted(unreferenced_license_files):
+                print(" -", fname)
+        else:
+            print("\nAll files in ./licenses are referenced in the LICENSE file.")
+
+        if missing_in_license or extra_in_license or missing_license_files or unreferenced_license_files:
             sys.exit(1)
 
 if __name__ == "__main__":
