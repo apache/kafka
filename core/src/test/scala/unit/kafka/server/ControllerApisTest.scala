@@ -57,7 +57,7 @@ import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig, RaftManager}
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, MirrorVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -159,7 +159,8 @@ class ControllerApisTest {
   private def createControllerApis(authorizer: Option[Plugin[Authorizer]],
                                    controller: Controller,
                                    props: Properties = new Properties(),
-                                   throttle: Boolean = false): ControllerApis = {
+                                   throttle: Boolean = false,
+                                   featureVersions: Map[String, java.lang.Short] = Map.empty): ControllerApis = {
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
@@ -178,7 +179,8 @@ class ControllerApisTest {
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())),
+        () => if (featureVersions.isEmpty) FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())
+        else FinalizedFeatures.of(MetadataVersion.latestTesting(), featureVersions.asJava, 0)),
       metadataCache
     )
   }
@@ -446,6 +448,60 @@ class ControllerApisTest {
       controllerApis.handleUnregisterBroker(buildRequest(new UnregisterBrokerRequest.Builder(
         new UnregisterBrokerRequestData()).build(0)))
     })
+  }
+
+  @Test
+  def testStopMirrorTopicsDisabled(): Unit = {
+    val authorizer = createDenyAllAuthorizer()
+    controllerApis = createControllerApis(Some(authorizer), new MockController.Builder().build())
+    val request = buildRequest(new StopMirrorTopicsRequest.Builder(
+      new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true).build())
+    val error = assertThrows(classOf[UnsupportedVersionException], () => controllerApis.handleStopMirrorTopics(request))
+    assertTrue(error.getMessage.contains("mirror.version=0"))
+    verify(authorizer.get(), never()).authorize(any(), any())
+  }
+
+  @Test
+  def testStopMirrorTopicsUnauthorized(): Unit = {
+    val authorizer = mock(classOf[Authorizer])
+    val expectedActions = util.List.of(new Action(AclOperation.ALTER,
+      new ResourcePattern(ResourceType.CLUSTER_MIRROR, "mirror-a", PatternType.LITERAL), 1, true, true))
+    when(authorizer.authorize(any(), ArgumentMatchers.eq(expectedActions)))
+      .thenReturn(singletonList(AuthorizationResult.DENIED))
+    controllerApis = createControllerApis(Some(Plugin.wrapInstance(authorizer, null, "authorizer.class.name")),
+      new MockController.Builder().build(),
+      featureVersions = Map(MirrorVersion.FEATURE_NAME -> Short.box(MirrorVersion.MV_1.featureLevel())))
+    val request = buildRequest(new StopMirrorTopicsRequest.Builder(
+      new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true).build())
+    assertThrows(classOf[ClusterMirrorAuthorizationException], () => controllerApis.handleStopMirrorTopics(request))
+    verify(authorizer).authorize(any(), ArgumentMatchers.eq(expectedActions))
+  }
+
+  @Test
+  def testStopMirrorTopicsAuthorized(): Unit = {
+    val authorizer = mock(classOf[Authorizer])
+    val expectedActions = util.List.of(new Action(AclOperation.ALTER,
+      new ResourcePattern(ResourceType.CLUSTER_MIRROR, "mirror-a", PatternType.LITERAL), 1, true, true))
+    when(authorizer.authorize(any(), ArgumentMatchers.eq(expectedActions)))
+      .thenReturn(singletonList(AuthorizationResult.ALLOWED))
+    controllerApis = createControllerApis(Some(Plugin.wrapInstance(authorizer, null, "authorizer.class.name")),
+      new MockController.Builder().build(),
+      featureVersions = Map(MirrorVersion.FEATURE_NAME -> Short.box(MirrorVersion.MV_1.featureLevel())))
+    val request = buildRequest(new StopMirrorTopicsRequest.Builder(
+      new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true).build())
+    val error = assertThrows(classOf[UnsupportedVersionException], () => controllerApis.handleStopMirrorTopics(request))
+    assertEquals("StopMirrorTopics is not implemented yet.", error.getMessage)
+    verify(authorizer).authorize(any(), ArgumentMatchers.eq(expectedActions))
+  }
+
+  @Test
+  def testStopMirrorTopicsNotImplemented(): Unit = {
+    controllerApis = createControllerApis(None, new MockController.Builder().build(),
+      featureVersions = Map(MirrorVersion.FEATURE_NAME -> Short.box(MirrorVersion.MV_1.featureLevel())))
+    val request = buildRequest(new StopMirrorTopicsRequest.Builder(
+      new StopMirrorTopicsRequestData().setMirrorName("mirror-a"), true).build())
+    val error = assertThrows(classOf[UnsupportedVersionException], () => controllerApis.handleStopMirrorTopics(request))
+    assertEquals("StopMirrorTopics is not implemented yet.", error.getMessage)
   }
 
   @Test

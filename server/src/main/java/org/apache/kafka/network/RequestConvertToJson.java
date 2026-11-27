@@ -175,6 +175,8 @@ import org.apache.kafka.common.message.ShareGroupDescribeRequestDataJsonConverte
 import org.apache.kafka.common.message.ShareGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestDataJsonConverter;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseDataJsonConverter;
+import org.apache.kafka.common.message.StopMirrorTopicsRequestDataJsonConverter;
+import org.apache.kafka.common.message.StopMirrorTopicsResponseDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestDataJsonConverter;
@@ -362,6 +364,8 @@ import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
+import org.apache.kafka.common.requests.StopMirrorTopicsRequest;
+import org.apache.kafka.common.requests.StopMirrorTopicsResponse;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
@@ -558,6 +562,8 @@ public class RequestConvertToJson {
                 ShareGroupDescribeRequestDataJsonConverter.write(((ShareGroupDescribeRequest) request).data(), request.version());
             case SHARE_GROUP_HEARTBEAT ->
                 ShareGroupHeartbeatRequestDataJsonConverter.write(((ShareGroupHeartbeatRequest) request).data(), request.version());
+            case STOP_MIRROR_TOPICS ->
+                StopMirrorTopicsRequestDataJsonConverter.write(((StopMirrorTopicsRequest) request).data(), request.version());
             case STREAMS_GROUP_DESCRIBE ->
                 StreamsGroupDescribeRequestDataJsonConverter.write(((StreamsGroupDescribeRequest) request).data(), request.version());
             case STREAMS_GROUP_HEARTBEAT ->
@@ -740,6 +746,8 @@ public class RequestConvertToJson {
                 ShareGroupDescribeResponseDataJsonConverter.write(((ShareGroupDescribeResponse) response).data(), version);
             case SHARE_GROUP_HEARTBEAT ->
                 ShareGroupHeartbeatResponseDataJsonConverter.write(((ShareGroupHeartbeatResponse) response).data(), version);
+            case STOP_MIRROR_TOPICS ->
+                StopMirrorTopicsResponseDataJsonConverter.write(((StopMirrorTopicsResponse) response).data(), version);
             case STREAMS_GROUP_DESCRIBE ->
                 StreamsGroupDescribeResponseDataJsonConverter.write(((StreamsGroupDescribeResponse) response).data(), version);
             case STREAMS_GROUP_HEARTBEAT ->
