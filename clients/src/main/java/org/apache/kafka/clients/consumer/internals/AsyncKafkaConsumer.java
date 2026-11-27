@@ -682,7 +682,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.fetchBuffer = new FetchBuffer(logContext);
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.time = time;
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);

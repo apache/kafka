@@ -47,7 +47,7 @@ public class AdminFetchMetricsManagerTest {
 
     @BeforeEach
     public void setup() {
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
     }
 

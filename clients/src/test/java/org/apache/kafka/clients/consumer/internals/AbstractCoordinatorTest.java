@@ -150,7 +150,7 @@ public class AbstractCoordinatorTest {
                                                         retryBackoffMs,
                                                         REQUEST_TIMEOUT_MS,
                                                         HEARTBEAT_INTERVAL_MS);
-        metrics = new Metrics(mockTime);
+        metrics = Metrics.Internal.of(mockTime);
 
         mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);

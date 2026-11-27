@@ -199,7 +199,7 @@ public class RemoteLogManagerTest {
     private RemoteLogManagerConfig config;
 
     private BrokerTopicStats brokerTopicStats = null;
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private RemoteLogManager remoteLogManager = null;
 
     private final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));

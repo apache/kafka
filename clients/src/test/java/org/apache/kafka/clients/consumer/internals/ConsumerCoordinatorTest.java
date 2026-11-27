@@ -206,7 +206,7 @@ public abstract class ConsumerCoordinatorTest {
         this.client.updateMetadata(metadataResponse);
         this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100,
                 requestTimeoutMs, Integer.MAX_VALUE);
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
@@ -3865,7 +3865,7 @@ public abstract class ConsumerCoordinatorTest {
             assignors,
             metadata,
             subscriptions,
-            new Metrics(time),
+            Metrics.Internal.of(time),
             consumerId + groupId,
             time,
             false,
@@ -4279,7 +4279,7 @@ public abstract class ConsumerCoordinatorTest {
         metrics.close();
         coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
 
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
 
         rebalanceConfig = buildRebalanceConfig(rebalanceConfig.groupInstanceId, rackId);
         coordinator = new ConsumerCoordinator(
@@ -4373,7 +4373,7 @@ public abstract class ConsumerCoordinatorTest {
         metrics.close();
         coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
 
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         coordinator = new ConsumerCoordinator(
             rebalanceConfig,
             new LogContext(),

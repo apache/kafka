@@ -76,7 +76,7 @@ public class MetricsTest {
 
     @BeforeEach
     public void setup() {
-        this.metrics = new Metrics(config, singletonList(new JmxReporter()), time, true);
+        this.metrics = Metrics.Internal.of(config, singletonList(new JmxReporter()), time, true, new KafkaMetricsContext(""));
     }
 
     @AfterEach
@@ -678,7 +678,7 @@ public class MetricsTest {
         Map<String, String> childTagsWithValues = new HashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
-        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), singletonList(new JmxReporter()), time, true)) {
+        try (Metrics inherited = Metrics.Internal.of(new MetricConfig().tags(parentTagsWithValues), singletonList(new JmxReporter()), time, true, new KafkaMetricsContext(""))) {
             MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
 
             Map<String, String> filledOutTags = inheritedMetric.tags();
@@ -708,7 +708,7 @@ public class MetricsTest {
         final Random random = new Random();
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         metrics.close();
-        metrics = new Metrics(new MockTime(10));
+        metrics = Metrics.Internal.of(new MockTime(10));
         SensorCreator sensorCreator = new SensorCreator(metrics);
 
         final AtomicBoolean alive = new AtomicBoolean(true);
@@ -772,7 +772,7 @@ public class MetricsTest {
 
         final LockingReporter reporter = new LockingReporter();
         this.metrics.close();
-        this.metrics = new Metrics(config, singletonList(reporter), new MockTime(10), true);
+        this.metrics = Metrics.Internal.of(config, singletonList(reporter), new MockTime(10), true, new KafkaMetricsContext(""));
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         SensorCreator sensorCreator = new SensorCreator(metrics);
 

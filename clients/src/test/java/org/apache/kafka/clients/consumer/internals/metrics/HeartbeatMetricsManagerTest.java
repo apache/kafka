@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class HeartbeatMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
     private final Time time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     @Override
     protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class ShareRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 
     private final Time time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
 
     @Override
     protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {

@@ -309,7 +309,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);

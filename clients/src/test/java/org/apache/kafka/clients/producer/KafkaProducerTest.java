@@ -3056,7 +3056,7 @@ public class KafkaProducerTest {
         private Sender sender = mock(Sender.class);
         private TransactionManager transactionManager = mock(TransactionManager.class);
         private Time time = new MockTime();
-        private final Metrics metrics = new Metrics(time);
+        private final Metrics metrics = Metrics.Internal.of(time);
 
         public KafkaProducerTestContext(
             TestInfo testInfo,

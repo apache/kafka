@@ -97,7 +97,7 @@ public class ShareMembershipManagerTest {
         metadata = mock(ShareConsumerMetadata.class);
         subscriptionState = mock(ShareSubscriptionState.class);
         time = new MockTime(0);
-        metrics = new Metrics(time);
+        metrics = Metrics.Internal.of(time);
         rebalanceMetricsManager = new ShareRebalanceMetricsManager(metrics);
     }
 

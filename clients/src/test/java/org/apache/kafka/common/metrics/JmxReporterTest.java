@@ -166,7 +166,7 @@ public class JmxReporterTest {
         JmxReporter reporter = new JmxReporter();
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.server");
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM, metricsContext);
+        Metrics metrics = Metrics.Internal.of(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM, false, metricsContext);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {

@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.internals.MetricsUtils
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
+import org.apache.kafka.common.metrics.{KafkaMetric, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.{ConnectionThrottledException, Processor, SocketServer, SocketServerConfigs, TooManyConnectionsException}
@@ -80,7 +80,7 @@ class ConnectionQuotasTest {
     // clean up metrics initialized with Time.SYSTEM
     metrics.close()
     time = new MockTime()
-    metrics = new Metrics(time)
+    metrics = Metrics.Internal.of(time)
   }
 
   @BeforeEach
@@ -98,7 +98,7 @@ class ConnectionQuotasTest {
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
     time = Time.SYSTEM
-    metrics = new Metrics(new MetricConfig(), util.List.of, time)
+    metrics = Metrics.Internal.of(time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }
 

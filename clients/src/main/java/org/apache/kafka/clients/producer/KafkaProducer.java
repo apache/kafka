@@ -391,7 +391,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-            this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            this.metrics = Metrics.Internal.of(metricConfig, reporters, time, false, metricsContext);
             this.producerMetrics = new KafkaProducerMetrics(metrics);
             this.partitionerPlugin = Plugin.wrapInstance(
                     config.getConfiguredInstance(

@@ -429,7 +429,7 @@ public class TopologyTestDriver implements Closeable {
             .samples(streamsConfig.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(streamsConfig.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
             .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
-        metrics = new Metrics(metricConfig, mockWallClockTime);
+        metrics = Metrics.Internal.of(metricConfig, mockWallClockTime);
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
                 metrics,

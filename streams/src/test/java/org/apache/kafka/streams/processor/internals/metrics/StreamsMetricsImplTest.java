@@ -930,7 +930,7 @@ public class StreamsMetricsImplTest {
     public void testTotalMetricDoesntDecrease() {
         final MockTime time = new MockTime(1);
         final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
-        final Metrics metrics = new Metrics(config, time);
+        final Metrics metrics = Metrics.Internal.of(config, time);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "", time);
 
         final String scope = "scope";

@@ -128,7 +128,7 @@ public class WorkerCoordinatorIncrementalTest {
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
             retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
-        this.metrics = new Metrics(time);
+        this.metrics = Metrics.Internal.of(time);
         this.rebalanceListener = new MockRebalanceListener();
 
         this.leaderId = "worker1";

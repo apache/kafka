@@ -368,7 +368,7 @@ public class GroupCoordinatorMetricsTest {
     public void testGlobalSensors() {
         MetricsRegistry registry = new MetricsRegistry();
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
             new SnapshotRegistry(new LogContext()), new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
@@ -419,7 +419,7 @@ public class GroupCoordinatorMetricsTest {
     public void testStreamsGroupTopologyDescriptionSetAndGetSensors() {
         MetricsRegistry registry = new MetricsRegistry();
         Time time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
 
         coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);

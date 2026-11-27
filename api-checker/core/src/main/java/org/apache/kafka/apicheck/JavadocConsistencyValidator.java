@@ -41,6 +41,11 @@ import java.util.jar.JarFile;
  * <p>Deprecated classes are out of scope on both sides: the deprecation set on the
  * {@link ApiSurface} is subtracted from the HTML-discovered set before cross-validation.
  *
+ * <p>A nested class that carries an explicit {@code @InterfaceAudience.Private} inside an
+ * effectively-{@code @Public} class is also skipped on the HTML side. Javadoc has no way to drop
+ * a single nested type from the outer's page, so such a class always gets an HTML page even though
+ * its own annotation already marks it as internal (for example {@code Metrics.Internal}).
+ *
  * <p>Returns a {@link CheckResult} with an empty suppressions list — these violations don't
  * currently have an escape-hatch mechanism, but the uniform shape lets callers compose
  * validators without per-validator special cases.
@@ -54,6 +59,7 @@ final class JavadocConsistencyValidator {
 
         Set<String> classesWithPublicDoc = findClassesFromJavadocHtml(javadocJar);
         classesWithPublicDoc.removeIf(surface::isDeprecated);
+        classesWithPublicDoc.removeIf(name -> isPrivateNestedOfPublic(surface, name));
 
         for (ClassFacts facts : surface.directPublic()) {
             if (!classesWithPublicDoc.contains(facts.dottedName())) {
@@ -76,6 +82,18 @@ final class JavadocConsistencyValidator {
         }
 
         return new CheckResult(violations, List.of());
+    }
+
+    /**
+     * True iff the class carries its own {@code @InterfaceAudience.Private} and its enclosing class
+     * is effectively {@code @Public}. Javadoc cannot exclude such a nested type, so it is not a
+     * documentation leak.
+     */
+    private static boolean isPrivateNestedOfPublic(ApiSurface surface, String name) {
+        ClassFacts facts = surface.factsOf(name);
+        if (facts == null || !facts.isPrivate()) return false;
+        String enclosing = facts.enclosingName();
+        return enclosing != null && surface.isEffectivelyPublic(enclosing);
     }
 
     /** Find Kafka-namespaced class names from HTML files in a javadoc JAR. */

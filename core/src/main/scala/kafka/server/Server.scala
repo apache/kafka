@@ -50,7 +50,7 @@ object Server {
     metricsContext: KafkaMetricsContext
   ): Metrics = {
     val metricConfig = buildMetricsConfig(config)
-    new Metrics(metricConfig, new util.ArrayList[MetricsReporter](), time, true, metricsContext)
+    Metrics.Internal.of(metricConfig, new util.ArrayList[MetricsReporter](), time, true, metricsContext)
   }
 
   def buildMetricsConfig(

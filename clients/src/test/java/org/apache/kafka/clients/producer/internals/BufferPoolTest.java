@@ -50,7 +50,7 @@ import static org.mockito.Mockito.verify;
 
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private final long maxBlockTimeMs = 10;
     private final String metricGroup = "TestMetrics";
 

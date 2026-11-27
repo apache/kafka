@@ -19,6 +19,7 @@ package org.apache.kafka.common.metrics.stats;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -45,7 +46,7 @@ public class FrequenciesTest {
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
-        metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), time, true);
+        metrics = Metrics.Internal.of(config, Collections.singletonList(new JmxReporter()), time, true, new KafkaMetricsContext(""));
     }
 
     @AfterEach

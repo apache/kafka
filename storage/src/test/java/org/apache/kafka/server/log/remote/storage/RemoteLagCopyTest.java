@@ -83,7 +83,7 @@ public class RemoteLagCopyTest {
     private final AtomicLong currentLogStartOffset = new AtomicLong(0L);
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
-    private final Metrics metrics = new Metrics(time);
+    private final Metrics metrics = Metrics.Internal.of(time);
     private final TopicIdPartition leaderTopicIdPartition =
             new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
     private final Optional<Endpoint> endPoint =

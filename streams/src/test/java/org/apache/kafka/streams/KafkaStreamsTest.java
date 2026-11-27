@@ -215,7 +215,8 @@ public class KafkaStreamsTest {
     private void prepareStreams() {
         // setup metrics
         metricsMockedConstruction = mockConstruction(Metrics.class, (mock, context) -> {
-            assertEquals(4, context.arguments().size());
+            // Metrics.Internal.of always ends in the five-argument constructor
+            assertEquals(5, context.arguments().size());
             final List<MetricsReporter> reporters = (List<MetricsReporter>) context.arguments().get(1);
             for (final MetricsReporter reporter : reporters) {
                 reporter.init(Collections.emptyList());

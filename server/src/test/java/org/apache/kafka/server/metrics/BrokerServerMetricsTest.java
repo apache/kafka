@@ -83,7 +83,7 @@ public final class BrokerServerMetricsTest {
     @Test
     public void testLastAppliedRecordTimestamp() throws Exception {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             time.sleep(1000);
             KafkaMetric timestampMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordTimestampName());
@@ -108,7 +108,7 @@ public final class BrokerServerMetricsTest {
     @Test
     public void testMetadataLoadErrorCount() throws Exception {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataLoadErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataLoadErrorCountName());
 
@@ -124,7 +124,7 @@ public final class BrokerServerMetricsTest {
     @Test
     public void testMetadataApplyErrorCount() throws Exception {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataApplyErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataApplyErrorCountName());
 
@@ -140,7 +140,7 @@ public final class BrokerServerMetricsTest {
     @Test
     public void testIgnoredStaticVoters() throws Exception {
         MockTime time = new MockTime();
-        Metrics metrics = new Metrics(time);
+        Metrics metrics = Metrics.Internal.of(time);
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric ignoredStaticVotersMetric = metrics.metrics().get(brokerMetrics.ignoredStaticVotersName());
 
