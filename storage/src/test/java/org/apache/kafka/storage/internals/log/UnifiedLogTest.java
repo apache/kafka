@@ -762,7 +762,7 @@ public class UnifiedLogTest {
                 false);
         assertEquals(expectedSize, readInfo.records.sizeInBytes());
         List<Long> actualOffsets = new ArrayList<>();
-        readInfo.records.records().forEach(record -> actualOffsets.add(record.offset()));
+        TestUtils.records(readInfo.records).forEach(record -> actualOffsets.add(record.offset()));
         assertEquals(expectedOffsets, actualOffsets);
     }
 
@@ -967,7 +967,7 @@ public class UnifiedLogTest {
             case TXN_COMMITTED -> log.lastStableOffset();
         };
 
-        for (Record record : readInfo.records.records())
+        for (Record record : TestUtils.records(readInfo.records))
             assertTrue(record.offset() < upperBoundOffset);
 
         assertEquals(batchBaseOffset, readInfo.fetchOffsetMetadata.messageOffset);
@@ -2312,7 +2312,7 @@ public class UnifiedLogTest {
         for (int i = 0; i < values.length; i++) {
             RecordBatch read = log.read(i, 1, FetchIsolation.LOG_END, true).records.batches().iterator().next();
             assertEquals(i, read.lastOffset(), "Offset read should match order appended.");
-            Record actual = read.iterator().next();
+            Record actual = TestUtils.records(read).get(0);
             assertNull(actual.key(), "Key should be null");
             assertEquals(ByteBuffer.wrap(values[i]), actual.value(), "Values not equal");
         }
@@ -2354,7 +2354,7 @@ public class UnifiedLogTest {
             final int offset = i;
             int idx = 0;
             while (idx < messageIds.length && messageIds[idx] < offset) idx++;
-            Record read = log.read(i, 100, FetchIsolation.LOG_END, true).records.records().iterator().next();
+            Record read = TestUtils.records(log.read(i, 100, FetchIsolation.LOG_END, true).records).iterator().next();
             assertEquals(messageIds[idx], read.offset(), "Offset read should match message id.");
             assertEquals(records[idx], new SimpleRecord(read), "Message should match appended.");
         }
@@ -2759,7 +2759,7 @@ public class UnifiedLogTest {
                     log.read(i, 100, FetchIsolation.LOG_END, true)
             );
             for (FetchDataInfo fetchDataInfo : fetchResults) {
-                Record read = fetchDataInfo.records.records().iterator().next();
+                Record read = TestUtils.records(fetchDataInfo.records).iterator().next();
                 assertEquals(messageIds[idx], read.offset(), "Offset read should match message id.");
                 assertEquals(records[idx], new SimpleRecord(read), "Message should match appended.");
             }
@@ -2880,15 +2880,15 @@ public class UnifiedLogTest {
             RecordBatch head = batches.iterator().next();
             assertEquals(offset, head.lastOffset(), "Offsets not equal");
 
-            Record expected = messageSets[i].records().iterator().next();
-            Record actual = head.iterator().next();
+            Record expected = TestUtils.records(messageSets[i]).iterator().next();
+            Record actual = TestUtils.records(head).get(0);
             assertEquals(expected.key(), actual.key(), "Keys not equal at offset " + offset);
             assertEquals(expected.value(), actual.value(), "Values not equal at offset " + offset);
             assertEquals(expected.timestamp(), actual.timestamp(), "Timestamps not equal at offset " + offset);
             offset = head.lastOffset() + 1;
         }
         Records lastRead = log.read(numMessages, 1024 * 1024, FetchIsolation.LOG_END, true).records;
-        assertFalse(lastRead.records().iterator().hasNext(), "Should be no more messages");
+        assertFalse(TestUtils.records(lastRead).iterator().hasNext(), "Should be no more messages");
 
         // check that rolling the log forced a flush, the flush is async so retry in case of failure
         TestUtils.retryOnExceptionWithTimeout(1000L, () ->
@@ -2921,7 +2921,7 @@ public class UnifiedLogTest {
     }
 
     private Iterable<Record> read(UnifiedLog log, long offset) throws IOException {
-        return log.read(offset, 4096, FetchIsolation.LOG_END, true).records.records();
+        return TestUtils.records(log.read(offset, 4096, FetchIsolation.LOG_END, true).records);
     }
 
     /**

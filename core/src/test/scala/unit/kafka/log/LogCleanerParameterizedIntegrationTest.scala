@@ -241,17 +241,17 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       // number of retained records after compaction)
       assertEquals(RecordVersion.V2.value, recordBatch.magic)
       if (compressionType == CompressionType.NONE)
-        assertEquals(1, recordBatch.iterator().asScala.size)
+        assertEquals(1, org.apache.kafka.test.TestUtils.records(recordBatch).iterator().asScala.size)
       else
-        assertTrue(recordBatch.iterator().asScala.nonEmpty)
+        assertTrue(org.apache.kafka.test.TestUtils.records(recordBatch).iterator().asScala.nonEmpty)
 
-      val firstRecordKey = TestUtils.readString(recordBatch.iterator().next().key())
+      val firstRecordKey = TestUtils.readString(org.apache.kafka.test.TestUtils.records(recordBatch).iterator().next().key())
       if (keysForV0RecordsWithNoV1V2Updates.contains(firstRecordKey))
         assertEquals(TimestampType.CREATE_TIME, recordBatch.timestampType)
       else
         assertEquals(timestampType, recordBatch.timestampType)
 
-      recordBatch.iterator.asScala.foreach { record =>
+      org.apache.kafka.test.TestUtils.records(recordBatch).iterator.asScala.foreach { record =>
         val recordKey = TestUtils.readString(record.key)
         if (keysForV0RecordsWithNoV1V2Updates.contains(recordKey))
           assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp, "Record " + recordKey + " with unexpected timestamp ")
@@ -334,7 +334,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, String, Long)] = {
-    for (segment <- log.logSegments.asScala; deepLogEntry <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; deepLogEntry <- org.apache.kafka.test.TestUtils.records(segment.log).asScala) yield {
       val key = TestUtils.readString(deepLogEntry.key).toInt
       val value = TestUtils.readString(deepLogEntry.value)
       (key, value, deepLogEntry.offset)

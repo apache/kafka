@@ -337,7 +337,7 @@ public class LogCleanerLagIntegrationTest {
     private Map<Integer, Integer> readFromLog(UnifiedLog log) {
         Map<Integer, Integer> result = new HashMap<>();
         for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
+            for (Record record : TestUtils.records(segment.log())) {
                 int key = Integer.parseInt(LogTestUtils.readString(record.key()));
                 int value = Integer.parseInt(LogTestUtils.readString(record.value()));
                 result.put(key, value);
@@ -349,7 +349,7 @@ public class LogCleanerLagIntegrationTest {
     private List<int[]> readKeyValuePairsFromLog(UnifiedLog log) {
         List<int[]> result = new ArrayList<>();
         for (LogSegment segment : log.logSegments()) {
-            for (Record record : segment.log().records()) {
+            for (Record record : TestUtils.records(segment.log())) {
                 int key = Integer.parseInt(LogTestUtils.readString(record.key()));
                 int value = Integer.parseInt(LogTestUtils.readString(record.value()));
                 result.add(new int[]{key, value});

@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.raft;
-
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -24,9 +23,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
 import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.test.TestUtils;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
@@ -165,9 +166,7 @@ public final class KafkaRaftClientFetchTest {
         int batchCount = 0;
         while (iterator.hasNext()) {
             var batch = iterator.next();
-            var recordsIterator = batch.iterator();
-            while (recordsIterator.hasNext()) {
-                var record = recordsIterator.next();
+            for (Record record : TestUtils.records(batch)) {
                 assertEquals(offsetCount, record.offset());
                 offsetCount++;
             }
@@ -352,8 +351,8 @@ public final class KafkaRaftClientFetchTest {
         // We expect to return the same number of total bytes in both requests.
         assertEquals(allRecords.sizeInBytes(), exactSizeBytesRecords.sizeInBytes());
 
-        var allIterator = allRecords.records().iterator();
-        var exactIterator = exactSizeBytesRecords.records().iterator();
+        var allIterator = TestUtils.records(allRecords).iterator();
+        var exactIterator = TestUtils.records(exactSizeBytesRecords).iterator();
         while (exactIterator.hasNext() && allIterator.hasNext()) {
             var r1 = exactIterator.next();
             var r2 = allIterator.next();

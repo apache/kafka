@@ -890,7 +890,7 @@ class LogLoaderTest {
       val numMessages = 50 + TestUtils.random.nextInt(50)
       for (_ <- 0 until numMessages)
         log.appendAsLeader(createRecords, 0)
-      val records = log.logSegments.asScala.flatMap(_.log.records.asScala.toList).toList
+      val records = log.logSegments.asScala.flatMap(segment => org.apache.kafka.test.TestUtils.records(segment.log).asScala.toList).toList
       log.close()
 
       // corrupt index and log by appending random bytes
@@ -901,7 +901,7 @@ class LogLoaderTest {
       log = createLog(logDir, logConfig, brokerTopicStats, 0L, recoveryPoint, lastShutdownClean = false)
       assertEquals(numMessages, log.logEndOffset)
 
-      val recovered = log.logSegments.asScala.flatMap(_.log.records.asScala.toList).toList
+      val recovered = log.logSegments.asScala.flatMap(segment => org.apache.kafka.test.TestUtils.records(segment.log).asScala.toList).toList
       assertEquals(records.size, recovered.size)
 
       for (i <- records.indices) {

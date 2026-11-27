@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.storage.internals.log;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -25,6 +24,8 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -939,7 +940,7 @@ public class ProducerStateManagerTest {
 
         RecordBatch batch = mock(RecordBatch.class);
         when(batch.isControlBatch()).thenReturn(true);
-        when(batch.iterator()).thenReturn(Collections.emptyIterator());
+        when(batch.streamingIterator(BufferSupplier.NO_CACHING)).thenReturn(CloseableIterator.wrap(Collections.emptyIterator()));
 
         // Appending the empty control batch should not throw and a new transaction shouldn't be started
         append(stateManager, producerId, baseOffset, batch);
