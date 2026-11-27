@@ -17,6 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.streams.StreamsConfig;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +32,7 @@ import java.util.Objects;
  * the windowed store changelog topics.
  */
 public class WindowedChangelogTopicConfig extends InternalTopicConfig {
+    private static final Logger LOG = LoggerFactory.getLogger(WindowedChangelogTopicConfig.class);
     private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
@@ -52,7 +57,9 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
      */
     @Override
     public Map<String, String> properties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
-        // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
+        // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides,
+        // except for retention.ms: it is derived from the store retention and replaces a global value,
+        // so only a per-topic value overrides it
         final Map<String, String> topicConfig = new HashMap<>(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
 
         topicConfig.putAll(defaultProperties);
@@ -65,6 +72,17 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
                 retentionValue = Math.addExact(retentionMs, additionalRetentionMs);
             } catch (final ArithmeticException swallow) {
                 retentionValue = Long.MAX_VALUE;
+            }
+            if (defaultProperties.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
+                LOG.warn("Topic config '{}' does not apply to changelog topic {}. User setting ({}) will be ignored " +
+                        "and the value derived from the store retention and {} ({}) will be used. " +
+                        "To set {} for this topic, use withLoggingEnabled(Map).",
+                    StreamsConfig.topicPrefix(TopicConfig.RETENTION_MS_CONFIG),
+                    name,
+                    defaultProperties.get(TopicConfig.RETENTION_MS_CONFIG),
+                    StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+                    retentionValue,
+                    TopicConfig.RETENTION_MS_CONFIG);
             }
             topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionValue));
         }

@@ -197,6 +197,7 @@ public class StreamsConfig extends AbstractConfig {
      * Prefix used to provide default topic configs to be applied when creating internal topics.
      * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
      * It is recommended to use {@link #topicPrefix(String)}.
+     * See {@link #topicPrefix(String)} for the configs that this prefix does not override.
      */
     // TODO: currently we cannot get the full topic configurations and hence cannot allow topic configs without the prefix,
     //       this can be lifted once kafka.log.LogConfig is completely deprecated by org.apache.kafka.common.config.TopicConfig
@@ -1621,6 +1622,12 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * Prefix a property with {@link #TOPIC_PREFIX}
      * used to provide default topic configs to be applied when creating internal topics.
+     * <p>
+     * Two configs are derived from the state store, so this prefix does not override them:
+     * {@code retention.ms} of window and session store changelog topics (the store retention plus
+     * {@link #WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG}), and {@code min.compaction.lag.ms}
+     * of versioned store changelog topics (the store history retention plus 24 hours).
+     * To set them, pass the config to the store with {@code withLoggingEnabled(Map)}.
      *
      * @param topicProp the topic property to be masked
      * @return TOPIC_PREFIX + {@code topicProp}

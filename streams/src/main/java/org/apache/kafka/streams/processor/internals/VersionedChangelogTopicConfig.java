@@ -17,6 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.streams.StreamsConfig;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +32,7 @@ import java.util.Objects;
  * the versioned store changelog topics.
  */
 public class VersionedChangelogTopicConfig extends InternalTopicConfig {
+    private static final Logger LOG = LoggerFactory.getLogger(VersionedChangelogTopicConfig.class);
     private static final Map<String, String> VERSIONED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
@@ -60,7 +65,9 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
      */
     @Override
     public Map<String, String> properties(final Map<String, String> defaultProperties, final long windowStoreAdditionalRetentionMs) {
-        // internal topic config override rule: library overrides < global config overrides < per-topic config overrides
+        // internal topic config override rule: library overrides < global config overrides < per-topic config overrides,
+        // except for min.compaction.lag.ms: it is derived from the store history retention and replaces a global value,
+        // so only a per-topic value overrides it
         final Map<String, String> topicConfig = new HashMap<>(VERSIONED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
 
         topicConfig.putAll(defaultProperties);
@@ -73,6 +80,16 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
                 compactionLagValue = Math.addExact(minCompactionLagMs, VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS);
             } catch (final ArithmeticException swallow) {
                 compactionLagValue = Long.MAX_VALUE;
+            }
+            if (defaultProperties.containsKey(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG)) {
+                LOG.warn("Topic config '{}' does not apply to changelog topic {}. User setting ({}) will be ignored " +
+                        "and the value derived from the store history retention ({}) will be used. " +
+                        "To set {} for this topic, use withLoggingEnabled(Map).",
+                    StreamsConfig.topicPrefix(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG),
+                    name,
+                    defaultProperties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG),
+                    compactionLagValue,
+                    TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
             }
             topicConfig.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagValue));
         }
