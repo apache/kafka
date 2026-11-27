@@ -123,7 +123,9 @@ public class ProduceRequest extends AbstractRequest {
                             // TopicName will be empty string in versions >= 13 and topic id will be used as the main identifier.
                             tmpPartitionSizes.compute(new TopicIdPartition(topicData.topicId(), partitionData.index(), topicData.name()),
                                 (ignored, previousValue) ->
-                                    partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
+                                    // records are nullable in the schema
+                                    (partitionData.records() == null ? 0 : partitionData.records().sizeInBytes()) +
+                                        (previousValue == null ? 0 : previousValue))
                         )
                     );
                     partitionSizes = tmpPartitionSizes;
