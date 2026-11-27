@@ -49,6 +49,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -100,6 +102,23 @@ public class RemoteIndexCache implements Closeable {
     private final RemoteStorageManager remoteStorageManager;
     private final KafkaScheduler cleanerScheduler = new KafkaScheduler(1, true, REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD);
     private int fileDeleteDelayMs = 10_000;
+
+    /**
+     * Entries that have been removed from the cache and whose delayed cleanup task has not completed yet. These entries
+     * are no longer reachable through {@link #internalCache}, so they are tracked here in order to release their
+     * resources if the cleaner is stopped before their cleanup task runs.
+     */
+    private final Set<Entry> entriesPendingCleanup = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Lock used to make scheduling a cleanup task and stopping the cleaner mutually exclusive, so that every entry
+     * removed from the cache is either tracked in {@link #entriesPendingCleanup} before the cleaner stops or closed
+     * directly after it has stopped.
+     */
+    private final Object cleanupLock = new Object();
+
+    // Guarded by cleanupLock
+    private boolean cleanerStopped = false;
 
     /**
      * Actual cache implementation that this file wraps around.
@@ -154,8 +173,21 @@ public class RemoteIndexCache implements Closeable {
         cacheDir = new File(logDir, DIR_NAME);
 
         internalCache = initEmptyCache(maxSize, ttlMs, recordStats, ticker);
-        init();
+        // Restoring cached entries can trigger eviction, so cleanup scheduling must already be available.
         cleanerScheduler.startup();
+        try {
+            init();
+        } catch (IOException | RuntimeException | Error e) {
+            try {
+                shutdownCleanerAndCloseEntries();
+            } catch (Exception cleanupException) {
+                if (cleanupException instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                e.addSuppressed(cleanupException);
+            }
+            throw e;
+        }
     }
 
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
@@ -195,7 +227,7 @@ public class RemoteIndexCache implements Closeable {
                 .evictionListener((Uuid key, Entry entry, RemovalCause cause) -> {
                     // Mark the entries for cleanup and add them to the queue to be garbage collected later by the background thread.
                     if (entry != null) {
-                        enqueueEntryForCleanup(entry);
+                        enqueueEntryForCleanup(entry, true);
                     } else {
                         log.error("Received entry as null for key {} when the it is removed from the cache.", key);
                     }
@@ -221,7 +253,7 @@ public class RemoteIndexCache implements Closeable {
         lock.readLock().lock();
         try {
             internalCache.asMap().computeIfPresent(key, (k, v) -> {
-                enqueueEntryForCleanup(v);
+                enqueueEntryForCleanup(v, false);
                 // Returning null to remove the key from the cache
                 return null;
             });
@@ -236,7 +268,7 @@ public class RemoteIndexCache implements Closeable {
             keys.forEach(key -> internalCache.asMap().computeIfPresent(key, (k, v) -> {
                 // Mark then entry for cleanup before removing it from the cache to avoid contention with the
                 // next fetch for the same key.
-                enqueueEntryForCleanup(v);
+                enqueueEntryForCleanup(v, false);
                 // Returning null to remove the key from the cache
                 return null;
             }));
@@ -245,20 +277,83 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    private void enqueueEntryForCleanup(Entry entry) {
+    /**
+     * Marks an entry that has been removed from the cache for cleanup and schedules the deletion of its index files.
+     * If the cleaner has stopped, no deletion can be scheduled anymore and the entry is closed instead.
+     *
+     * @param entry   the entry removed from the cache
+     * @param evicted whether the entry has been evicted by the cache, as opposed to removed explicitly. Once the cleaner
+     *                has stopped, an evicted entry keeps its index files, as closing the cache does not delete index
+     *                files, so they can be reused on the next initialization. An explicitly removed entry always has its
+     *                index files renamed with the deleted suffix, so they are removed on the next initialization.
+     */
+    private void enqueueEntryForCleanup(Entry entry, boolean evicted) {
+        if (evicted && isCleanerStopped()) {
+            entry.close();
+            return;
+        }
+
         try {
             entry.markForCleanup();
-            Runnable runnable = () -> {
-                try {
-                    entry.cleanup();
-                    log.debug("Cleaned up index entry {}", entry);
-                } catch (Exception ex) {
-                    log.error("Error occurred while cleaning up expired entry: {}", entry, ex);
-                }
-            };
-            cleanerScheduler.scheduleOnce("delete-index", runnable, fileDeleteDelayMs);
         } catch (IOException e) {
             throw new KafkaException(e);
+        }
+
+        synchronized (cleanupLock) {
+            if (!cleanerStopped) {
+                entriesPendingCleanup.add(entry);
+                Runnable runnable = () -> {
+                    try {
+                        entry.cleanup();
+                        log.debug("Cleaned up index entry {}", entry);
+                    } catch (Exception ex) {
+                        log.error("Error occurred while cleaning up expired entry: {}", entry, ex);
+                    } finally {
+                        entriesPendingCleanup.remove(entry);
+                    }
+                };
+                cleanerScheduler.scheduleOnce("delete-index", runnable, fileDeleteDelayMs);
+                return;
+            }
+        }
+
+        // The cleaner has been stopped, so no cleanup task will ever run for this entry. Release its resources now. The
+        // index files have already been renamed with the deleted suffix and will be removed on the next initialization.
+        entry.close();
+    }
+
+    private boolean isCleanerStopped() {
+        synchronized (cleanupLock) {
+            return cleanerStopped;
+        }
+    }
+
+    /**
+     * Stops the cleaner and closes every entry this cache still holds resources for: the entries in the cache and the
+     * entries removed from the cache whose delayed cleanup task will no longer run. This does not delete any index files.
+     */
+    private void shutdownCleanerAndCloseEntries() throws InterruptedException {
+        synchronized (cleanupLock) {
+            cleanerStopped = true;
+        }
+        try {
+            // Waits for a running cleanup task to complete. Delayed cleanup tasks that have not started are discarded.
+            cleanerScheduler.shutdown();
+        } finally {
+            // Entries whose cleanup task was discarded are closed instead of deleted. Their index files have already
+            // been renamed with the deleted suffix and will be removed on the next initialization.
+            entriesPendingCleanup.forEach(Entry::close);
+            entriesPendingCleanup.clear();
+            // Close all the opened indexes to force unload mmap memory. Note that internal cache does not require
+            // explicit cleaning/closing. We don't invalidate the cache as that would remove all the entries and
+            // rename their index files with the deleted suffix.
+            internalCache.asMap().forEach((uuid, entry) -> entry.close());
+            // Entries that have expired but have not been evicted yet are not visible through asMap(), and an eviction
+            // may be in progress on another thread. Perform the pending cache maintenance synchronously: this waits for
+            // any in-progress eviction and evicts the remaining expired entries. As the cleaner has stopped, the
+            // eviction listener closes them directly and keeps their index files, so every entry is closed by the time
+            // this method returns.
+            internalCache.cleanUp();
         }
     }
 
@@ -491,11 +586,7 @@ public class RemoteIndexCache implements Closeable {
             try {
                 log.info("Close initiated for RemoteIndexCache. Cache stats={}. Cache entries pending delete={}",
                         internalCache.stats(), expiredIdxPendingForDeletion());
-                cleanerScheduler.shutdown();
-                // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
-                // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
-                // the cache as both would lead to triggering of removal listener.
-                internalCache.asMap().forEach((uuid, entry) -> entry.close());
+                shutdownCleanerAndCloseEntries();
                 log.info("Close completed for RemoteIndexCache");
             } catch (InterruptedException e) {
                 throw new KafkaException(e);

@@ -27,14 +27,20 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
+
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.InOrder;
+import org.mockito.MockedConstruction;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +50,9 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -62,6 +70,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -81,11 +91,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -540,6 +555,224 @@ public class RemoteIndexCacheTest {
         }
 
         verifyNoMoreInteractions(rsm);
+    }
+
+    @Test
+    public void testCacheEntriesEvictedDuringInitializationAreScheduledForCleanup() throws IOException {
+        cache.close();
+        File cacheDir = cache.cacheDir();
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(2, idPartition);
+        for (RemoteLogSegmentMetadata metadata : metadataList) {
+            try (OffsetIndex offsetIndex = createOffsetIndexForSegmentMetadata(metadata, cacheDir);
+                 TimeIndex timeIndex = createTimeIndexForSegmentMetadata(metadata, cacheDir);
+                 TransactionIndex transactionIndex = createTxIndexForSegmentMetadata(metadata, cacheDir)) {
+                maybeAppendIndexEntries(offsetIndex, timeIndex);
+                assertTrue(transactionIndex.isEmpty());
+            }
+        }
+
+        // Run cache maintenance inline so entries are evicted during init(), before the constructor returns.
+        Caffeine<Object, Object> builder = Caffeine.newBuilder().executor(Runnable::run);
+        try (var mockedCaffeine = mockStatic(Caffeine.class, CALLS_REAL_METHODS)) {
+            mockedCaffeine.when(Caffeine::newBuilder).thenReturn(builder);
+            try (RemoteIndexCache reloadedCache = new RemoteIndexCache(1L, rsm, logDir.toString())) {
+                assertEquals(0, reloadedCache.internalCache().estimatedSize());
+                assertEquals(3 * metadataList.size(), countFiles(cacheDir,
+                    name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
+                assertEquals(metadataList.size(), reloadedCache.expiredIdxPendingForDeletion(),
+                    "Every entry evicted during initialization must retain its cleanup task");
+            }
+        }
+        verifyNoInteractions(rsm);
+    }
+
+    @Test
+    public void testInitializationFailureClosesEntriesEvictedDuringInitialization() throws IOException, InterruptedException {
+        cache.close();
+        File cacheDir = cache.cacheDir();
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(2, idPartition);
+        for (RemoteLogSegmentMetadata metadata : metadataList) {
+            try (OffsetIndex offsetIndex = createOffsetIndexForSegmentMetadata(metadata, cacheDir);
+                 TimeIndex timeIndex = createTimeIndexForSegmentMetadata(metadata, cacheDir);
+                 TransactionIndex transactionIndex = createTxIndexForSegmentMetadata(metadata, cacheDir)) {
+                maybeAppendIndexEntries(offsetIndex, timeIndex);
+                assertTrue(transactionIndex.isEmpty());
+            }
+        }
+
+        // Run cache maintenance inline so that the first restored entry is evicted during init(). Once it has been
+        // evicted, corrupt the offset index of the remaining segment so that restoring it makes init() fail while the
+        // evicted entry is only referenced by its pending cleanup task.
+        List<RemoteIndexCache.Entry> evictedEntries = new ArrayList<>();
+        Caffeine<Object, Object> builder = spy(Caffeine.newBuilder().executor(Runnable::run));
+        AtomicReference<RemovalListener<Object, Object>> wrappedListener = new AtomicReference<>();
+        doAnswer(invocation -> {
+            RemovalListener<Object, Object> listener = invocation.getArgument(0);
+            if (listener == wrappedListener.get()) {
+                return invocation.callRealMethod();
+            }
+            wrappedListener.set((key, value, cause) -> {
+                listener.onRemoval(key, value, cause);
+                evictedEntries.add((RemoteIndexCache.Entry) value);
+                corruptOffsetIndexFiles(cacheDir);
+            });
+            return builder.evictionListener(wrappedListener.get());
+        }).when(builder).evictionListener(any());
+
+        // Use a mock scheduler so that the delayed cleanup task never runs, independent of timing.
+        try (var mockedCaffeine = mockStatic(Caffeine.class, CALLS_REAL_METHODS);
+             MockedConstruction<KafkaScheduler> schedulers = mockConstruction(KafkaScheduler.class)) {
+            mockedCaffeine.when(Caffeine::newBuilder).thenReturn(builder);
+            assertThrows(CorruptIndexException.class, () -> new RemoteIndexCache(1L, rsm, logDir.toString()));
+
+            assertEquals(1, schedulers.constructed().size());
+            KafkaScheduler scheduler = schedulers.constructed().get(0);
+            InOrder order = inOrder(scheduler);
+            order.verify(scheduler).startup();
+            order.verify(scheduler).scheduleOnce(eq("delete-index"), any(Runnable.class), anyLong());
+            order.verify(scheduler).shutdown();
+        }
+
+        assertEquals(1, evictedEntries.size());
+        RemoteIndexCache.Entry evictedEntry = evictedEntries.get(0);
+        assertTrue(evictedEntry.isMarkedForCleanup());
+        assertFalse(evictedEntry.isCleanStarted(), "The delayed cleanup task must not have run");
+        assertNull(evictedEntry.offsetIndex().mmap(), "Offset index of the evicted entry must be closed");
+        assertNull(evictedEntry.timeIndex().mmap(), "Time index of the evicted entry must be closed");
+        verifyNoInteractions(rsm);
+    }
+
+    @Test
+    public void testCloseClosesEntriesPendingCleanup() throws IOException {
+        // Make sure that the delayed cleanup task does not run before the cache is closed.
+        cache.setFileDeleteDelayMs(60_000);
+        Uuid key = rlsMetadata.remoteLogSegmentId().id();
+        RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry(rlsMetadata.remoteLogSegmentId());
+        cache.internalCache().put(key, spyEntry);
+
+        cache.remove(key);
+        assertTrue(spyEntry.isMarkedForCleanup());
+        assertEquals(1, cache.expiredIdxPendingForDeletion());
+
+        cache.close();
+
+        // The entry is no longer in the cache and its cleanup task was discarded, so close must release its indexes.
+        verify(spyEntry).close();
+        verify(spyEntry, times(0)).cleanup();
+        verify(spyEntry.offsetIndex()).close();
+        verify(spyEntry.timeIndex()).close();
+        verify(spyEntry.txnIndex()).close();
+        // Index files must not be deleted. They have been renamed and will be removed on the next initialization.
+        verify(spyEntry.offsetIndex(), times(0)).deleteIfExists();
+        verify(spyEntry.timeIndex(), times(0)).deleteIfExists();
+        verify(spyEntry.txnIndex(), times(0)).deleteIfExists();
+        assertEquals(3, countFiles(cache.cacheDir(), name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
+    }
+
+    @Test
+    public void testEntryRemovedAfterCleanerStoppedIsClosed() throws IOException {
+        Uuid key = rlsMetadata.remoteLogSegmentId().id();
+        RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry(rlsMetadata.remoteLogSegmentId());
+        cache.internalCache().put(key, spyEntry);
+        cache.close();
+        verify(spyEntry).close();
+
+        // No cleanup task can run once the cleaner has stopped, so the removed entry must be closed directly.
+        cache.remove(key);
+        assertTrue(spyEntry.isMarkedForCleanup());
+        verify(spyEntry, times(2)).close();
+        verify(spyEntry, times(0)).cleanup();
+        assertEquals(0, cache.expiredIdxPendingForDeletion());
+    }
+
+    @Test
+    public void testCloseClosesExpiredEntriesNotYetEvicted() throws IOException {
+        cache.close();
+        AtomicLong tickerNanos = new AtomicLong();
+        // Discard the background maintenance tasks, so that the entry is only evicted when maintenance is performed
+        // synchronously through Cache.cleanUp(), and never before close.
+        Caffeine<Object, Object> builder = Caffeine.newBuilder().executor(task -> { });
+        RemoteIndexCache ttlCache;
+        try (var mockedCaffeine = mockStatic(Caffeine.class, CALLS_REAL_METHODS)) {
+            mockedCaffeine.when(Caffeine::newBuilder).thenReturn(builder);
+            ttlCache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, 1000L, false, rsm,
+                logDir.toString(), tickerNanos::get);
+        }
+        try {
+            Uuid key = rlsMetadata.remoteLogSegmentId().id();
+            RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry(rlsMetadata.remoteLogSegmentId());
+            ttlCache.internalCache().put(key, spyEntry);
+
+            // The entry expires, but it is not evicted yet and is therefore not visible through asMap().
+            tickerNanos.addAndGet(TimeUnit.SECONDS.toNanos(2));
+            assertFalse(ttlCache.internalCache().asMap().containsKey(key));
+            assertFalse(spyEntry.isMarkedForCleanup());
+
+            ttlCache.close();
+
+            // The expired entry must be closed by the time close returns, without running the delayed cleanup.
+            verify(spyEntry).close();
+            verify(spyEntry.offsetIndex()).close();
+            verify(spyEntry.timeIndex()).close();
+            verify(spyEntry.txnIndex()).close();
+            verify(spyEntry, times(0)).cleanup();
+            assertNull(ttlCache.internalCache().getIfPresent(key));
+
+            // Closing the cache must not rename or delete the index files of the expired entry.
+            assertFalse(spyEntry.isMarkedForCleanup());
+            File cacheDir = ttlCache.cacheDir();
+            assertTrue(remoteOffsetIndexFile(cacheDir, rlsMetadata).exists());
+            assertTrue(remoteTimeIndexFile(cacheDir, rlsMetadata).exists());
+            assertTrue(remoteTransactionIndexFile(cacheDir, rlsMetadata).exists());
+            assertEquals(0, countFiles(cacheDir, name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
+        } finally {
+            ttlCache.close();
+        }
+    }
+
+    @Test
+    public void testEntryEvictedAfterCleanerStoppedKeepsIndexFiles() throws IOException {
+        Uuid key = rlsMetadata.remoteLogSegmentId().id();
+        File cacheDir = cache.cacheDir();
+        OffsetIndex offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, cacheDir));
+        TimeIndex timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, cacheDir));
+        TransactionIndex txnIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, cacheDir));
+        // Give the entry a non-zero weight so that it can be evicted by size.
+        maybeAppendIndexEntries(offsetIndex, timeIndex);
+        RemoteIndexCache.Entry spyEntry = spy(new RemoteIndexCache.Entry(offsetIndex, timeIndex, txnIndex));
+        cache.internalCache().put(key, spyEntry);
+        cache.close();
+        verify(spyEntry).close();
+
+        // An eviction after close only releases the resources of the entry and keeps its index files for reuse.
+        cache.internalCache().policy().eviction().orElseThrow().setMaximum(1L);
+        cache.internalCache().cleanUp();
+        assertNull(cache.internalCache().getIfPresent(key));
+        verify(spyEntry, times(2)).close();
+        verify(spyEntry, times(0)).markForCleanup();
+        assertTrue(remoteOffsetIndexFile(cacheDir, rlsMetadata).exists());
+        assertTrue(remoteTimeIndexFile(cacheDir, rlsMetadata).exists());
+        assertTrue(remoteTransactionIndexFile(cacheDir, rlsMetadata).exists());
+        assertEquals(0, countFiles(cacheDir, name -> name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
+    }
+
+    @Test
+    public void testInitializationFailureClosesCleanerScheduler() throws IOException, InterruptedException {
+        cache.close();
+        Path cacheDir = cache.cacheDir().toPath();
+        Files.delete(cacheDir);
+        Files.createFile(cacheDir);
+
+        try (MockedConstruction<KafkaScheduler> schedulers = mockConstruction(KafkaScheduler.class)) {
+            NotDirectoryException exception = assertThrows(NotDirectoryException.class,
+                () -> new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString()));
+            assertEquals(cacheDir.toString(), exception.getFile());
+            assertEquals(1, schedulers.constructed().size());
+            KafkaScheduler scheduler = schedulers.constructed().get(0);
+            InOrder order = inOrder(scheduler);
+            order.verify(scheduler).startup();
+            order.verify(scheduler).shutdown();
+        }
     }
 
     @Test
@@ -1136,6 +1369,19 @@ public class RemoteIndexCacheTest {
         assertEquals(0, countFiles(cacheDir, name -> true));
         assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
         assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
+    }
+
+    private static void corruptOffsetIndexFiles(File cacheDir) {
+        File[] offsetIndexFiles = Objects.requireNonNull(
+            cacheDir.listFiles((dir, name) -> name.endsWith(LogFileUtils.INDEX_FILE_SUFFIX)));
+        for (File offsetIndexFile : offsetIndexFiles) {
+            try {
+                // An offset index whose size is not a multiple of the entry size fails the sanity check.
+                Files.write(offsetIndexFile.toPath(), new byte[7]);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
     }
 
     private int countFiles(File cacheDir, Predicate<String> condition) {
