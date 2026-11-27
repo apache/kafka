@@ -273,6 +273,7 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
+                RemoteLogManagerConfig.REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP,
                 RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,

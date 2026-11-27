@@ -232,6 +232,32 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testUpdateRemoteFetchPrincipalMetricsEnabled(): Unit = {
+    val config = KafkaConfig(TestUtils.createBrokerConfig(0, port = 8181))
+    assertFalse(config.remoteLogManagerConfig.remoteFetchPrincipalMetricsEnabled())
+
+    val serverMock = mock(classOf[KafkaBroker])
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    when(serverMock.config).thenReturn(config)
+    when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
+
+    val props = new Properties()
+    props.put(RemoteLogManagerConfig.REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP, "true")
+    config.dynamicConfig.validate(props, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertTrue(config.remoteLogManagerConfig.remoteFetchPrincipalMetricsEnabled())
+    verify(remoteLogManager).updateFetchPrincipalMetricsEnabled(true)
+
+    props.put(RemoteLogManagerConfig.REMOTE_FETCH_PRINCIPAL_METRICS_ENABLE_PROP, "false")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertFalse(config.remoteLogManagerConfig.remoteFetchPrincipalMetricsEnabled())
+    verify(remoteLogManager).updateFetchPrincipalMetricsEnabled(false)
+  }
+
+  @Test
   def testRemoteLogDynamicThreadPoolWithInvalidValues(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     val config = KafkaConfig(origProps)
