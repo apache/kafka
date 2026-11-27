@@ -29,6 +29,7 @@
     <allow pkg="javax.security.auth.login"/>
 
     <allow pkg="com.yammer.metrics.core" />
+    <allow pkg="io.opentelemetry.proto" />
 
     <subpackage name="clients.producer">
         <allow pkg="org.opentest4j"/>
