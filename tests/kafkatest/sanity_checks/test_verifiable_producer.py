@@ -151,3 +151,31 @@ class TestVerifiableProducer(Test):
         num_produced = self.producer.num_acked
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
+    @cluster(num_nodes=4)
+    @matrix(controller_sasl_mechanism=['SCRAM-SHA-256', 'SCRAM-SHA-512'], metadata_quorum=[quorum.isolated_kraft])
+    def test_isolated_kraft_controller_scram(self, controller_sasl_mechanism, metadata_quorum):
+        """Verify that an isolated KRaft quorum can bootstrap with SCRAM controller listeners."""
+        self.kafka.security_protocol = self.kafka.interbroker_security_protocol = 'PLAINTEXT'
+        self.kafka.client_sasl_mechanism = controller_sasl_mechanism
+
+        controller_quorum = self.kafka.controller_quorum
+        controller_quorum.security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.client_sasl_mechanism = controller_sasl_mechanism
+        controller_quorum.interbroker_security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.interbroker_sasl_mechanism = controller_sasl_mechanism
+        controller_quorum.controller_security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.controller_sasl_mechanism = controller_sasl_mechanism
+        controller_quorum.intercontroller_security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.intercontroller_sasl_mechanism = controller_sasl_mechanism
+
+        self.kafka.start()
+
+        node = self.producer.nodes[0]
+        node.version = KafkaVersion(str(DEV_BRANCH))
+        self.producer.start()
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
+                   err_msg="Producer failed to start in a reasonable amount of time.")
+
+        assert is_version(node, [node.version.vstring], proc_grep_string=VerifiableProducer.__qualname__, logger=self.logger)
+        self.producer.wait()
+        assert self.producer.num_acked == self.num_messages
