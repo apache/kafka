@@ -27,15 +27,21 @@ import java.util.Map;
 
 public class DescribeTransactionsResponse extends AbstractResponse {
     private final DescribeTransactionsResponseData data;
+    private final boolean hasTransactionLastUpdateTimeMs;
 
-    public DescribeTransactionsResponse(DescribeTransactionsResponseData data) {
+    public DescribeTransactionsResponse(DescribeTransactionsResponseData data, short version) {
         super(ApiKeys.DESCRIBE_TRANSACTIONS);
         this.data = data;
+        this.hasTransactionLastUpdateTimeMs = version >= 1;
     }
 
     @Override
     public DescribeTransactionsResponseData data() {
         return data;
+    }
+
+    public boolean hasTransactionLastUpdateTimeMs() {
+        return hasTransactionLastUpdateTimeMs;
     }
 
     @Override
@@ -49,8 +55,7 @@ public class DescribeTransactionsResponse extends AbstractResponse {
     }
 
     public static DescribeTransactionsResponse parse(Readable readable, short version) {
-        return new DescribeTransactionsResponse(new DescribeTransactionsResponseData(
-            readable, version));
+        return new DescribeTransactionsResponse(new DescribeTransactionsResponseData(readable, version), version);
     }
 
     @Override

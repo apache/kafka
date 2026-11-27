@@ -1227,7 +1227,7 @@ public class RequestResponseTest {
             case BROKER_REGISTRATION: return createBrokerRegistrationResponse();
             case BROKER_HEARTBEAT: return createBrokerHeartbeatResponse();
             case UNREGISTER_BROKER: return createUnregisterBrokerResponse();
-            case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse();
+            case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse(version);
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
@@ -3727,7 +3727,8 @@ public class RequestResponseTest {
         return new DescribeTransactionsRequest.Builder(data).build(version);
     }
 
-    private DescribeTransactionsResponse createDescribeTransactionsResponse() {
+    private DescribeTransactionsResponse createDescribeTransactionsResponse(short version) {
+        long lastUpdateTimeMs = version >= 1 ? 13490218404L : 0L;
         DescribeTransactionsResponseData data = new DescribeTransactionsResponseData();
         data.setTransactionStates(asList(
             new DescribeTransactionsResponseData.TransactionState()
@@ -3736,6 +3737,7 @@ public class RequestResponseTest {
                 .setProducerId(12345L)
                 .setProducerEpoch((short) 15)
                 .setTransactionStartTimeMs(13490218304L)
+                .setTransactionLastUpdateTimeMs(lastUpdateTimeMs)
                 .setTransactionState("Empty"),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NONE.code())
@@ -3743,6 +3745,7 @@ public class RequestResponseTest {
                 .setProducerId(98765L)
                 .setProducerEpoch((short) 30)
                 .setTransactionStartTimeMs(13490218304L)
+                .setTransactionLastUpdateTimeMs(lastUpdateTimeMs)
                 .setTransactionState("Ongoing")
                 .setTopics(new DescribeTransactionsResponseData.TopicDataCollection(
                     asList(
@@ -3758,7 +3761,7 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
                 .setTransactionalId("t3")
         ));
-        return new DescribeTransactionsResponse(data);
+        return new DescribeTransactionsResponse(data, version);
     }
 
     private ListTransactionsRequest createListTransactionsRequest(short version) {

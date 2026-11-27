@@ -390,6 +390,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 .setTransactionState(txnMetadata.state.stateName)
                 .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
                 .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
+                .setTransactionLastUpdateTimeMs(txnMetadata.txnLastUpdateTimestamp)
             }
           })
       }

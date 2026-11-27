@@ -67,7 +67,7 @@ public class DescribeTransactionsRequest extends AbstractRequest {
                     .setErrorCode(error.code());
             response.transactionStates().add(transactionState);
         }
-        return new DescribeTransactionsResponse(response);
+        return new DescribeTransactionsResponse(response, version());
     }
 
     public static DescribeTransactionsRequest parse(Readable readable, short version) {

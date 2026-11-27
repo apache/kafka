@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -382,6 +383,7 @@ public abstract class TransactionsCommand {
             "TransactionState",
             "TransactionTimeoutMs",
             "CurrentTransactionStartTimeMs",
+            "TransactionLastUpdateTimeMs",
             "TransactionDurationMs",
             "TopicPartitions"
         );
@@ -429,11 +431,19 @@ public abstract class TransactionsCommand {
             if (result.transactionStartTimeMs().isPresent()) {
                 long transactionStartTimeMs = result.transactionStartTimeMs().getAsLong();
                 transactionStartTimeMsColumnValue = String.valueOf(transactionStartTimeMs);
-                transactionDurationMsColumnValue = String.valueOf(time.milliseconds() - transactionStartTimeMs);
+                if (result.state() == TransactionState.COMPLETE_COMMIT || result.state() == TransactionState.COMPLETE_ABORT) {
+                    transactionDurationMsColumnValue = result.transactionLastUpdateTimeMs().isPresent() ?
+                        String.valueOf(result.transactionLastUpdateTimeMs().getAsLong() - transactionStartTimeMs) : "-1";
+                } else {
+                    transactionDurationMsColumnValue = String.valueOf(time.milliseconds() - transactionStartTimeMs);
+                }
             } else {
                 transactionStartTimeMsColumnValue = "None";
                 transactionDurationMsColumnValue = "None";
             }
+
+            final String transactionLastUpdateTimeMsColumnValue = result.transactionLastUpdateTimeMs().isPresent() ?
+                String.valueOf(result.transactionLastUpdateTimeMs().getAsLong()) : "None";
 
             List<String> row = List.of(
                 String.valueOf(result.coordinatorId()),
@@ -443,6 +453,7 @@ public abstract class TransactionsCommand {
                 result.state().toString(),
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
+                transactionLastUpdateTimeMsColumnValue,
                 transactionDurationMsColumnValue,
                 result.topicPartitions().stream().map(TopicPartition::toString).collect(Collectors.joining(","))
             );

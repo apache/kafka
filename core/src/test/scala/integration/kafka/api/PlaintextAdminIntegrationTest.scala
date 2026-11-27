@@ -374,6 +374,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       producer.commitTransaction()
       TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
+      val committedTransaction = describeTransactions()
+      assertTrue(committedTransaction.transactionLastUpdateTimeMs().getAsLong >= transactionResult.transactionLastUpdateTimeMs().getAsLong)
     } finally producer.close()
 
     // abort case
@@ -406,6 +408,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       abortProducer.abortTransaction()
       TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
+      val abortedTransaction = describeTransactions()
+      assertTrue(abortedTransaction.transactionLastUpdateTimeMs().getAsLong >= transactionSendMsgResult.transactionLastUpdateTimeMs().getAsLong)
     } finally abortProducer.close()
   }
 

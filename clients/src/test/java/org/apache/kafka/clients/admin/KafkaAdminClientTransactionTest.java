@@ -198,7 +198,7 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
             Node coordinator = env.cluster().nodes().iterator().next();
             TransactionDescription expected = new TransactionDescription(
                 coordinator.id(), TransactionState.COMPLETE_COMMIT, 12345L,
-                15, 10000L, OptionalLong.empty(), emptySet());
+                15, 10000L, OptionalLong.empty(), OptionalLong.of(4000L), emptySet());
 
             env.kafkaClient().prepareResponse(
                 request -> request instanceof FindCoordinatorRequest,
@@ -215,9 +215,10 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
                         .setTransactionalId(transactionalId)
                         .setTransactionTimeoutMs(10000)
                         .setTransactionStartTimeMs(-1)
+                        .setTransactionLastUpdateTimeMs(4000L)
                         .setTransactionState(expected.state().toString())
                     )
-                )),
+                ), (short) 1),
                 coordinator
             );
 
@@ -267,7 +268,7 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
                         .setErrorCode(Errors.NOT_COORDINATOR.code())
                         .setTransactionalId(transactionalId)
                     )
-                )),
+                ), (short) 1),
                 coordinator1
             );
 
@@ -284,7 +285,7 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
 
             TransactionDescription expected = new TransactionDescription(
                 coordinator2.id(), TransactionState.COMPLETE_COMMIT, 12345L,
-                15, 10000L, OptionalLong.empty(), emptySet());
+                15, 10000L, OptionalLong.empty(), OptionalLong.of(4000L), emptySet());
 
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof DescribeTransactionsRequest,
@@ -296,9 +297,10 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
                         .setTransactionalId(transactionalId)
                         .setTransactionTimeoutMs(10000)
                         .setTransactionStartTimeMs(-1)
+                        .setTransactionLastUpdateTimeMs(4000L)
                         .setTransactionState(expected.state().toString())
                     )
-                )),
+                ), (short) 1),
                 coordinator2
             );
 
