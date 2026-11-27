@@ -663,14 +663,45 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestAndHandleResponse(final long currentTimeMs) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
         return request.whenComplete((response, exception) -> {
-            long completionTimeMs = request.handler().completionTimeMs();
-            if (response != null) {
-                metricsManager.recordRequestLatency(response.requestLatencyMs());
-                onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
-            } else {
-                onFailure(exception, completionTimeMs);
+            // Handle unexpected errors when processing a HB response, so that
+            // the member moves to a fatal state and the error reaches the application.
+            final long completionTimeMs = request.handler().completionTimeMs();
+            try {
+                if (response != null) {
+                    metricsManager.recordRequestLatency(response.requestLatencyMs());
+                    onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
+                } else {
+                    onFailure(exception, completionTimeMs);
+                }
+            } catch (Throwable t) {
+                onUnexpectedResponseHandlingError(t, completionTimeMs);
             }
         });
+    }
+
+    /**
+     * Handle an unexpected error thrown while handling a heartbeat response or a heartbeat request
+     * failure. This would be the case of a bug on the client or an unexpected/buggy response from the broker.
+     * The member transitions to {@link MemberState#FATAL} and the error is propagated to the application
+     * (just like any other fatal heartbeat error).
+     */
+    private void onUnexpectedResponseHandlingError(final Throwable error, final long currentTimeMs) {
+        final String errorMessage = String.format(
+            "Unexpected error while handling StreamsGroupHeartbeatRequest: %s", error);
+        logger.error(errorMessage, error);
+        try {
+            // Record the attempt as failed only if handling did not get to record it, so that the
+            // request is not left in flight.
+            if (heartbeatRequestState.requestInFlight()) {
+                heartbeatRequestState.onFailedAttempt(currentTimeMs);
+            }
+            heartbeatState.reset();
+            handleFatalFailure(new KafkaException(errorMessage, error));
+            membershipManager.onFatalHeartbeatFailure();
+        } catch (final Throwable t) {
+            logger.error("Unexpected error while failing the member after an unexpected error handling "
+                + "StreamsGroupHeartbeatRequest", t);
+        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
