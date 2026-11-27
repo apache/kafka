@@ -143,7 +143,6 @@ public class EmbeddedKafkaCluster {
         try {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
         } catch (Exception e) {
             throw new ConnectException("Failed to start test Kafka cluster", e);
         }
@@ -173,7 +172,7 @@ public class EmbeddedKafkaCluster {
      * <p>
      * This provides extra guarantees compared to other cluster readiness checks such as
      * {@link ConnectAssertions#assertExactlyNumBrokersAreUp(int, String)} and
-     * {@link KafkaClusterTestKit#waitForReadyBrokers()}, which verify that brokers have
+     * {@link KafkaClusterTestKit#startup()}, which verify that brokers have
      * completed startup and joined the cluster, but do not verify that the internal consumer
      * offsets topic has been created or that it's actually possible for users to create and
      * interact with topics.

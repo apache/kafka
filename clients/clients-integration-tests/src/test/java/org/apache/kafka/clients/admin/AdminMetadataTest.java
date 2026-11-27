@@ -118,7 +118,6 @@ public class AdminMetadataTest {
 
     @ClusterTest
     public void testDescribeCluster() throws Exception {
-        clusterInstance.waitForReadyBrokers();
         try (Admin admin = clusterInstance.admin()) {
             DescribeClusterResult result = admin.describeCluster();
             Collection<Node> nodes = result.nodes().get();

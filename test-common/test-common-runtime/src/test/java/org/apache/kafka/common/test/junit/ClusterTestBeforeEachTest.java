@@ -20,10 +20,10 @@ package org.apache.kafka.common.test.junit;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.metadata.BrokerState;
 
 import org.junit.jupiter.api.BeforeEach;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,7 +40,7 @@ public class ClusterTestBeforeEachTest {
         if (!clusterInstance.started()) {
             clusterInstance.start();
         }
-        assertDoesNotThrow(clusterInstance::waitForReadyBrokers);
+        assertTrue(clusterInstance.brokers().values().stream().allMatch(broker -> broker.brokerState() == BrokerState.RUNNING));
     }
 
     @ClusterTest

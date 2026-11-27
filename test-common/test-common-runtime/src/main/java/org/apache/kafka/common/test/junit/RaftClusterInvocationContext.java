@@ -32,7 +32,6 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.storage.FormatterException;
 import org.apache.kafka.server.common.Feature;
@@ -54,7 +53,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -245,10 +244,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    waitForCondition(
-                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
-                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
-                            ), "Broker never made it to RUNNING state.");
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start Raft server", e);
@@ -283,8 +278,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public void restartBroker(int brokerId, Map<String, Object> propOverrides) {
-            clusterTestKit.restartBroker(brokerId, propOverrides);
+        public CompletableFuture<Void> restartBroker(int brokerId, Map<String, Object> propOverrides) {
+            return clusterTestKit.restartBroker(brokerId, propOverrides);
         }
 
         @Override
@@ -304,15 +299,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Optional<FaultHandlerException> firstNonFatalException() {
             return Optional.ofNullable(clusterTestKit.nonFatalFaultHandler().firstException());
-        }
-
-        @Override
-        public void waitForReadyBrokers() throws InterruptedException {
-            try {
-                clusterTestKit.waitForReadyBrokers();
-            } catch (ExecutionException e) {
-                throw new AssertionError("Failed while waiting for brokers to become ready", e);
-            }
         }
 
         @Override

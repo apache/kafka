@@ -47,8 +47,7 @@ class MetadataQuorumCommandTest {
         @ClusterTest(brokers = 2, controllers = 1),
         @ClusterTest(brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
-        cluster.waitForReadyBrokers();
+    public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) {
         String describeOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
@@ -89,14 +88,12 @@ class MetadataQuorumCommandTest {
         @ClusterTest(brokers = 2, controllers = 1),
         @ClusterTest(brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
+    public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) {
         testDescribeQuorumStatusSuccessful(cluster, false);
         testDescribeQuorumStatusSuccessful(cluster, true);
     }
 
-    private void testDescribeQuorumStatusSuccessful(ClusterInstance cluster, boolean usingBootstrapController) throws InterruptedException {
-        cluster.waitForReadyBrokers();
-
+    private void testDescribeQuorumStatusSuccessful(ClusterInstance cluster, boolean usingBootstrapController) {
         String describeOutput = ToolsTestUtils.captureStandardOut(
             () -> MetadataQuorumCommand.mainNoExit(
                 usingBootstrapController ? "--bootstrap-controller" : "--bootstrap-server",

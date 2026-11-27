@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -227,6 +228,24 @@ public class KafkaClusterTestKitTest {
             var broker = cluster.brokers().values().iterator().next();
             broker.shutdown();
             broker.startup();
+        }
+    }
+
+    @Test
+    public void testRestartBrokerFailure() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.fatalFaultHandler().setIgnore(true);
+
+            var restart = cluster.restartBroker(0, Map.of("authorizer.class.name", BadAuthorizer.class.getName()));
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> restart.get(30, TimeUnit.SECONDS));
+            assertEquals("test authorizer exception", exception.getCause().getMessage());
+            assertTrue(cluster.brokers().get(0).isShutdown());
         }
     }
 

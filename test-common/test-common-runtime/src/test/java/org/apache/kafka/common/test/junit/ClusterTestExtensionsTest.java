@@ -278,8 +278,6 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
-        clusterInstance.waitForReadyBrokers();
-
         // Remove broker id 0
         clusterInstance.shutdownBroker(0);
         Assertions.assertFalse(clusterInstance.aliveBrokers().containsKey(0));

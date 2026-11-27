@@ -245,7 +245,6 @@ public class ProducerIdExpirationTest {
             kafkaBroker.shutdown(Duration.ofMinutes(5));
             kafkaBroker.awaitShutdown();
             kafkaBroker.startup();
-            cluster.waitForReadyBrokers();
             for (KafkaBroker broker : cluster.brokers().values()) {
                 waitForCondition(
                     () -> broker.logManager().producerStateManagerConfig().producerIdExpirationMs() == 100,

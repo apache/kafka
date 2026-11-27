@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -268,7 +269,13 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
-    void restartBroker(int brokerId, Map<String, Object> propOverrides);
+    /**
+     * Restarts a broker with the given static configuration overrides.
+     *
+     * @return a future that completes after broker startup and propagation of broker metadata
+     *         to all brokers, or exceptionally if the restart fails
+     */
+    CompletableFuture<Void> restartBroker(int brokerId, Map<String, Object> propOverrides);
 
     void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2);
 
@@ -370,8 +377,6 @@ public interface ClusterInstance {
             throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
         }
     }
-
-    void waitForReadyBrokers() throws InterruptedException;
 
     default void waitTopicCreation(String topic, int partitions) throws InterruptedException {
         if (partitions <= 0) {

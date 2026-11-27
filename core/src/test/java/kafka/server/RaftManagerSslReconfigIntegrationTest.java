@@ -212,7 +212,6 @@ public class RaftManagerSslReconfigIntegrationTest {
         try (KafkaClusterTestKit cluster = buildCluster()) {
             cluster.format();
             cluster.startup();
-            cluster.waitForReadyBrokers();
 
             TestUtils.waitForCondition(
                 () -> certASerial.equals(quietlyLoadedSerial(cluster)),

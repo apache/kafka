@@ -111,7 +111,7 @@ public class DeleteTopicTest {
         cluster.restartBroker(0, Map.of(
             LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100",
             LOG_DELETE_DELAY_MS_CONFIG, "1000"
-        ));
+        )).get();
         TestUtils.waitForCondition(() -> deletedDirectories.stream().noneMatch(File::exists),
             "Topic directories were not deleted from disk after the broker restarted");
     }
