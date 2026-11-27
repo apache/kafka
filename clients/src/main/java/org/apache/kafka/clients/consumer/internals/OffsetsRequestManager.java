@@ -31,8 +31,11 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -329,7 +332,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     /**
      * Generate requests to fetch offsets and update positions once a response is received. This will first attempt
      * to use the committed offsets if available. If no committed offsets available, it will use the partition
-     * offsets retrieved from the leader.
+     * offsets retrieved from the leader. If the OffsetFetch fails because the member was fenced or left the group,
+     * the partitions are left without positions, and will be initialized on a following call if they are still
+     * assigned.
      */
     private CompletableFuture<Void> updatePositionsWithOffsets(long deadlineMs) {
         CompletableFuture<Void> result = new CompletableFuture<>();
@@ -341,8 +346,20 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         if (commitRequestManager != null) {
             CompletableFuture<Void> refreshWithCommittedOffsets = initWithCommittedOffsetsIfNeeded(initializingPartitions, deadlineMs);
 
-            // Reset positions for all partitions that may still require it (or that are awaiting reset)
-            updatePositions = refreshWithCommittedOffsets.thenCompose(__ -> initWithPartitionOffsetsIfNeeded(initializingPartitions));
+            updatePositions = refreshWithCommittedOffsets
+                .handle((__, error) -> {
+                    if (error == null) {
+                        // Reset positions for all partitions that may still require it (or that are awaiting reset)
+                        return initWithPartitionOffsetsIfNeeded(initializingPartitions);
+                    }
+                    if (memberFencedOrLeft(error)) {
+                        // Leave the partitions without positions (no reset). They will be initialized on a
+                        // following call if they are still assigned.
+                        return CompletableFuture.<Void>completedFuture(null);
+                    }
+                    return CompletableFuture.<Void>failedFuture(error);
+                })
+                .thenCompose(f -> f);
 
         } else {
             updatePositions = initWithPartitionOffsetsIfNeeded(initializingPartitions);
@@ -460,7 +477,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      *
      * @param offsets Committed offsets to use to update positions for initializing partitions.
      * @param error   Error received in response to the OffsetFetch request. Will be null if the request was successful.
-     * @param result  Future to complete once all positions have been updated with the given committed offsets
+     * @param result  Future to complete once all positions have been updated with the given committed offsets.
      */
     private void refreshOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                 final Throwable error,
@@ -476,9 +493,24 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             result.complete(null);
 
         } else {
-            log.error("Error fetching committed offsets to update positions", error);
+            if (memberFencedOrLeft(error)) {
+                log.info("OffsetFetch failed with {}. Positions will be initialized on a following poll " +
+                    "if the partitions are still assigned.", Errors.forException(error));
+            } else {
+                log.error("Error fetching committed offsets to update positions", error);
+            }
             result.completeExceptionally(error);
         }
+    }
+
+    /**
+     * Check if the given error, received in response to an OffsetFetch request, indicates that the member
+     * was fenced or left the group: UNKNOWN_MEMBER_ID, or STALE_MEMBER_EPOCH that could not be retried
+     * with a newer member epoch.
+     */
+    private static boolean memberFencedOrLeft(Throwable error) {
+        Throwable cause = Errors.maybeUnwrapException(error);
+        return cause instanceof UnknownMemberIdException || cause instanceof StaleMemberEpochException;
     }
 
     /**
