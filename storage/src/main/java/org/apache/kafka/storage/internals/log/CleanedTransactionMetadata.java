@@ -20,12 +20,13 @@ import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,40 +84,41 @@ public class CleanedTransactionMetadata {
     public boolean onControlBatchRead(RecordBatch controlBatch) {
         consumeAbortedTxnsUpTo(controlBatch.lastOffset());
 
-        Iterator<Record> controlRecordIterator = controlBatch.iterator();
-        if (controlRecordIterator.hasNext()) {
-            Record controlRecord = controlRecordIterator.next();
-            ControlRecordType controlType = ControlRecordType.parse(controlRecord.key());
-            long producerId = controlBatch.producerId();
+        try (CloseableIterator<Record> controlRecordIterator = controlBatch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            if (controlRecordIterator.hasNext()) {
+                Record controlRecord = controlRecordIterator.next();
+                ControlRecordType controlType = ControlRecordType.parse(controlRecord.key());
+                long producerId = controlBatch.producerId();
 
-            switch (controlType) {
-                case ABORT:
-                    AbortedTransactionMetadata abortedTxnMetadata = ongoingAbortedTxns.remove(producerId);
+                switch (controlType) {
+                    case ABORT:
+                        AbortedTransactionMetadata abortedTxnMetadata = ongoingAbortedTxns.remove(producerId);
 
-                    // Retain the marker until all batches from the transaction have been removed.
-                    if (abortedTxnMetadata != null && abortedTxnMetadata.lastObservedBatchOffset.isPresent()) {
-                        cleanedIndex.ifPresent(index -> {
-                            try {
-                                index.append(abortedTxnMetadata.abortedTxn);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+                        // Retain the marker until all batches from the transaction have been removed.
+                        if (abortedTxnMetadata != null && abortedTxnMetadata.lastObservedBatchOffset.isPresent()) {
+                            cleanedIndex.ifPresent(index -> {
+                                try {
+                                    index.append(abortedTxnMetadata.abortedTxn);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                            return false;
+                        }
+
+                        return true;
+
+                    case COMMIT:
+                        // This marker is eligible for deletion if we didn't traverse any batches from the transaction
+                        return !ongoingCommittedTxns.remove(producerId);
+
+                    default:
                         return false;
-                    }
-
-                    return true;
-
-                case COMMIT:
-                    // This marker is eligible for deletion if we didn't traverse any batches from the transaction
-                    return !ongoingCommittedTxns.remove(producerId);
-
-                default:
-                    return false;
+                }
+            } else {
+                // An empty control batch was already cleaned, so it's safe to discard
+                return true;
             }
-        } else {
-            // An empty control batch was already cleaned, so it's safe to discard
-            return true;
         }
     }
 

@@ -1110,7 +1110,7 @@ public class KafkaRaftLogTest {
         // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
         // [0..R-1] converted to an utf-8 string with empty keys and headers.
         int count = 0;
-        for (Record record : info.records.records()) {
+        for (Record record : TestUtils.records(info.records)) {
             byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
             assertEquals(ByteBuffer.wrap(expectedValue), record.value());
             count += 1;
@@ -1178,7 +1178,7 @@ public class KafkaRaftLogTest {
             )
         );
         int recordCount = 0;
-        var iterator = records.records().iterator();
+        var iterator = TestUtils.records(records).iterator();
         while (iterator.hasNext()) {
             recordCount++;
             iterator.next();

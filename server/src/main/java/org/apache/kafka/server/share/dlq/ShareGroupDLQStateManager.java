@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.LogReader;
@@ -1196,8 +1197,11 @@ public class ShareGroupDLQStateManager {
         }
         List<SimpleRecord> simpleRecords = new ArrayList<>();
         for (MemoryRecords records : recordsList) {
-            for (Record record : records.records()) {
-                simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
+            try (CloseableIterator<Record> iterator = records.records()) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
+                }
             }
         }
         return MemoryRecords.withRecords(Compression.NONE, simpleRecords.toArray(new SimpleRecord[0]));

@@ -32,6 +32,8 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
@@ -374,18 +376,21 @@ public class ProducerBatch {
         // And we also Retain the create time of the original batch.
         ProducerBatch batch = null;
 
-        for (Record record : recordBatch) {
-            assert thunkIter.hasNext();
-            Thunk thunk = thunkIter.next();
-            if (batch == null)
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+        try (CloseableIterator<Record> iterator = recordBatch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                assert thunkIter.hasNext();
+                Thunk thunk = thunkIter.next();
+                if (batch == null)
+                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
 
-            // A newly created batch can always host the first message.
-            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
-                batches.add(batch);
-                batch.closeForRecordAppends();
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+                // A newly created batch can always host the first message.
+                if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+                    batches.add(batch);
+                    batch.closeForRecordAppends();
+                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                    batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+                }
             }
         }
 

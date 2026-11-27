@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.record.internal.DefaultRecordBatch.RECORDS_COUNT_OFFSET;
@@ -126,7 +127,7 @@ public class DefaultRecordBatchTest {
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.lastSequence());
 
-            for (Record record : batch) record.ensureValid();
+            for (Record record : TestUtils.records(batch)) record.ensureValid();
         }
     }
 
@@ -154,7 +155,7 @@ public class DefaultRecordBatchTest {
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(baseSequence + 1, batch.lastSequence());
 
-            for (Record record : batch) record.ensureValid();
+            for (Record record : TestUtils.records(batch)) record.ensureValid();
         }
     }
 
@@ -180,7 +181,7 @@ public class DefaultRecordBatchTest {
         assertEquals(epoch, batch.producerEpoch());
         assertEquals(baseSequence, batch.baseSequence());
         assertEquals(0, batch.lastSequence());
-        List<Record> allRecords = TestUtils.toList(batch);
+        List<Record> allRecords = TestUtils.records(batch);
         assertEquals(3, allRecords.size());
         assertEquals(Integer.MAX_VALUE - 1, allRecords.get(0).sequence());
         assertEquals(Integer.MAX_VALUE, allRecords.get(1).sequence());
@@ -227,7 +228,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(batch));
     }
 
     @Test
@@ -236,7 +237,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(batch));
     }
 
     @Test
@@ -245,7 +246,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(batch));
     }
 
     @Test
@@ -254,7 +255,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
+        assertThrows(InvalidRecordException.class, () -> TestUtils.records(batch));
     }
 
     @Test
@@ -297,7 +298,7 @@ public class DefaultRecordBatchTest {
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
         long offset = firstOffset;
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(offset++, record.offset());
     }
 
@@ -342,7 +343,7 @@ public class DefaultRecordBatchTest {
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
 
-        for (Record record : records.records())
+        for (Record record : TestUtils.records(records))
             assertEquals(logAppendTime, record.timestamp());
     }
 
@@ -379,7 +380,7 @@ public class DefaultRecordBatchTest {
         MutableRecordBatch batch = batches.get(0);
         assertTrue(batch.isControlBatch());
 
-        List<Record> logRecords = TestUtils.toList(records.records());
+        List<Record> logRecords = TestUtils.records(records);
         assertEquals(1, logRecords.size());
 
         Record commitRecord = logRecords.get(0);
@@ -388,7 +389,7 @@ public class DefaultRecordBatchTest {
 
     @ParameterizedTest
     @EnumSource(value = CompressionType.class)
-    public void testStreamingIteratorConsistency(CompressionType compressionType) {
+    public void testStreamingIterator(CompressionType compressionType) {
         Compression compression = Compression.of(compressionType).build();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 compression, TimestampType.CREATE_TIME,
@@ -397,8 +398,30 @@ public class DefaultRecordBatchTest {
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
         try (CloseableIterator<Record> streamingIterator = batch.streamingIterator(BufferSupplier.create())) {
-            TestUtils.checkEquals(streamingIterator, batch.iterator());
+            List<Record> decoded = Utils.toList(streamingIterator);
+            assertEquals(List.of(0L, 1L, 2L), decoded.stream().map(Record::offset).collect(Collectors.toList()));
+            assertEquals(List.of(1L, 2L, 3L), decoded.stream().map(Record::timestamp).collect(Collectors.toList()));
+            assertEquals(List.of("a", "b", "c"), decoded.stream().map(record -> Utils.utf8(record.key())).collect(Collectors.toList()));
+            assertEquals(List.of("1", "2", "3"), decoded.stream().map(record -> Utils.utf8(record.value())).collect(Collectors.toList()));
         }
+    }
+
+    @Test
+    public void testStreamingIteratorDoesNotOpenStreamForEmptyBatch() {
+        DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
+            RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, 0));
+        try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+            assertFalse(iterator.hasNext());
+        }
+        verify(batch, never()).recordInputStream(any());
+    }
+
+    @Test
+    public void testStreamingIteratorRejectsNegativeCountBeforeOpeningStream() {
+        DefaultRecordBatch batch = spy(recordsWithInvalidRecordCount(
+            RecordBatch.MAGIC_VALUE_V2, 0L, CompressionType.GZIP, -1));
+        assertThrows(InvalidRecordException.class, () -> batch.streamingIterator(BufferSupplier.NO_CACHING));
+        verify(batch, never()).recordInputStream(any());
     }
 
     @ParameterizedTest
@@ -434,7 +457,7 @@ public class DefaultRecordBatchTest {
                 // assert that for uncompressed data stream record iterator is not used
                 assertInstanceOf(DefaultRecordBatch.RecordIterator.class, skipKeyValueIterator);
                 // superficial validation for correctness. Deep validation is already performed in other tests
-                assertEquals(Utils.toList(records.records()).size(), Utils.toList(skipKeyValueIterator).size());
+                assertEquals(TestUtils.records(records).size(), Utils.toList(skipKeyValueIterator).size());
             } else {
                 // assert that a streaming iterator is used for compressed records
                 assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);

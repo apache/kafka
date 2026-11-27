@@ -382,11 +382,12 @@ public class CompletedFetch {
         if (!batch.isControlBatch())
             return false;
 
-        Iterator<Record> batchIterator = batch.iterator();
-        if (!batchIterator.hasNext())
-            return false;
+        try (CloseableIterator<Record> batchIterator = batch.streamingIterator(decompressionBufferSupplier)) {
+            if (!batchIterator.hasNext())
+                return false;
 
-        Record firstRecord = batchIterator.next();
-        return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            Record firstRecord = batchIterator.next();
+            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+        }
     }
 }
