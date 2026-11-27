@@ -581,10 +581,13 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * @return True if the committed metadata is invalid; False otherwise.
+     * @return The validation error, or NONE if the committed offset and metadata are valid.
      */
-    private boolean isMetadataInvalid(String metadata) {
-        return metadata != null && metadata.length() > config.offsetMetadataMaxSize();
+    private Errors validateOffsetAndMetadata(long offset, String metadata) {
+        if (metadata != null && metadata.length() > config.offsetMetadataMaxSize()) {
+            return Errors.OFFSET_METADATA_TOO_LARGE;
+        }
+        return offset < 0 ? Errors.INVALID_REQUEST : Errors.NONE;
     }
 
     /**
@@ -635,10 +638,11 @@ public class OffsetMetadataManager {
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
-                if (isMetadataInvalid(partition.committedMetadata())) {
+                Errors error = validateOffsetAndMetadata(partition.committedOffset(), partition.committedMetadata());
+                if (error != Errors.NONE) {
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
+                        .setErrorCode(error.code()));
                 } else {
                     // Validate commit per-partition
                     validator.validate(
@@ -705,10 +709,11 @@ public class OffsetMetadataManager {
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
-                if (isMetadataInvalid(partition.committedMetadata())) {
+                Errors error = validateOffsetAndMetadata(partition.committedOffset(), partition.committedMetadata());
+                if (error != Errors.NONE) {
                     topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
+                        .setErrorCode(error.code()));
                 } else {
                     // Validate commit per-partition
                     try {

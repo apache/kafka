@@ -104,7 +104,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1078,6 +1081,89 @@ public class OffsetMetadataManagerTest {
         assertEquals("foo", group.groupId());
     }
 
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testOffsetCommitWithNegativeOffsets(short version) {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        Uuid topicId = version >= 10 ? Uuid.randomUuid() : Uuid.ZERO_UUID;
+        context.commitOffset("foo", "bar", 0, 100L, -1);
+
+        OffsetCommitRequestData.OffsetCommitRequestTopic topic = new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setName("bar")
+            .setTopicId(topicId)
+            .setPartitions(new ArrayList<>(List.of(
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(-2L),
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                    .setPartitionIndex(1)
+                    .setCommittedOffset(-1L),
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                    .setPartitionIndex(2)
+                    .setCommittedOffset(Long.MIN_VALUE)
+            )));
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setTopics(List.of(topic));
+
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(version, request);
+        assertEquals(List.of(Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(), result.records());
+        assertEquals(100L, context.offsetMetadataManager.offset("foo", "bar", 0).committedOffset);
+        verify(context.metrics, never()).record(eq(OFFSET_COMMITS_SENSOR_NAME), anyDouble());
+
+        topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
+            .setPartitionIndex(3)
+            .setCommittedOffset(0L));
+        topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
+            .setPartitionIndex(4)
+            .setCommittedOffset(Long.MAX_VALUE));
+        result = context.commitOffset(version, request);
+
+        assertEquals(List.of(Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(),
+                Errors.NONE.code(), Errors.NONE.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(
+            GroupCoordinatorRecordHelpers.newOffsetCommitRecord("foo", "bar", 3,
+                new OffsetAndMetadata(0L, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), topicId)),
+            GroupCoordinatorRecordHelpers.newOffsetCommitRecord("foo", "bar", 4,
+                new OffsetAndMetadata(Long.MAX_VALUE, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), topicId))
+        ), result.records());
+        assertEquals(100L, context.offsetMetadataManager.offset("foo", "bar", 0).committedOffset);
+        verify(context.metrics).record(OFFSET_COMMITS_SENSOR_NAME, 2);
+    }
+
+    @Test
+    public void testOffsetCommitWithOffsetMetadataTooLargeTakesPrecedenceOverNegativeOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withOffsetMetadataMaxSize(5)
+            .build();
+
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setTopics(List.of(
+                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                        .setName("bar")
+                        .setPartitions(List.of(
+                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitionIndex(0)
+                                .setCommittedOffset(-1L)
+                                .setCommittedMetadata("toolarge"),
+                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitionIndex(1)
+                                .setCommittedOffset(-1L)
+                                .setCommittedMetadata("small")
+                        ))
+                ))
+        );
+
+        assertEquals(List.of(Errors.OFFSET_METADATA_TOO_LARGE.code(), Errors.INVALID_REQUEST.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(), result.records());
+    }
+
     @Test
     public void testSimpleGroupOffsetCommitWithInstanceId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
@@ -2024,6 +2110,97 @@ public class OffsetMetadataManagerTest {
             )),
             result.records()
         );
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testTransactionalOffsetCommitWithNegativeOffsets(short version) {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        Uuid topicId = version >= 6 ? Uuid.randomUuid() : Uuid.ZERO_UUID;
+        context.commitOffset("foo", "bar", 0, 100L, -1);
+
+        TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic topic = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setName("bar")
+            .setTopicId(topicId)
+            .setPartitions(new ArrayList<>(List.of(
+                new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(-2L),
+                new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                    .setPartitionIndex(1)
+                    .setCommittedOffset(-1L),
+                new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                    .setPartitionIndex(2)
+                    .setCommittedOffset(Long.MIN_VALUE)
+            )));
+        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
+            .setGroupId("foo")
+            .setProducerId(10L)
+            .setTopics(List.of(topic));
+
+        CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> result = context.commitTransactionalOffset(request, version);
+        assertEquals(List.of(Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(), result.records());
+        assertNull(context.offsetMetadataManager.pendingTransactionalOffset(10L, "foo", "bar", 0));
+        verify(context.metrics, never()).record(eq(OFFSET_COMMITS_SENSOR_NAME), anyDouble());
+
+        topic.partitions().add(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+            .setPartitionIndex(3)
+            .setCommittedOffset(0L));
+        topic.partitions().add(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+            .setPartitionIndex(4)
+            .setCommittedOffset(Long.MAX_VALUE));
+        result = context.commitTransactionalOffset(request, version);
+
+        assertEquals(List.of(Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(), Errors.INVALID_REQUEST.code(),
+                Errors.NONE.code(), Errors.NONE.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(
+            GroupCoordinatorRecordHelpers.newOffsetCommitRecord("foo", "bar", 3,
+                new OffsetAndMetadata(0L, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), topicId)),
+            GroupCoordinatorRecordHelpers.newOffsetCommitRecord("foo", "bar", 4,
+                new OffsetAndMetadata(Long.MAX_VALUE, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), topicId))
+        ), result.records());
+        verify(context.metrics).record(OFFSET_COMMITS_SENSOR_NAME, 2);
+
+        context.replayEndTransactionMarker(10L, TransactionResult.COMMIT);
+        assertEquals(100L, context.offsetMetadataManager.offset("foo", "bar", 0).committedOffset);
+        assertNull(context.offsetMetadataManager.offset("foo", "bar", 1));
+        assertNull(context.offsetMetadataManager.offset("foo", "bar", 2));
+        assertEquals(0L, context.offsetMetadataManager.offset("foo", "bar", 3).committedOffset);
+        assertEquals(Long.MAX_VALUE, context.offsetMetadataManager.offset("foo", "bar", 4).committedOffset);
+    }
+
+    @Test
+    public void testTransactionalOffsetCommitWithOffsetMetadataTooLargeTakesPrecedenceOverNegativeOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withOffsetMetadataMaxSize(5)
+            .build();
+
+        CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> result = context.commitTransactionalOffset(
+            new TxnOffsetCommitRequestData()
+                .setGroupId("foo")
+                .setProducerId(10L)
+                .setTopics(List.of(
+                    new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+                        .setName("bar")
+                        .setPartitions(List.of(
+                            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                                .setPartitionIndex(0)
+                                .setCommittedOffset(-1L)
+                                .setCommittedMetadata("toolarge"),
+                            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                                .setPartitionIndex(1)
+                                .setCommittedOffset(-1L)
+                                .setCommittedMetadata("small")
+                        ))
+                ))
+        );
+
+        assertEquals(List.of(Errors.OFFSET_METADATA_TOO_LARGE.code(), Errors.INVALID_REQUEST.code()),
+            result.response().topics().get(0).partitions().stream().map(partition -> partition.errorCode()).toList());
+        assertEquals(List.of(), result.records());
     }
 
     @ParameterizedTest

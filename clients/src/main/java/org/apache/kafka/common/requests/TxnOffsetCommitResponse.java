@@ -42,6 +42,7 @@ import java.util.function.Function;
  *   - {@link Errors#OFFSET_METADATA_TOO_LARGE}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
+ *   - {@link Errors#INVALID_REQUEST}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#UNSUPPORTED_FOR_MESSAGE_FORMAT}
  *   - {@link Errors#REQUEST_TIMED_OUT}
