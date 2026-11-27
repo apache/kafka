@@ -27,6 +27,8 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A Kafka ACLs which is identified by a UUID and stored in the metadata log.
@@ -34,6 +36,14 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 public record StandardAcl(ResourceType resourceType, String resourceName, PatternType patternType, String principal,
                           String host, AclOperation operation,
                           AclPermissionType permissionType) implements Comparable<StandardAcl> {
+    // Cache of parsed KafkaPrincipal per unique principal string. The cache is bounded:
+    // once MAX_CACHED_PRINCIPALS is reached, additional distinct principals are parsed
+    // directly without being inserted, while already-cached principals are still
+    // served from the cache. Bounded to ~10K entries; under concurrent inserts the
+    // size may overshoot the bound slightly (ConcurrentHashMap.size() is approximate).
+    private static final int MAX_CACHED_PRINCIPALS = 10_000;
+    private static final Map<String, KafkaPrincipal> PRINCIPAL_CACHE = new ConcurrentHashMap<>();
+
     public static StandardAcl fromRecord(AccessControlEntryRecord record) {
         return new StandardAcl(
             ResourceType.fromCode(record.resourceType()),
@@ -57,14 +67,30 @@ public record StandardAcl(ResourceType resourceType, String resourceName, Patter
     }
 
     public KafkaPrincipal kafkaPrincipal() {
-        int colonIndex = principal.indexOf(":");
+        KafkaPrincipal cached = PRINCIPAL_CACHE.get(principal);
+        if (cached != null) return cached;
+        if (PRINCIPAL_CACHE.size() >= MAX_CACHED_PRINCIPALS) {
+            return parsePrincipal(principal);
+        }
+        return PRINCIPAL_CACHE.computeIfAbsent(principal, StandardAcl::parsePrincipal);
+    }
+
+    private static KafkaPrincipal parsePrincipal(String principalStr) {
+        int colonIndex = principalStr.indexOf(":");
         if (colonIndex == -1) {
-            throw new IllegalStateException("Could not parse principal from `" + principal + "` " +
+            throw new IllegalStateException("Could not parse principal from `" + principalStr + "` " +
                 "(no colon is present separating the principal type from the principal name)");
         }
-        String principalType = principal.substring(0, colonIndex);
-        String principalName = principal.substring(colonIndex + 1);
-        return new KafkaPrincipal(principalType, principalName);
+        return new KafkaPrincipal(principalStr.substring(0, colonIndex), principalStr.substring(colonIndex + 1));
+    }
+
+    // Package-private access for tests; avoids reflection on the private cache.
+    static int principalCacheSize() {
+        return PRINCIPAL_CACHE.size();
+    }
+
+    static int principalCacheBound() {
+        return MAX_CACHED_PRINCIPALS;
     }
 
     public AclBinding toBinding() {
