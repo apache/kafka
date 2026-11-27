@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -120,20 +121,24 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     static byte[] extractKeyBytes(final byte[] binaryKey) {
+        checkKeyLength(binaryKey);
         final byte[] bytes = new byte[binaryKey.length - 2 * TIMESTAMP_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return bytes;
     }
 
     static long extractEndTimestamp(final byte[] binaryKey) {
+        checkKeyLength(binaryKey);
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
     }
 
     static long extractStartTimestamp(final byte[] binaryKey) {
+        checkKeyLength(binaryKey);
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
     }
 
     static Window extractWindow(final byte[] binaryKey) {
+        checkKeyLength(binaryKey);
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
@@ -200,5 +205,13 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         buf.put(key.get());
         buf.putLong(endTime);
         buf.putLong(startTime);
+    }
+
+    private static void checkKeyLength(final byte[] binaryKey) {
+        if (binaryKey.length < SUFFIX_SIZE) {
+            throw new SerializationException(
+                "Invalid session key: expected at least " + SUFFIX_SIZE + " bytes, but got " + binaryKey.length
+            );
+        }
     }
 }
