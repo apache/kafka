@@ -39,7 +39,7 @@ import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata,
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
+import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.partition.PartitionListener
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -1610,6 +1610,26 @@ class TransactionStateManagerTest {
     assertEquals(txnMetadata1.state, txnMetadata.state)
     assertEquals(txnMetadata1.topicPartitions, txnMetadata.topicPartitions)
     assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
+  }
+
+  @Test
+  def testIgnoreInvalidRecord(): Unit = {
+    val invalidValue = MessageUtil.toVersionPrefixedBytes(1.toShort,
+      new TransactionLogValue().setTransactionStatus(99.toByte))
+    val invalidRecord = new SimpleRecord(TransactionLog.keyToBytes("invalid"), invalidValue)
+
+    val records = MemoryRecords.withRecords(0L, Compression.NONE,
+      new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2)),
+      invalidRecord,
+      new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2)))
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
+    assertTrue(txnMetadataPool.containsKey(transactionalId1))
+    assertTrue(txnMetadataPool.containsKey(transactionalId2))
   }
 
   @ParameterizedTest

@@ -509,16 +509,22 @@ class TransactionStateManager(brokerId: Int,
                 s"It could be a left over from an aborted upgrade."
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
-                require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.read(record.key(), record.value()) match {
-                  case v: TransactionLog.UnknownKeyVersion =>
-                    warn(unknownVersionWarning("key", v.version()))
-                  case v: TransactionLog.UnknownValueVersion =>
-                    warn(unknownVersionWarning("value", v.version()))
-                  case r: TransactionLog.TxnTombstone =>
-                    loadedTransactions.remove(r.transactionId())
-                  case r: TransactionLog.TxnRecord =>
-                    loadedTransactions.put(r.transactionId(), r.metadata())
+                try {
+                  require(record.hasKey, "Transaction state log's key should not be null")
+                  TransactionLog.read(record.key(), record.value()) match {
+                    case v: TransactionLog.UnknownKeyVersion =>
+                      warn(unknownVersionWarning("key", v.version()))
+                    case v: TransactionLog.UnknownValueVersion =>
+                      warn(unknownVersionWarning("value", v.version()))
+                    case r: TransactionLog.TxnTombstone =>
+                      loadedTransactions.remove(r.transactionId())
+                    case r: TransactionLog.TxnRecord =>
+                      loadedTransactions.put(r.transactionId(), r.metadata())
+                  }
+                } catch {
+                  case e: Exception =>
+                    error(s"Failed to read the record at offset ${record.offset} while loading transaction state " +
+                      s"from $topicPartition. Ignoring it: $e")
                 }
               }
               currOffset = batch.nextOffset
