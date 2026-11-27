@@ -5054,7 +5054,6 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testApiVersionsSerialization
 - testBatchedFindCoordinatorRequestSerialization
 - testClientThrottleForCommonResponses
-- testCreateTopicRequestV0FailsIfValidateOnly
 - testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas
 - testDeletableTopicResultErrorMessageIsNullByDefault
 - testDeleteGroupsResponseV3PreservesErrorMessage
