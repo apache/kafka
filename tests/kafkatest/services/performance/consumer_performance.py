@@ -18,7 +18,7 @@ import os
 
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.performance import PerformanceService
-from kafkatest.version import V_2_5_0, DEV_BRANCH
+from kafkatest.version import V_2_5_0, V_3_5_0, DEV_BRANCH, get_version
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -79,6 +79,12 @@ class ConsumerPerformanceService(PerformanceService):
 
         for node in self.nodes:
             node.version = version
+
+    def java_class_name(self, node):
+        # Kafka 3.5.0 moved ConsumerPerformance from kafka.tools to org.apache.kafka.tools.
+        if get_version(node) < V_3_5_0:
+            return "kafka.tools.ConsumerPerformance"
+        return "org.apache.kafka.tools.ConsumerPerformance"
 
     def args(self, version):
         """Dictionary of arguments used to start the Consumer Performance script."""
