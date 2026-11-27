@@ -306,7 +306,7 @@ These take the same arguments as the built-in variants.
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
 
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
-* `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
+* `mavenUrl`: sets the URL of the Maven deployment repository (`file:///absolute/path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: maximum number of test processes to start in parallel. Defaults to the number of processors available to the JVM.
 * `maxScalacThreads`: maximum number of worker threads for the scalac backend. Defaults to the lowest of `8` and the number of processors
 available to the JVM. The value must be between 1 and 16 (inclusive). 
