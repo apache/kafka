@@ -775,17 +775,20 @@ public class RecordAccumulator {
             TopicPartition part = entry.getKey();
 
             Node leader = null;
+            // The index of this partition in queueSizes, or -1 if it isn't an available partition.
+            int partitionIndex = -1;
             // Advance queueSizesIndex so that we properly index available
-            // partitions.  Do it here so that it's done for all code paths.
+            // partitions.  Do it here so that it's done for all code paths,
+            // including partitions with an empty deque (KAFKA-21462).
             // Only call leaderFor() here when queue sizes is not null,
             // otherwise defer it below until we know the deque isn't empty.
             if (queueSizes != null) {
                 leader = cluster.leaderFor(part);
-                if (leader != null) {
-                    ++queueSizesIndex;
-                    assert queueSizesIndex < queueSizes.length;
-                    partitionIds[queueSizesIndex] = part.partition();
-                    partitionLeaderRacks[queueSizesIndex] = leader.rack();
+                if (leader != null && !isLeaderUnavailable(leader)) {
+                    partitionIndex = ++queueSizesIndex;
+                    assert partitionIndex < queueSizes.length;
+                    partitionIds[partitionIndex] = part.partition();
+                    partitionLeaderRacks[partitionIndex] = leader.rack();
                 }
             }
 
@@ -837,22 +840,8 @@ public class RecordAccumulator {
                 // Note that entries are currently not removed from batches when deque is empty.
                 unknownLeaderTopics.add(part.topic());
             } else {
-                if (queueSizes != null) {
-                    queueSizes[queueSizesIndex] = dequeSize;
-                    if (partitionAvailabilityTimeoutMs > 0) {
-                        // Check if we want to exclude the partition from the list of available partitions
-                        // if the broker hasn't responded for some time.
-                        NodeLatencyStats nodeLatencyStats = nodeStats.get(leader.id());
-                        if (nodeLatencyStats != null) {
-                            // NOTE: there is no synchronization between reading metrics,
-                            // so we read ready time first to avoid accidentally marking partition
-                            // unavailable if we read while the metrics are being updated.
-                            long readyTimeMs = nodeLatencyStats.readyTimeMs;
-                            if (readyTimeMs - nodeLatencyStats.drainTimeMs > partitionAvailabilityTimeoutMs)
-                                --queueSizesIndex;
-                        }
-                    }
-                }
+                if (partitionIndex >= 0)
+                    queueSizes[partitionIndex] = dequeSize;
 
                 if (checkBatchReady) {
                     nextReadyCheckDelayMs = batchReady(exhausted, leader, waitedTimeMs, backingOff,
@@ -866,6 +855,23 @@ public class RecordAccumulator {
         // queueSizes array.
         topicInfo.builtInPartitioner.updatePartitionLoadStats(queueSizes, partitionIds, partitionLeaderRacks, queueSizesIndex + 1);
         return nextReadyCheckDelayMs;
+    }
+
+    /**
+     * Check if we want to exclude the leader's partitions from the list of available partitions
+     * because the broker hasn't responded for some time.
+     */
+    private boolean isLeaderUnavailable(Node leader) {
+        if (partitionAvailabilityTimeoutMs <= 0)
+            return false;
+        NodeLatencyStats nodeLatencyStats = nodeStats.get(leader.id());
+        if (nodeLatencyStats == null)
+            return false;
+        // NOTE: there is no synchronization between reading metrics,
+        // so we read ready time first to avoid accidentally marking partition
+        // unavailable if we read while the metrics are being updated.
+        long readyTimeMs = nodeLatencyStats.readyTimeMs;
+        return readyTimeMs - nodeLatencyStats.drainTimeMs > partitionAvailabilityTimeoutMs;
     }
 
     /**
