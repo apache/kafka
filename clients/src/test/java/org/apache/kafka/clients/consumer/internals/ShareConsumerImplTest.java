@@ -46,6 +46,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -72,6 +73,7 @@ import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -187,6 +189,18 @@ public class ShareConsumerImplTest {
             String clientId,
             String acknowledgementMode
     ) {
+        return newConsumer(fetchBuffer, subscriptions, groupId, clientId, acknowledgementMode,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+    }
+
+    private ShareConsumerImpl<String, String> newConsumer(
+            ShareFetchBuffer fetchBuffer,
+            ShareSubscriptionState subscriptions,
+            String groupId,
+            String clientId,
+            String acknowledgementMode,
+            long retryBackoffMs
+    ) {
         final int defaultApiTimeoutMs = 1000;
         final int requestTimeoutMs = 30000;
 
@@ -206,6 +220,7 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
+                retryBackoffMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 groupId,
@@ -1083,6 +1098,101 @@ public class ShareConsumerImplTest {
         assertNotNull(cause);
         assertInstanceOf(LoginException.class, cause);
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+    }
+
+    @Test
+    public void testPollBoundsFetchBufferWaitWhenNoPartitionsAssigned() {
+        ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
+        long retryBackoffMs = 100L;
+        consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit", retryBackoffMs);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton("topic1"));
+        assertEquals(0, subscriptions.numAssignedPartitions());
+
+        long largeTimeoutMs = 30000L;
+        doReturn(largeTimeoutMs).when(applicationEventHandler).maximumTimeToWait();
+
+        List<Long> waitDurations = new ArrayList<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            waitDurations.add(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
+
+        doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(250));
+        assertTrue(records.isEmpty());
+
+        assertFalse(waitDurations.isEmpty());
+        assertEquals(retryBackoffMs, waitDurations.get(0));
+    }
+
+    @Test
+    public void testPollReportsFatalHeartbeatErrorPromptlyDuringStartup() {
+        ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
+        long retryBackoffMs = 100L;
+        consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit", retryBackoffMs);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton("topic1"));
+        assertEquals(0, subscriptions.numAssignedPartitions());
+
+        // While the first heartbeat is in flight, maximumTimeToWait is requestTimeoutMs (30s)
+        doReturn(30000L).when(applicationEventHandler).maximumTimeToWait();
+
+        List<Long> waitDurations = new ArrayList<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            waitDurations.add(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
+            backgroundEventQueue.add(new ErrorEvent(new GroupAuthorizationException("Group authorization failed")));
+            return null;
+        }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
+
+        doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        long startTimeMs = time.milliseconds();
+        assertThrows(GroupAuthorizationException.class, () -> consumer.poll(Duration.ofSeconds(60)));
+        long elapsedMs = time.milliseconds() - startTimeMs;
+
+        assertFalse(waitDurations.isEmpty());
+        assertEquals(retryBackoffMs, waitDurations.get(0));
+        // Fatal error should be reported promptly after retryBackoffMs, not delayed by 30 seconds
+        assertTrue(elapsedMs < 1000L, "Expected prompt fatal error report, but elapsed was " + elapsedMs + "ms");
+    }
+
+    @Test
+    public void testPollDoesNotBoundWaitWhenPartitionsAssigned() {
+        ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class);
+        ShareSubscriptionState subscriptions = new ShareSubscriptionState(new LogContext());
+        long retryBackoffMs = 100L;
+        consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit", retryBackoffMs);
+
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.subscribeToShareGroup(Collections.singleton(tp.topic()));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp));
+        assertEquals(1, subscriptions.numAssignedPartitions());
+
+        doReturn(500L).when(applicationEventHandler).maximumTimeToWait();
+
+        List<Long> waitDurations = new ArrayList<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            waitDurations.add(pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
+            return null;
+        }).when(fetchBuffer).awaitNotEmpty(any(Timer.class));
+
+        doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.poll(Duration.ofMillis(1000));
+
+        assertFalse(waitDurations.isEmpty());
+        // When partitions are assigned, wait duration should use maximumTimeToWait (500ms) rather than being capped at retryBackoffMs (100ms)
+        assertEquals(500L, waitDurations.get(0));
     }
 
     private void completeShareSubscriptionChangeApplicationEventSuccessfully(ShareSubscriptionState subscriptions, List<String> topics) {
