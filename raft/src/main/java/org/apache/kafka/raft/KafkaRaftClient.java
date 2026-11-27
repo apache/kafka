@@ -2667,7 +2667,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return Optional.of(true);
         } else if (epoch == quorum.epoch()
             && leaderId.isPresent()
-            && !quorum.hasLeader()) {
+            && (!quorum.hasLeader() || quorum.isUnattached())) {
 
             // Since we are transitioning to Follower, we will only forward the
             // request to the handler if there is no error. Otherwise, we will let
@@ -2719,7 +2719,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
         ) {
             // The request or response indicates the leader of the current epoch
-            // which are currently unknown or the replica has discovered more endpoints
+            // is currently unknown, the replica has discovered more endpoints,
+            // or the replica is unattached but has discovered endpoints for the leader.
             transitionToFollower(epoch, leaderId.getAsInt(), leaderEndpoints, currentTimeMs);
         }
     }
@@ -3385,6 +3386,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
+        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
+            // If we can no longer reach the leader, transition to Unattached so we
+            // re-discover the leader (and its endpoints) via the bootstrap servers,
+            // rather than continuing to retry RPCs against an unreachable leader.
+            transitionToUnattached(state.epoch(), OptionalInt.of(state.leaderId()));
+            return 0L;
         } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
