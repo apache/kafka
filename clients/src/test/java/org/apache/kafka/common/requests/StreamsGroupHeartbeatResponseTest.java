@@ -22,7 +22,10 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import org.junit.jupiter.params.ParameterizedTest;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class StreamsGroupHeartbeatResponseTest {
 
@@ -128,6 +131,35 @@ public class StreamsGroupHeartbeatResponseTest {
         } else {
             assertEquals(maxValue, parsedResponse.data().acceptableRecoveryLag(),
                 "Version 1+ response should preserve full int64 value beyond Integer.MAX_VALUE");
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.STREAMS_GROUP_HEARTBEAT)
+    public void testTopicPartitionCountsFieldVersionCompatibility(short version) {
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData()
+            .setMemberId("test-member")
+            .setMemberEpoch(1)
+            .setHeartbeatIntervalMs(5000)
+            .setTaskOffsetIntervalMs(60000);
+
+        if (version >= 2) {
+            data.setTopicPartitionCounts(List.of(
+                new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                    .setTopic("orders")
+                    .setPartitionCount(4)
+            ));
+        }
+
+        StreamsGroupHeartbeatResponse parsedResponse =
+            StreamsGroupHeartbeatResponse.parse(new StreamsGroupHeartbeatResponse(data).serialize(version), version);
+
+        if (version >= 2) {
+            assertEquals(1, parsedResponse.data().topicPartitionCounts().size());
+            assertEquals("orders", parsedResponse.data().topicPartitionCounts().get(0).topic());
+            assertEquals(4, parsedResponse.data().topicPartitionCounts().get(0).partitionCount());
+        } else {
+            assertNull(parsedResponse.data().topicPartitionCounts());
         }
     }
 }
