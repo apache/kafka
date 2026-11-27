@@ -82,11 +82,11 @@ public class PlainSaslServerTest {
     public void unknownUserOrInvalidPassword() throws Exception {
         Exception e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("", "unknownUser", PASSWORD_A)));
-        assertEquals("Authentication failed: Invalid username or password", e.getMessage());
+        assertEquals("Authentication failed for user unknownUser: Invalid username or password", e.getMessage());
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_B)));
-        assertEquals("Authentication failed: Invalid username or password", e.getMessage());
+        assertEquals("Authentication failed for user " + USER_A + ": Invalid username or password", e.getMessage());
 
         assertFalse(callbackHandler.authenticate("unknownUser", new char[] {'\0'}));
     }
@@ -112,7 +112,7 @@ public class PlainSaslServerTest {
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("", "u", "")));
-        assertEquals("Authentication failed: password not specified", e.getMessage());
+        assertEquals("Authentication failed for user u: password not specified", e.getMessage());
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("a", "", "")));
@@ -124,7 +124,7 @@ public class PlainSaslServerTest {
 
         e = assertThrows(SaslAuthenticationException.class, () ->
             saslServer.evaluateResponse(saslMessage("a", "u", "")));
-        assertEquals("Authentication failed: password not specified", e.getMessage());
+        assertEquals("Authentication failed for user u: password not specified", e.getMessage());
 
         String nul = "\u0000";
 
