@@ -45,6 +45,7 @@ import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+import org.apache.kafka.trogdor.task.TaskSpec;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -132,13 +133,7 @@ public class CoordinatorTest {
                 "Recreating task with different task spec is not allowed");
 
             time.sleep(2);
-            new ExpectedTasks().
-                addTask(new ExpectedTaskBuilder("foo").
-                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
-                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
-                    build()).
-                waitFor(cluster.coordinatorClient()).
-                waitFor(cluster.agentClient("node02"));
+            waitForActiveTask(cluster.coordinatorClient(), cluster.agentClient("node02"), "foo", fooSpec, 2);
 
             time.sleep(3);
             new ExpectedTasks().
@@ -537,13 +532,7 @@ public class CoordinatorTest {
 
 
             time.sleep(2);
-            new ExpectedTasks().
-                addTask(new ExpectedTaskBuilder("foo").
-                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
-                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
-                    build()).
-                waitFor(coordinatorClient).
-                waitFor(cluster.agentClient("node02"));
+            waitForActiveTask(coordinatorClient, cluster.agentClient("node02"), "foo", fooSpec, 2);
 
             cluster.restartAgent("node02");
             time.sleep(550);
@@ -590,6 +579,8 @@ public class CoordinatorTest {
 
             TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
             assertEquals(expectedState, resp);
+
+            waitForActiveTask(coordinatorClient, cluster.agentClient("node02"), "fooSpec", updatedSpec, 552);
         }
     }
 
@@ -636,13 +627,7 @@ public class CoordinatorTest {
             assertEquals(expectedState, resp);
 
             time.sleep(2);
-            new ExpectedTasks().
-                addTask(new ExpectedTaskBuilder("foo").
-                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
-                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
-                    build()).
-                waitFor(coordinatorClient).
-                waitFor(cluster.agentClient("node02"));
+            waitForActiveTask(coordinatorClient, cluster.agentClient("node02"), "foo", fooSpec, 2);
 
             assertThrows(NotFoundException.class, () -> coordinatorClient.task(new TaskRequest("non-existent-foo")));
         }
@@ -715,5 +700,16 @@ public class CoordinatorTest {
                     build()).
                 waitFor(coordinatorClient);
         }
+    }
+
+    private static void waitForActiveTask(CoordinatorClient coordinatorClient, AgentClient agentClient,
+                                          String taskId, TaskSpec spec, long startedMs) throws InterruptedException {
+        new ExpectedTasks().
+            addTask(new ExpectedTaskBuilder(taskId).
+                taskState(new TaskRunning(spec, startedMs, new TextNode("active"))).
+                workerState(new WorkerRunning(taskId, spec, startedMs, new TextNode("active"))).
+                build()).
+            waitFor(coordinatorClient).
+            waitFor(agentClient);
     }
 }
