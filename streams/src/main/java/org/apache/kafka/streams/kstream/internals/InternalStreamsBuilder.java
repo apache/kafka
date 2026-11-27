@@ -279,7 +279,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         if (node.isKeyChangingOperation()) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new LinkedHashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
-            final GraphNode parentNode = getKeyChangingParentNode(node);
+            final GraphNode parentNode = findParentNodeMatching(node, GraphNode::isKeyChangingOperation);
             if (parentNode != null) {
                 keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode<?, ?>) node);
             }
@@ -487,7 +487,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 continue;
             }
 
-            final GroupedInternal<?, ?> groupedInternal = new GroupedInternal<>(getRepartitionSerdes(entry.getValue()));
+            // Resolve key value serdes for merging repartition nodes under the common key changing node
+            final GroupedInternal<?, ?> groupedInternal = getRepartitionSerdes(entry.getKey(), entry.getValue());
 
             final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
             //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
@@ -502,19 +503,19 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
                 final GraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNodes().contains(keyChangingNode));
 
-                if (keyChangingNodeChild == null) {
-                    throw new StreamsException(String.format("Found a null keyChangingChild node for %s", repartitionNodeToBeReplaced));
+                // Remove any child to the key-changing node
+                // Such child may be common to all corresponding repartition nodes, so only remove it once
+                if (keyChangingNodeChild != null) {
+                    LOG.debug("Found the child node of the key changer {} from the repartition {}.", keyChangingNodeChild, repartitionNodeToBeReplaced);
+
+                    // need to add children of key-changing node as children of optimized repartition
+                    // in order to process records from re-partitioning
+                    optimizedSingleRepartition.addChild(keyChangingNodeChild);
+
+                    LOG.debug("Removing {} from {}  children {}", keyChangingNodeChild, keyChangingNode, keyChangingNode.children());
+                    // now remove children from key-changing node
+                    keyChangingNode.removeChild(keyChangingNodeChild);
                 }
-
-                LOG.debug("Found the child node of the key changer {} from the repartition {}.", keyChangingNodeChild, repartitionNodeToBeReplaced);
-
-                // need to add children of key-changing node as children of optimized repartition
-                // in order to process records from re-partitioning
-                optimizedSingleRepartition.addChild(keyChangingNodeChild);
-
-                LOG.debug("Removing {} from {}  children {}", keyChangingNodeChild, keyChangingNode, keyChangingNode.children());
-                // now remove children from key-changing node
-                keyChangingNode.removeChild(keyChangingNodeChild);
 
                 // now need to get children of repartition node so we can remove repartition node
                 final Collection<GraphNode> repartitionNodeToBeReplacedChildren = repartitionNodeToBeReplaced.children();
@@ -606,39 +607,26 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     }
 
-    private GraphNode getKeyChangingParentNode(final GraphNode repartitionNode) {
-        final GraphNode shouldBeKeyChangingNode = findParentNodeMatching(repartitionNode, n -> n.isKeyChangingOperation() || n.isValueChangingOperation());
-
-        final GraphNode keyChangingNode = findParentNodeMatching(repartitionNode, GraphNode::isKeyChangingOperation);
-        if (shouldBeKeyChangingNode != null && shouldBeKeyChangingNode.equals(keyChangingNode)) {
-            return keyChangingNode;
-        }
-        return null;
-    }
-
     private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
         return repartitionNodes.iterator().next().repartitionTopic();
     }
 
     @SuppressWarnings("unchecked")
-    private <K, V> GroupedInternal<K, V> getRepartitionSerdes(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
+    private <K, V> GroupedInternal<K, V> getRepartitionSerdes(final GraphNode keyChangingNode, final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
         Serde<K> keySerde = null;
-        Serde<V> valueSerde = null;
 
         for (final OptimizableRepartitionNode<?, ?> repartitionNode : repartitionNodes) {
             if (keySerde == null && repartitionNode.keySerde() != null) {
                 keySerde = (Serde<K>) repartitionNode.keySerde();
             }
-
-            if (valueSerde == null && repartitionNode.valueSerde() != null) {
-                valueSerde = (Serde<V>) repartitionNode.valueSerde();
-            }
-
-            if (keySerde != null && valueSerde != null) {
-                break;
-            }
         }
 
+        // Resolve repartition nodes' value serde for any value-changing nodes upstream until key changing node
+        Serde<V> valueSerde = (Serde<V>) keyChangingNode.valueSerde();
+        if (valueSerde == null) {
+            final GraphNode parent = findParentNodeMatching(keyChangingNode, gn -> gn.valueSerde() != null);
+            valueSerde = parent == null ? null : (Serde<V>) parent.valueSerde();
+        }
         return new GroupedInternal<>(Grouped.with(keySerde, valueSerde));
     }
 
