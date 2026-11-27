@@ -219,7 +219,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final long checkpointStartTimeMs = time.milliseconds();
             maybeCheckpointTasks(checkpointStartTimeMs);
 
-            updateTaskEndOffsetSumSnapshot();
+            updateTaskOffsetSumsSnapshot();
 
             final long waitStartTimeMs = time.milliseconds();
             waitIfAllChangelogsCompletelyRead();
@@ -467,10 +467,9 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        // Current offset sums are sourced from the StateDirectory (see TaskManager#maybeUpdateTaskOffsetSumSnapshot);
-        // end-offsets are not tracked there, so the end-offset-sum is computed here from the changelog reader's
-        // (logical) end-offsets for the tasks the state updater is currently restoring/updating.
-        private void updateTaskEndOffsetSumSnapshot() {
+        // Publishes the offset sums and the end-offset sums as one snapshot, so that a task being restored or updated
+        // enters and leaves both together. A paused task gets an offset sum only.
+        private void updateTaskOffsetSumsSnapshot() {
             final Map<TopicPartition, Long> changelogEndOffsets;
             if (!updatingTasks.isEmpty()) {
                 changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
@@ -478,9 +477,11 @@ public class DefaultStateUpdater implements StateUpdater {
                 changelogEndOffsets = Map.of();
             }
 
+            final Map<StreamsRebalanceData.TaskId, Long> offsetSnapshot = new HashMap<>(updatingTasks.size() + pausedTasks.size());
             final Map<StreamsRebalanceData.TaskId, Long> endOffsetSnapshot = new HashMap<>(updatingTasks.size());
 
             for (final Task task : updatingTasks.values()) {
+                putOffsetSum(offsetSnapshot, task);
                 long endSum = 0L; // ok to init with zero, as we have at least one changelog topic partition
                 for (final TopicPartition partition : task.changelogPartitions()) {
                     final Long endOffset = changelogEndOffsets.get(partition);
@@ -495,13 +496,27 @@ public class DefaultStateUpdater implements StateUpdater {
                     endSum += endOffset;
                 }
 
-                endOffsetSnapshot.put(
-                    new StreamsRebalanceData.TaskId(String.valueOf(task.id().subtopology()), task.id().partition()),
-                    endSum
-                );
+                endOffsetSnapshot.put(rebalanceTaskId(task.id()), endSum);
+            }
+            for (final Task task : pausedTasks.values()) {
+                putOffsetSum(offsetSnapshot, task);
             }
 
-            taskEndOffsetSumSnapshot.set(Collections.unmodifiableMap(endOffsetSnapshot));
+            taskOffsetSumsSnapshot.set(new StreamsRebalanceData.TaskOffsetSums(
+                Collections.unmodifiableMap(offsetSnapshot),
+                Collections.unmodifiableMap(endOffsetSnapshot)
+            ));
+        }
+
+        private void putOffsetSum(final Map<StreamsRebalanceData.TaskId, Long> offsetSnapshot, final Task task) {
+            final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+            if (!changelogOffsets.isEmpty()) {
+                offsetSnapshot.put(rebalanceTaskId(task.id()), StateDirectory.sumOfChangelogOffsets(task.id(), changelogOffsets));
+            }
+        }
+
+        private StreamsRebalanceData.TaskId rebalanceTaskId(final TaskId taskId) {
+            return new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition());
         }
 
         private void waitIfAllChangelogsCompletelyRead() {
@@ -898,7 +913,8 @@ public class DefaultStateUpdater implements StateUpdater {
     private final long commitIntervalMs;
     private long lastCommitMs;
 
-    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSumSnapshot = new AtomicReference<>(Map.of());
+    private final AtomicReference<StreamsRebalanceData.TaskOffsetSums> taskOffsetSumsSnapshot =
+        new AtomicReference<>(StreamsRebalanceData.TaskOffsetSums.EMPTY);
 
     private StateUpdaterThread stateUpdaterThread = null;
 
@@ -1227,8 +1243,8 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     @Override
-    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
-        return taskEndOffsetSumSnapshot.get();
+    public StreamsRebalanceData.TaskOffsetSums taskOffsetSumsSnapshot() {
+        return taskOffsetSumsSnapshot.get();
     }
 
     public boolean isRunning() {

@@ -176,8 +176,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         Optional.of(RACK_ID),
         SUBTOPOLOGIES,
         CLIENT_TAGS,
-        Map::of,
-        Map::of
+        () -> StreamsRebalanceData.TaskOffsetSums.EMPTY
     );
 
     private final Time time = new MockTime();
@@ -986,8 +985,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            () -> warmupOffsets,
-            Map::of
+            () -> new StreamsRebalanceData.TaskOffsetSums(warmupOffsets, Map.of())
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1035,8 +1033,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            () -> Map.of(warmupTaskId, 1000L)
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), Map.of(warmupTaskId, 1000L))
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1126,8 +1123,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), endOffsets)
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1195,8 +1191,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            () -> offsets,
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets, endOffsets)
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1236,6 +1231,57 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(1000L, reportedEndOffsets.get(warmupTask));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MemberState.class, names = {"JOINING", "STABLE"})
+    public void testTaskOffsetsAndTaskEndOffsetsAreReportedFromOneSnapshot(final MemberState memberState) {
+        final StreamsRebalanceData.TaskId warmupTask = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        // The member publishes a snapshot while restoring the warm-up task and a newer one right after it.
+        final StreamsRebalanceData.TaskOffsetSums snapshot =
+            new StreamsRebalanceData.TaskOffsetSums(Map.of(warmupTask, 500L), Map.of(warmupTask, 1000L));
+        final StreamsRebalanceData.TaskOffsetSums newerSnapshot =
+            new StreamsRebalanceData.TaskOffsetSums(Map.of(warmupTask, 600L), Map.of(warmupTask, 2000L));
+        final AtomicReference<StreamsRebalanceData.TaskOffsetSums> published = new AtomicReference<>(snapshot);
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            () -> published.getAndSet(newerSnapshot)
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(),
+            Set.of(),
+            Set.of(warmupTask),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+        rebalanceData.setAcceptableRecoveryLag(100L);
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(
+                rebalanceData,
+                membershipManager,
+                1234,
+                time
+            );
+        when(membershipManager.state()).thenReturn(memberState);
+
+        final StreamsGroupHeartbeatRequestData request = heartbeatState.buildRequestData();
+
+        final StreamsRebalanceData.TaskOffsetSums reported = new StreamsRebalanceData.TaskOffsetSums(
+            request.taskOffsets().stream().collect(Collectors.toMap(
+                t -> new StreamsRebalanceData.TaskId(t.subtopologyId(), t.partition()),
+                StreamsGroupHeartbeatRequestData.TaskOffset::offset
+            )),
+            request.taskEndOffsets().stream().collect(Collectors.toMap(
+                t -> new StreamsRebalanceData.TaskId(t.subtopologyId(), t.partition()),
+                StreamsGroupHeartbeatRequestData.TaskOffset::offset
+            ))
+        );
+        assertEquals(snapshot, reported, "the heartbeat must report the task offsets and the task end-offsets of one snapshot");
+    }
+
     @Test
     public void testHotWarmupTaskDisabledWhenEndOffsetMissing() {
         // Without an end-offset entry for the warmup task, lag cannot be computed.
@@ -1251,8 +1297,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            () -> offsets,
-            Map::of // no end-offsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(
+                offsets,
+                Map.of() // no end-offsets
+            )
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1294,8 +1342,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            Map::of, // no offsets
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(
+                Map.of(), // no offsets
+                endOffsets
+            )
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1362,8 +1412,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            endOffsets::get
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), endOffsets.get())
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(activeTaskId),
@@ -1409,8 +1458,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            endOffsets::get
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), endOffsets.get())
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(activeTaskId),
@@ -1478,8 +1526,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            () -> Map.of(standbyTaskId, 1000L)
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), Map.of(standbyTaskId, 1000L))
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(activeTaskId),
@@ -1709,8 +1756,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), endOffsets)
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1762,8 +1808,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            taskOffsetSum::get,
-            taskEndOffsetSum::get
+            () -> new StreamsRebalanceData.TaskOffsetSums(taskOffsetSum.get(), taskEndOffsetSum.get())
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1792,8 +1837,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            () -> offsets,
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets, endOffsets)
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(),
@@ -1818,8 +1862,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Optional.of(RACK_ID),
             SUBTOPOLOGIES,
             CLIENT_TAGS,
-            offsets::get,
-            () -> endOffsets
+            () -> new StreamsRebalanceData.TaskOffsetSums(offsets.get(), endOffsets)
         );
         rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
             Set.of(activeTaskId),

@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -288,8 +287,9 @@ public interface StateUpdater {
     KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout);
 
     /**
-     * Returns the latest per-task changelog end-offset-sum snapshot for tasks currently
-     * being restored. Safe to invoke from any thread.
+     * Returns the latest per-task changelog offset-sum and end-offset-sum snapshot: offset sums for all tasks being
+     * restored or updated and for all paused tasks, end-offset sums for all tasks being restored or updated.
+     * Safe to invoke from any thread.
      */
-    Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot();
+    StreamsRebalanceData.TaskOffsetSums taskOffsetSumsSnapshot();
 }

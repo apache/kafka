@@ -156,9 +156,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 data.setActiveTasks(fromStreamsToHeartbeatRequest(Set.of()));
                 data.setStandbyTasks(fromStreamsToHeartbeatRequest(Set.of()));
                 data.setWarmupTasks(fromStreamsToHeartbeatRequest(Set.of()));
-                // call both methods only once, as they invoke an expensive `supplier`
-                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
-                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
+                // call only once, as it invokes an expensive `supplier`
+                final StreamsRebalanceData.TaskOffsetSums taskOffsetSums = streamsRebalanceData.taskOffsetSums();
+                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = taskOffsetSums.taskOffsetSum();
+                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = taskOffsetSums.taskEndOffsetSum();
                 data.setTaskOffsets(convertToList(taskOffsetSum));
                 data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
                 // Record what we sent so the first non-joining heartbeat does not redundantly resend unchanged offsets.
@@ -176,9 +177,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     lastSentFields.assignment = reconciledAssignment;
                 }
 
-                // call both method only once, as they invoke an expensive `supplier`
-                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
-                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
+                // call only once, as it invokes an expensive `supplier`
+                final StreamsRebalanceData.TaskOffsetSums taskOffsetSums = streamsRebalanceData.taskOffsetSums();
+                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = taskOffsetSums.taskOffsetSum();
+                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = taskOffsetSums.taskEndOffsetSum();
 
                 final long now = time.milliseconds();
                 if (assignmentChanged
@@ -189,7 +191,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
-                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterward.
+                    // otherwise. The broker pairs a sent field with the field it holds from an earlier heartbeat, which
+                    // is consistent because both maps come from one snapshot. reset() clears the snapshot on any
+                    // error/disconnect, forcing a full resend afterward.
                     if (!taskOffsetSum.equals(lastSentFields.taskOffsets)) {
                         data.setTaskOffsets(convertToList(taskOffsetSum));
                         lastSentFields.taskOffsets = taskOffsetSum;
