@@ -47,6 +47,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiVersionsResponseTest {
 
+    @Test
+    public void testFallbackVersionIsSupported() {
+        // Clients and brokers rely on FALLBACK_VERSION to negotiate the ApiVersions version, so it must never be removed
+        short fallbackVersion = ApiVersionsRequest.FALLBACK_VERSION;
+        assertTrue(ApiKeys.API_VERSIONS.isVersionSupported(fallbackVersion));
+        assertNotNull(ApiKeys.API_VERSIONS.messageType.requestSchemas()[fallbackVersion]);
+        assertNotNull(ApiKeys.API_VERSIONS.messageType.responseSchemas()[fallbackVersion]);
+    }
+
     @ParameterizedTest
     @EnumSource(ApiMessageType.ListenerType.class)
     public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ListenerType scope) {

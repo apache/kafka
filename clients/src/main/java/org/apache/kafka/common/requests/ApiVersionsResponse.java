@@ -147,17 +147,17 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse parse(Readable readable, short version) {
-        // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
-        // using a version higher than that supported by the broker, a version 0 response is sent
-        // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
-        // falls back while parsing it which means that the version received by this
-        // method is not necessarily the real one. It may be version 0 as well.
+        // Fallback to ApiVersionsRequest.FALLBACK_VERSION for ApiVersions response. If a client sends an
+        // ApiVersionsRequest using a version higher than that supported by the broker, a FALLBACK_VERSION
+        // response is sent to the client indicating UNSUPPORTED_VERSION. When the client receives the response,
+        // it falls back while parsing it which means that the version received by this method is not
+        // necessarily the real one. It may be FALLBACK_VERSION as well.
         Readable readableCopy = readable.slice();
         try {
             return new ApiVersionsResponse(new ApiVersionsResponseData(readable, version));
         } catch (RuntimeException e) {
-            if (version != 0)
-                return new ApiVersionsResponse(new ApiVersionsResponseData(readableCopy, (short) 0));
+            if (version != ApiVersionsRequest.FALLBACK_VERSION)
+                return new ApiVersionsResponse(new ApiVersionsResponseData(readableCopy, ApiVersionsRequest.FALLBACK_VERSION));
             else
                 throw e;
         }

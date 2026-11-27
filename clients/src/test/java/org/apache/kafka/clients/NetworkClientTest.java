@@ -39,6 +39,7 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
@@ -593,7 +594,7 @@ public class NetworkClientTest {
             .setApiKey(ApiKeys.API_VERSIONS.id)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 2));
-        delayedApiVersionsResponse(0, (short) 0,
+        delayedApiVersionsResponse(0, ApiVersionsRequest.FALLBACK_VERSION,
             new ApiVersionsResponse(
                 new ApiVersionsResponseData()
                     .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
@@ -660,7 +661,7 @@ public class NetworkClientTest {
         assertEquals(6, header.apiVersion());
 
         // prepare response
-        delayedApiVersionsResponse(0, (short) 0,
+        delayedApiVersionsResponse(0, ApiVersionsRequest.FALLBACK_VERSION,
             new ApiVersionsResponse(
                 new ApiVersionsResponseData()
                     .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
@@ -689,10 +690,10 @@ public class NetworkClientTest {
         buffer = selector.completedSendBuffers().get(0).buffer();
         header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
-        assertEquals(0, header.apiVersion());
+        assertEquals(ApiVersionsRequest.FALLBACK_VERSION, header.apiVersion());
 
         // prepare response
-        delayedApiVersionsResponse(1, (short) 0, defaultApiVersionsResponse());
+        delayedApiVersionsResponse(1, ApiVersionsRequest.FALLBACK_VERSION, defaultApiVersionsResponse());
 
         // handle completed receives
         client.poll(0, time.milliseconds());

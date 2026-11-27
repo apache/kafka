@@ -220,7 +220,7 @@ public class ApiVersionsRequestTest {
             byte[] serializedBytes = Utils.toArray(
                     RequestUtils.serialize(overrideHeader.data(), overrideHeader.headerVersion(), request.data(), request.version()));
             IntegrationTestUtils.sendRequest(socket, serializedBytes);
-            return IntegrationTestUtils.receive(socket, ApiKeys.API_VERSIONS, (short) 0);
+            return IntegrationTestUtils.receive(socket, ApiKeys.API_VERSIONS, ApiVersionsRequest.FALLBACK_VERSION);
         }
     }
 

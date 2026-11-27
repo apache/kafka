@@ -55,7 +55,7 @@ public class RequestContextTest {
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
         assertEquals(header.apiVersion(), context.requestVersion());
-        assertEquals(0, context.effectiveApiVersion());
+        assertEquals(ApiVersionsRequest.FALLBACK_VERSION, context.effectiveApiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
         // the unknown version type as v0 which has an empty request body.
@@ -86,7 +86,7 @@ public class RequestContextTest {
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
         assertEquals(header.apiVersion(), context.requestVersion());
-        assertEquals(0, context.effectiveApiVersion());
+        assertEquals(ApiVersionsRequest.FALLBACK_VERSION, context.effectiveApiVersion());
 
         verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
     }
@@ -97,7 +97,7 @@ public class RequestContextTest {
         assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
-        assertEquals(0, request.version());
+        assertEquals(ApiVersionsRequest.FALLBACK_VERSION, request.version());
 
         Send send = context.buildResponseSend(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
         ByteBufferChannel channel = new ByteBufferChannel(256);
@@ -114,15 +114,24 @@ public class RequestContextTest {
     }
 
     private void verifyUnsupportedApiVersionsResponse(ByteBuffer responseBuffer, int correlationId) {
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, (short) 0);
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
+            ApiKeys.API_VERSIONS.responseHeaderVersion(ApiVersionsRequest.FALLBACK_VERSION));
         assertEquals(correlationId, responseHeader.correlationId());
 
-        ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
-            new ByteBufferAccessor(responseBuffer), (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer.duplicate()),
+            ApiKeys.API_VERSIONS.latestVersion());
+        verifyUnsupportedApiVersionsResponseData(response);
+
+        response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
+            new ByteBufferAccessor(responseBuffer), ApiVersionsRequest.FALLBACK_VERSION);
+        verifyUnsupportedApiVersionsResponseData(response);
+        assertEquals(0, responseBuffer.remaining());
+    }
+
+    private void verifyUnsupportedApiVersionsResponseData(ApiVersionsResponse response) {
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertEquals(ApiKeys.API_VERSIONS.latestVersion(),
             response.data().apiKeys().find(ApiKeys.API_VERSIONS.id).maxVersion());
-        assertEquals(0, responseBuffer.remaining());
     }
 
     @Test

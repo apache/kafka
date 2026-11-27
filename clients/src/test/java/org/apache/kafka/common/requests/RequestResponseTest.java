@@ -962,7 +962,7 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallback() {
         for (short version : API_VERSIONS.allVersions()) {
-            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize((short) 0);
+            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize(ApiVersionsRequest.FALLBACK_VERSION);
             ApiVersionsResponse response = ApiVersionsResponse.parse(readable, version);
             assertEquals(Errors.NONE.code(), response.data().errorCode());
         }

@@ -131,8 +131,9 @@ public class RequestContext implements AuthorizableRequestContext {
      */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
-            // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
-            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
+            // Unsupported ApiVersion requests are treated as FALLBACK_VERSION requests and are not parsed
+            ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(),
+                ApiVersionsRequest.FALLBACK_VERSION, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
         } else if (!header.isApiVersionSupported()) {
             // The request header is only partially parsed for unsupported versions (see RequestHeader#parse),
@@ -189,15 +190,16 @@ public class RequestContext implements AuthorizableRequestContext {
 
     /**
      * Returns the API version parsed by the server. This is usually the API version in the original client request.
-     * The only exception is an unsupported {@link ApiVersionsRequest}, whose API version is set to 0 after parsing.
+     * The only exception is an unsupported {@link ApiVersionsRequest}, whose API version is set to
+     * {@link ApiVersionsRequest#FALLBACK_VERSION} after parsing.
      * The response should be sent and serialized using this version.
      * <p>
      * To retrieve the API version in the original client request, use {@link #requestVersion()} instead.
      */
     public short effectiveApiVersion() {
-        // Use v0 when serializing an unhandled ApiVersion response
+        // Use FALLBACK_VERSION when serializing an unhandled ApiVersion response
         if (isUnsupportedApiVersionsRequest())
-            return 0;
+            return ApiVersionsRequest.FALLBACK_VERSION;
         return header.apiVersion();
     }
 

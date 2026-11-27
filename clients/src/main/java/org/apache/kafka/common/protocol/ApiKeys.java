@@ -246,7 +246,7 @@ public enum ApiKeys {
 
     public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
         // ApiVersions API is a particular case. The client always send the highest version
-        // that it supports and the server fails back to version 0 if it does not know it.
+        // that it supports and the server falls back to ApiVersionsRequest.FALLBACK_VERSION if it does not know it.
         // Hence, we have to accept any versions here, even unsupported ones.
         if (this == ApiKeys.API_VERSIONS) return true;
 
