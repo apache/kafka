@@ -41,7 +41,7 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
 jobs:
   get-build-scan-names:
-    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    if: github.repository == 'apache/kafka' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     outputs:
       build-scan-names: ${{ steps.build-scan-names.outputs.build-scan-names }}
@@ -63,7 +63,7 @@ jobs:
   upload-build-scan:
     needs: get-build-scan-names
     # Skip this workflow if the CI run was skipped or cancelled
-    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    if: github.repository == 'apache/kafka' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
