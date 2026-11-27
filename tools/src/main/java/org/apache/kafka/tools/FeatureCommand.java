@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -152,7 +154,9 @@ public class FeatureCommand {
                 .help("DEPRECATED -- The level to which we should upgrade the metadata. For example, 3.3-IV3.")
                 .action(store());
         upgradeParser.addArgument("--release-version")
-                .help("The release version to update all features to. For example, 3.9-IV0 will set metadata.version=21 and kraft.version=1." +
+                .help("The release version to update all features to. For example, 3.9-IV0 will set metadata.version=21." +
+                      " kraft.version is only upgraded if it is already above 0, since upgrading it from 0 turns a static controller quorum into a dynamic one;" +
+                      " use --feature kraft.version=1 for that." +
                       " Use the version-mapping command to learn which features will be set for any given version.")
                 .action(store());
         upgradeParser.addArgument("--feature")
@@ -301,30 +305,13 @@ public class FeatureCommand {
         }
 
         Map<String, FeatureUpdate> updates = new HashMap<>();
-        MetadataVersion metadataVersion;
 
         if (releaseVersion != null) {
-            try {
-                metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true);
-                updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
-            } catch (Throwable e) {
-                throw new TerseException(e.getMessage());
-            }
-            try {
-                for (Feature feature : Feature.PRODUCTION_FEATURES) {
-                    short featureLevel = feature.defaultLevel(metadataVersion);
-                    // Don't send a request to upgrade a feature to 0.
-                    if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
-                        updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
-                    }
-                }
-            } catch (Throwable e) {
-                throw new TerseException(upgradeType.name() + " for release version " + releaseVersion +
-                    " failed because at least one feature had the following error: " + e.getMessage());
-            }
+            updates.putAll(releaseVersionUpdates(releaseVersion, admin, upgradeType));
         } else {
             if (metadata != null) {
                 System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
+                MetadataVersion metadataVersion;
                 try {
                     metadataVersion = MetadataVersion.fromVersionString(metadata, true);
                 } catch (Throwable e) {
@@ -346,6 +333,52 @@ public class FeatureCommand {
         }
 
         update(op, admin, updates, namespace.getBoolean("dry_run"));
+    }
+
+    private static Map<String, FeatureUpdate> releaseVersionUpdates(String releaseVersion, Admin admin, FeatureUpdate.UpgradeType upgradeType) throws TerseException {
+        Map<String, FeatureUpdate> updates = new HashMap<>();
+        MetadataVersion metadataVersion;
+        try {
+            metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true);
+            updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
+        } catch (Throwable e) {
+            throw new TerseException(e.getMessage());
+        }
+        // Upgrading kraft.version from 0 turns a static controller quorum into a dynamic one and cannot be undone,
+        // so a release version upgrade leaves it to an explicit --feature kraft.version=1.
+        boolean keepStaticQuorum = upgradeType == FeatureUpdate.UpgradeType.UPGRADE &&
+            Feature.KRAFT_VERSION.defaultLevel(metadataVersion) > 0 &&
+            finalizedLevel(admin, KRaftVersion.FEATURE_NAME) == 0;
+        try {
+            for (Feature feature : Feature.PRODUCTION_FEATURES) {
+                short featureLevel = feature.defaultLevel(metadataVersion);
+                if (keepStaticQuorum && feature == Feature.KRAFT_VERSION) {
+                    System.out.println(KRaftVersion.FEATURE_NAME + " is not upgraded because it is 0, which keeps the static controller quorum." +
+                        " Use --feature " + KRaftVersion.FEATURE_NAME + "=" + featureLevel + " to make the quorum dynamic.");
+                    continue;
+                }
+                // Don't send a request to upgrade a feature to 0.
+                if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
+                    updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
+                }
+            }
+        } catch (Throwable e) {
+            throw new TerseException(upgradeType.name() + " for release version " + releaseVersion +
+                " failed because at least one feature had the following error: " + e.getMessage());
+        }
+        return updates;
+    }
+
+    private static short finalizedLevel(Admin admin, String feature) throws TerseException {
+        try {
+            FinalizedVersionRange range = admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(feature);
+            return range == null ? 0 : range.maxVersionLevel();
+        } catch (ExecutionException e) {
+            throw new TerseException("Could not describe the finalized level of " + feature + ": " + e.getCause().getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TerseException("Interrupted while describing the finalized level of " + feature + ".");
+        }
     }
 
     static void handleDisable(Namespace namespace, Admin adminClient) throws TerseException {
