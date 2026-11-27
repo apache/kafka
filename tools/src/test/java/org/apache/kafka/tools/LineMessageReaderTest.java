@@ -23,6 +23,8 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.tools.api.RecordReader;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.util.Iterator;
@@ -141,6 +143,25 @@ public class LineMessageReaderTest {
         );
 
         runTest(props, input, record0, record1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"|", ".", "+", "\\"})
+    public void testHeadersSeparatorIsNotARegex(String headersSeparator) {
+        Properties props = defaultTestProps();
+        props.put("headers.separator", headersSeparator);
+
+        runTest(
+                props,
+                "h0:v0" + headersSeparator + "h1:v1\tkey\tvalue",
+                record("key",
+                        "value",
+                        List.of(
+                                new RecordHeader("h0", "v0".getBytes(UTF_8)),
+                                new RecordHeader("h1", "v1".getBytes(UTF_8))
+                        )
+                )
+        );
     }
 
     @Test
