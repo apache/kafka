@@ -445,10 +445,6 @@ public class SaslServerAuthenticator implements Authenticator {
             ByteBuffer requestBuffer = ByteBuffer.wrap(clientToken);
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
-            if (apiKey == ApiKeys.SASL_AUTHENTICATE && header.isApiVersionSupported()
-                    && !apiKey.isVersionEnabled(header.apiVersion(), enableUnstableLastVersion))
-                throw new InvalidRequestException("Received request for disabled api with key " + apiKey.id + " (" +
-                        apiKey.name() + ") and version " + header.apiVersion());
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
@@ -458,6 +454,9 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw e;
             }
             short version = header.apiVersion();
+            if (!apiKey.isVersionEnabled(version, enableUnstableLastVersion))
+                throw new UnsupportedVersionException("Received request for disabled api with key " + apiKey.id + " (" +
+                        apiKey.name() + ") and version " + version);
             /*
              * The client sends multiple SASL_AUTHENTICATE requests, and the client is known
              * to support the required version if any one of them indicates it supports that
