@@ -56,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
@@ -199,6 +200,159 @@ public class StreamsGroupCommandTest {
         assertEquals(exp, service.getDescribeGroup(firstGroup));
 
         service.close();
+    }
+
+    @ParameterizedTest
+    @MethodSource("describeMembersWithOptionalColumns")
+    public void testDescribeMembersWithOptionalColumns(
+        boolean verbose,
+        String instanceId,
+        String rackId,
+        String expectedHeader,
+        String expectedRow
+    ) throws Exception {
+        StreamsGroupMemberDescription member = memberDescription("member-1", instanceId, rackId);
+        List<String> lines = describeMembersOutput(verbose, List.of(member));
+
+        assertEquals(2, lines.size());
+        assertEquals(expectedHeader, lines.get(0).trim().replaceAll("\\s+", " "));
+        assertEquals(expectedRow, lines.get(1).trim().replaceAll("\\s+", " "));
+    }
+
+    private static Stream<Arguments> describeMembersWithOptionalColumns() {
+        return Stream.of(
+            Arguments.of(false, null, null,
+                "GROUP MEMBER PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group member-1 process-1 client-1 ACTIVE: 0:[0];"),
+            Arguments.of(false, "instance-1", null,
+                "GROUP MEMBER GROUP-INSTANCE-ID PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group member-1 instance-1 process-1 client-1 ACTIVE: 0:[0];"),
+            Arguments.of(false, null, "rack-1",
+                "GROUP MEMBER PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group member-1 process-1 client-1 ACTIVE: 0:[0];"),
+            Arguments.of(false, "instance-1", "rack-1",
+                "GROUP MEMBER GROUP-INSTANCE-ID PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group member-1 instance-1 process-1 client-1 ACTIVE: 0:[0];"),
+            Arguments.of(true, null, null,
+                "GROUP TARGET-ASSIGNMENT-EPOCH TOPOLOGY-EPOCH MEMBER MEMBER-PROTOCOL MEMBER-EPOCH PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group 10 3 member-1 streams 7 process-1 client-1 ACTIVE: 0:[0]; TARGET-ACTIVE: 0:[1];"),
+            Arguments.of(true, "instance-1", null,
+                "GROUP TARGET-ASSIGNMENT-EPOCH TOPOLOGY-EPOCH MEMBER GROUP-INSTANCE-ID MEMBER-PROTOCOL MEMBER-EPOCH PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group 10 3 member-1 instance-1 streams 7 process-1 client-1 ACTIVE: 0:[0]; TARGET-ACTIVE: 0:[1];"),
+            Arguments.of(true, null, "rack-1",
+                "GROUP TARGET-ASSIGNMENT-EPOCH TOPOLOGY-EPOCH MEMBER MEMBER-PROTOCOL MEMBER-EPOCH PROCESS CLIENT-ID RACK-ID ASSIGNMENTS",
+                "foo-group 10 3 member-1 streams 7 process-1 client-1 rack-1 ACTIVE: 0:[0]; TARGET-ACTIVE: 0:[1];"),
+            Arguments.of(true, "instance-1", "rack-1",
+                "GROUP TARGET-ASSIGNMENT-EPOCH TOPOLOGY-EPOCH MEMBER GROUP-INSTANCE-ID MEMBER-PROTOCOL MEMBER-EPOCH PROCESS CLIENT-ID RACK-ID ASSIGNMENTS",
+                "foo-group 10 3 member-1 instance-1 streams 7 process-1 client-1 rack-1 ACTIVE: 0:[0]; TARGET-ACTIVE: 0:[1];"),
+            Arguments.of(false, "", "",
+                "GROUP MEMBER PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group member-1 process-1 client-1 ACTIVE: 0:[0];"),
+            Arguments.of(true, "", "",
+                "GROUP TARGET-ASSIGNMENT-EPOCH TOPOLOGY-EPOCH MEMBER MEMBER-PROTOCOL MEMBER-EPOCH PROCESS CLIENT-ID ASSIGNMENTS",
+                "foo-group 10 3 member-1 streams 7 process-1 client-1 ACTIVE: 0:[0]; TARGET-ACTIVE: 0:[1];")
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testDescribeMembersWithMixedOptionalIds(boolean verbose) throws Exception {
+        List<String> lines = describeMembersOutput(verbose, List.of(
+            memberDescription("member-1", null, null),
+            memberDescription("member-2", "", ""),
+            memberDescription("member-3", "instance-1", "rack-1")
+        ));
+
+        String header = lines.get(0);
+        String withoutIds = lines.get(1);
+        String withEmptyStringIds = lines.get(2);
+        String withIds = lines.get(3);
+        int instanceIdStart = header.indexOf("GROUP-INSTANCE-ID");
+        int instanceIdEnd = header.indexOf(verbose ? "MEMBER-PROTOCOL" : "PROCESS");
+
+        assertEquals("", withoutIds.substring(instanceIdStart, instanceIdEnd).trim());
+        assertEquals("", withEmptyStringIds.substring(instanceIdStart, instanceIdEnd).trim());
+        assertEquals("instance-1", withIds.substring(instanceIdStart, instanceIdEnd).trim());
+
+        if (verbose) {
+            int rackStart = header.indexOf("RACK-ID");
+            int rackEnd = header.indexOf("ASSIGNMENTS");
+            assertEquals("", withoutIds.substring(rackStart, rackEnd).trim());
+            assertEquals("", withEmptyStringIds.substring(rackStart, rackEnd).trim());
+            assertEquals("rack-1", withIds.substring(rackStart, rackEnd).trim());
+        } else {
+            assertFalse(header.contains("RACK-ID"));
+            assertFalse(withIds.contains("rack-1"));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testDescribeMembersWithLongOptionalIds(boolean verbose) throws Exception {
+        String instanceId = "instance-id-longer-than-the-column-header";
+        String rackId = "rack-id-longer-than-the-default-column-width";
+        // A shorter ID follows the longest one to catch widths being overwritten instead of accumulated.
+        List<String> lines = describeMembersOutput(verbose, List.of(
+            memberDescription("member-1", instanceId, rackId),
+            memberDescription("member-2", "short-instance", "short-rack")
+        ));
+
+        String header = lines.get(0);
+        assertEquals(header.indexOf("GROUP-INSTANCE-ID"), lines.get(1).indexOf(instanceId));
+        assertEquals(header.indexOf("GROUP-INSTANCE-ID"), lines.get(2).indexOf("short-instance"));
+
+        for (String row : lines.subList(1, lines.size())) {
+            assertEquals(header.indexOf("PROCESS"), row.indexOf("process-1"));
+            assertEquals(header.indexOf("CLIENT-ID"), row.indexOf("client-1"));
+            assertEquals(header.indexOf("ASSIGNMENTS"), row.indexOf("ACTIVE:"));
+        }
+        if (verbose) {
+            assertEquals(header.indexOf("RACK-ID"), lines.get(1).indexOf(rackId));
+            assertEquals(header.indexOf("RACK-ID"), lines.get(2).indexOf("short-rack"));
+        } else {
+            assertFalse(header.contains("RACK-ID"));
+            assertFalse(lines.get(1).contains(rackId));
+            assertFalse(lines.get(2).contains("short-rack"));
+        }
+    }
+
+    private StreamsGroupMemberDescription memberDescription(String memberId, String instanceId, String rackId) {
+        StreamsGroupMemberAssignment assignment = new StreamsGroupMemberAssignment(
+            List.of(new StreamsGroupMemberAssignment.TaskIds("0", List.of(0))), List.of(), List.of());
+        StreamsGroupMemberAssignment targetAssignment = new StreamsGroupMemberAssignment(
+            List.of(new StreamsGroupMemberAssignment.TaskIds("0", List.of(1))), List.of(), List.of());
+        return new StreamsGroupMemberDescription(
+            memberId, 7, Optional.ofNullable(instanceId), Optional.ofNullable(rackId),
+            "client-1", "localhost", 3, "process-1", Optional.empty(), Map.of(), List.of(), List.of(),
+            assignment, targetAssignment, false);
+    }
+
+    private List<String> describeMembersOutput(boolean verbose, List<StreamsGroupMemberDescription> members) throws Exception {
+        String group = "foo-group";
+        StreamsGroupDescription description = new StreamsGroupDescription(
+            group, 11, 10, 3, List.of(), members, GroupState.STABLE, new Node(0, "localhost", 9092), null,
+            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED, Optional.empty());
+        Admin admin = mock(KafkaAdminClient.class);
+        DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(Map.of(group, description)));
+        when(admin.describeStreamsGroups(eq(List.of(group)), any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
+
+        List<String> args = new ArrayList<>(List.of(
+            "--bootstrap-server", BOOTSTRAP_SERVERS, "--group", group, "--describe", "--members"));
+        if (verbose) {
+            args.add("--verbose");
+        }
+
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), admin)) {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> {
+                try {
+                    assertEquals(0, service.describeGroups());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            return output.lines().toList();
+        }
     }
 
     @Test
