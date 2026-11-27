@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 import org.mockito.internal.util.MockUtil;
@@ -35,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -782,6 +786,46 @@ public class ExpiringCredentialRefreshingLoginTest {
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCloseWhenReloginClearsInterrupt(boolean reloginFails) throws Exception {
+        Subject subject = new Subject();
+        final LoginContext mockLoginContext = mock(LoginContext.class);
+        when(mockLoginContext.getSubject()).thenReturn(subject);
+        CountDownLatch reloginStarted = new CountDownLatch(1);
+        // The first re-login blocks until close() interrupts it and then clears the interrupt flag, like a login
+        // callback handler that catches the InterruptedException of a blocking call and returns or rethrows it wrapped.
+        Mockito.doNothing().doAnswer(invocation -> {
+            reloginStarted.countDown();
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                if (reloginFails)
+                    throw new LoginException(e.toString());
+            }
+            return null;
+        }).doNothing().when(mockLoginContext).login();
+
+        MockTime mockTime = new MockTime();
+        long lifetimeMinutes = 100L;
+        long refreshEveryMinutes = 80L;
+        boolean clientReloginAllowedBeforeLogout = true;
+        TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
+        TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
+                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                        1.0 * refreshEveryMinutes / lifetimeMinutes, (short) 0, (short) 0,
+                        clientReloginAllowedBeforeLogout),
+                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, Long.MAX_VALUE,
+                clientReloginAllowedBeforeLogout);
+        testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
+
+        testExpiringCredentialRefreshingLogin.login();
+        assertTrue(reloginStarted.await(10L, TimeUnit.SECONDS));
+
+        CompletableFuture.runAsync(testExpiringCredentialRefreshingLogin::close).get(10L, TimeUnit.SECONDS);
+        assertTrue(testLoginContextFactory.refresherThreadDoneFuture().isDone());
     }
 
     private static List<KafkaFutureImpl<Long>> addWaiters(MockScheduler mockScheduler, long refreshEveryMillis,
