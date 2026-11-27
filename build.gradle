@@ -140,8 +140,7 @@ ext {
   runtimeTestLibs = [
     libs.slf4jLog4j2,
     libs.junitPlatformLauncher,
-    libs.jacksonDataformatYaml,
-    project(":test-common:test-common-util")
+    libs.jacksonDataformatYaml
   ]
 
   log4jReleaseLibs = [
@@ -162,6 +161,36 @@ ext {
     libs.log4j2Core
   ]
 
+  checkstyleConfigProperties = { configFileName ->
+    [importControlFile: "$configFileName"]
+  }
+
+
+  /**
+   * For a given Project, compute a nice dash separated directory name
+   * to store the JUnit XML files in. E.g., Project ":connect:api" -> "connect-api"
+   */
+  projectToJUnitXmlPath = { project ->
+    var p = project
+    var projectNames = []
+    while (p != null) {
+      projectNames.push(p.name)
+      p = p.parent
+      if (p.name == "kafka") {
+        break
+      }
+    }
+    return projectNames.join("/")
+  }
+}
+
+// Gradle 10 no longer resolves properties and methods a subproject doesn't declare from its parent project
+// (https://docs.gradle.org/current/userguide/upgrading_version_9.html#deprecated_implicit_lookup_in_parent_projects),
+// so give each subproject its own copy of the extra properties declared above.
+subprojects {
+  rootProject.ext.properties.each { name, value -> ext.set(name, value) }
+  // A project dependency is created by each subproject's own DependencyHandler; a Project object isn't a valid notation.
+  ext.runtimeTestLibs = rootProject.ext.runtimeTestLibs + dependencies.project(path: ':test-common:test-common-util')
 }
 
 allprojects {
@@ -237,23 +266,6 @@ def determineCommitId() {
   } else {
     "unknown"
   }
-}
-
-/**
- * For a given Project, compute a nice dash separated directory name
- * to store the JUnit XML files in. E.g., Project ":connect:api" -> "connect-api"
- */
-static def projectToJUnitXmlPath(project) {
-  var p = project
-  var projectNames = []
-  while (p != null) {
-    projectNames.push(p.name)
-    p = p.parent
-    if (p.name == "kafka") {
-      break
-    }
-  }
-  return projectNames.join("/")
 }
 
 
@@ -467,17 +479,18 @@ subprojects {
 
     def logFiles = new HashMap<String, File>()
     def logStreams = new HashMap<String, FileOutputStream>()
-    beforeTest { TestDescriptor td ->
+    def testOutputDir = "${project.projectDir}/build/reports/testOutput"
+    def beforeTestHook = { TestDescriptor td ->
       def tid = testId(td)
       // truncate the file name if it's too long
       def logFile = new File(
-              "${projectDir}/build/reports/testOutput/${tid.substring(0, Math.min(tid.size(),240))}.test.stdout"
+              "${testOutputDir}/${tid.substring(0, Math.min(tid.size(),240))}.test.stdout"
       )
       logFile.parentFile.mkdirs()
       logFiles.put(tid, logFile)
       logStreams.put(tid, new FileOutputStream(logFile))
     }
-    onOutput { TestDescriptor td, TestOutputEvent toe ->
+    def onOutputHook = { TestDescriptor td, TestOutputEvent toe ->
       def tid = testId(td)
       // Some output can happen outside the context of a specific test (e.g. at the class level)
       // and beforeTest/afterTest seems to not be invoked for these cases (and similarly, there's
@@ -503,7 +516,7 @@ subprojects {
         e.printStackTrace()
       }
     }
-    afterTest { TestDescriptor td, TestResult tr ->
+    def afterTestHook = { TestDescriptor td, TestResult tr ->
       def tid = testId(td)
       try {
         logStreams.get(tid).close()
@@ -521,6 +534,13 @@ subprojects {
         logStreams.remove(tid)
       }
     }
+    addTestListener([
+      beforeSuite: { TestDescriptor suite -> },
+      afterSuite: { TestDescriptor suite, TestResult result -> },
+      beforeTest: beforeTestHook,
+      afterTest: afterTestHook
+    ] as TestListener)
+    addTestOutputListener(onOutputHook as TestOutputListener)
   }
 
   // Workaround for Mockito Java Agent restrictions in Java 21+
@@ -529,7 +549,7 @@ subprojects {
   // fails without explicit instrumentation, and the JVM consistently emits warnings.
   // See also: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation
   afterEvaluate { subproject ->
-    def hasMockitoCore = subproject.configurations.findAll {
+    def hasMockitoCore = subproject.configurations.matching {
       it.canBeResolved
     }.any { config ->
       config.incoming.dependencies.any { dependency ->
@@ -894,8 +914,8 @@ kafkaPublicApiChecker {
   tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
     reports.configure {
       // Continue supporting `xmlFindBugsReport` for compatibility
-      xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
-      html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
+      xml.enabled = project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport')
+      html.enabled = !project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport')
     }
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -928,11 +948,6 @@ kafkaPublicApiChecker {
     tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
-  dependencyCheck {
-    suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
-    skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
-    skipConfigurations = [ "zinc" ]
-  }
   apply plugin: 'com.diffplug.spotless'
   spotless {
     java {
@@ -1007,12 +1022,15 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
   }
 }
 
-def checkstyleConfigProperties(configFileName) {
-  [importControlFile: "$configFileName"]
-}
-
 if (userEnableTestCoverage) {
   tasks.register('reportCoverage').configure { dependsOn(subprojects.reportCoverage) }
+}
+
+// The OWASP dependency-check plugin is applied to the root project only, and checks all subprojects from there.
+dependencyCheck {
+  suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
+  skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
+  skipConfigurations = [ "zinc" ]
 }
 
 def connectPkgs = [
@@ -1027,9 +1045,9 @@ def connectPkgs = [
     'connect:mirror-client'
 ]
 
-tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
+tasks.register("jarConnect") { dependsOn connectPkgs.collect { it + ":jar" } }
 
-tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
+tasks.register("testConnect") { dependsOn connectPkgs.collect { it + ":test" } }
 
 project(':server') {
   base {
@@ -1393,7 +1411,6 @@ project(':core') {
   }
 
   tasks.register('releaseTarGz', Tar) {
-    dependsOn = configurations.archives.artifacts
     into "kafka_${versions.baseScala}-${archiveVersion.get()}"
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
@@ -1402,7 +1419,7 @@ project(':core') {
     from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
     from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
     from(configurations.runtimeClasspath) { into("libs/") }
-    from(configurations.archives.artifacts.files) { into("libs/") }
+    from(tasks.named('jar')) { into("libs/") }
     from(configurations.releaseOnly) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
