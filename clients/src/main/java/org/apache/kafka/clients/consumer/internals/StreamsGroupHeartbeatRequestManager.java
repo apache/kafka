@@ -408,6 +408,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final HeartbeatMetricsManager metricsManager;
 
+    private long heartbeatGeneration;
+
     private final StreamsRebalanceData streamsRebalanceData;
 
     private String lastMissingClientTagsDetail = null;
@@ -497,6 +499,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
+            // Completions from before the leave must not update the next membership's request state.
+            heartbeatGeneration++;
             membershipManager.onPollTimerExpired();
             NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequestAndLogResponse(currentTimeMs);
 
@@ -661,11 +665,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestAndHandleResponse(final long currentTimeMs) {
+        final long requestGeneration = heartbeatGeneration;
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
         return request.whenComplete((response, exception) -> {
-            long completionTimeMs = request.handler().completionTimeMs();
             if (response != null) {
                 metricsManager.recordRequestLatency(response.requestLatencyMs());
+            }
+            if (requestGeneration != heartbeatGeneration) {
+                return;
+            }
+            long completionTimeMs = request.handler().completionTimeMs();
+            if (response != null) {
                 onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
             } else {
                 onFailure(exception, completionTimeMs);

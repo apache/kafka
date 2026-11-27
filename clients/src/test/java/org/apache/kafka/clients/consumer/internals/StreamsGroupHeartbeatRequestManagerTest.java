@@ -560,6 +560,31 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testIgnoreHeartbeatResponseFromBeforePollTimeout() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.ACKNOWLEDGING);
+        StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        NetworkClientDelegate.UnsentRequest oldHeartbeat = heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.get(0);
+
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
+        assertEquals(1, heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.size());
+        verify(membershipManager).onPollTimerExpired();
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
+        verify(membershipManager).maybeRejoinStaleMember();
+
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        NetworkClientDelegate.UnsentRequest joinHeartbeat = heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.get(0);
+        oldHeartbeat.handler().onComplete(buildClientResponse());
+
+        verify(membershipManager, never()).onHeartbeatSuccess(any());
+        assertTrue(heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.isEmpty());
+
+        ClientResponse joinResponse = buildClientResponse();
+        joinHeartbeat.handler().onComplete(joinResponse);
+        verify(membershipManager).onHeartbeatSuccess((StreamsGroupHeartbeatResponse) joinResponse.responseBody());
+    }
+
+    @Test
     public void testNotSendingLeaveHeartbeatIfPollTimerExpiredAndMemberIsLeaving() {
         final long timeToNextHeartbeatMs = 1234;
         try (

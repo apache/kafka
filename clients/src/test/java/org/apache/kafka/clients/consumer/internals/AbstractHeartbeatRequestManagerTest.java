@@ -554,6 +554,31 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     }
 
     @Test
+    public void testIgnoreHeartbeatResponseFromBeforePollTimeout() {
+        recreateHeartbeatRequestManager();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.UnsentRequest oldHeartbeat = heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.get(0);
+
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS - DEFAULT_HEARTBEAT_INTERVAL_MS);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
+        verify(membershipManager).maybeRejoinStaleMember();
+
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        NetworkClientDelegate.UnsentRequest joinHeartbeat = heartbeatRequestManager.poll(time.milliseconds()).unsentRequests.get(0);
+        oldHeartbeat.handler().onComplete(createHeartbeatResponse(oldHeartbeat, Errors.NONE));
+
+        verify(membershipManager, never()).onHeartbeatSuccess(any());
+        assertTrue(heartbeatRequestState.requestInFlight());
+
+        ClientResponse joinResponse = createHeartbeatResponse(joinHeartbeat, Errors.NONE);
+        joinHeartbeat.handler().onComplete(joinResponse);
+        verify(membershipManager).onHeartbeatSuccess(responseClass.cast(joinResponse.responseBody()));
+        assertFalse(heartbeatRequestState.requestInFlight());
+    }
+
+    @Test
     public void testisExpiredByUsedForLogging() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
