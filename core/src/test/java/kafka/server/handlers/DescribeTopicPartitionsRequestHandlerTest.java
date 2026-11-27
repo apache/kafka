@@ -48,6 +48,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.image.ClusterImage;
@@ -470,7 +471,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), Optional.empty(), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
                 listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, false,
                 Optional.of(kafkaPrincipalSerde));
-        return new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+        return new Request(1, context, Time.SYSTEM, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
     }
 
     KafkaConfig createKafkaDefaultConfig() {

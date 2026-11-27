@@ -59,6 +59,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.common.RequestTimeRecorder;
 
 import java.util.List;
 import java.util.Map;
@@ -76,29 +77,33 @@ public interface GroupCoordinator {
     /**
      * Heartbeat to a Consumer Group.
      *
-     * @param context           The request context.
-     * @param request           The ConsumerGroupHeartbeatRequest data.
+     * @param context             The request context.
+     * @param request             The ConsumerGroupHeartbeatRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         AuthorizableRequestContext context,
-        ConsumerGroupHeartbeatRequestData request
+        ConsumerGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Heartbeat to a Streams Group.
      *
-     * @param context           The request context.
-     * @param request           The StreamsGroupHeartbeatRequest data.
+     * @param context             The request context.
+     * @param request             The StreamsGroupHeartbeatRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response together with internal topics to create.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
         AuthorizableRequestContext context,
-        StreamsGroupHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
@@ -111,37 +116,42 @@ public interface GroupCoordinator {
      * at the same epoch. On a transient failure no record is written and the broker arms
      * an in-memory back-off.
      *
-     * @param context   The request context.
-     * @param request   The StreamsGroupTopologyDescriptionUpdateRequest data.
+     * @param context             The request context.
+     * @param request             The StreamsGroupTopologyDescriptionUpdateRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return A future yielding the response. The error code is set to indicate any error
      *         encountered during the execution.
      */
     CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
         AuthorizableRequestContext context,
-        StreamsGroupTopologyDescriptionUpdateRequestData request
+        StreamsGroupTopologyDescriptionUpdateRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Heartbeat to a Share Group.
      *
-     * @param context           The request context.
-     * @param request           The ShareGroupHeartbeatRequest data.
+     * @param context             The request context.
+     * @param request             The ShareGroupHeartbeatRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
         AuthorizableRequestContext context,
-        ShareGroupHeartbeatRequestData request
+        ShareGroupHeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Join a Classic Group.
      *
-     * @param context           The request context.
-     * @param request           The JoinGroupRequest data.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The request context.
+     * @param request             The JoinGroupRequest data.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -149,15 +159,17 @@ public interface GroupCoordinator {
     CompletableFuture<JoinGroupResponseData> joinGroup(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Sync a Classic Group.
      *
-     * @param context           The coordinator request context.
-     * @param request           The SyncGroupRequest data.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The coordinator request context.
+     * @param request             The SyncGroupRequest data.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -165,76 +177,87 @@ public interface GroupCoordinator {
     CompletableFuture<SyncGroupResponseData> syncGroup(
         AuthorizableRequestContext context,
         SyncGroupRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Heartbeat to a Classic Group.
      *
-     * @param context           The coordinator request context.
-     * @param request           The HeartbeatRequest data.
+     * @param context             The coordinator request context.
+     * @param request             The HeartbeatRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<HeartbeatResponseData> heartbeat(
         AuthorizableRequestContext context,
-        HeartbeatRequestData request
+        HeartbeatRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Leave a Classic Group.
      *
-     * @param context           The coordinator request context.
-     * @param request           The LeaveGroupRequest data.
+     * @param context             The coordinator request context.
+     * @param request             The LeaveGroupRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<LeaveGroupResponseData> leaveGroup(
         AuthorizableRequestContext context,
-        LeaveGroupRequestData request
+        LeaveGroupRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * List Groups.
      *
-     * @param context           The coordinator request context.
-     * @param request           The ListGroupsRequest data.
+     * @param context             The coordinator request context.
+     * @param request             The ListGroupsRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ListGroupsResponseData> listGroups(
         AuthorizableRequestContext context,
-        ListGroupsRequestData request
+        ListGroupsRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Describe Groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context             The coordinator request context.
+     * @param groupIds            The group ids.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Describe consumer groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context             The coordinator request context.
+     * @param groupIds            The group ids.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
@@ -248,49 +271,56 @@ public interface GroupCoordinator {
      *                                      {@code TopologyDescription} / {@code TopologyDescriptionStatus}
      *                                      fields are left at their defaults and the plugin
      *                                      is not consulted.
+     * @param requestTimeRecorder           The recorder for the timings of the request.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
         List<String> groupIds,
-        boolean includeTopologyDescription
+        boolean includeTopologyDescription,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Describe share groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context             The coordinator request context.
+     * @param groupIds            The group ids.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> shareGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Alter Share Group Offsets for a given group.
      *
-     * @param context     The request context.
-     * @param groupId     The group id.
-     * @param requestData The AlterShareGroupOffsetsRequest data.
+     * @param context             The request context.
+     * @param groupId             The group id.
+     * @param requestData         The AlterShareGroupOffsetsRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
         AuthorizableRequestContext context,
         String groupId,
-        AlterShareGroupOffsetsRequestData requestData
+        AlterShareGroupOffsetsRequestData requestData,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Delete Groups.
      *
-     * @param context           The request context.
-     * @param groupIds          The group ids.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The request context.
+     * @param groupIds            The group ids.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the results are set to indicate the errors occurred during the execution.
@@ -298,17 +328,19 @@ public interface GroupCoordinator {
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         AuthorizableRequestContext context,
         List<String> groupIds,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Fetch offsets for a given Group.
      *
-     * @param context           The request context.
-     * @param request           The OffsetFetchRequestGroup request.
-     * @param requireStable     Whether the fetch waits for the offsets already written to the log
-     *                          to be committed, and returns the UNSTABLE_OFFSET_COMMIT error for
-     *                          the partitions with pending transactional offsets.
+     * @param context             The request context.
+     * @param request             The OffsetFetchRequestGroup request.
+     * @param requireStable       Whether the fetch waits for the offsets already written to the log
+     *                            to be committed, and returns the UNSTABLE_OFFSET_COMMIT error for
+     *                            the partitions with pending transactional offsets.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the results are set to indicate the errors occurred during the execution.
@@ -316,57 +348,65 @@ public interface GroupCoordinator {
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
         AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
+        boolean requireStable,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Describe the Share Group Offsets for a given group.
      *
-     * @param context           The request context.
-     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     * @param context             The request context.
+     * @param request             The DescribeShareGroupOffsetsRequestGroup request.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         AuthorizableRequestContext context,
-        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Describe all Share Group Offsets for a given group.
      *
-     * @param context           The request context.
-     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     * @param context             The request context.
+     * @param request             The DescribeShareGroupOffsetsRequestGroup request.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
         AuthorizableRequestContext context,
-        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Delete the Share Group Offsets for a given group.
      *
-     * @param context           The request context.
-     * @param request           The DeleteShareGroupOffsetsRequest data.
+     * @param context             The request context.
+     * @param request             The DeleteShareGroupOffsetsRequest data.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the results.
      *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsets(
         AuthorizableRequestContext context,
-        DeleteShareGroupOffsetsRequestData request
+        DeleteShareGroupOffsetsRequestData request,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Commit offsets for a given Group.
      *
-     * @param context           The request context.
-     * @param request           The OffsetCommitRequest data.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The request context.
+     * @param request             The OffsetCommitRequest data.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -374,15 +414,17 @@ public interface GroupCoordinator {
     CompletableFuture<OffsetCommitResponseData> commitOffsets(
         AuthorizableRequestContext context,
         OffsetCommitRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Commit transactional offsets for a given Group.
      *
-     * @param context           The request context.
-     * @param request           The TxnOffsetCommitRequest data.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The request context.
+     * @param request             The TxnOffsetCommitRequest data.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -390,15 +432,17 @@ public interface GroupCoordinator {
     CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
         AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
      * Delete offsets for a given Group.
      *
-     * @param context           The request context.
-     * @param request           The OffsetDeleteRequest data.
-     * @param bufferSupplier    The buffer supplier tied to the request thread.
+     * @param context             The request context.
+     * @param request             The OffsetDeleteRequest data.
+     * @param bufferSupplier      The buffer supplier tied to the request thread.
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
@@ -406,7 +450,8 @@ public interface GroupCoordinator {
     CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
         AuthorizableRequestContext context,
         OffsetDeleteRequestData request,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**
@@ -420,6 +465,7 @@ public interface GroupCoordinator {
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
      * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
+     * @param requestTimeRecorder The recorder for the timings of the request.
      *
      * @return A future yielding the result.
      */
@@ -429,7 +475,8 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion
+        short transactionVersion,
+        RequestTimeRecorder requestTimeRecorder
     );
 
     /**

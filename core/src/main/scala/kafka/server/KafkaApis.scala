@@ -67,7 +67,7 @@ import org.apache.kafka.network.Request
 import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, AuthHelper, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ForwardingManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.common.{GroupVersion, RequestLocal, RequestTimeRecorder, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
@@ -265,9 +265,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       // expiration thread for certain delayed operations (e.g. DelayedJoin)
       // Delayed fetches are also completed by ReplicaFetcherThread.
       replicaManager.tryCompleteActions()
-      // The local completion time may be set while processing the request. Only record it if it's unset.
-      if (request.apiLocalCompleteTimeNanos < 0)
-        request.apiLocalCompleteTimeNanos(time.nanoseconds)
     }
   }
 
@@ -367,7 +364,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
             .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
             .setTopics(authorizedTopicsRequest.asJava),
-          requestLocal.bufferSupplier
+          requestLocal.bufferSupplier,
+          request
         ).handle[Unit] { (results, exception) =>
           if (exception != null) {
             requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
@@ -1044,13 +1042,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         futures += fetchAllOffsetsForGroup(
           request.context,
           groupOffsetFetch,
-          requireStable
+          requireStable,
+          request
         )
       } else {
         futures += fetchOffsetsForGroup(
           request.context,
           groupOffsetFetch,
-          requireStable
+          requireStable,
+          request
         )
       }
     }
@@ -1065,14 +1065,16 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def fetchAllOffsetsForGroup(
     requestContext: RequestContext,
     groupFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
-    requireStable: Boolean
+    requireStable: Boolean,
+    requestTimeRecorder: RequestTimeRecorder
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     val useTopicIds = OffsetFetchRequest.useTopicIds(requestContext.effectiveApiVersion)
 
     groupCoordinator.fetchOffsets(
       requestContext,
       groupFetchRequest,
-      requireStable
+      requireStable,
+      requestTimeRecorder
     ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (groupFetchResponse, exception) =>
       if (exception != null) {
         OffsetFetchResponse.groupError(
@@ -1119,7 +1121,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def fetchOffsetsForGroup(
     requestContext: RequestContext,
     groupFetchRequest: OffsetFetchRequestData.OffsetFetchRequestGroup,
-    requireStable: Boolean
+    requireStable: Boolean,
+    requestTimeRecorder: RequestTimeRecorder
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     val useTopicIds = OffsetFetchRequest.useTopicIds(requestContext.effectiveApiVersion)
 
@@ -1176,7 +1179,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setMemberId(groupFetchRequest.memberId)
         .setMemberEpoch(groupFetchRequest.memberEpoch)
         .setTopics(authorizedTopics.asJava),
-      requireStable
+      requireStable,
+      requestTimeRecorder
     ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (groupFetchResponse, exception) =>
       if (exception != null) {
         OffsetFetchResponse.groupError(
@@ -1331,7 +1335,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     groupCoordinator.describeGroups(
       request.context,
-      authorizedGroups.asJava
+      authorizedGroups.asJava,
+      request
     ).handle[Unit] { (results, exception) =>
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, describeRequest.getErrorResponse(exception))
@@ -1366,7 +1371,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     groupCoordinator.listGroups(
       request.context,
-      listGroupsRequest.data
+      listGroupsRequest.data,
+      request
     ).handle[Unit] { (response, exception) =>
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, listGroupsRequest.getErrorResponse(exception))
@@ -1399,7 +1405,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.joinGroup(
         request.context,
         joinGroupRequest.data,
-        requestLocal.bufferSupplier
+        requestLocal.bufferSupplier,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, joinGroupRequest.getErrorResponse(exception))
@@ -1427,7 +1434,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.syncGroup(
         request.context,
         syncGroupRequest.data,
-        requestLocal.bufferSupplier
+        requestLocal.bufferSupplier,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, syncGroupRequest.getErrorResponse(exception))
@@ -1452,7 +1460,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupCoordinator.deleteGroups(
       request.context,
       authorizedGroups.toList.asJava,
-      requestLocal.bufferSupplier
+      requestLocal.bufferSupplier,
+      request
     ).handle[Unit] { (results, exception) =>
       val response = new DeleteGroupsResponseData()
 
@@ -1497,7 +1506,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       groupCoordinator.heartbeat(
         request.context,
-        heartbeatRequest.data
+        heartbeatRequest.data,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, heartbeatRequest.getErrorResponse(exception))
@@ -1517,7 +1527,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       groupCoordinator.leaveGroup(
         request.context,
-        leaveGroupRequest.normalizedData()
+        leaveGroupRequest.normalizedData(),
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, leaveGroupRequest.getErrorResponse(exception))
@@ -1845,7 +1856,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerEpoch,
               marker.coordinatorEpoch,
               marker.transactionResult,
-              markerTransactionVersion
+              markerTransactionVersion,
+              request
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE
@@ -2179,7 +2191,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupCoordinator.commitTransactionalOffsets(
           request.context,
           txnOffsetCommitRequestData,
-          requestLocal.bufferSupplier
+          requestLocal.bufferSupplier,
+          request
         ).handle[Unit] { (response, exception) =>
           if (exception != null) {
             sendResponse(txnOffsetCommitRequest.getErrorResponse(exception))
@@ -2493,7 +2506,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.deleteOffsets(
         request.context,
         offsetDeleteRequestData,
-        requestLocal.bufferSupplier
+        requestLocal.bufferSupplier,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, offsetDeleteRequest.getErrorResponse(exception))
@@ -2708,7 +2722,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.consumerGroupHeartbeat(
         request.context,
-        consumerGroupHeartbeatRequest.data
+        consumerGroupHeartbeatRequest.data,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(exception))
@@ -2745,7 +2760,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.consumerGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        request
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
@@ -2871,7 +2887,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.streamsGroupHeartbeat(
         request.context,
-        streamsGroupHeartbeatRequest.data
+        streamsGroupHeartbeatRequest.data,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(exception))
@@ -2962,7 +2979,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       groupCoordinator.streamsGroupTopologyDescriptionUpdate(
         request.context,
-        updateRequest.data
+        updateRequest.data,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(exception))
@@ -2999,7 +3017,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.streamsGroupDescribe(
         request.context,
         authorizedGroups.asJava,
-        streamsGroupDescribeRequest.data.includeTopologyDescription
+        streamsGroupDescribeRequest.data.includeTopologyDescription,
+        request
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))
@@ -3182,7 +3201,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.shareGroupHeartbeat(
         request.context,
-        shareGroupHeartbeatRequest.data
+        shareGroupHeartbeatRequest.data,
+        request
       ).handle[Unit] { (response, exception) =>
 
         if (exception != null) {
@@ -3218,7 +3238,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.shareGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        request
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(exception))
@@ -3769,7 +3790,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator.initializeState(request.context, initializeShareGroupStateRequest.data)
+    shareCoordinator.initializeState(request.context, initializeShareGroupStateRequest.data, request)
       .handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(exception))
@@ -3793,7 +3814,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator.readState(request.context, readShareGroupStateRequest.data)
+    shareCoordinator.readState(request.context, readShareGroupStateRequest.data, request)
       .handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(exception))
@@ -3817,7 +3838,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator.writeState(request.context, writeShareGroupStateRequest.data)
+    shareCoordinator.writeState(request.context, writeShareGroupStateRequest.data, request)
       .handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(exception))
@@ -3841,7 +3862,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
+    shareCoordinator.deleteState(request.context, deleteShareGroupStateRequest.data, request)
       .handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(exception))
@@ -3865,7 +3886,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
+    shareCoordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data, request)
       .handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
@@ -3893,7 +3914,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else if (isAllPartitions) {
         futures += describeShareGroupAllOffsetsForGroup(
           request.context,
-          groupDescribeOffsets
+          groupDescribeOffsets,
+          request
         )
       } else if (groupDescribeOffsets.topics.isEmpty) {
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
@@ -3901,7 +3923,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         futures += describeShareGroupOffsetsForGroup(
           request.context,
-          groupDescribeOffsets
+          groupDescribeOffsets,
+          request
         )
       }
     }
@@ -3915,11 +3938,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def describeShareGroupAllOffsetsForGroup(requestContext: RequestContext,
-    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup,
+    requestTimeRecorder: RequestTimeRecorder
   ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
     groupCoordinator.describeShareGroupAllOffsets(
       requestContext,
-      groupDescribeOffsetsRequest
+      groupDescribeOffsetsRequest,
+      requestTimeRecorder
     ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
       if (exception != null) {
         val error = Errors.forException(exception)
@@ -3943,7 +3968,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
-    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup,
+    requestTimeRecorder: RequestTimeRecorder
   ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
     val partitionResult = authHelper.partitionByAuthorized(
@@ -3960,7 +3986,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestContext,
       new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
         .setGroupId(groupDescribeOffsetsRequest.groupId)
-        .setTopics(authorizedTopics)
+        .setTopics(authorizedTopics),
+      requestTimeRecorder
     ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
       if (exception != null) {
         val error = Errors.forException(exception)
@@ -4031,7 +4058,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.alterShareGroupOffsets(
         request.context,
         groupId,
-        data
+        data,
+        request
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(exception))
@@ -4078,7 +4106,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     groupCoordinator.deleteShareGroupOffsets(
       request.context,
-      new DeleteShareGroupOffsetsRequestData().setGroupId(groupId).setTopics(authorizedTopics)
+      new DeleteShareGroupOffsetsRequestData().setGroupId(groupId).setTopics(authorizedTopics),
+      request
     ).handle[Unit] {(responseData, exception) => {
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(
