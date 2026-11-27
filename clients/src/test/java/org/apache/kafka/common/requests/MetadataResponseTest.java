@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -63,5 +65,30 @@ public class MetadataResponseTest {
         assertNull(cluster.topicName(Uuid.ZERO_UUID));
         assertNull(cluster.topicName(zeroUuid));
         assertEquals("topic3", cluster.topicName(randomUuid));
+    }
+
+    @Test
+    void errorsSkipTopicsWithoutName() {
+        MetadataResponseData.MetadataResponseTopicCollection topics =
+                new MetadataResponseData.MetadataResponseTopicCollection();
+        topics.add(new MetadataResponseData.MetadataResponseTopic()
+                .setName("topic1")
+                .setTopicId(Uuid.randomUuid())
+                .setErrorCode(Errors.NONE.code()));
+        topics.add(new MetadataResponseData.MetadataResponseTopic()
+                .setName("topic2")
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()));
+        topics.add(new MetadataResponseData.MetadataResponseTopic()
+                .setName(null)
+                .setTopicId(Uuid.randomUuid())
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()));
+        topics.add(new MetadataResponseData.MetadataResponseTopic()
+                .setName(null)
+                .setTopicId(Uuid.randomUuid())
+                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()));
+        MetadataResponse metadataResponse = new MetadataResponse(new MetadataResponseData().setTopics(topics),
+                ApiKeys.METADATA.latestVersion());
+
+        assertEquals(Map.of("topic2", Errors.UNKNOWN_TOPIC_OR_PARTITION), metadataResponse.errors());
     }
 }

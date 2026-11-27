@@ -747,6 +747,37 @@ public class MetadataTest {
     }
 
     @Test
+    public void testUnknownTopicIdWithoutNameRequestsUpdate() {
+        Uuid topicId = Uuid.randomUuid();
+        MetadataResponse response = RequestTestUtils.metadataUpdateWithIds(1, Map.of("topic", 1), Map.of("topic", topicId));
+        response.data().topics().add(new MetadataResponseTopic()
+                .setName(null)
+                .setTopicId(Uuid.randomUuid())
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()));
+
+        metadata.updateWithCurrentRequestVersion(response, false, 0L);
+
+        assertEquals(Map.of(topicId, "topic"), metadata.topicNames());
+        assertTrue(metadata.updateRequested());
+    }
+
+    @Test
+    public void testUnauthorizedTopicIdWithoutNameDoesNotRequestUpdateOrThrow() {
+        Uuid topicId = Uuid.randomUuid();
+        MetadataResponse response = RequestTestUtils.metadataUpdateWithIds(1, Map.of("topic", 1), Map.of("topic", topicId));
+        response.data().topics().add(new MetadataResponseTopic()
+                .setName(null)
+                .setTopicId(Uuid.randomUuid())
+                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()));
+
+        metadata.updateWithCurrentRequestVersion(response, false, 0L);
+
+        assertEquals(Map.of(topicId, "topic"), metadata.topicNames());
+        assertFalse(metadata.updateRequested());
+        metadata.maybeThrowAnyException();
+    }
+
+    @Test
     public void testMetadataTopicErrors() {
         Time time = new MockTime();
 

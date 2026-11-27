@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -139,6 +140,31 @@ public class ConsumerMetadataTest {
 
             assertEquals(Set.of("__matching_topic"), new HashSet<>(metadata.fetch().topics()));
             assertEquals(Set.of("__matching_topic"), metadata.fetch().topics());
+        }
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexSkipsDeletedAssignedTopic() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"));
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        Uuid deletedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId, deletedTopicId));
+
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            // Metadata response for the assigned topic IDs, where the deleted topic has no name
+            Map<String, Uuid> topicIds = Map.of("__matching_topic", assignedTopicId);
+            MetadataResponse response = RequestTestUtils.metadataUpdateWithIds(1, singletonMap("__matching_topic", 1), topicIds);
+            response.data().topics().add(new MetadataResponseData.MetadataResponseTopic()
+                .setName(null)
+                .setTopicId(deletedTopicId)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()));
+            metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
+
+            assertEquals(Set.of("__matching_topic"), metadata.fetch().topics());
+            assertTrue(metadata.updateRequested());
         }
     }
 
