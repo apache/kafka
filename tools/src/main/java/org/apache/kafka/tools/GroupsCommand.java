@@ -56,9 +56,19 @@ public class GroupsCommand {
         try {
             execute(args);
             return 0;
-        } catch (Throwable e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            System.err.println(Utils.stackTrace(e));
+            return 1;
+        } catch (ExecutionException e) {
+            printException(Objects.requireNonNullElse(e.getCause(), e));
+            return 1;
+        } catch (Throwable e) {
+            printException(e);
             return 1;
         }
     }
@@ -69,20 +79,10 @@ public class GroupsCommand {
         Properties config = opts.commandConfig();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServer());
 
-        int exitCode = 0;
         try (GroupsService service = new GroupsService(config)) {
             if (opts.hasListOption()) {
                 service.listGroups(opts);
             }
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            printException(Objects.requireNonNullElse(cause, e));
-            exitCode = 1;
-        } catch (Throwable t) {
-            printException(t);
-            exitCode = 1;
-        } finally {
-            Exit.exit(exitCode);
         }
     }
 
@@ -225,7 +225,7 @@ public class GroupsCommand {
             try {
                 options = parser.parse(args);
             } catch (OptionException oe) {
-                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, oe.getMessage());
             }
 
             checkArgs();
@@ -285,14 +285,14 @@ public class GroupsCommand {
 
         public void checkArgs() {
             if (args.length == 0)
-                CommandLineUtils.printUsageAndExit(parser, "This tool helps to list groups of all types.");
+                CommandLineUtils.printUsageAndThrow(parser, "This tool helps to list groups of all types.");
 
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list groups of all types.");
 
             // should have exactly one action
             long actions = Stream.of(listOpt).filter(options::has).count();
             if (actions != 1)
-                CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list.");
+                CommandLineUtils.printUsageAndThrow(parser, "Command must include exactly one action: --list.");
 
             if (has(groupTypeOpt)) {
                 if (groupType().isEmpty()) {

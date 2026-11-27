@@ -84,10 +84,15 @@ public class MetadataQuorumCommand {
             return 0;
         } catch (HelpScreenException e) {
             return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
         } catch (ArgumentParserException e) {
             e.getParser().handleError(e);
             return 1;
-        } catch (TerseException e) {
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {

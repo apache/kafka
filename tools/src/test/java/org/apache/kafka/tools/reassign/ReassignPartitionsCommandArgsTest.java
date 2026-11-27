@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.common.utils.internals.Exit;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -30,18 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(60)
 public class ReassignPartitionsCommandArgsTest {
     public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify either --bootstrap-server or --bootstrap-controller";
-
-    @BeforeEach
-    public void setUp() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-    }
-
-    @AfterEach
-    public void tearDown() {
-        Exit.resetExitProcedure();
-    }
 
     ///// Test valid argument parsing
     @Test
@@ -224,7 +208,8 @@ public class ReassignPartitionsCommandArgsTest {
     @Test
     public void shouldPrintHelpTextIfHelpArg() {
         String[] args = new String[] {"--help"};
-        // note, this is not actually a failed case, it's just we share the same `printUsageAndExit` method when wrong arg received
+        // --help is a success path (HelpOrVersionException, exit 0); this helper just asserts that an exception
+        // carrying HELP_TEXT was thrown.
         shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
 
