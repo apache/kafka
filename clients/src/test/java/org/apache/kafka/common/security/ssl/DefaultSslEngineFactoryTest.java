@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,12 +43,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class DefaultSslEngineFactoryTest {
 
     /*
-     * Key and certificates were extracted using openssl from a key store file created with 100 years validity using:
+     * RSA key and certificates were extracted using openssl from a key store file created with 100 years validity using:
      *
      * openssl pkcs12 -in server.keystore.p12 -nodes -nocerts -out test.key.pem -passin pass:key-password
      * openssl pkcs12 -in server.keystore.p12 -nodes -nokeys -out test.certchain.pem  -passin pass:key-password
      * openssl pkcs12 -in server.keystore.p12 -nodes  -out test.keystore.pem -passin pass:key-password
      * openssl pkcs8 -topk8 -v1 pbeWithSHA1And3-KeyTripleDES-CBC -in test.key.pem -out test.key.encrypted.pem -passout pass:key-password
+     *
+     * EC key and certificate were extracted the same way from a key store created with:
+     *
+     * keytool -genkeypair -alias server -keyalg EC -groupname secp256r1 -keystore server-ec.keystore.p12 -storetype PKCS12 -storepass key-password -keypass key-password -dname "CN=TestEC" -validity 36500
+     * openssl pkcs12 -in server-ec.keystore.p12 -nodes -nocerts -out ec.key.pem -passin pass:key-password
+     * openssl pkcs12 -in server-ec.keystore.p12 -nodes -nokeys -out ec.certchain.pem -passin pass:key-password
      */
 
     private static final String CA1 = "-----BEGIN CERTIFICATE-----\n"
@@ -88,7 +95,7 @@ public class DefaultSslEngineFactoryTest {
             + "hL+PVwIu7g==\n"
             + "-----END CERTIFICATE-----";
 
-    private static final String CERTCHAIN = "Bag Attributes\n"
+    private static final String RSA_CERTCHAIN = "Bag Attributes\n"
             + "    friendlyName: server\n"
             + "    localKeyID: 54 69 6D 65 20 31 36 30 31 32 38 33 37 36 35 34 32 33 \n"
             + "subject=/CN=TestBroker\n"
@@ -135,7 +142,7 @@ public class DefaultSslEngineFactoryTest {
             + "REH2YTlftQ==\n"
             + "-----END CERTIFICATE-----";
 
-    private static final String KEY =  "Bag Attributes\n"
+    private static final String RSA_KEY = "Bag Attributes\n"
             + "    friendlyName: server\n"
             + "    localKeyID: 54 69 6D 65 20 31 36 30 31 32 38 33 37 36 35 34 32 33\n"
             + "Key Attributes: <No Attributes>\n"
@@ -168,7 +175,7 @@ public class DefaultSslEngineFactoryTest {
             + "tDGh1HlOIRm1jD9KQNVZ/Q==\n"
             + "-----END PRIVATE KEY-----";
 
-    private static final String ENCRYPTED_KEY =  "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
+    private static final String RSA_ENCRYPTED_KEY = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
             + "MIIE6jAcBgoqhkiG9w0BDAEDMA4ECGyAEWAXlaXzAgIIAASCBMgt7QD1Bbz7MAHI\n"
             + "Ni0eTrwNiuAPluHirLXzsV57d1O9i4EXVp5nzRy6753cjXbGXARbBeaJD+/+jbZp\n"
             + "CBZTHMG8rTCfbsg5kMqxT6XuuqWlKLKc4gaq+QNgHHleKqnpwZQmOQ+awKWEK/Ow\n"
@@ -197,6 +204,26 @@ public class DefaultSslEngineFactoryTest {
             + "q5EgQGkt4ifiaP6qvyFulwvVwx+m0bf1q6Vb/k3clIyLMcVZWFE1TqNH2Ife46AE\n"
             + "2I39ZnGTt0mbWskpHBA=\n"
             + "-----END ENCRYPTED PRIVATE KEY-----";
+
+    private static final String EC_KEY = "-----BEGIN PRIVATE KEY-----\n"
+            + "MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCAHf26/rcO4rUWGTYA2\n"
+            + "ptREGSs5nnJGQWNEhr1WRD8SiQ==\n"
+            + "-----END PRIVATE KEY-----";
+
+    private static final String EC_CERTCHAIN = "Bag Attributes\n"
+            + "    friendlyName: server\n"
+            + "    localKeyID: 54 69 6D 65 20 31 37 39 35 30 30 33 31 39 32 39 37 36 \n"
+            + "subject=CN=TestEC\n"
+            + "issuer=CN=TestEC\n"
+            + "-----BEGIN CERTIFICATE-----\n"
+            + "MIIBOjCB4qADAgECAgkAmwr+pBLBh3gwCgYIKoZIzj0EAwIwETEPMA0GA1UEAxMG\n"
+            + "VGVzdEVDMCAXDTI2MTExODExNTk1MloYDzIxMjYxMDI1MTE1OTUyWjARMQ8wDQYD\n"
+            + "VQQDEwZUZXN0RUMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATjBqjGO1xnyYVq\n"
+            + "SEHxX/kDbe7Sn7UXF6aJg88JLd2eIwNk0UAgE8DQIWb0EOa1XkZnkuhZ101c7ACH\n"
+            + "lFFSQkv0oyEwHzAdBgNVHQ4EFgQUEAUFUpF6QanRmZiqPgpeV5BDlnIwCgYIKoZI\n"
+            + "zj0EAwIDRwAwRAIgV+bOvtZyyivJFhp/5qGPVCz2JbSYm/SH0kw0VryovQ0CIHFh\n"
+            + "woP5mDMjzcwQPcep8DHDGuGLWEGJd/xiDXJJokwU\n"
+            + "-----END CERTIFICATE-----";
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
@@ -247,32 +274,37 @@ public class DefaultSslEngineFactoryTest {
 
     @Test
     public void testPemKeyStoreConfigNoPassword() throws Exception {
-        verifyPemKeyStoreConfig(KEY, null);
+        verifyPemKeyStoreConfig(RSA_KEY, RSA_CERTCHAIN, null);
+    }
+
+    @Test
+    public void testPemKeyStoreConfigNoPasswordEcKey() throws Exception {
+        verifyPemKeyStoreConfig(EC_KEY, EC_CERTCHAIN, null);
     }
 
     @Test
     public void testPemKeyStoreConfigWithKeyPassword() throws Exception {
-        verifyPemKeyStoreConfig(ENCRYPTED_KEY, KEY_PASSWORD);
+        verifyPemKeyStoreConfig(RSA_ENCRYPTED_KEY, RSA_CERTCHAIN, KEY_PASSWORD);
     }
 
     @Test
     public void testTrailingNewLines() throws Exception {
-        verifyPemKeyStoreConfig(ENCRYPTED_KEY + "\n\n", KEY_PASSWORD);
+        verifyPemKeyStoreConfig(RSA_ENCRYPTED_KEY + "\n\n", RSA_CERTCHAIN, KEY_PASSWORD);
     }
 
     @Test
     public void testLeadingNewLines() throws Exception {
-        verifyPemKeyStoreConfig("\n\n" + ENCRYPTED_KEY, KEY_PASSWORD);
+        verifyPemKeyStoreConfig("\n\n" + RSA_ENCRYPTED_KEY, RSA_CERTCHAIN, KEY_PASSWORD);
     }
 
     @Test
     public void testCarriageReturnLineFeed() throws Exception {
-        verifyPemKeyStoreConfig(ENCRYPTED_KEY.replaceAll("\n", "\r\n"), KEY_PASSWORD);
+        verifyPemKeyStoreConfig(RSA_ENCRYPTED_KEY.replaceAll("\n", "\r\n"), RSA_CERTCHAIN, KEY_PASSWORD);
     }
 
-    private void verifyPemKeyStoreConfig(String keyFileName, Password keyPassword) throws Exception {
-        configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(keyFileName));
-        configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(CERTCHAIN));
+    private void verifyPemKeyStoreConfig(String keyPem, String certChainPem, Password keyPassword) throws Exception {
+        configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(keyPem));
+        configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(certChainPem));
         configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
         configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
         factory.configure(configs);
@@ -303,7 +335,7 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testPemKeyStoreFileNoKeyPassword() throws Exception {
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-                pemFilePath(pemAsConfigValue(KEY, CERTCHAIN).value()));
+                pemFilePath(pemAsConfigValue(RSA_KEY, RSA_CERTCHAIN).value()));
         configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
         configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, null);
         factory.configure(configs);
@@ -319,7 +351,7 @@ public class DefaultSslEngineFactoryTest {
     @Test
     public void testPemKeyStoreFileWithKeyPassword() throws Exception {
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-                pemFilePath(pemAsConfigValue(ENCRYPTED_KEY, CERTCHAIN).value()));
+                pemFilePath(pemAsConfigValue(RSA_ENCRYPTED_KEY, RSA_CERTCHAIN).value()));
         configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, KEY_PASSWORD);
         configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
         factory.configure(configs);
@@ -334,7 +366,8 @@ public class DefaultSslEngineFactoryTest {
 
     @Test
     public void testUnavailableKeyFactoryAlgorithmDoesNotThrow() {
-        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(List.of("RSA", "DSA", "EC", "BOGUS_FACTORY"));
+        List<KeyFactory> factories = DefaultSslEngineFactory.PemStore.keyFactories(Set.of("RSA", "EC", "BOGUS_FACTORY"));
+        assertFalse(factories.isEmpty());
         assertFalse(factories.stream().anyMatch(f -> f.getAlgorithm().equals("BOGUS_FACTORY")));
     }
 
@@ -346,7 +379,7 @@ public class DefaultSslEngineFactoryTest {
 
         assertThrows(InvalidConfigurationException.class, () ->
                 new DefaultSslEngineFactory.PemStore(
-                        new Password(CERTCHAIN),
+                        new Password(RSA_CERTCHAIN),
                         new Password(bogusKey),
                         null
                 )
