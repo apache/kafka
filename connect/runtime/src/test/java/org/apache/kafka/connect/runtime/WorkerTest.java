@@ -131,6 +131,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
@@ -1455,6 +1456,7 @@ public class WorkerTest {
                 "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
         assertEquals("localhost:4761", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
         assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+        assertEquals("false", consumerConfigs.get(ALLOW_AUTO_CREATE_TOPICS_CONFIG));
 
         workerProps.put("consumer." + BOOTSTRAP_SERVERS_CONFIG, "localhost:9021");
         workerProps.put("consumer." + ISOLATION_LEVEL_CONFIG, "read_uncommitted");
@@ -1468,10 +1470,13 @@ public class WorkerTest {
         workerProps.remove("consumer." + ISOLATION_LEVEL_CONFIG);
         connectorConsumerOverrides.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:489");
         connectorConsumerOverrides.put(ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        // Users are never allowed to let the broker auto-create the offsets topic
+        connectorConsumerOverrides.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, "true");
         config = new DistributedConfig(workerProps);
         consumerConfigs = Worker.regularSourceOffsetsConsumerConfigs(
                 "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
         assertEquals("localhost:489", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals("false", consumerConfigs.get(ALLOW_AUTO_CREATE_TOPICS_CONFIG));
         // User is allowed to override the isolation level for regular (non-exactly-once) source connectors and their tasks
         assertEquals("read_uncommitted", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
     }
@@ -1496,6 +1501,7 @@ public class WorkerTest {
                 "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
         assertEquals("localhost:4761", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
         assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+        assertEquals("false", consumerConfigs.get(ALLOW_AUTO_CREATE_TOPICS_CONFIG));
 
         workerProps.put("consumer." + BOOTSTRAP_SERVERS_CONFIG, "localhost:9021");
         workerProps.put("consumer." + ISOLATION_LEVEL_CONFIG, "read_uncommitted");
@@ -1509,10 +1515,13 @@ public class WorkerTest {
         workerProps.remove("consumer." + ISOLATION_LEVEL_CONFIG);
         connectorConsumerOverrides.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:489");
         connectorConsumerOverrides.put(ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        // Users are never allowed to let the broker auto-create the offsets topic
+        connectorConsumerOverrides.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, "true");
         config = new DistributedConfig(workerProps);
         consumerConfigs = Worker.exactlyOnceSourceOffsetsConsumerConfigs(
                 "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
         assertEquals("localhost:489", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals("false", consumerConfigs.get(ALLOW_AUTO_CREATE_TOPICS_CONFIG));
         // User is not allowed to override isolation level when exactly-once support is enabled
         assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
     }

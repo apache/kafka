@@ -422,6 +422,10 @@ public class KafkaBasedLog<K, V> {
 
         // Turn off autocommit since we always want to consume the full log
         consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        // Never let the broker auto-create the topic: it would get the broker's default cleanup policy and
+        // partition count instead of the settings required for a compacted internal topic
+        consumerConfigs.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
         return new KafkaConsumer<>(consumerConfigs);
     }
 
