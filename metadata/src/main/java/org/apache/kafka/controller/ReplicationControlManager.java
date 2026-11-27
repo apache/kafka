@@ -630,12 +630,14 @@ public class ReplicationControlManager {
         for (int partitionId : partitionIds) {
             PartitionRegistration partition = topic.parts.get(partitionId);
             if (partition.elr.length != 0 || partition.lastKnownElr.length != 0) {
-                topic.parts.put(partitionId, partition.merge(
+                PartitionRegistration newPartition = partition.merge(
                     new PartitionChangeRecord().
                         setPartitionId(partitionId).
                         setTopicId(topic.id).
                         setEligibleLeaderReplicas(List.of()).
-                        setLastKnownElr(List.of())));
+                        setLastKnownElr(List.of()));
+                topic.parts.put(partitionId, newPartition);
+                brokersToElrs.update(topic.id, partitionId, partition.elr, newPartition.elr);
                 numRemoved++;
             }
         }
