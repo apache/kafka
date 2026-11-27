@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerDeserializer.UPDATE_CONSUMER_COUNT;
@@ -362,18 +363,24 @@ public class ClientsTestUtils {
     }
 
 
-    public static void waitForPollThrowException(
+    public static <T extends Exception> T waitForPollThrowException(
         Consumer<byte[], byte[]> consumer,
-        Class<? extends Exception> exceptedException
+        Class<T> expectedException
     ) throws InterruptedException {
+        var exception = new AtomicReference<T>();
         TestUtils.waitForCondition(() -> {
             try {
                 consumer.poll(Duration.ZERO);
                 return false;
             } catch (Exception e) {
-                return exceptedException.isInstance(e);
+                if (expectedException.isInstance(e)) {
+                    exception.set(expectedException.cast(e));
+                    return true;
+                }
+                return false;
             }
-        }, "Continuous poll not fail");
+        }, "Consumer poll did not throw " + expectedException.getSimpleName());
+        return exception.get();
     }
 
     public static Header transactionStatusHeader(boolean willBeCommitted) {
