@@ -90,15 +90,15 @@ public interface StateRestoreListener {
      *        the {@link TopicPartition} containing the values to restore
      * @param storeName
      *        the name of the store undergoing restoration
-     * @param batchEndOffset
-     *        the inclusive ending offset for the current restored batch for this {@link TopicPartition}
+     * @param lastBatchOffset
+     *        the offset of the last record of the restored batch for this {@link TopicPartition}
      * @param numRestored
      *        the total number of records restored in this batch for this {@link TopicPartition}
      */
     void onBatchRestored(
         final TopicPartition topicPartition,
         final String storeName,
-        final long batchEndOffset,
+        final long lastBatchOffset,
         final long numRestored
     );
 

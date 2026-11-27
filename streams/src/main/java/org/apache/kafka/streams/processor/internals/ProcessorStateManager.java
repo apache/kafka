@@ -105,7 +105,7 @@ public class ProcessorStateManager implements StateManager {
 
         // the last offset of the changelog, -1 for an empty changelog; set on each restored batch, and for a standby
         // task once its restore consumer reaches the end of the changelog; null while unknown
-        private Long endOffset;
+        private Long lastChangelogOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
@@ -151,8 +151,8 @@ public class ProcessorStateManager implements StateManager {
             return this.offset;
         }
 
-        Long endOffset() {
-            return this.endOffset;
+        Long lastChangelogOffset() {
+            return this.lastChangelogOffset;
         }
 
         // the retentionPeriod is exposed to the changelog reader for window restoration
@@ -160,8 +160,8 @@ public class ProcessorStateManager implements StateManager {
             return retentionPeriod;
         }
 
-        public void setEndOffset(final Long endOffset) {
-            this.endOffset = endOffset;
+        public void setLastChangelogOffset(final Long lastChangelogOffset) {
+            this.lastChangelogOffset = lastChangelogOffset;
         }
 
         TopicPartition changelogPartition() {
@@ -509,8 +509,8 @@ public class ProcessorStateManager implements StateManager {
         }
 
         if (!restoreRecords.isEmpty()) {
-            // restore states from changelog records and update the snapshot offset as the batch end record's offset
-            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
+            // restore states from changelog records and update the snapshot offset as the offset of the batch's last record
+            final Long lastBatchOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
             final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
             final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
                 .map(storeMetadata.recordConverter::convert)
@@ -525,11 +525,11 @@ public class ProcessorStateManager implements StateManager {
                 );
             }
 
-            storeMetadata.setOffset(batchEndOffset);
+            storeMetadata.setOffset(lastBatchOffset);
 
             // If null means the lag for this partition is not known yet
             if (optionalLag.isPresent()) {
-                storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
+                storeMetadata.setLastChangelogOffset(optionalLag.getAsLong() + lastBatchOffset);
             }
 
             stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());

@@ -240,7 +240,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             reader.transitToUpdateStandby();
             reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
 
-            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).lastChangelogOffset());
             assertEquals(Collections.singletonMap(tp, changelogEndOffset), reader.logicalChangelogEndOffsets());
             assertEquals(Collections.singletonMap(tp, changelogEndOffset), stateManager.changelogOffsets());
         } finally {
@@ -277,7 +277,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
 
             assertEquals(changelogEndOffset, consumer.position(tp));
-            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).lastChangelogOffset());
             assertEquals(Collections.singletonMap(tp, changelogEndOffset), reader.logicalChangelogEndOffsets());
             assertEquals(Collections.singletonMap(tp, changelogEndOffset), stateManager.changelogOffsets());
         } finally {
@@ -311,7 +311,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             reader.transitToUpdateStandby();
             reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
 
-            assertEquals(-1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(-1L, stateManager.storeMetadata(tp).lastChangelogOffset());
             assertEquals(Collections.singletonMap(tp, 0L), reader.logicalChangelogEndOffsets());
             assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
         } finally {
@@ -487,7 +487,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
 
             assertEquals(1, timedOutPositionCalls.get());
             assertNull(stateManager.storeMetadata(tp).offset());
-            assertNull(stateManager.storeMetadata(tp).endOffset());
+            assertNull(stateManager.storeMetadata(tp).lastChangelogOffset());
             assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
             verify(task, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
         } finally {
