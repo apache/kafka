@@ -31,7 +31,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -66,20 +65,11 @@ public class TaskExecutor {
      */
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
-        Task lastProcessed = null;
 
         for (final StreamTask task : tasks.activeInitializedTasks()) {
             final long now = time.milliseconds();
-            try {
-                if (executionMetadata.canProcessTask(task, now)) {
-                    lastProcessed = task;
-                    totalProcessed += processTask(task, maxNumRecords, now, time);
-                }
-            } catch (final Throwable t) {
-                executionMetadata.registerTaskError(task, t, now);
-                executionMetadata.removeTaskFromSuccessfullyProcessedBeforeClosing(lastProcessed);
-                commitSuccessfullyProcessedTasks();
-                throw t;
+            if (executionMetadata.canProcessTask(task, now)) {
+                totalProcessed += processTask(task, maxNumRecords, now, time);
             }
         }
 
@@ -95,11 +85,6 @@ public class TaskExecutor {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
                 processed++;
-            }
-            // TODO: enable regardless of whether using named topologies
-            if (processed > 0 && executionMetadata.hasNamedTopologies() && executionMetadata.processingMode() != EXACTLY_ONCE_V2) {
-                log.trace("Successfully processed task {}", task.id());
-                executionMetadata.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
             // TODO consolidate TimeoutException retries with general error handling
@@ -243,16 +228,6 @@ public class TaskExecutor {
                 }
             }
         }
-    }
-
-    private void commitSuccessfullyProcessedTasks() {
-        if (!executionMetadata.successfullyProcessed().isEmpty()) {
-            log.info("Streams encountered an error when processing tasks." +
-                " Will commit all previously successfully processed tasks {}",
-                executionMetadata.successfullyProcessed().stream().map(Task::id));
-            commitTasksAndMaybeUpdateCommittableOffsets(executionMetadata.successfullyProcessed(), new HashMap<>());
-        }
-        executionMetadata.clearSuccessfullyProcessed();
     }
 
     /**

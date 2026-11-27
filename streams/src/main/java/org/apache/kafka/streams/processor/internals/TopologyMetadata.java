@@ -111,7 +111,7 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
+        this.taskExecutionMetadata = new TaskExecutionMetadata(pausedTopologies, processingMode);
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -126,7 +126,7 @@ public class TopologyMetadata {
         if (builders.isEmpty()) {
             log.info("Created an empty KafkaStreams app with no topology");
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
+        this.taskExecutionMetadata = new TaskExecutionMetadata(pausedTopologies, processingMode);
     }
 
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
