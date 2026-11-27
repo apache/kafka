@@ -328,8 +328,8 @@ public class StreamsGroupCommand {
             final int groupLen = Math.max(15, description.groupId().length());
             int maxMemberIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<StreamsGroupMemberDescription> members = description.members();
+            maybePrintEmptyGroupState(description.groupId(), description.groupState());
             if (isGroupStateValid(description.groupState(), description.members().size())) {
-                maybePrintEmptyGroupState(description.groupId(), description.groupState());
                 for (StreamsGroupMemberDescription member : members) {
                     maxMemberIdLen = Math.max(maxMemberIdLen, member.memberId().length());
                     maxHostLen = Math.max(maxHostLen, member.processId().length());
@@ -430,8 +430,8 @@ public class StreamsGroupCommand {
 
         private void printOffsets(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
             Map<TopicPartition, OffsetsInfo> offsets = getOffsets(description);
-            if (isGroupStateValid(description.groupState(), description.members().size())) {
-                maybePrintEmptyGroupState(description.groupId(), description.groupState());
+            maybePrintEmptyGroupState(description.groupId(), description.groupState());
+            if (isGroupStateValid(description.groupState(), offsets.size())) {
                 final int groupLen = Math.max(15, description.groupId().length());
                 int maxTopicLen = 15;
                 for (TopicPartition topicPartition : offsets.keySet()) {
@@ -462,6 +462,14 @@ public class StreamsGroupCommand {
             for (StreamsGroupMemberDescription memberDescription : members) {
                 allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
             }
+            // Also include partitions that have committed offsets but are not assigned to any member,
+            // e.g., when the group is empty, so that their committed offsets are still shown.
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description);
+            committedOffsets.forEach((tp, offsetAndMetadata) -> {
+                if (offsetAndMetadata != null) {
+                    allTp.add(tp);
+                }
+            });
             // fetch latest and earliest offsets
             Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
             Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
@@ -478,12 +486,12 @@ public class StreamsGroupCommand {
                 latest,
                 withTimeoutMs(new ListOffsetsOptions())
             ).all().get();
-            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
             Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
-                final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
+                final Optional<OffsetAndMetadata> committed = Optional.ofNullable(committedOffsets.get(tp.getKey()));
+                final Optional<Long> currentOffset = committed.map(OffsetAndMetadata::offset);
+                final Optional<Integer> leaderEpoch = committed.flatMap(OffsetAndMetadata::leaderEpoch);
                 final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
                 output.put(tp.getKey(),
                     new OffsetsInfo(
@@ -497,10 +505,22 @@ public class StreamsGroupCommand {
 
         Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
-                var sourceTopics = adminClient.describeStreamsGroups(
+                return getCommittedOffsets(adminClient.describeStreamsGroups(
                     List.of(groupId),
                     withTimeoutMs(new DescribeStreamsGroupsOptions())
-                ).all().get().get(groupId).subtopologies().stream()
+                ).all().get().get(groupId));
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * Returns the group's committed offsets for the source and repartition source topics of its topology.
+         */
+        Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(StreamsGroupDescription description) {
+            try {
+                var groupId = description.groupId();
+                var sourceTopics = description.subtopologies().stream()
                     .flatMap(subtopology -> Stream.concat(
                         subtopology.sourceTopics().stream(),
                         subtopology.repartitionSourceTopics().keySet().stream()))
@@ -1053,7 +1073,7 @@ public class StreamsGroupCommand {
         }
 
         /**
-         * Prints an error message if the group state indicates that the group is either dead or empty.
+         * Prints an error message if the group is dead, or a notice on stderr if the group is empty.
          *
          * @param group The ID of the group being checked.
          * @param state The current state of the group, represented as a `GroupState` object.
@@ -1064,7 +1084,7 @@ public class StreamsGroupCommand {
             if (state == GroupState.DEAD) {
                 printError("Streams group '" + group + "' does not exist.", Optional.empty());
             } else if (state == GroupState.EMPTY) {
-                printError("Streams group '" + group + "' has no active members.", Optional.empty());
+                System.err.println("\nStreams group '" + group + "' has no active members.");
             }
         }
 

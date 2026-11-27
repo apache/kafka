@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.tools.streams;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -25,8 +30,10 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -37,12 +44,15 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -253,6 +263,77 @@ public class DescribeStreamsGroupTest {
         }, 60_000L, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
 
         assertTrue(out.get().contains("Sub-topology: 0"), "Expected a sub-topology in the output, but found:\n" + out.get());
+    }
+
+    @ClusterTest
+    public void testDescribeEmptyStreamsGroupShowsCommittedOffsets(ClusterInstance cluster) throws Exception {
+        final String appId = "streams-group-command-test-empty";
+        final String inputTopic = "emptyGroupInputTopic";
+        final String outputTopic = "emptyGroupOutputTopic";
+        final TopicPartition tp0 = new TopicPartition(inputTopic, 0);
+        final TopicPartition tp1 = new TopicPartition(inputTopic, 1);
+        cluster.createTopic(inputTopic, 2, (short) 1);
+        for (int partition = 0; partition < 2; partition++) {
+            StreamsGroupCommandTestUtils.produce(cluster, inputTopic, Optional.of(partition),
+                List.of(new KeyValueTimestamp<>("key", "value", System.currentTimeMillis())));
+        }
+
+        try (Admin admin = cluster.admin()) {
+            final Properties props = streamsProp(cluster, appId);
+            props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+            final KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), props);
+            try {
+                StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
+                TestUtils.waitForCondition(() -> {
+                    Map<TopicPartition, OffsetAndMetadata> committed = admin.listStreamsGroupOffsets(
+                        Map.of(appId, new ListStreamsGroupOffsetsSpec())).partitionsToOffsetAndMetadata(appId).get();
+                    return committed.get(tp0) != null && committed.get(tp0).offset() == 1
+                        && committed.get(tp1) != null && committed.get(tp1).offset() == 1;
+                }, "The streams application did not commit the input offsets.");
+            } finally {
+                streams.close(CloseOptions.timeout(Duration.ofSeconds(30))
+                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            }
+            TestUtils.waitForCondition(
+                () -> admin.describeStreamsGroups(List.of(appId)).all().get().get(appId).groupState() == GroupState.EMPTY,
+                "The group did not become empty.");
+        }
+
+        final String[] args = {"--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--verbose", "--group", appId};
+        final Entry<String, String> outputAndError = ToolsTestUtils.grabConsoleOutputAndError(
+            () -> assertEquals(0, StreamsGroupCommand.execute(args)));
+        final String output = outputAndError.getKey();
+
+        assertTrue(outputAndError.getValue().contains("Streams group '" + appId + "' has no active members."), outputAndError.getValue());
+        final String[] lines = output.trim().split("\n");
+        assertEquals(List.of("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG"),
+            List.of(lines[0].trim().split("\\s+")), output);
+        // The topology is still known for the empty group, so the committed input offsets are shown.
+        // The leader epoch is not deterministic, so it is not checked.
+        final Set<List<String>> inputRows = Arrays.stream(lines)
+            .map(line -> new ArrayList<>(List.of(line.trim().split("\\s+"))))
+            .filter(row -> row.size() == 7 && row.get(1).equals(inputTopic))
+            .peek(row -> row.set(4, ""))
+            .collect(Collectors.toSet());
+        assertEquals(Set.of(
+            List.of(appId, inputTopic, "0", "1", "", "1", "0"),
+            List.of(appId, inputTopic, "1", "1", "", "1", "0")), inputRows, output);
+
+        // --members: the notice goes to stderr and there are no member rows to print.
+        final Entry<String, String> membersOutputAndError = ToolsTestUtils.grabConsoleOutputAndError(() -> assertEquals(0, StreamsGroupCommand.execute(
+            new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", appId})));
+        assertTrue(membersOutputAndError.getValue().contains("Streams group '" + appId + "' has no active members."), membersOutputAndError.getValue());
+        assertEquals("", membersOutputAndError.getKey().trim());
+
+        // --state: the notice goes to stderr without the "Error:" prefix, and stdout only has the state table.
+        final Entry<String, String> stateOutputAndError = ToolsTestUtils.grabConsoleOutputAndError(() -> assertEquals(0, StreamsGroupCommand.execute(
+            new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--group", appId})));
+        assertEquals("Streams group '" + appId + "' has no active members.", stateOutputAndError.getValue().trim());
+        final String[] stateLines = stateOutputAndError.getKey().trim().split("\n");
+        assertEquals(2, stateLines.length, stateOutputAndError.getKey());
+        final List<String> stateRow = List.of(stateLines[1].trim().split("\\s+"));
+        assertEquals(appId, stateRow.get(0), stateOutputAndError.getKey());
+        assertEquals(List.of("Empty", "0"), stateRow.subList(stateRow.size() - 2, stateRow.size()), stateOutputAndError.getKey());
     }
 
     @ClusterTest
