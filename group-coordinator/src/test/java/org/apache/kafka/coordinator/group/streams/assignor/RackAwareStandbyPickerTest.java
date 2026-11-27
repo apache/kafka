@@ -54,10 +54,8 @@ public class RackAwareStandbyPickerTest {
             "W", Map.of("cluster", "c1", "zone", "z2"),
             "X", Map.of("cluster", "c2", "zone", "z1")
         ));
-        picker.markUsed("H");
 
-        assertEquals(Set.of("X"), candidates());
-        assertEquals(List.of("cluster"), conditionNames());
+        assertEquals(Set.of("X"), candidates(List.of("H")));
     }
 
     @Test
@@ -71,10 +69,8 @@ public class RackAwareStandbyPickerTest {
             "X", Map.of("cluster", "c2", "zone", "z2", "rack", "r1"),
             "Z", Map.of("cluster", "c3", "zone", "z2", "rack", "r1")
         ));
-        picker.markUsed("H");
 
-        assertEquals(Set.of("X", "Z"), candidates());
-        assertEquals(List.of("cluster", "zone"), conditionNames());
+        assertEquals(Set.of("X", "Z"), candidates(List.of("H")));
         assertEquals("Z", pick.leastLoaded());
     }
 
@@ -88,10 +84,8 @@ public class RackAwareStandbyPickerTest {
             "Y", Map.of("cluster", "c1", "zone", "z2", "rack", "r2"),
             "Z", Map.of("cluster", "c2", "zone", "z1", "rack", "r1")
         ));
-        picker.markUsed("H");
 
-        assertEquals(Set.of("X"), candidates());
-        assertEquals(List.of("cluster", "rack"), conditionNames());
+        assertEquals(Set.of("X"), candidates(List.of("H")));
     }
 
     @Test
@@ -102,25 +96,17 @@ public class RackAwareStandbyPickerTest {
             "W", Map.of("cluster", "c1", "zone", "z3"),
             "X", Map.of("cluster", "c2", "zone", "z1")
         ));
-        picker.markUsed("H");
-        assertEquals(Set.of("X"), candidates());
-        assertEquals(List.of("cluster"), conditionNames());
+        assertEquals(Set.of("X"), candidates(List.of("H")));
 
         // Every cluster is used: zone becomes the priority and N and W are back. There is no lower key to order
         // them by.
-        picker.markUsed("X");
-        assertEquals(Set.of("N", "W"), candidates());
-        assertEquals(List.of("zone"), conditionNames());
+        assertEquals(Set.of("N", "W"), candidates(List.of("H", "X")));
 
         // N has no cluster to record; its zone is used now.
-        picker.markUsed("N");
-        assertEquals(Set.of("W"), candidates());
-        assertEquals(List.of("zone"), conditionNames());
+        assertEquals(Set.of("W"), candidates(List.of("H", "X", "N")));
 
         // Every zone is used too, so no process makes the task more diverse.
-        picker.markUsed("W");
-        assertEquals(Set.of(), candidates());
-        assertEquals(List.of(), conditionNames());
+        assertEquals(Set.of(), candidates(List.of("H", "X", "N", "W")));
     }
 
     @Test
@@ -131,18 +117,12 @@ public class RackAwareStandbyPickerTest {
             "C", Map.of("cluster", "c1", "zone", "z3"),
             "D", Map.of("cluster", "c2", "zone", "z1")
         ));
-        picker.markUsed("A");
-        assertEquals(Set.of("B"), candidates());
-        assertEquals(List.of("cluster", "zone"), conditionNames());
-        picker.markUsed("B");
-        assertEquals(Set.of("C"), candidates());
-        assertEquals(List.of("zone"), conditionNames());
+        assertEquals(Set.of("B"), candidates(List.of("A")));
+        assertEquals(Set.of("C"), candidates(List.of("A", "B")));
 
         // The previous task gave up cluster and left C as the only candidate. The picks of this one start from cluster
         // again, over every process and with no value used.
-        picker.startTask(List.of("C"));
-        assertEquals(Set.of("B", "D"), candidates());
-        assertEquals(List.of("cluster", "zone"), conditionNames());
+        assertEquals(Set.of("B", "D"), candidates(List.of("C")));
     }
 
     @Test
@@ -163,7 +143,8 @@ public class RackAwareStandbyPickerTest {
                 for (int holder = 0, numHolders = 1 + random.nextInt(2); holder < numHolders; holder++) {
                     holders.add(processes.get(random.nextInt(processes.size())));
                 }
-                picker.startTask(holders);
+                // The queries below read the values the pick records as used.
+                picker.pick(holders);
 
                 for (int check = 0; check < 3; check++) {
                     assertQueriesMatchScan(tagKeys, clientTags, holders, "round " + round + ", task " + task + ", check " + check);
@@ -204,29 +185,18 @@ public class RackAwareStandbyPickerTest {
         return process;
     }
 
-    /** The candidate processes of a new pick, empty when nothing is picked. */
-    private Set<String> candidates() {
-        pick = picker.pick();
+    /** The candidate processes of a new pick for a task held by {@code holders}, empty when nothing is picked. */
+    private Set<String> candidates(final List<String> holders) {
+        pick = picker.pick(holders);
         final Set<String> candidates = new HashSet<>();
         if (pick != null) {
             for (final String process : processes) {
-                if (picker.isCandidate(process, pick.conditions())) {
+                if (pick.isMostRackDiverse(process)) {
                     candidates.add(process);
                 }
             }
         }
         return candidates;
-    }
-
-    /** The names of the tag keys in the conditions of the last pick by candidates(). */
-    private List<String> conditionNames() {
-        final List<String> names = new ArrayList<>();
-        if (pick != null) {
-            for (final TagKey tagKey : pick.conditions()) {
-                names.add(tagKey.toString());
-            }
-        }
-        return names;
     }
 
     /** The client tags of up to 12 processes with random loads, each key taking one of three values or none. */

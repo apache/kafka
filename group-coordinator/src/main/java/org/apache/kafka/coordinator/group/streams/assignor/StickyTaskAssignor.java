@@ -625,13 +625,12 @@ public class StickyTaskAssignor implements TaskAssignor {
         final List<ProcessState> standbys,
         final boolean stickyOnly
     ) {
-        final List<ProcessState> holders = new ArrayList<>(1 + standbys.size());
+        final List<ProcessState> holders = new ArrayList<>(1 + localState.numStandbyReplicas);
         holders.add(localState.activeTaskToProcess.get(task));
         holders.addAll(standbys);
-        picker.startTask(holders);
 
         while (standbys.size() < localState.numStandbyReplicas) {
-            final RackAwareStandbyPicker.Pick<ProcessState> pick = picker.pick();
+            final RackAwareStandbyPicker.Pick<ProcessState> pick = picker.pick(holders);
             if (pick == null) {
                 return;
             }
@@ -643,7 +642,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 task,
                 member -> {
                     final ProcessState process = localState.processIdToState.get(member.processId);
-                    return picker.isCandidate(process, pick.conditions()) && hasUnfulfilledTaskQuota(localState, process, member);
+                    return pick.isMostRackDiverse(process) && hasUnfulfilledTaskQuota(localState, process, member);
                 }
             );
             final ProcessState process;
@@ -660,7 +659,6 @@ public class StickyTaskAssignor implements TaskAssignor {
 
             final int totalTasksPerMember = localState.totalTasksPerMember;
             maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-            picker.markUsed(process);
             if (localState.totalTasksPerMember < totalTasksPerMember) {
                 // A lower quota can take the room of any process.
                 picker.updatedAll();
@@ -668,6 +666,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 picker.updated(process);
             }
             standbys.add(process);
+            holders.add(process);
         }
     }
 

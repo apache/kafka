@@ -32,11 +32,14 @@ import java.util.function.ToDoubleFunction;
 import java.util.stream.IntStream;
 
 /**
- * Picks the conditions for the next standby of one task: the tag keys in {@code rack.aware.assignment.tags} order, each
- * kept if a process with room meets it together with those kept so far. A process meets a tag key when it has a value
- * for it that no holder of the task has yet. A pick also returns the least-loaded process with room that meets the
- * conditions, and the picker can tell whether a process meets them. The caller reports every change to a load or room
- * with {@link #updated(Object)} or {@link #updatedAll()}.
+ * Picks the processes that make a task most rack-diverse as its next standby. An assignor calls
+ * {@link #pick(Collection)} with the holders of the task once per standby until it returns null, and places the
+ * standby on a candidate of the pick. It then reports the change to the load and room of that process with
+ * {@link #updated(Object)}, or with {@link #updatedAll()} when those of other processes changed too.
+ * <p>
+ * A pick first finds its conditions: the tag keys in {@code rack.aware.assignment.tags} order, each kept if a process
+ * with room meets it together with those kept so far. A process meets a tag key when it has a value for it that no
+ * holder of the task has yet. The candidates of the pick are the processes with room that meet the conditions.
  * <p>
  * The processes sit in a tree with one level per tag key, those with the same values sharing a leaf. Scanning every
  * leaf per standby is too slow once there are many, e.g. one per process for a host tag. Each node keeps its
@@ -65,8 +68,8 @@ final class RackAwareStandbyPicker<P> {
     private final Map<P, QueuedProcess<P>> queuedByProcess;
     private final Node<P> root;
 
-    // Per key index, one bit per value index, set once a holder of the task carries that value.
-    // Cleared by startTask.
+    // Per key index, one bit per value index, set if a holder of the task carries that value.
+    // Set anew by each pick.
     private final BitSet[] usedValues;
 
     /**
@@ -179,27 +182,18 @@ final class RackAwareStandbyPicker<P> {
         return keys;
     }
 
-    /**
-     * Starts the picks for a task, forgetting the values of the holders of the previous task; a missing value stays used.
-     *
-     * @param holders The holders of the task: its active owner and the standbys placed so far.
-     */
-    void startTask(final Collection<P> holders) {
+    /** Records the tag values of the holders as used, forgetting those of the previous pick; a missing value stays used. */
+    private void markUsed(final Collection<P> holders) {
         for (final BitSet used : usedValues) {
             used.clear();
         }
         for (final P holder : holders) {
-            markUsed(holder);
-        }
-    }
-
-    /** Records the tag values of a new holder of the task as used. */
-    void markUsed(final P holder) {
-        final int[] valueIndexes = queuedByProcess.get(holder).leaf.valueIndexes;
-        for (int keyIndex = 0; keyIndex < keys.size(); keyIndex++) {
-            // A missing value has no bit: isUsed counts it as used.
-            if (valueIndexes[keyIndex] != MISSING_VALUE_INDEX) {
-                usedValues[keyIndex].set(valueIndexes[keyIndex]);
+            final int[] valueIndexes = queuedByProcess.get(holder).leaf.valueIndexes;
+            for (int keyIndex = 0; keyIndex < keys.size(); keyIndex++) {
+                // A missing value has no bit: isUsed counts it as used.
+                if (valueIndexes[keyIndex] != MISSING_VALUE_INDEX) {
+                    usedValues[keyIndex].set(valueIndexes[keyIndex]);
+                }
             }
         }
     }
@@ -215,10 +209,12 @@ final class RackAwareStandbyPicker<P> {
     }
 
     /**
-     * The conditions for the next standby and the least-loaded candidate under them, or null once no process with
-     * room can make the task more diverse.
+     * The pick for the next standby of a task, or null once no process with room can make the task more diverse.
+     *
+     * @param holders The holders of the task: its active owner and the standbys placed so far.
      */
-    Pick<P> pick() {
+    Pick<P> pick(final Collection<P> holders) {
+        markUsed(holders);
         // No process has room for the standby.
         if (root.leastLoaded == null) {
             return null;
@@ -238,7 +234,7 @@ final class RackAwareStandbyPicker<P> {
         // Most picks find a process with room that meets the condition of every such tag key.
         final QueuedProcess<P> meetingAll = leastLoadedProcessMeeting(tagKeysWithUnusedValue);
         if (meetingAll != null) {
-            return new Pick<>(tagKeysWithUnusedValue, meetingAll.process);
+            return new Pick<>(this, tagKeysWithUnusedValue, meetingAll.process);
         }
         // Otherwise the tag keys are added in priority order; a tag key is given up when no process with room
         // meets it together with the tag keys kept so far.
@@ -256,11 +252,11 @@ final class RackAwareStandbyPicker<P> {
                 }
             }
         }
-        return leastLoaded == null ? null : new Pick<>(conditions, leastLoaded.process);
+        return leastLoaded == null ? null : new Pick<>(this, conditions, leastLoaded.process);
     }
 
     /** Whether a process is a candidate under the conditions of a pick: it meets them and has room. */
-    boolean isCandidate(final P process, final List<TagKey> conditions) {
+    private boolean isCandidate(final P process, final List<TagKey> conditions) {
         return meets(process, conditions) && processHasRoom.test(process);
     }
 
@@ -372,8 +368,28 @@ final class RackAwareStandbyPicker<P> {
         }
     }
 
-    /** The conditions of a pick and the least-loaded candidate under them. */
-    record Pick<P>(List<TagKey> conditions, P leastLoaded) { }
+    /** The candidates for the next standby of a task; valid until the next pick. */
+    static final class Pick<P> {
+        private final RackAwareStandbyPicker<P> picker;
+        private final List<TagKey> conditions;
+        private final P leastLoaded;
+
+        private Pick(final RackAwareStandbyPicker<P> picker, final List<TagKey> conditions, final P leastLoaded) {
+            this.picker = picker;
+            this.conditions = conditions;
+            this.leastLoaded = leastLoaded;
+        }
+
+        /** The least-loaded candidate. */
+        P leastLoaded() {
+            return leastLoaded;
+        }
+
+        /** Whether the process is a candidate: no process with room makes the task more rack-diverse. */
+        boolean isMostRackDiverse(final P process) {
+            return picker.isCandidate(process, conditions);
+        }
+    }
 
     /** A key of {@code rack.aware.assignment.tags}. */
     static final class TagKey {
