@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 
 import org.slf4j.Logger;
@@ -74,9 +73,9 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
- * {@link org.apache.kafka.streams.KafkaStreams} constructor or the {@link KafkaStreamsNamedTopologyWrapper} constructor (deprecated)
- * will determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
- * topology builders via the {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor for DSL applications,
+ * {@link org.apache.kafka.streams.KafkaStreams} constructor will determine the defaults, which can then be overridden
+ * for specific topologies by passing them in when creating the topology builders via the
+ * {@link StreamsBuilder#StreamsBuilder(TopologyConfig)} constructor for DSL applications,
  * or the {@link Topology#Topology(TopologyConfig)} for PAPI applications.
  * <p>
  * Note that some configs, such as the {@code processor.wrapper.class} config, can only take effect while the

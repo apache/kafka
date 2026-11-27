@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.FixedPartitionPartitioner;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -37,9 +36,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -78,7 +74,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.ge
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -413,79 +408,6 @@ public class StoreQueryIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    @SuppressWarnings("deprecation")
-    public void shouldQuerySpecificStalePartitionStoresMultiStreamThreadsNamedTopology(final boolean withHeaders) throws Exception {
-        final int batch1NumMessages = 100;
-        final int key = 1;
-        final Semaphore semaphore = new Semaphore(0);
-        final int numStreamThreads = 2;
-
-        final Properties streamsConfiguration1 = streamsConfiguration(withHeaders);
-        streamsConfiguration1.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
-
-        final Properties streamsConfiguration2 = streamsConfiguration(withHeaders);
-        streamsConfiguration2.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
-
-        final String topologyA = "topology-A";
-
-        final KafkaStreamsNamedTopologyWrapper kafkaStreams1 = createNamedTopologyKafkaStreams(streamsConfiguration1);
-        final KafkaStreamsNamedTopologyWrapper kafkaStreams2 = createNamedTopologyKafkaStreams(streamsConfiguration2);
-        final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
-
-        final NamedTopologyBuilder builder1A = kafkaStreams1.newNamedTopologyBuilder(topologyA, streamsConfiguration1);
-        getStreamsBuilderWithTopology(builder1A, semaphore);
-
-        final NamedTopologyBuilder builder2A = kafkaStreams2.newNamedTopologyBuilder(topologyA, streamsConfiguration2);
-        getStreamsBuilderWithTopology(builder2A, semaphore);
-
-        kafkaStreams1.start(builder1A.build());
-        kafkaStreams2.start(builder2A.build());
-        waitForApplicationState(kafkaStreamsList, State.RUNNING, Duration.ofSeconds(60));
-
-        assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
-        assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
-
-        produceValueRange(key, 0, batch1NumMessages);
-
-        // Assert that all messages in the first batch were processed in a timely manner
-        assertTrue(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
-        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer(), topologyA);
-
-        //key belongs to this partition
-        final int keyPartition = keyQueryMetadata.partition();
-
-        //key doesn't belongs to this partition
-        final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
-        final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
-
-        // Assert that both active and standby are able to query for a key
-        final NamedTopologyStoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param = NamedTopologyStoreQueryParameters
-            .fromNamedTopologyAndStoreNameAndType(topologyA, TABLE_NAME, queryableStoreType)
-            .enableStaleStores()
-            .withPartition(keyPartition);
-        TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(kafkaStreams1, param);
-            return store1.get(key) != null;
-        }, "store1 cannot find results for key");
-        TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store2 = getStore(kafkaStreams2, param);
-            return store2.get(key) != null;
-        }, "store2 cannot find results for key");
-
-        final NamedTopologyStoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> otherParam = NamedTopologyStoreQueryParameters
-            .fromNamedTopologyAndStoreNameAndType(topologyA, TABLE_NAME, queryableStoreType)
-            .enableStaleStores()
-            .withPartition(keyDontBelongPartition);
-        final ReadOnlyKeyValueStore<Integer, Integer> store3 = getStore(kafkaStreams1, otherParam);
-        final ReadOnlyKeyValueStore<Integer, Integer> store4 = getStore(kafkaStreams2, otherParam);
-
-        // Assert that
-        assertNull(store3.get(key));
-        assertNull(store4.get(key));
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
     public void shouldQueryStoresAfterAddingAndRemovingStreamThread(final boolean withHeaders) throws Exception {
         final int batch1NumMessages = 100;
         final int key = 1;
@@ -629,13 +551,6 @@ public class StoreQueryIntegrationTest {
 
     private KafkaStreams createKafkaStreams(final StreamsBuilder builder, final Properties config) {
         final KafkaStreams streams = new KafkaStreams(builder.build(config), config);
-        streamsToCleanup.add(streams);
-        return streams;
-    }
-
-    @SuppressWarnings("deprecation")
-    private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final Properties config) {
-        final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(config);
         streamsToCleanup.add(streams);
         return streams;
     }

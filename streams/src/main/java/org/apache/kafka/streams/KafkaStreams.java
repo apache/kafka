@@ -72,7 +72,6 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -1988,43 +1987,22 @@ public class KafkaStreams implements AutoCloseable {
      *  Note that pause() can be called before start() in order to start a KafkaStreams instance
      *  in a manner where the processing is paused as described, but the consumers are started up.
      */
-    @SuppressWarnings("deprecation")
     public void pause() {
-        if (topologyMetadata.hasNamedTopologies()) {
-            for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {
-                topologyMetadata.pauseTopology(namedTopology.name());
-            }
-        } else {
-            topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
-        }
+        topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
     }
 
     /**
      * @return true when the KafkaStreams instance has its processing paused.
      */
-    @SuppressWarnings("deprecation")
     public boolean isPaused() {
-        if (topologyMetadata.hasNamedTopologies()) {
-            return topologyMetadata.allNamedTopologies().stream()
-                .map(NamedTopology::name)
-                .allMatch(topologyMetadata::isPaused);
-        } else {
-            return topologyMetadata.isPaused(UNNAMED_TOPOLOGY);
-        }
+        return topologyMetadata.isPaused(UNNAMED_TOPOLOGY);
     }
 
     /**
      * This method resumes processing for the KafkaStreams instance.
      */
-    @SuppressWarnings("deprecation")
     public void resume() {
-        if (topologyMetadata.hasNamedTopologies()) {
-            for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {
-                topologyMetadata.resumeTopology(namedTopology.name());
-            }
-        } else {
-            topologyMetadata.resumeTopology(UNNAMED_TOPOLOGY);
-        }
+        topologyMetadata.resumeTopology(UNNAMED_TOPOLOGY);
         threads.forEach(StreamThread::signalResume);
     }
 
