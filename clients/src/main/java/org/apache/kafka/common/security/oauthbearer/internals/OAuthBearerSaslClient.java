@@ -178,10 +178,12 @@ public class OAuthBearerSaslClient implements SaslClient {
             for (String mechanism : mechanisms) {
                 for (String name : mechanismNamesCompatibleWithPolicy) {
                     if (name.equals(mechanism)) {
+                        // Returning null lets Sasl try the remaining providers, and lets the caller fall back
+                        // to the factory of its own class loader. This factory is reached through the JVM-wide
+                        // security provider registry, so it may have been loaded by a different class loader
+                        // than the callback handler.
                         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
-                            throw new IllegalArgumentException(String.format(
-                                    "Callback handler must be castable to %s: %s",
-                                    AuthenticateCallbackHandler.class.getName(), callbackHandler.getClass().getName()));
+                            return null;
                         return new OAuthBearerSaslClient((AuthenticateCallbackHandler) callbackHandler);
                     }
                 }
