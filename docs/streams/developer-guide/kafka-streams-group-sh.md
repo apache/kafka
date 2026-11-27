@@ -188,7 +188,7 @@ Safety:
   * `--all-groups`: Operate on all groups (allowed with `--delete`).
   * `--bootstrap-server <host:port>`: Broker(s) to connect to (required).
   * `--command-config <file>`: Properties for AdminClient (security, timeouts, etc.).
-  * `--timeout <ms>`: Wait time for group stabilization in some operations (default: 30000ms).
+  * `--timeout <ms>`: Timeout for the Admin API calls made by the command. If not specified, `default.api.timeout.ms` from `--command-config` is used when set (default: 30000ms).
   * `--dry-run`, `--execute`: Preview vs apply for offset reset operations.
   * `--help`, `--version`, `--verbose`: Usage, version, verbosity.
 

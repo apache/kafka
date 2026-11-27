@@ -39,8 +39,8 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     private static final String DESCRIBE_DOC = "Describe share group, members and offset information.";
     private static final String ALL_GROUPS_DOC = "Apply to all share groups.";
     private static final String DELETE_DOC = "Delete share group.";
-    private static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
-        "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
+    private static final String TIMEOUT_MS_DOC = "The timeout in milliseconds for the Admin API calls made by the command. If not specified, " +
+        "default.api.timeout.ms from --command-config is used when set.";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of share group. Supports one share group at a time, and instances must be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to reset the offsets. " + NL +

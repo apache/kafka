@@ -45,6 +45,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.GroupOffsetsResetter;
+import org.apache.kafka.tools.ToolsUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -138,12 +139,15 @@ public class ShareGroupCommand {
     static class ShareGroupService implements AutoCloseable {
         final ShareGroupCommandOptions opts;
         private final Admin adminClient;
+        private final long timeoutMs;
         private final GroupOffsetsResetter groupOffsetsResetter;
 
         public ShareGroupService(ShareGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             try {
-                this.adminClient = createAdminClient(configOverrides);
+                Properties adminClientProps = adminClientProps(configOverrides);
+                this.adminClient = createAdminClient(adminClientProps);
+                this.timeoutMs = ToolsUtils.groupCommandTimeoutMs(opts.options, opts.timeoutMsOpt, adminClientProps);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -153,6 +157,7 @@ public class ShareGroupCommand {
         public ShareGroupService(ShareGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
+            this.timeoutMs = opts.options.valueOf(opts.timeoutMsOpt);
             this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
@@ -162,7 +167,7 @@ public class ShareGroupCommand {
                     opts.options.valuesOf(opts.resetToOffsetOpt),
                     opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
-                    opts.options.valueOf(opts.timeoutMsOpt));
+                    timeoutMs);
         }
 
         public void listGroups() throws ExecutionException, InterruptedException {
@@ -181,7 +186,7 @@ public class ShareGroupCommand {
         List<String> listShareGroups() {
             try {
                 ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
-                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
+                    .timeoutMs((int) timeoutMs));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException ie) {
@@ -199,7 +204,7 @@ public class ShareGroupCommand {
         List<GroupListing> listDetailedShareGroups() {
             try {
                 ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
-                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
+                    .timeoutMs((int) timeoutMs));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().toList();
             } catch (InterruptedException ie) {
@@ -216,7 +221,7 @@ public class ShareGroupCommand {
 
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
             ListGroupsResult result = adminClient.listGroups(ListGroupsOptions.forShareGroups()
-                .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                .timeoutMs((int) timeoutMs)
                 .inGroupStates(states));
             return new ArrayList<>(result.all().get());
         }
@@ -543,15 +548,14 @@ public class ShareGroupCommand {
         }
 
         private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
-            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
-            return options.timeoutMs(t);
+            return options.timeoutMs((int) timeoutMs);
         }
 
         Map<String, ShareGroupDescription> describeShareGroups(Collection<String> groupIds) throws ExecutionException, InterruptedException {
             Map<String, ShareGroupDescription> res = new HashMap<>();
             Map<String, KafkaFuture<ShareGroupDescription>> stringKafkaFutureMap = adminClient.describeShareGroups(
                 groupIds,
-                new DescribeShareGroupsOptions().timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                new DescribeShareGroupsOptions().timeoutMs((int) timeoutMs)
             ).describedGroups();
 
             for (Entry<String, KafkaFuture<ShareGroupDescription>> e : stringKafkaFutureMap.entrySet()) {
@@ -761,11 +765,15 @@ public class ShareGroupCommand {
             adminClient.close();
         }
 
-        protected Admin createAdminClient(Map<String, String> configOverrides) throws IOException {
+        protected Admin createAdminClient(Properties adminClientProps) {
+            return Admin.create(adminClientProps);
+        }
+
+        private Properties adminClientProps(Map<String, String> configOverrides) throws IOException {
             Properties props = opts.options.has(opts.commandConfigOpt) ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) : new Properties();
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
-            return Admin.create(props);
+            return props;
         }
     }
 
