@@ -339,6 +339,8 @@
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.security" />
+    <allow pkg="net.jqwik" />
+    <allow pkg="org.hamcrest" />
 
     <file name="NativeImageConfigTest">
       <allow pkg="io.github.classgraph" />
