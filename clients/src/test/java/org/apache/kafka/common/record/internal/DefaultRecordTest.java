@@ -600,10 +600,44 @@ public class DefaultRecordTest {
     }
 
     private static void assertPartiallyDecodingRecordsFromBufferThrowsInvalidRecordException(ByteBuffer buf) throws IOException {
-        try (InputStream inputStream = new ByteBufferInputStream(buf)) {
+        try (InputStream inputStream = new ByteBufferInputStream(buf.duplicate())) {
             assertThrows(InvalidRecordException.class,
                 () -> DefaultRecord.readPartiallyFrom(inputStream, 0L, 0L, RecordBatch.NO_SEQUENCE, null, Records.SOFT_MAX_ARRAY_LENGTH));
         }
+        assertThrows(InvalidRecordException.class,
+            () -> DefaultRecord.readPartiallyFrom(buf.duplicate(), 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+    }
+
+    @Test
+    public void testReadPartiallyFromByteBufferBoundsCheckedAgainstRecordEnd() {
+        // Malformed record claiming sizeOfBodyInBytes=6, followed by 1024 extra bytes in the same batch buffer,
+        // where keySize=500 would overrun recordEnd if checked only against buffer.remaining().
+        ByteBuffer buf = ByteBuffer.allocate(1040);
+        ByteUtils.writeVarint(6, buf);      // sizeOfBodyInBytes
+        buf.put((byte) 0);                  // attributes
+        ByteUtils.writeVarlong(0L, buf);    // timestampDelta
+        ByteUtils.writeVarint(0, buf);      // offsetDelta
+        ByteUtils.writeVarint(500, buf);    // keySize > remainingInRecord
+        buf.position(buf.capacity());
+        buf.flip();
+
+        assertThrows(InvalidRecordException.class,
+            () -> DefaultRecord.readPartiallyFrom(buf.duplicate(), 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+
+        // Same check for numHeaders exceeding remainingInRecord when extra bytes follow in the batch buffer.
+        ByteBuffer headerBuf = ByteBuffer.allocate(1040);
+        ByteUtils.writeVarint(7, headerBuf);   // sizeOfBodyInBytes
+        headerBuf.put((byte) 0);               // attributes
+        ByteUtils.writeVarlong(0L, headerBuf); // timestampDelta
+        ByteUtils.writeVarint(0, headerBuf);   // offsetDelta
+        ByteUtils.writeVarint(-1, headerBuf);  // null key
+        ByteUtils.writeVarint(-1, headerBuf);  // null value
+        ByteUtils.writeVarint(500, headerBuf); // numHeaders > remainingInRecord
+        headerBuf.position(headerBuf.capacity());
+        headerBuf.flip();
+
+        assertThrows(InvalidRecordException.class,
+            () -> DefaultRecord.readPartiallyFrom(headerBuf.duplicate(), 0L, 0L, RecordBatch.NO_SEQUENCE, null));
     }
 
     private static void assertDecodingRecordFromBufferThrowsInvalidRecordException(ByteBuffer buf) throws IOException {
