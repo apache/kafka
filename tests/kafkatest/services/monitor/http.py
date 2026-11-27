@@ -107,8 +107,10 @@ class HttpMetricsCollector(object):
         super(HttpMetricsCollector, self).stop_node(node)
 
         idx = self.idx(node)
-        self._forwarders[idx].stop()
-        del self._forwarders[idx]
+        forwarder = self._forwarders.get(idx)
+        if forwarder is not None:
+            forwarder.stop()
+            del self._forwarders[idx]
 
     def metrics(self, host=None, client_id=None, name=None, group=None, tags=None):
         """
