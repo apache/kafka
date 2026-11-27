@@ -85,17 +85,15 @@ If the `FinalizedVersionLevel` for `Feature: kraft.version` is `0`, the version 
 
 ### Upgrade KRaft Version
 
-The KRaft feature version can be upgraded to support dynamic controller clusters by using the `kafka-feature` CLI command. To upgrade all of the feature versions to the latest version:
+`kafka-features.sh upgrade --release-version` upgrades production features for that release, but it leaves `kraft.version` unchanged when the cluster is still on `kraft.version=0`. That avoids converting a static controller quorum to a dynamic quorum as a side effect of a metadata upgrade.
 
-```bash
-$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1
-```
-
-To upgrade just the KRaft feature version:
+To convert a static quorum to a dynamic quorum, upgrade `kraft.version` explicitly:
 
 ```bash
 $ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1
 ```
+
+After `kraft.version` is at least `1`, later `--release-version` upgrades may still update `kraft.version` if a newer default exists.
 
 ### Update KRaft Config
 
