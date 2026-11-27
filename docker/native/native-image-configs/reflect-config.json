@@ -1163,7 +1163,7 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor",
+  "name":"org.apache.kafka.coordinator.group.streams.assignor.SpreadTaskAssignor",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
