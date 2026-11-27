@@ -26,14 +26,19 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
@@ -43,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -183,6 +189,42 @@ public class FetchBufferTest {
             fetchBuffer.wakeup();
             waitingThread.join(Duration.ofSeconds(30).toMillis());
             assertFalse(waitingThread.isAlive());
+        }
+    }
+
+    @Test
+    public void testLockFailureIsNotMaskedByUnlock() throws Exception {
+        final RuntimeException lockFailure = new RuntimeException("lock failed");
+        final AtomicBoolean failLock = new AtomicBoolean(true);
+
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
+            TestUtils.setFieldValue(fetchBuffer, "lock", new ReentrantLock() {
+                @Override
+                public void lock() {
+                    if (failLock.get())
+                        throw lockFailure;
+                    super.lock();
+                }
+            });
+
+            final List<Executable> operations = List.of(
+                fetchBuffer::isEmpty,
+                () -> fetchBuffer.hasCompletedFetches(fetch -> true),
+                () -> fetchBuffer.add(completedFetch(topicAPartition0)),
+                fetchBuffer::nextInLineFetch,
+                () -> fetchBuffer.setNextInLineFetch(null),
+                fetchBuffer::peek,
+                fetchBuffer::poll,
+                () -> fetchBuffer.awaitWakeup(time.timer(0)),
+                fetchBuffer::wakeup,
+                () -> fetchBuffer.retainAll(Set.of()),
+                fetchBuffer::bufferedPartitions,
+                fetchBuffer::close
+            );
+            for (Executable operation : operations)
+                assertSame(lockFailure, assertThrows(RuntimeException.class, operation));
+
+            failLock.set(false);
         }
     }
 
