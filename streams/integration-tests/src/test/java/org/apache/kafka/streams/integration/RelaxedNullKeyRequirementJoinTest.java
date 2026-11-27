@@ -138,6 +138,23 @@ public class RelaxedNullKeyRequirementJoinTest {
         assertEquals(Collections.emptyList(), out.readKeyValuesToList());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testRelaxedJoinReachedThroughDiamondKeepsNullKeyRecords(final boolean withHeaders) {
+        this.withHeaders = withHeaders;
+        leftStream
+            .mapValues(v -> v)
+            .merge(leftStream.mapValues(v -> v))
+            .leftJoin(rightStream.toTable(), JOINER)
+            .to(OUT);
+        initTopology();
+        left.pipeInput(null, "leftValue", 1);
+        assertEquals(
+            Arrays.asList(new KeyValue<>(null, "leftValue|null"), new KeyValue<>(null, "leftValue|null")),
+            out.readKeyValuesToList()
+        );
+    }
+
     private void initTopology() {
         final Properties props = props();
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);

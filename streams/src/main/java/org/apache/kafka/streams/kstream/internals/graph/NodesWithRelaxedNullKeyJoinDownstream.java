@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -40,15 +42,37 @@ public class NodesWithRelaxedNullKeyJoinDownstream {
             .collect(Collectors.toSet());
     }
 
-    private void traverseGraph(final GraphNode node) {
-        if (!visited.contains(node)) {
-            for (final GraphNode child : node.children()) {
-                traverseGraph(child);
-                if (child.labels().contains(GraphNode.Label.NULL_KEY_RELAXED_JOIN) || nonOptimizable.contains(child)) {
-                    nonOptimizable.add(node);
+    /**
+     * Post-order traversal that adds every node reachable from {@code root} to {@code visited}, and adds a node
+     * to {@code nonOptimizable} if any of its children has a relaxed null-key join label or is non-optimizable
+     * itself. It uses an explicit stack instead of recursion, because recursion depth would grow with the length
+     * of the longest processor chain and overflow the call stack for very deep topologies.
+     */
+    private void traverseGraph(final GraphNode root) {
+        final Deque<GraphNode> stack = new ArrayDeque<>();
+        final Set<GraphNode> childrenPushed = new HashSet<>();
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            final GraphNode node = stack.peek();
+            if (visited.contains(node)) {
+                stack.pop();
+            } else if (childrenPushed.add(node)) {
+                // first time on top of the stack: process the children before the node itself
+                for (final GraphNode child : node.children()) {
+                    if (!visited.contains(child)) {
+                        stack.push(child);
+                    }
                 }
+            } else {
+                // all children are visited, so their nonOptimizable status is final
+                stack.pop();
+                for (final GraphNode child : node.children()) {
+                    if (child.labels().contains(GraphNode.Label.NULL_KEY_RELAXED_JOIN) || nonOptimizable.contains(child)) {
+                        nonOptimizable.add(node);
+                    }
+                }
+                visited.add(node);
             }
-            visited.add(node);
         }
     }
 }
