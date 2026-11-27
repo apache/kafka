@@ -1044,14 +1044,17 @@ public class LogManager {
         try {
             OffsetCheckpointFile checkpoint = recoveryPointCheckpoints.get(logDir);
             if (checkpoint != null) {
-                Map<TopicPartition, Long> recoveryOffsets = logsToCheckpoint.entrySet().stream()
-                        .collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                entry -> entry.getValue().recoveryPoint()
-                        ));
-                // checkpoint.write calls Utils.atomicMoveWithFallback, which flushes the parent
-                // directory and guarantees crash consistency.
-                checkpoint.write(recoveryOffsets);
+                // Serialize sampling and writing so an older snapshot cannot overwrite a truncation checkpoint.
+                synchronized (checkpoint) {
+                    Map<TopicPartition, Long> recoveryOffsets = logsToCheckpoint.entrySet().stream()
+                            .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    entry -> entry.getValue().recoveryPoint()
+                            ));
+                    // checkpoint.write calls Utils.atomicMoveWithFallback, which flushes the parent
+                    // directory and guarantees crash consistency.
+                    checkpoint.write(recoveryOffsets);
+                }
             }
         } catch (KafkaStorageException kse) {
             LOG.error("Disk error while writing recovery offsets checkpoint in directory {}: {}", logDir, kse.getMessage());
