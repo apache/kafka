@@ -369,20 +369,31 @@ public class DefaultStateUpdater implements StateUpdater {
         private void handleTaskCorruptedException(final TaskCorruptedException taskCorruptedException) {
             log.info("Encountered task corrupted exception: ", taskCorruptedException);
             final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTasks();
-            final Set<Task> corruptedTasks = new HashSet<>();
+            final Set<Task> corruptedUpdatingTasks = new HashSet<>();
+            final Set<Task> corruptedPausedTasks = new HashSet<>();
             final Set<TopicPartition> changelogsOfCorruptedTasks = new HashSet<>();
             for (final TaskId taskId : corruptedTaskIds) {
-                final Task corruptedTask = updatingTasks.get(taskId);
-                if (corruptedTask == null) {
-                    throw new IllegalStateException("Task " + taskId + " is corrupted but is not updating. " + BUG_ERROR_MESSAGE);
+                final Task corruptedTask;
+                if (updatingTasks.containsKey(taskId)) {
+                    corruptedTask = updatingTasks.get(taskId);
+                    corruptedUpdatingTasks.add(corruptedTask);
+                } else if (pausedTasks.containsKey(taskId)) {
+                    // A paused task's changelog partitions can still be assigned to the restore consumer,
+                    // so an invalid offset for one of them can result in a TaskCorruptedException naming this task.
+                    corruptedTask = pausedTasks.get(taskId);
+                    corruptedPausedTasks.add(corruptedTask);
+                } else {
+                    throw new IllegalStateException("Task " + taskId + " is corrupted but is not updating or paused. " + BUG_ERROR_MESSAGE);
                 }
-                corruptedTasks.add(corruptedTask);
                 removeCheckpointForCorruptedTask(corruptedTask);
                 changelogsOfCorruptedTasks.addAll(corruptedTask.changelogPartitions());
             }
             changelogReader.unregister(changelogsOfCorruptedTasks);
-            corruptedTasks.forEach(
+            corruptedUpdatingTasks.forEach(
                 task -> addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTask(taskCorruptedException, task))
+            );
+            corruptedPausedTasks.forEach(
+                task -> addToExceptionsAndFailedTasksThenRemoveFromPausedTasks(new ExceptionAndTask(taskCorruptedException, task))
             );
         }
 

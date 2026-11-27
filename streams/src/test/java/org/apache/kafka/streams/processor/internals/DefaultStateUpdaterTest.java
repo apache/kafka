@@ -1634,6 +1634,33 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldHandleTaskCorruptedExceptionForPausedTaskAndAddFailedTasksToQueue() throws Exception {
+        final StreamTask pausedTask = statefulTask(TASK_A_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask updatingTask = statefulTask(TASK_B_0_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        when(topologyMetadata.isPaused(pausedTask.id().topologyName())).thenReturn(true);
+        stateUpdater.start();
+
+        stateUpdater.add(pausedTask);
+        verifyPausedTasks(pausedTask);
+
+        // only the updating task is restored by the changelog reader once the other task was paused;
+        // the corrupted changelog of the paused task can still be hit by the restore consumer
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(pausedTask.id()));
+        final Map<TaskId, Task> updatingTasks = mkMap(mkEntry(updatingTask.id(), updatingTask));
+        doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
+        stateUpdater.add(updatingTask);
+
+        final ExceptionAndTask expectedExceptionAndTask = new ExceptionAndTask(taskCorruptedException, pausedTask);
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTask);
+        verifyUpdatingTasks(updatingTask);
+        verifyPausedTasks();
+        verifyRestoredActiveTasks();
+        verify(changelogReader).unregister(Set.of(TOPIC_PARTITION_A_0));
+        verify(pausedTask).markChangelogAsCorrupted(Set.of(TOPIC_PARTITION_A_0));
+        assertTrue(stateUpdater.isRunning());
+    }
+
+    @Test
     public void shouldAddFailedTasksToQueueWhenUncaughtExceptionIsThrown() throws Exception {
         final StreamTask task1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
