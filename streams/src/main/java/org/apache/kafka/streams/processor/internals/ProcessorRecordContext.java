@@ -41,19 +41,14 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private final Headers headers;
     private byte[] sourceRawKey;
     private byte[] sourceRawValue;
+    private Headers sourceRawHeaders;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
                                   final String topic,
                                   final Headers headers) {
-        this.timestamp = timestamp;
-        this.offset = offset;
-        this.topic = topic;
-        this.partition = partition;
-        this.headers = Objects.requireNonNull(headers);
-        this.sourceRawKey = null;
-        this.sourceRawValue = null;
+        this(timestamp, offset, partition, topic, headers, null, null, null);
     }
 
     public ProcessorRecordContext(final long timestamp,
@@ -63,6 +58,17 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
                                   final Headers headers,
                                   final byte[] sourceRawKey,
                                   final byte[] sourceRawValue) {
+        this(timestamp, offset, partition, topic, headers, sourceRawKey, sourceRawValue, null);
+    }
+
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic,
+                                  final Headers headers,
+                                  final byte[] sourceRawKey,
+                                  final byte[] sourceRawValue,
+                                  final Headers sourceRawHeaders) {
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
@@ -70,6 +76,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         this.headers = Objects.requireNonNull(headers);
         this.sourceRawKey = sourceRawKey;
         this.sourceRawValue = sourceRawValue;
+        this.sourceRawHeaders = sourceRawHeaders;
     }
 
     @Override
@@ -105,6 +112,24 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     @Override
     public byte[] sourceRawValue() {
         return sourceRawValue;
+    }
+
+    /**
+     * Returns the source header snapshot when available, or {@link #headers()} otherwise.
+     * Punctuation and synthetic records have no snapshot. {@link #freeRawRecord()} also
+     * clears it when the source record is sent to a sink, along with the raw key and value.
+     */
+    public Headers sourceRawHeaders() {
+        return sourceRawHeaders == null ? headers : sourceRawHeaders;
+    }
+
+    /**
+     * Returns the source header snapshot, or {@code null} if there is none. Copy this one into
+     * a new context: a missing snapshot then stays missing, so {@link #sourceRawHeaders()} on the
+     * copy falls back to the copy's own headers instead of this context's headers.
+     */
+    public Headers sourceRawHeadersOrNull() {
+        return sourceRawHeaders;
     }
 
     public long residentMemorySizeEstimate() {
@@ -214,6 +239,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     public void freeRawRecord() {
         this.sourceRawKey = null;
         this.sourceRawValue = null;
+        this.sourceRawHeaders = null;
     }
 
     @Override
@@ -231,7 +257,8 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             Objects.equals(topic, that.topic) &&
             Objects.equals(headers, that.headers) &&
             Arrays.equals(sourceRawKey, that.sourceRawKey) &&
-            Arrays.equals(sourceRawValue, that.sourceRawValue);
+            Arrays.equals(sourceRawValue, that.sourceRawValue) &&
+            Objects.equals(sourceRawHeaders, that.sourceRawHeaders);
     }
 
     /**
