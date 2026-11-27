@@ -1,0 +1,129 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Names to show in the contributor list of the release announcement (see contributors.py).
+# Add an entry only when:
+#  1. a contributor asks to be shown with another name,
+#  2. credits are known to be the same person but share no email, name or GitHub login,
+#     so they cannot be matched automatically,
+#  3. a wrong email in some commit merges two people. Map that name and email to the right
+#     email, e.g. "Right Name <right@email> Right Name <wrong@email>", or
+#  4. the names of a group reported by the name check were checked and are of one person, to
+#     keep that group out of the next checks. Such an entry gives its name to every credit
+#     with that email, so a wrong email in a later commit is no longer reported for it, and
+#     a credit that was only grouped through a replaced name is no longer grouped.
+# Note why each entry was added, so that it can be checked later.
+#
+# The format is the one of git mailmap (see https://git-scm.com/docs/gitmailmap), but this
+# file is only used by contributors.py and does not change how git shows names elsewhere.
+# For credits without an email, such as "@login" or "Name (github:login)", use
+# "Canonical Name <login@users.noreply.github.com>". The address is only used to look up
+# explicit mappings; an unmapped login keeps its original name and email.
+
+# 1. Asked for in https://github.com/apache/kafka-site/pull/928
+Gabriella Fu <100360154+gabriellefu@users.noreply.github.com>
+Jiayao Sun <jiayao.s@outlook.com>
+
+# 2. The GitHub account imavishek also commits as Avishek Das <avishek.akd@gmail.com>
+Avishek Das <imavishek@users.noreply.github.com>
+
+# 2. Chia-Ping Tsai is credited as @chia7712 in commit 0bc2c6e69994.
+Chia-Ping Tsai <chia7712@users.noreply.github.com>
+
+# 2. Andrew Schofield is credited as @AndrewJSchofield in commit dbe9d34e4745. That login was
+#    only matched through the name "Andrew J Schofield", which an entry below replaces.
+Andrew Schofield <AndrewJSchofield@users.noreply.github.com>
+
+# 2. Kuan-Po Tseng is credited as @brandboat in commit dbe9d34e4745.
+Kuan-Po Tseng <brandboat@users.noreply.github.com>
+
+# 2. khyativ, kvaghamshi and KhyatiVaghamshi are the same person. The commits of the GitHub
+#    account KhyatiVaghamshi credit the other email as a co-author, e.g. commit 34f859e2ceac.
+Khyati Vaghamshi <kvaghamshi@salesforce.com>
+Khyati Vaghamshi <khyati220@gmail.com>
+
+# 2. Mukesh Regar <regarmukesh3g@gmail.com> is also credited through the GitHub account
+#    regarmukesh3g, as "Reg Armukesh3g" in commit 981e710e31d7.
+Mukesh Regar <regarmukesh3g@users.noreply.github.com>
+
+# 2. SunMin Lee (GitHub: sunm2n) also commits as "LEE SUN MIN <sunmin8410@mju.ac.kr>", in
+#    commit 8f24a916b7fb.
+SunMin Lee <sunmin8410@mju.ac.kr>
+
+# 4. Groups checked for 4.4.0. Every name and email below was grouped automatically and is
+#    the same person; these entries only keep the group out of the name check.
+Akhilesh C <akhileshchg@users.noreply.github.com>
+Alieh Saeedi <107070585+aliehsaeedii@users.noreply.github.com>
+Alieh Saeedi <asaeedi@confluent.io>
+Anastasia Vela <anastasiavela@berkeley.edu>
+Andrew Schofield <aschofield@apache.org>
+Apoorv Mittal <apoorvmittal10@gmail.com>
+Arpit Goyal <59436466+iit2009060@users.noreply.github.com>
+Bill Bejeck <bbejeck@gmail.com>
+Chia-Ping Tsai <chia7712@gmail.com>
+Chia-Yi Chiu <cychiu8@gmail.com>
+Christo Lolov <clolov@apache.org>
+Christo Lolov <lolovc@amazon.com>
+David Jacot <djacot@confluent.io>
+Dejan Stojadinović <dejan2609@gmail.com>
+Edoardo Comar <ecomar@uk.ibm.com>
+Evan Zhou <84255167+ezhou413@users.noreply.github.com>
+Hana <huikewong@gmail.com>
+Jian <fujian1115@gmail.com>
+José Armando García Sancio <jsancio@gmail.com>
+José Armando García Sancio <jsancio@users.noreply.github.com>
+Justine Olshan <jolshan@confluent.io>
+Kamal Chandraprakash <kamal.chandraprakash@gmail.com>
+Kamal Chandraprakash <kamal@nmsworks.co.in>
+KC.H <kuoche1712003@gmail.com>
+Kevin Wu <66326898+kevin-wu24@users.noreply.github.com>
+Kondrat Bertalan <kb.pcre@gmail.com>
+Kuan-Po Tseng <brandboat@gmail.com>
+Lan Ding <53332773+DL1231@users.noreply.github.com>
+Lan Ding <isDing_L@163.com>
+Lianet Magrans <lmagrans@confluent.io>
+Lucy Liu <lucliu@confluent.io>
+Luke Chen <43372967+showuon@users.noreply.github.com>
+Manikumar Reddy <manikumar.reddy@gmail.com>
+Matthias J. Sax <matthias@confluent.io>
+Matthias J. Sax <mjsax@apache.org>
+Mickael Maison <mickael.maison@gmail.com>
+Ming-Yen Chung <mingyen066@gmail.com>
+Nick Telford <nick.telford@gmail.com>
+Nikita Shupletsov <nshupletsov@confluent.io>
+Nilesh Kumar <nileshkumar3@gmail.com>
+Omnia Ibrahim <o.g.h.ibrahim@gmail.com>
+Paolo Patierno <ppatierno@live.com>
+Rajini Sivaram <rajinisivaram@googlemail.com>
+Russole Chen <850905junior@gmail.com>
+Shekhar Prasad Rajak <60732970+shekhar-rajak@users.noreply.github.com>
+TengYao Chi <51072200+frankvicky@users.noreply.github.com>
+TengYao Chi <kitingiao@gmail.com>
+Viktor Somogyi-Vass <viktor.somogyi@cloudera.com>
+Viktor Somogyi-Vass <viktorsomogyi@gmail.com>
+YANG-SYUAN CHOU <dino2895un@gmail.com>
+Yu-Chia Ma <minecraftmiku831@gmail.com>
+Yunchi Pang <yunchipang@gmail.com>
+Zheguang Zhao <zheguang.zhao@alumni.brown.edu>
+Zheguang Zhao <zheguang.zhao@gmail.com>
+Zhiyan Tang <ztang@confluent.io>
+
+# 4. Chung-Yi.Chi also committed as "Demonic" with the same email, in commit 43235c279653.
+Chung-Yi.Chi <demonic@csie.io>
+
+# 4. "Chia-Cheng Chueh (add mul)" is a typo of the author name, e.g. in commit 12afd711cd40.
+Chia-Cheng Chueh <40436michael@gmail.com>
