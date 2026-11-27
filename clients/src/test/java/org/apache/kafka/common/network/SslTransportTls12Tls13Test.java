@@ -138,7 +138,7 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
 
         NetworkTestUtils.waitForChannelClose(selector, "0", ChannelState.State.AUTHENTICATION_FAILED);
         server.verifyAuthenticationMetrics(0, 1);
@@ -147,7 +147,7 @@ public class SslTransportTls12Tls13Test {
     private void checkAuthenticationSucceed() throws IOException, InterruptedException {
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
         NetworkTestUtils.waitForChannelReady(selector, "0");
         server.verifyAuthenticationMetrics(1, 0);
     }

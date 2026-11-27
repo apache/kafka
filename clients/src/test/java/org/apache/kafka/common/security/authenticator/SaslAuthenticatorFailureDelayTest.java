@@ -218,7 +218,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, NetworkTestUtils.CLIENT_INSTANCE_ID);
     }
 
     private void createAndCheckClientAuthenticationFailure(SecurityProtocol securityProtocol, String node,

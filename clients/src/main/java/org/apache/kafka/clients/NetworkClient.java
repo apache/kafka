@@ -1267,7 +1267,8 @@ public class NetworkClient implements KafkaClient {
             selector.connect(nodeConnectionId,
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
-                    this.socketReceiveBuffer);
+                    this.socketReceiveBuffer,
+                    clientInstanceId);
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff

@@ -20,11 +20,15 @@
   "name": "SaslAuthenticateRequest",
   // Version 1 is the same as version 0.
   // Version 2 adds flexible version support
-  "validVersions": "0-2",
+  //
+  // Version 3 uses the v3 request header (KIP-1313).
+  "latestVersionUnstable": true,
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "headerVersions": {
     "0-1": "1",
-    "2+": "2"
+    "2": "2",
+    "3+": "3"
   },
   "fields": [
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",

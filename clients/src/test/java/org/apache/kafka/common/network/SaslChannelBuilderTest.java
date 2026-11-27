@@ -194,7 +194,7 @@ public class SaslChannelBuilderTest {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER,
             Collections.singletonMap(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, jaasContext), SecurityProtocol.SASL_PLAINTEXT,
             new ListenerName("SASL_PLAINTEXT"), false, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), true);
         Map<String, Object> allConfigs = new HashMap<>(new TestSecurityConfig(new HashMap<>()).values());
         allConfigs.putAll(configs);
         channelBuilder.configure(allConfigs);
@@ -204,7 +204,7 @@ public class SaslChannelBuilderTest {
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
-            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier()) {
+            null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), true) {
 
             @Override
             protected GSSManager gssManager() {
@@ -244,7 +244,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier(), true);
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

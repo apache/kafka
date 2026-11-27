@@ -19,7 +19,9 @@
   "name": "SaslAuthenticateResponse",
   // Version 1 adds the session lifetime.
   // Version 2 adds flexible version support
-  "validVersions": "0-2",
+  //
+  // Version 3 is the same as version 2 (KIP-1313).
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "headerVersions": {
     "0-1": "0",

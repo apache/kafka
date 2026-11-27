@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
@@ -88,6 +89,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
     private final Function<Short, ApiVersionsResponse> apiVersionSupplier;
+    private final boolean enableUnstableLastVersion;
     private final String sslClientAuthOverride;
     private final Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
@@ -110,7 +112,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               String sslClientAuthOverride,
                               Time time,
                               LogContext logContext,
-                              Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                              Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                              boolean enableUnstableLastVersion) {
         this.connectionMode = connectionMode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -128,6 +131,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.apiVersionSupplier = apiVersionSupplier;
+        this.enableUnstableLastVersion = enableUnstableLastVersion;
 
         if (connectionMode == ConnectionMode.SERVER && apiVersionSupplier == null) {
             throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
@@ -232,6 +236,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
                         saslCallbackHandlers.get(clientSaslMechanism),
                         id,
+                        metadataRegistry.clientInstanceId(),
                         socket.getInetAddress().getHostName(),
                         loginManager.serviceName(),
                         finalTransportLayer,
@@ -279,17 +284,18 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                ChannelMetadataRegistry metadataRegistry) {
         return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
                 kerberosShortNamer, listenerName, securityProtocol, transportLayer,
-                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
+                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier, enableUnstableLastVersion);
     }
 
     // Visible to override for testing
     protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                AuthenticateCallbackHandler callbackHandler,
                                                                String id,
+                                                               Uuid clientInstanceId,
                                                                String serverHost,
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) {
-        return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
+        return new SaslClientAuthenticator(configs, callbackHandler, id, clientInstanceId, subject, servicePrincipal,
                 serverHost, clientSaslMechanism, transportLayer, time, logContext);
     }
 

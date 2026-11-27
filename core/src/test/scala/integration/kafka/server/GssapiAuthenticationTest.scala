@@ -145,7 +145,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
 
   private def verifyRelogin(selector: Selector, login: TestableKerberosLogin): Unit = {
     val node1 = "1"
-    selector.connect(node1, serverAddr, 1024, 1024)
+    selector.connect(node1, serverAddr, 1024, 1024, NetworkTestUtils.CLIENT_INSTANCE_ID)
     login.logoutResumeLatch.countDown()
     login.logoutCompleteLatch.await(15, TimeUnit.SECONDS)
     assertFalse(pollUntilReadyOrDisconnected(selector, node1), "Authenticated during re-login")
@@ -153,7 +153,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     login.reLoginResumeLatch.countDown()
     login.reLoginCompleteLatch.await(15, TimeUnit.SECONDS)
     val node2 = "2"
-    selector.connect(node2, serverAddr, 1024, 1024)
+    selector.connect(node2, serverAddr, 1024, 1024, NetworkTestUtils.CLIENT_INSTANCE_ID)
     assertTrue(pollUntilReadyOrDisconnected(selector, node2), "Authenticated failed after re-login")
   }
 
@@ -210,7 +210,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
       var actualSuccessfulAuths = 0
       while (actualSuccessfulAuths < numSuccessfulAuths) {
         val nodeId = actualSuccessfulAuths.toString
-        selector.connect(nodeId, serverAddr, 1024, 1024)
+        selector.connect(nodeId, serverAddr, 1024, 1024, NetworkTestUtils.CLIENT_INSTANCE_ID)
         val isReady = pollUntilReadyOrDisconnected(selector, nodeId)
         if (isReady)
           actualSuccessfulAuths += 1
@@ -246,7 +246,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private def verifyNonRetriableAuthenticationFailure(): Unit = {
     val selector = createSelector()
     val nodeId = "1"
-    selector.connect(nodeId, serverAddr, 1024, 1024)
+    selector.connect(nodeId, serverAddr, 1024, 1024, NetworkTestUtils.CLIENT_INSTANCE_ID)
     TestUtils.waitUntilTrue(() => {
       selector.poll(100)
       val disconnectState = selector.disconnected().get(nodeId)
@@ -269,7 +269,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val jaasContexts = java.util.Map.of("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
-      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER)) {
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER), true) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())

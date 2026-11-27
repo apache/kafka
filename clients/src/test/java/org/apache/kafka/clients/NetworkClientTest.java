@@ -247,6 +247,18 @@ public class NetworkClientTest {
                 MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false));
     }
 
+    @Test
+    public void testClientInstanceIdIsPassedOnConnect() {
+        Uuid clientInstanceId = Uuid.randomUuid();
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", clientInstanceId, Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), null,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE, BootstrapConfiguration.DISABLED, false);
+        client.ready(node, time.milliseconds());
+        assertEquals(clientInstanceId, selector.clientInstanceId(node.idString()));
+    }
+
     private static void assertGeneratedClientInstanceId(NetworkClient client) {
         // OffsetDelete v1 uses the v3 request header.
         Uuid clientInstanceId = client.newClientRequest("0", new OffsetDeleteRequest.Builder(new OffsetDeleteRequestData()), 0, true)
@@ -1592,10 +1604,10 @@ public class NetworkClientTest {
         // disconnect detected after telemetrySender.maybeUpdate() already ran with the channel ready.
         MockSelector capturingSelector = new MockSelector(time) {
             @Override
-            public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize)
-                    throws IOException {
+            public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
+                                Uuid clientInstanceId) throws IOException {
                 connectAttempts.add(address);
-                super.connect(id, address, sendBufferSize, receiveBufferSize);
+                super.connect(id, address, sendBufferSize, receiveBufferSize, clientInstanceId);
             }
 
             @Override

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.Uuid;
+
 public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
     private CipherInformation cipherInformation;
     private ClientInformation clientInformation;
+    private Uuid clientInstanceId;
 
     @Override
     public void registerCipherInformation(final CipherInformation cipherInformation) {
@@ -41,8 +44,19 @@ public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
     }
 
     @Override
+    public void registerClientInstanceId(final Uuid clientInstanceId) {
+        this.clientInstanceId = clientInstanceId;
+    }
+
+    @Override
+    public Uuid clientInstanceId() {
+        return this.clientInstanceId;
+    }
+
+    @Override
     public void close() {
         this.cipherInformation = null;
         this.clientInformation = null;
+        this.clientInstanceId = null;
     }
 }

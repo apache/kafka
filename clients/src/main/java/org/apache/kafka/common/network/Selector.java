@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -51,6 +52,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -65,7 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * A connection can be added to the nioSelector associated with an integer id by doing
  *
  * <pre>
- * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
+ * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000, clientInstanceId);
  * </pre>
  *
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
@@ -243,18 +245,21 @@ public class Selector implements Selectable, AutoCloseable {
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
+     * @param clientInstanceId The client instance ID of the client opening the new connection
      * @throws IllegalStateException if there is already a connection for that id
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */
     @Override
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
+                        Uuid clientInstanceId) throws IOException {
+        Objects.requireNonNull(clientInstanceId, "clientInstanceId must not be null");
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
         SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT, clientInstanceId);
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
@@ -309,7 +314,8 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
-        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        // Accepted connections have no client instance ID.
+        registerChannel(id, socketChannel, SelectionKey.OP_READ, null);
         this.sensors.connectionCreated.record();
         // Default to empty client information as the ApiVersionsRequest is not
         // mandatory. In this case, we still want to account for the connection.
@@ -325,19 +331,22 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
-    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps,
+                                           Uuid clientInstanceId) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
-        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key, clientInstanceId);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
         return key;
     }
 
-    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key,
+                                                    Uuid clientInstanceId) throws IOException {
         ChannelMetadataRegistry metadataRegistry = null;
         try {
             metadataRegistry = new SelectorChannelMetadataRegistry();
+            metadataRegistry.registerClientInstanceId(clientInstanceId);
             KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
             key.attach(channel);
             return channel;
@@ -1073,6 +1082,7 @@ public class Selector implements Selectable, AutoCloseable {
     class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
         private CipherInformation cipherInformation;
         private ClientInformation clientInformation;
+        private Uuid clientInstanceId;
 
         @Override
         public void registerCipherInformation(final CipherInformation cipherInformation) {
@@ -1109,6 +1119,16 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         @Override
+        public void registerClientInstanceId(final Uuid clientInstanceId) {
+            this.clientInstanceId = clientInstanceId;
+        }
+
+        @Override
+        public Uuid clientInstanceId() {
+            return clientInstanceId;
+        }
+
+        @Override
         public void close() {
             if (this.cipherInformation != null) {
                 sensors.connectionsByCipher.decrement(this.cipherInformation);
@@ -1119,6 +1139,8 @@ public class Selector implements Selectable, AutoCloseable {
                 sensors.connectionsByClient.decrement(this.clientInformation);
                 this.clientInformation = null;
             }
+
+            this.clientInstanceId = null;
         }
     }
 

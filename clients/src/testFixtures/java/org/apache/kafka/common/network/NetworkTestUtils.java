@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -39,6 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Common utility functions used by transport layer and authenticator tests.
  */
 public class NetworkTestUtils {
+    public static final Uuid CLIENT_INSTANCE_ID = Uuid.randomUuid();
+
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
                                                  AbstractConfig serverConfig, CredentialCache credentialCache, Time time) throws Exception {
         return createEchoServer(listenerName, securityProtocol, serverConfig, credentialCache, 100, time);

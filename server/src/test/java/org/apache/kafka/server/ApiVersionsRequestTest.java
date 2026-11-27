@@ -20,6 +20,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -28,12 +29,16 @@ import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.requests.SaslAuthenticateRequest;
+import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
@@ -48,6 +53,7 @@ import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -203,6 +209,37 @@ public class ApiVersionsRequestTest {
                 (short) 0
             );
             sendSaslHandshakeRequestValidateResponse(socket);
+        }
+    }
+
+    @ClusterTests({
+        @ClusterTest(types = {Type.KRAFT},
+            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+            controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+            serverProperties = {
+                @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+            }
+        ),
+        @ClusterTest(types = {Type.KRAFT},
+            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+            controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+            serverProperties = {
+                @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false")
+            }
+        )
+    })
+    public void testSaslAuthenticateRequestWithAdvertisedVersion() throws IOException {
+        try (Socket socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))) {
+            ApiVersionsResponse apiVersionsResponse = IntegrationTestUtils.sendAndReceive(
+                new ApiVersionsRequest.Builder().build((short) 0), socket);
+            short saslAuthenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id).maxVersion();
+            sendSaslHandshakeRequestValidateResponse(socket);
+            byte[] authBytes = ("\u0000" + JaasUtils.KAFKA_PLAIN_ADMIN + "\u0000" + JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
+                .getBytes(StandardCharsets.UTF_8);
+            SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(
+                new SaslAuthenticateRequestData().setAuthBytes(authBytes)).build(saslAuthenticateVersion);
+            SaslAuthenticateResponse response = IntegrationTestUtils.sendAndReceive(request, socket);
+            assertEquals(Errors.NONE, response.error());
         }
     }
 

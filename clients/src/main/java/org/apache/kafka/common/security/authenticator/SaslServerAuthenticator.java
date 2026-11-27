@@ -130,6 +130,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final ReauthInfo reauthInfo;
     private final ChannelMetadataRegistry metadataRegistry;
     private final Function<Short, ApiVersionsResponse> apiVersionSupplier;
+    private final boolean enableUnstableLastVersion;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -163,7 +164,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
                                    ChannelMetadataRegistry metadataRegistry,
                                    Time time,
-                                   Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                                   Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                                   boolean enableUnstableLastVersion) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -176,6 +178,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.reauthInfo = new ReauthInfo();
         this.metadataRegistry = metadataRegistry;
         this.apiVersionSupplier = apiVersionSupplier;
+        this.enableUnstableLastVersion = enableUnstableLastVersion;
 
         this.configs = configs;
         @SuppressWarnings("unchecked")
@@ -451,6 +454,9 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw e;
             }
             short version = header.apiVersion();
+            if (!apiKey.isVersionEnabled(version, enableUnstableLastVersion))
+                throw new UnsupportedVersionException("Received request for disabled api with key " + apiKey.id + " (" +
+                        apiKey.name() + ") and version " + version);
             /*
              * The client sends multiple SASL_AUTHENTICATE requests, and the client is known
              * to support the required version if any one of them indicates it supports that

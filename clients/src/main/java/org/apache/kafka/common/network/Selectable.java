@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 
 import java.io.IOException;
@@ -31,7 +32,7 @@ import java.util.Map;
 public interface Selectable {
 
     /**
-     * See {@link #connect(String, InetSocketAddress, int, int) connect()}
+     * See {@link #connect(String, InetSocketAddress, int, int, Uuid) connect()}
      */
     int USE_DEFAULT_BUFFER_SIZE = -1;
 
@@ -41,9 +42,11 @@ public interface Selectable {
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the socket
      * @param receiveBufferSize The receive buffer for the socket
+     * @param clientInstanceId The client instance ID of the client opening this connection
      * @throws IOException If we cannot begin connecting
      */
-    void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
+    void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize,
+                 Uuid clientInstanceId) throws IOException;
 
     /**
      * Wakeup this selector if it is blocked on I/O
