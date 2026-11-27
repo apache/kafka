@@ -131,6 +131,19 @@ The following checks are performed on our PRs:
 With the merge queue, our PR title and body will become the commit subject and message.
 This linting step will help to ensure that we have nice looking commits.
 
+The linter normalizes line endings to LF and wraps top-level prose at 72
+columns, including prose containing inline code, underscores, and links.
+Markdown blocks and paragraphs containing explicit hard breaks retain their
+source formatting. Reviewers trailers wrap with indented continuation lines;
+other trailers are preserved separately. Use code fences to preserve aligned
+output. PR descriptions are only updated when formatting changes the body.
+
+Run the formatter tests locally without installing Python dependencies:
+
+```shell
+python -B -S -m unittest discover -s .github/scripts -p test_pr_format.py
+```
+
 ### Stale PRs
 
 This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
