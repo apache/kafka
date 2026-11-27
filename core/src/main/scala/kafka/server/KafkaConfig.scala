@@ -209,8 +209,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
   def controllerListeners: Seq[Endpoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listener))
 
-  def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
-
   def dataPlaneListeners: Seq[Endpoint] = {
     listeners.filterNot { listener =>
       val name = listener.listener
