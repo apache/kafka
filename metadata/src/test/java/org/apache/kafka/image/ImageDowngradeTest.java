@@ -19,15 +19,18 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -132,6 +135,37 @@ public class ImageDowngradeTest {
                     testPartitionRecord.duplicate().setDirectories(List.of()),
                     (short) 0))
         );
+    }
+
+    @Test
+    void testMirrorTopicState() {
+        MetadataVersion inputMetadataVersion = MetadataVersion.IBP_4_5_IV1;
+        MetadataVersion outputMetadataVersion = MetadataVersion.IBP_4_5_IV0;
+        TopicRecord topicRecord = (TopicRecord) TEST_RECORDS.get(0).message();
+        PartitionRecord partitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
+        List<ApiMessageAndVersion> expectedOutputs = List.of(
+                metadataVersionRecord(outputMetadataVersion),
+                TEST_RECORDS.get(0),
+                new PartitionRegistration(partitionRecord).toRecord(topicRecord.topicId(), partitionRecord.partitionId(),
+                        new ImageWriterOptions.Builder(outputMetadataVersion).build()));
+        writeWithExpectedLosses(outputMetadataVersion,
+                List.of(
+                        "cluster mirror topic state change"),
+                List.of(
+                        metadataVersionRecord(inputMetadataVersion),
+                        TEST_RECORDS.get(0),
+                        new ApiMessageAndVersion(new MirrorTopicStateChangeRecord().
+                                setTopicName(topicRecord.name()).
+                                setMirrorName("test-mirror").
+                                setDesiredState(MirrorPartitionState.STOPPED.value()), (short) 0),
+                        TEST_RECORDS.get(1)),
+                expectedOutputs
+        );
+
+        MetadataDelta delta = new MetadataDelta.Builder().build();
+        RecordTestUtils.replayAll(delta, expectedOutputs);
+        TopicImage topic = delta.apply(MetadataProvenance.EMPTY).topics().getTopic(topicRecord.topicId());
+        assertEquals(new TopicImage.NoMirror(), topic.mirror());
     }
 
     private static void writeWithExpectedLosses(

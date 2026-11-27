@@ -42,6 +42,10 @@ public final class TopicImageNode implements MetadataNode {
         for (Integer partitionId : image.partitions().keySet()) {
             childNames.add(partitionId.toString());
         }
+        if (image.mirror() instanceof TopicImage.ActiveMirror) {
+            childNames.add("mirrorName");
+            childNames.add("desiredMirrorState");
+        }
         return childNames;
     }
 
@@ -51,6 +55,16 @@ public final class TopicImageNode implements MetadataNode {
             return new MetadataLeafNode(image.name());
         } else if (name.equals("id")) {
             return new MetadataLeafNode(image.id().toString());
+        } else if (name.equals("mirrorName")) {
+            if (image.mirror() instanceof TopicImage.ActiveMirror activeMirror) {
+                return new MetadataLeafNode(activeMirror.name());
+            }
+            return null;
+        } else if (name.equals("desiredMirrorState")) {
+            if (image.mirror() instanceof TopicImage.ActiveMirror activeMirror) {
+                return new MetadataLeafNode(activeMirror.desiredState().name());
+            }
+            return null;
         } else {
             int partitionId;
             try {

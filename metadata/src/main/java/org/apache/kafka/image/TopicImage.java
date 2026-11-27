@@ -18,15 +18,18 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.MirrorTopicStateChangeRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.image.node.TopicImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.mirror.MirrorPartitionState;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 
 
 /**
@@ -34,15 +37,62 @@ import java.util.Map.Entry;
  *
  * This class is thread-safe.
  */
-public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+public record TopicImage(String name, Uuid id, Mirror mirror, Map<Integer, PartitionRegistration> partitions) {
+
+    public sealed interface Mirror permits ActiveMirror, NoMirror {
+
+    }
+
+    /**
+     * The mirror state of a mirrored topic.
+     *
+     * @param name         The name of the mirror. Never null.
+     * @param desiredState The desired mirror partition state.
+     */
+    public record ActiveMirror(String name, MirrorPartitionState desiredState) implements Mirror {
+        public ActiveMirror {
+            Objects.requireNonNull(name, "mirror name must not be null");
+        }
+    }
+
+    /**
+     * The mirror state when no mirror exists on a topic.
+     */
+    public record NoMirror() implements Mirror {
+    }
+
+    /**
+     * Creates an image of a topic which is not associated with a mirror.
+     */
+    public TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+        this(name, id, new NoMirror(), partitions);
+    }
+
+    /**
+     * Creates an image of a topic.
+     *
+     * @param mirror The mirror state. Must not be null; use {@link NoMirror} if the topic is not
+     *               associated with a mirror.
+     */
     public TopicImage {
+        Objects.requireNonNull(mirror);
         partitions = Collections.unmodifiableMap(partitions);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
         writer.write(0, new TopicRecord().
-            setName(name).
-            setTopicId(id));
+                setName(name).
+                setTopicId(id));
+        if (mirror instanceof ActiveMirror activeMirror) {
+            if (!options.metadataVersion().isClusterMirroringSupported()) {
+                options.handleLoss("cluster mirror topic state change");
+            } else {
+                writer.write(0, new MirrorTopicStateChangeRecord().
+                        setTopicName(name).
+                        setMirrorName(activeMirror.name()).
+                        setDesiredState(activeMirror.desiredState().value()));
+            }
+        }
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();

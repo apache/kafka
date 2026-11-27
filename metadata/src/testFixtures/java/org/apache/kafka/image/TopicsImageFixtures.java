@@ -122,12 +122,16 @@ public final class TopicsImageFixtures {
                             setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build())));
 
     public static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
+        return newTopicImage(name, id, new TopicImage.NoMirror(), partitions);
+    }
+
+    public static TopicImage newTopicImage(String name, Uuid id, TopicImage.Mirror mirror, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
         int i = 0;
         for (PartitionRegistration partition : partitions) {
             partitionMap.put(i++, partition);
         }
-        return new TopicImage(name, id, partitionMap);
+        return new TopicImage(name, id, mirror, partitionMap);
     }
 
     public static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
