@@ -518,6 +518,8 @@ public class StandardAuthorizerTest {
                 .when(() -> LoggerFactory.getLogger(Mockito.any(Class.class)))
                 .thenReturn(otherLog);
 
+            Mockito.when(auditLog.isInfoEnabled()).thenReturn(true);
+            Mockito.when(auditLog.isWarnEnabled()).thenReturn(true);
             Mockito.when(auditLog.isDebugEnabled()).thenReturn(true);
             Mockito.when(auditLog.isTraceEnabled()).thenReturn(true);
 
@@ -539,7 +541,7 @@ public class StandardAuthorizerTest {
                 "permissionType=DENY])";
 
             if (logIfDenied) {
-                Mockito.verify(auditLog).info(expectedAuditLog);
+                Mockito.verify(auditLog).warn(expectedAuditLog);
             } else {
                 Mockito.verify(auditLog).trace(expectedAuditLog);
             }
@@ -560,7 +562,7 @@ public class StandardAuthorizerTest {
                 .when(() -> LoggerFactory.getLogger(Mockito.any(Class.class)))
                 .thenReturn(otherLog);
 
-            Mockito.when(auditLog.isDebugEnabled()).thenReturn(true);
+            Mockito.when(auditLog.isInfoEnabled()).thenReturn(true);
             Mockito.when(auditLog.isTraceEnabled()).thenReturn(true);
 
             StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
@@ -581,7 +583,7 @@ public class StandardAuthorizerTest {
                 "permissionType=ALLOW])";
 
             if (logIfAllowed) {
-                Mockito.verify(auditLog).debug(expectedAuditLog);
+                Mockito.verify(auditLog).info(expectedAuditLog);
             } else {
                 Mockito.verify(auditLog).trace(expectedAuditLog);
             }
