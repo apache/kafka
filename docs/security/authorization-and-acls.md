@@ -656,7 +656,6 @@ The operations above can be applied on certain resources which are described bel
   * **TransactionalId:** this resource represents actions related to transactions, such as committing. If any error occurs, then a TRANSACTIONAL_ID_AUTHORIZATION_FAILED (error code: 53) will be returned by brokers.
   * **DelegationToken:** this represents the delegation tokens in the cluster. Actions, such as describing delegation tokens could be protected by a privilege on the DelegationToken resource. Since these objects have a little special behavior in Kafka it is recommended to read [KIP-48](https://cwiki.apache.org/confluence/x/tfmnAw) and the related upstream documentation at Authentication using Delegation Tokens.
   * **User:** CreateToken and DescribeToken operations can be granted to User resources to allow creating and describing tokens for other users. More info can be found in [KIP-373](https://cwiki.apache.org/confluence/x/cwOQBQ).
-  * **ClusterMirror:** this represents a cluster mirror, which replicates topics from a source cluster. Actions such as creating, deleting, describing and configuring cluster mirrors, or starting and stopping their mirror topics, are protected by privileges on the ClusterMirror resource. If there is an authorization error with a cluster mirror resource, then a CLUSTER_MIRROR_AUTHORIZATION_FAILED (error code: 142) will be returned. More info can be found in [KIP-1279](https://cwiki.apache.org/confluence/x/LYs8G).
 
 
 
