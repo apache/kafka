@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -178,7 +179,7 @@ public class SaslServerAuthenticatorTest {
 
             assertTrue(ApiKeys.SASL_AUTHENTICATE.messageType.latestVersionUnstable());
             mockRequest(saslAuthenticateRequest(), transportLayer);
-            Throwable e = assertThrows(InvalidRequestException.class, authenticator::authenticate);
+            Throwable e = assertThrows(UnsupportedVersionException.class, authenticator::authenticate);
             assertTrue(e.getMessage().contains("disabled api"));
         }
     }
