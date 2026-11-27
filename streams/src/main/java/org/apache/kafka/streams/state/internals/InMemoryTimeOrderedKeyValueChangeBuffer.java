@@ -104,6 +104,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
     private InternalProcessorContext<?, ?> context;
+    private boolean retainSourceRawRecord;
     private String changelogTopic;
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
@@ -215,6 +216,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        retainSourceRawRecord = SourceRawRecordRetention.shouldRetain(stateStoreContext.appConfigs());
         changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
@@ -719,7 +721,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         cleanPut(
             time,
             serializedKey,
-            new BufferValue(serializedPriorValue, oldValue, newValue, recordContext)
+            // hold a copy, so that freeing the caller's raw record does not change the size removed on eviction
+            new BufferValue(serializedPriorValue, oldValue, newValue,
+                SourceRawRecordRetention.forBuffering(recordContext, retainSourceRawRecord))
         );
         if (loggingEnabled) {
             dirtyKeys.add(serializedKey);

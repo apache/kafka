@@ -285,7 +285,9 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                 record.timestamp(),
                 seqnum).get());
         final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.headers(), record.value());
-        final BufferValue buffered = new BufferValue(null, null, valueBytes, recordContext);
+        // the serialized value does not include the source raw record, so it is not counted here either
+        final BufferValue buffered =
+            new BufferValue(null, null, valueBytes, SourceRawRecordRetention.forBuffering(recordContext, false));
         store.put(serializedKey, buffered.serialize(0).array());
 
         if (loggingEnabled) {

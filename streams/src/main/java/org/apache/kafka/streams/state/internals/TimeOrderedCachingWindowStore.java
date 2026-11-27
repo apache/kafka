@@ -79,6 +79,7 @@ public class TimeOrderedCachingWindowStore
     private boolean hasIndex;
     private boolean sendOldValues;
     private InternalProcessorContext<?, ?> internalContext;
+    private boolean retainSourceRawRecord;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
@@ -127,6 +128,7 @@ public class TimeOrderedCachingWindowStore
             stateStoreContext.applicationId()
         );
         internalContext = asInternalProcessorContext(stateStoreContext);
+        retainSourceRawRecord = SourceRawRecordRetention.shouldRetain(stateStoreContext.appConfigs());
         final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  stateStoreContext.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
@@ -273,8 +275,8 @@ public class TimeOrderedCachingWindowStore
                 internalContext.recordContext().timestamp(),
                 internalContext.recordContext().partition(),
                 internalContext.recordContext().topic(),
-                internalContext.recordContext().sourceRawKey(),
-                internalContext.recordContext().sourceRawValue()
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawKey() : null,
+                retainSourceRawRecord ? internalContext.recordContext().sourceRawValue() : null
             );
 
         // Put to index first so that base can be evicted later
@@ -293,8 +295,8 @@ public class TimeOrderedCachingWindowStore
                     internalContext.recordContext().timestamp(),
                     internalContext.recordContext().partition(),
                     "",
-                    internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
+                    retainSourceRawRecord ? internalContext.recordContext().sourceRawKey() : null,
+                    retainSourceRawRecord ? internalContext.recordContext().sourceRawValue() : null
                 );
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
             internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);

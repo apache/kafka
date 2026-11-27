@@ -113,15 +113,22 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static MockInternalProcessorContext<?, ?> makeContext() {
-        return makeContext(false);
+        return makeContext(false, null);
     }
 
     private static MockInternalProcessorContext<?, ?> makeContext(final boolean headersEnabled) {
+        return makeContext(headersEnabled, null);
+    }
+
+    private static MockInternalProcessorContext<?, ?> makeContext(final boolean headersEnabled, final String deadLetterQueueTopic) {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock:localhost:9092");
         if (headersEnabled) {
             properties.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
+        if (deadLetterQueueTopic != null) {
+            properties.setProperty(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, deadLetterQueueTopic);
         }
 
         final TaskId taskId = new TaskId(0, 0);
@@ -252,6 +259,75 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         putRecord(buffer, context, 0L, 0L, "zxcv", "qfowin");
         assertEquals(82L, buffer.bufferSize());
         cleanup(context, buffer);
+    }
+
+    // the size of the "asdf" -> "23roni" record in shouldTrackSize
+    private static final long SIZE_WITHOUT_SOURCE_RAW_RECORD = 43L;
+    private static final byte[] SOURCE_RAW_KEY = new byte[] {1, 2, 3, 4};
+    private static final byte[] SOURCE_RAW_VALUE = new byte[40_000];
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldNotKeepSourceRawRecordWithoutDeadLetterQueue(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        putRecordWithSourceRawRecord(buffer, context);
+
+        // nothing can read the source raw record, so the buffer neither keeps nor counts it
+        assertEquals(SIZE_WITHOUT_SOURCE_RAW_RECORD, buffer.bufferSize());
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+        assertNull(evicted.get(0).recordContext().sourceRawKey());
+        assertNull(evicted.get(0).recordContext().sourceRawValue());
+        assertEquals(0L, buffer.bufferSize());
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldKeepAndCountSourceRawRecordWithDeadLetterQueue(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext(false, "dlq");
+        buffer.init(context, buffer);
+
+        putRecordWithSourceRawRecord(buffer, context);
+
+        assertEquals(SIZE_WITHOUT_SOURCE_RAW_RECORD + SOURCE_RAW_KEY.length + SOURCE_RAW_VALUE.length, buffer.bufferSize());
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+        assertArrayEquals(SOURCE_RAW_KEY, evicted.get(0).recordContext().sourceRawKey());
+        assertArrayEquals(SOURCE_RAW_VALUE, evicted.get(0).recordContext().sourceRawValue());
+        assertEquals(0L, buffer.bufferSize());
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldNotDriftWhenSourceRawRecordIsFreedWhileBuffered(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext(false, "dlq");
+        buffer.init(context, buffer);
+
+        final ProcessorRecordContext recordContext = putRecordWithSourceRawRecord(buffer, context);
+        recordContext.freeRawRecord();
+        buffer.evictWhile(() -> true, kv -> { });
+
+        assertEquals(0L, buffer.bufferSize());
+        cleanup(context, buffer);
+    }
+
+    private static ProcessorRecordContext putRecordWithSourceRawRecord(final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer,
+                                                                       final MockInternalProcessorContext<?, ?> context) {
+        final ProcessorRecordContext recordContext =
+            new ProcessorRecordContext(0L, 0, 0, "topic", new RecordHeaders(), SOURCE_RAW_KEY, SOURCE_RAW_VALUE);
+        context.setRecordContext(recordContext);
+        buffer.put(0L, new Record<>("asdf", new Change<>("23roni", null), 0L), recordContext);
+        return recordContext;
     }
 
     @ParameterizedTest

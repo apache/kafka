@@ -123,6 +123,18 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertEquals(1, count.get());
     }
 
+    @Test
+    public void shouldNotCountOrDriftOnSourceRawRecordItDoesNotKeep() {
+        createBuffer(Duration.ZERO, Serdes.String());
+        // the serialized record does not include the source raw record, so it is not counted
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", new RecordHeaders(),
+            new byte[4], new byte[40_000]));
+        buffer.put(0L, new Record<>("1", "0", 0L), context.recordContext());
+        assertNumSizeAndTimestamp(buffer, 1, 0, 42);
+        buffer.evictWhile(() -> buffer.numRecords() > 0, r -> { });
+        assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldAddAndEvictRecordTwice() {
