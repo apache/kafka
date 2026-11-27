@@ -308,4 +308,28 @@ public class PartitionReassignmentReplicasTest {
             partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertEquals(List.of(0, 1, 2), replicas.originalReplicas());
     }
+
+    @Test
+    public void testKeepsCurrentAddingReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            partitionAssignment(List.of(2, 3, 0, 1)), partitionAssignment(List.of(2, 0)), List.of(2, 3));
+        assertEquals(List.of(1, 3), replicas.removing());
+        assertEquals(List.of(2, 3), replicas.adding());
+        assertEquals(List.of(2, 0, 1, 3), replicas.replicas());
+        assertEquals(List.of(0, 1), replicas.originalReplicas());
+    }
+
+    @Test
+    public void testCanCompleteReassignmentWhenRemovingAllAddingReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            partitionAssignment(List.of(2, 3, 0, 1)), partitionAssignment(List.of(0, 1)), List.of(2, 3));
+        assertEquals(List.of(2, 3), replicas.removing());
+        assertEquals(List.of(2, 3), replicas.adding());
+
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(List.of(0, 1));
+        assertTrue(reassignmentOptional.isPresent());
+        assertEquals(new PartitionReassignmentReplicas.CompletedReassignment(List.of(0, 1), List.of(0, 1)),
+            reassignmentOptional.get());
+    }
 }
