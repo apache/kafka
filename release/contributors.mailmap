@@ -48,6 +48,22 @@ Chia-Ping Tsai <chia7712@users.noreply.github.com>
 #    only matched through the name "Andrew J Schofield", which an entry below replaces.
 Andrew Schofield <AndrewJSchofield@users.noreply.github.com>
 
+# 2. Kuan-Po Tseng is credited as @brandboat in commit dbe9d34e4745.
+Kuan-Po Tseng <brandboat@users.noreply.github.com>
+
+# 2. khyativ, kvaghamshi and KhyatiVaghamshi are the same person. The commits of the GitHub
+#    account KhyatiVaghamshi credit the other email as a co-author, e.g. commit 34f859e2ceac.
+Khyati Vaghamshi <kvaghamshi@salesforce.com>
+Khyati Vaghamshi <khyati220@gmail.com>
+
+# 2. Mukesh Regar <regarmukesh3g@gmail.com> is also credited through the GitHub account
+#    regarmukesh3g, as "Reg Armukesh3g" in commit 981e710e31d7.
+Mukesh Regar <regarmukesh3g@users.noreply.github.com>
+
+# 2. SunMin Lee (GitHub: sunm2n) also commits as "LEE SUN MIN <sunmin8410@mju.ac.kr>", in
+#    commit 8f24a916b7fb.
+SunMin Lee <sunmin8410@mju.ac.kr>
+
 # 4. Groups checked for 4.4.0. Every name and email below was grouped automatically and is
 #    the same person; these entries only keep the group out of the name check.
 Akhilesh C <akhileshchg@users.noreply.github.com>
@@ -105,3 +121,9 @@ Yunchi Pang <yunchipang@gmail.com>
 Zheguang Zhao <zheguang.zhao@alumni.brown.edu>
 Zheguang Zhao <zheguang.zhao@gmail.com>
 Zhiyan Tang <ztang@confluent.io>
+
+# 4. Chung-Yi.Chi also committed as "Demonic" with the same email, in commit 43235c279653.
+Chung-Yi.Chi <demonic@csie.io>
+
+# 4. "Chia-Cheng Chueh (add mul)" is a typo of the author name, e.g. in commit 12afd711cd40.
+Chia-Cheng Chueh <40436michael@gmail.com>
