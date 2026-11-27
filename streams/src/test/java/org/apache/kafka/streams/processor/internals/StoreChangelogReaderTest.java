@@ -97,6 +97,7 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -990,6 +991,7 @@ public class StoreChangelogReaderTest {
         Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
 
         Mockito.reset(mockTask);
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
 
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
@@ -1082,6 +1084,7 @@ public class StoreChangelogReaderTest {
         Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
 
         Mockito.reset(mockTask);
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
 
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
@@ -1089,11 +1092,238 @@ public class StoreChangelogReaderTest {
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(10L, changelogReader.logicalChangelogEndOffsets().get(tp));
         assertEquals(6L, consumer.position(tp));
-        // an active changelog also looks up its end offset, which clears the task timeout a second time
-        Mockito.verify(mockTask, times(type == ACTIVE ? 2 : 1)).clearTaskTimeout();
+        // Initialization clears the task timeout only once both lookups have succeeded.
+        Mockito.verify(mockTask).clearTaskTimeout();
         if (type == ACTIVE) {
             Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldAdvanceActiveTaskTimeoutWhenCommittedOffsetIsMissing(final Task.TaskType type) {
+        setupStateManagerMock(type);
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        final TaskId taskId = new TaskId(0, 0);
+        final Task task = mock(Task.class);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(stateManager.taskId()).thenReturn(taskId);
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
+
+        changelogReader.register(tp, stateManager);
+        changelogReader.restore(Collections.singletonMap(taskId, task));
+
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(task, never()).clearTaskTimeout();
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
+        changelogReader.restore(Collections.singletonMap(taskId, task));
+        verify(task, times(2)).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(task, never()).clearTaskTimeout();
+        // Propagate the owner's eventual timeout instead of swallowing it or clearing it.
+        final StreamsException expired = new StreamsException("task timeout");
+        doAnswer(invocation -> {
+            throw expired;
+        }).when(task).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
+        assertEquals(expired, assertThrows(StreamsException.class,
+            () -> changelogReader.restore(Collections.singletonMap(taskId, task))));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
+    public void shouldIsolateIncompleteTaskFromHealthyTask(final Task.TaskType type) {
+        final TaskId failedId = new TaskId(0, 0);
+        final TaskId healthyId = new TaskId(0, 1);
+        final Task failedTask = mock(Task.class);
+        final Task healthyTask = mock(Task.class);
+        final ProcessorStateManager healthyManager = mock(ProcessorStateManager.class);
+        setupStateManagerMock(type);
+        when(stateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(stateManager.taskId()).thenReturn(failedId);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(stateManager.changelogAsSource(tp1)).thenReturn(true);
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(healthyManager.storeMetadata(tp2)).thenReturn(storeMetadataTwo);
+        when(healthyManager.taskType()).thenReturn(type);
+        when(healthyManager.taskId()).thenReturn(healthyId);
+        when(healthyManager.changelogAsSource(tp2)).thenReturn(true);
+        when(storeMetadataTwo.changelogPartition()).thenReturn(tp2);
+        when(storeMetadataTwo.store()).thenReturn(store);
+        when(storeMetadataTwo.offset()).thenReturn(5L);
+        setupStore();
+        adminClient.updateEndOffsets(Map.of(tp, 20L, tp1, 20L, tp2, 20L));
+        // tp is absent, but its sibling tp1 and the unrelated task's tp2 are present.
+        adminClient.updateConsumerGroupOffsets(Map.of(tp1, 10L, tp2, 10L));
+        changelogReader.register(tp, stateManager);
+        changelogReader.register(tp1, stateManager);
+        changelogReader.register(tp2, healthyManager);
+        changelogReader.restore(Map.of(failedId, failedTask, healthyId, healthyTask));
+
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
+        assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp1).state());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
+        verify(failedTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(failedTask, never()).clearTaskTimeout();
+        verify(healthyTask).clearTaskTimeout();
+        verify(healthyTask, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+    }
+
+    @Test
+    public void shouldPreserveTaskTimeoutIdentityOnPartialStandbyRefresh() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId id = new TaskId(0, 0);
+        final Task task = mock(Task.class);
+        when(standbyStateManager.taskId()).thenReturn(id);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+        final AtomicBoolean omitOffset = new AtomicBoolean();
+        final MockAdminClient admin = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(
+                final Map<String, ListConsumerGroupOffsetsSpec> specs,
+                final ListConsumerGroupOffsetsOptions options) {
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Map.of(
+                    specs.keySet().iterator().next(), omitOffset.get() ? Collections.emptyMap() :
+                        Map.of(tp, new OffsetAndMetadata(7L))));
+            }
+        };
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig localConfig = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader reader = new StoreChangelogReader(time, localConfig, logContext, admin, consumer, callback, standbyListener);
+        consumer.updateBeginningOffsets(Map.of(tp, 0L));
+        reader.transitToUpdateStandby();
+        reader.register(tp, standbyStateManager);
+        reader.restore(Map.of(id, task));
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, reader.changelogMetadata(tp).state());
+        // Buffer an unappliable record: this forces the periodic committed-offset refresh.
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
+        omitOffset.set(true);
+        final StreamsException expired = new StreamsException(new TimeoutException("expired"), id);
+        doAnswer(invocation -> {
+            throw expired;
+        }).when(task).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        time.sleep(101L);
+        final StreamsException actual = assertThrows(StreamsException.class, () -> reader.restore(Map.of(id, task)));
+        assertSame(expired, actual);
+        assertEquals(Optional.of(id), actual.taskId());
+        assertEquals(7L, reader.changelogMetadata(tp).endOffset());
+    }
+
+    @Test
+    public void shouldRefreshHealthyStandbyWhenOtherStandbyIsPaused() {
+        assertPeriodicRefreshExcludesUnavailableStandby(true);
+    }
+
+    @Test
+    public void shouldExcludeRegisteredBackoffStandbyFromPeriodicOffsetRefresh() {
+        assertPeriodicRefreshExcludesUnavailableStandby(false);
+    }
+
+    private void assertPeriodicRefreshExcludesUnavailableStandby(final boolean paused) {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId healthyId = new TaskId(0, 0);
+        final TaskId otherId = new TaskId(0, 1);
+        final Task healthy = mock(Task.class);
+        final Task other = mock(Task.class);
+        when(standbyStateManager.taskId()).thenReturn(healthyId);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+        final ProcessorStateManager otherManager = mock(ProcessorStateManager.class);
+        when(otherManager.taskType()).thenReturn(STANDBY);
+        when(otherManager.taskId()).thenReturn(otherId);
+        when(otherManager.changelogAsSource(tp1)).thenReturn(true);
+        when(otherManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        if (paused) {
+            when(storeMetadataOne.store()).thenReturn(store);
+            when(storeMetadataOne.offset()).thenReturn(3L);
+        }
+        final java.util.List<Set<TopicPartition>> requests = new java.util.ArrayList<>();
+        final MockAdminClient admin = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(
+                final Map<String, ListConsumerGroupOffsetsSpec> specs,
+                final ListConsumerGroupOffsetsOptions options) {
+                final String group = specs.keySet().iterator().next();
+                final Set<TopicPartition> requested = new HashSet<>(specs.get(group).topicPartitions());
+                requests.add(requested);
+                final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+                if (requested.contains(tp)) {
+                    offsets.put(tp, new OffsetAndMetadata(7L));
+                }
+                // For the paused case initialize both before omitting the paused task.
+                if (paused && requests.size() == 1 && requested.contains(tp1)) {
+                    offsets.put(tp1, new OffsetAndMetadata(7L));
+                }
+                return AdminClientTestUtils.listConsumerGroupOffsetsResult(Map.of(group, offsets));
+            }
+        };
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        properties.put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 1000L);
+        final StreamsConfig localConfig = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader reader = new StoreChangelogReader(time, localConfig, logContext, admin, consumer, callback, standbyListener);
+        consumer.updateBeginningOffsets(Map.of(tp, 0L, tp1, 0L));
+        reader.transitToUpdateStandby();
+        reader.register(tp, standbyStateManager);
+        reader.register(tp1, otherManager);
+        final Map<TaskId, Task> both = Map.of(healthyId, healthy, otherId, other);
+        reader.restore(both);
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, reader.changelogMetadata(tp).state());
+        assertEquals(paused ? StoreChangelogReader.ChangelogState.RESTORING : StoreChangelogReader.ChangelogState.REGISTERED,
+            reader.changelogMetadata(tp1).state());
+        assertEquals(1, requests.size());
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
+        time.sleep(101L); // Periodic refresh is due, but initialization retry is not.
+        reader.restore(paused ? Map.of(healthyId, healthy) : both);
+        assertEquals(2, requests.size());
+        // The healthy standby still refreshes even while the other is paused or backing off.
+        assertEquals(Set.of(tp), requests.get(1));
+        assertEquals(7L, reader.changelogMetadata(tp).endOffset());
+        if (paused) {
+            verify(other, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        } else {
+            verify(other, times(1)).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+            verify(other, never()).clearTaskTimeout();
+        }
+    }
+
+    @Test
+    public void shouldBackOffMissingCommittedOffsetLookup() {
+        setupStateManagerMock(STANDBY);
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        final TaskId taskId = new TaskId(0, 0);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(stateManager.taskId()).thenReturn(taskId);
+        final AtomicInteger lookups = new AtomicInteger();
+        final MockAdminClient countingAdmin = new MockAdminClient() {
+            @Override
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(
+                final Map<String, ListConsumerGroupOffsetsSpec> specs,
+                final ListConsumerGroupOffsetsOptions options) {
+                lookups.incrementAndGet();
+                return super.listConsumerGroupOffsets(specs, options);
+            }
+        };
+        final StoreChangelogReader reader = new StoreChangelogReader(
+            time, config, logContext, countingAdmin, consumer, callback, standbyListener);
+        final Map<TaskId, Task> tasks = Collections.singletonMap(taskId, mock(Task.class));
+        reader.register(tp, stateManager);
+        reader.restore(tasks);
+        final long beforeBackoff = time.milliseconds();
+        reader.restore(tasks);
+        assertTrue(time.milliseconds() > beforeBackoff);
+        assertEquals(1, lookups.get());
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
+        reader.restore(tasks);
+        assertEquals(2, lookups.get());
     }
 
     @Test
@@ -1122,6 +1352,7 @@ public class StoreChangelogReaderTest {
         assertEquals(Collections.emptySet(), consumer.assignment());
 
         adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10L));
+        time.sleep(config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG));
         changelogReader.restore(tasks);
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
