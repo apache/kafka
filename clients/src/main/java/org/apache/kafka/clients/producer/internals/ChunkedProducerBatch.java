@@ -51,7 +51,10 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * but the attached chunks lack capacity — the accumulator then allocates exactly the missing
      * bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
      * <p>
-     * TODO (KAFKA-20859): improve by reusing size calculation.
+     * The record is sized exactly as {@code hasRoomFor} sizes it, not by its worst-case upper bound.
+     * A looser size here would ask for a chunk that a record already fitting in the attached chunks
+     * never writes to, and once the attached capacity covers the batch-size limit that chunk could
+     * never be used at all.
      */
     int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers))
@@ -59,7 +62,7 @@ public class ChunkedProducerBatch extends ProducerBatch {
         // Size against the batch's projected total output after this record (header counted once,
         // ratio-adjusted when compressed), not per-record. Per-record sizing would over-count the
         // header and miss the compressor's flush-accumulation behavior.
-        int target = recordsBuilder.estimatedBytesWrittenAfter(key, value, headers);
+        int target = recordsBuilder.estimatedBytesWrittenAfter(timestamp, key, value, headers);
         return Math.max(0, target - stream().attachedCapacity());
     }
 
