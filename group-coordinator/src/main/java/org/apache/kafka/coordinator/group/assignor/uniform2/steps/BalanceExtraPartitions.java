@@ -37,12 +37,13 @@ import java.util.Arrays;
  * that can take one of its extra partitions. A member can take an extra partition when it
  * subscribes to the topic, has no extra partition of the topic, and is at least two partitions
  * smaller. On equal assignment sizes, a giver with a free extra partition gives first, and a
- * receiver owning more than the minimum quota of a topic with extra partitions receives first,
- * since only such a receiver can keep one more of its partitions. Member order breaks the
- * remaining ties. The giver gives the extra partition whose move revokes the fewest partitions. It
+ * receiver owning more than the minimum quota of a topic with extra partitions receives first.
+ * That topic may be one whose extra partition the receiver already has, and the receiver then
+ * keeps no more of its partitions. Member order breaks the remaining ties. Once the receiver is
+ * chosen, the giver gives it the extra partition whose move revokes the fewest partitions. It
  * tries its free extra partitions first, then its owned ones, and in both lists prefers a topic
  * that the receiver owns more than the minimum quota of. Ties are broken by taking the last such
- * topic in the list of the giver.
+ * topic in the list of the giver, see {@link #freeExtraPartitions}.
  *
  * <p>Every move goes from a member to one with at least two partitions fewer, so it lowers the sum
  * of the squares of the assignment sizes by at least two, and the step ends. It ends when no extra
@@ -56,9 +57,11 @@ import java.util.Arrays;
  * instead take a move in each of the two cohorts.
  *
  * <p>The members with extra partitions wait in a heap, the largest first. A member without a
- * receiver is parked until a move may give it one, see {@link #wake}. Receiving an extra partition
- * also wakes a member, since it is then larger and has a new topic to give. The step ends when the
- * largest giver is less than two partitions above the smallest member.
+ * receiver is parked until a move may give it one, see {@link #wake}. A parked member that still
+ * receives an extra partition is no longer parked, since it is then larger and has a new topic to
+ * give.
+ * The step ends when the largest giver is less than two partitions above the smallest member, or
+ * once every member with an extra partition is parked.
  *
  * <p>Receivers are searched cohort by cohort, starting with the cohort of the smallest member, and
  * within a cohort from its smallest member. A cohort is skipped when each of its members already
@@ -103,17 +106,21 @@ public final class BalanceExtraPartitions {
     private final boolean keepCounts;
 
     /**
-     * Per member, the topics of its free extra partitions.
+     * Per member, the topics of its free extra partitions. They start in topic order. A topic given
+     * away is replaced by the last one, and a topic received is added at the end. The choice of the
+     * extra partition to move relies on this order.
      */
     private IntList[] freeExtraPartitions;
 
     /**
-     * Per member, the topics of its owned extra partitions.
+     * Per member, the topics of its owned extra partitions, in the same order as
+     * {@link #freeExtraPartitions}.
      */
     private IntList[] ownedExtraPartitions;
 
     /**
-     * Per member, the topics with extra partitions of which it owns more than the minimum quota.
+     * Per member, the topics with extra partitions of which it owns more than the minimum quota,
+     * whether or not it has an extra partition of them.
      */
     private IntList[] ownedAboveMinQuota;
 
@@ -143,7 +150,8 @@ public final class BalanceExtraPartitions {
     private int[][] membersWithExtraPartitionPerCohort;
 
     /**
-     * Per cohort, its number of members.
+     * Per cohort, its number of members. The counts per cohort read it for every topic and cohort,
+     * which is cheaper from this array than through the group.
      */
     private int[] cohortSizes;
 
@@ -276,11 +284,13 @@ public final class BalanceExtraPartitions {
 
     /**
      * Per member as a giver, the positions in its free ({@link #FREE}) and owned ({@link #OWNED})
-     * extra partitions from which the next move to {@link #lastReceiver} searches for a topic. The
-     * position at {@code 4 * member + list} is for a topic the receiver can take, and the one at
-     * {@code 4 * member + list + 1} for a topic the receiver can take and owns more than the
-     * minimum quota of. The topics after a position were already looked at, and the moves do not
-     * change why they were passed over.
+     * extra partitions from which the next move to {@link #lastReceiver} searches for a topic. They
+     * spare a giver that gives several extra partitions in a row to the same receiver, for example
+     * when a member of a small group with many topics leaves, from looking again at the topics it
+     * passed over. The position at {@code 4 * member + list} is for a topic the receiver can take,
+     * and the one at {@code 4 * member + list + 1} for a topic the receiver can take and owns more
+     * than the minimum quota of. The topics after a position were already looked at, and the moves
+     * do not change why they were passed over.
      */
     private int[] resumePositions;
 
@@ -330,12 +340,13 @@ public final class BalanceExtraPartitions {
     }
 
     /**
-     * Tells whether the counts per cohort of every member fit, which is when they take no more
-     * entries than the subscriptions of the members, one per member and subscribed topic. The
-     * counts take one entry per member and cohort.
+     * Tells whether the counts per cohort of every member fit, which is when the number of members
+     * times the number of cohorts is at most the sum of the sizes of the subscriptions of the
+     * members. The counts take two entries per member and cohort, and the list of the cohorts of a
+     * member one entry per cohort, so they then take at most three entries per member and
+     * subscribed topic.
      *
-     * @return {@code true} if the number of members times the number of cohorts is at most the sum
-     *         of the sizes of the subscriptions of the members.
+     * @return {@code true} if the counts per cohort of every member fit.
      */
     static boolean countsFit(IndexedGroup group) {
         long subscribedTopics = 0;
@@ -460,13 +471,14 @@ public final class BalanceExtraPartitions {
      * receivers, every cohort with all its members.
      */
     private void createHeaps() {
-        var giverKeys = new long[group.memberCount()];
+        // The heaps keep these arrays as their storage. Every move adds its giver and its receiver
+        // again, and a stale entry only leaves a heap when it reaches the top, so twice the room
+        // delays the first copy of a heap.
+        var giverKeys = new long[2 * group.memberCount()];
         int giverCount = 0;
         receivers = new LongHeap[group.cohortCount()];
         for (int cohort = 0; cohort < group.cohortCount(); cohort++) {
             var members = group.membersOf(cohort);
-            // The heap keeps this array as its storage. Every move adds its giver and its receiver
-            // again to the heaps of their cohorts, so the array has room for as many entries again.
             var receiverKeys = new long[2 * members.length];
             for (int i = 0; i < members.length; i++) {
                 receiverKeys[i] = receiverKey(members[i]);
@@ -504,7 +516,9 @@ public final class BalanceExtraPartitions {
         while (!givers.isEmpty()) {
             long key = givers.poll();
             int giver = member(key);
-            if (key != giverKey(giver) || isParked[giver] || quotas.extraPartitionCount(giver) == 0) {
+            // A stale entry, or a parked member. An entry that is not stale has the assignment size
+            // it was added with, so its member still has an extra partition.
+            if (key != giverKey(giver) || isParked[giver]) {
                 continue;
             }
             // The other givers are no larger, and the parked members have no receiver either. Once
@@ -542,6 +556,7 @@ public final class BalanceExtraPartitions {
     private int findReceiver(int giver) {
         // The largest assignment size that a receiver may have.
         int maxSize = quotas.assignmentSize(giver) - 2;
+        computeCountsIfAbsent(giver);
         // Per cohort, the number of extra partitions of the giver of topics that the cohort
         // subscribes to, and the number of those topics that are full in the cohort.
         int[] extraPartitions = extraPartitionsPerCohort(giver);
@@ -551,7 +566,8 @@ public final class BalanceExtraPartitions {
         int kept = 0;
         for (int i = 0; i < cohorts.size(); i++) {
             int cohort = cohorts.get(i);
-            // The cohorts no longer subscribing to a topic of the giver are dropped on the way.
+            // A cohort is dropped once the giver has no extra partition left of a topic it
+            // subscribes to.
             if (extraPartitions[cohort] == 0) {
                 continue;
             }
@@ -641,24 +657,8 @@ public final class BalanceExtraPartitions {
             return true;
         }
         markExtraPartitions(receiver);
-        return canTakeOne(freeExtraPartitions[giver], receiver) || canTakeOne(ownedExtraPartitions[giver], receiver);
-    }
-
-    /**
-     * Tells whether the receiver can take an extra partition of one of the topics. The extra
-     * partitions of the receiver must be marked.
-     *
-     * @return {@code true} if the receiver subscribes to one of the topics and has no extra
-     *         partition of it.
-     */
-    private boolean canTakeOne(IntList topics, int receiver) {
-        for (int i = 0; i < topics.size(); i++) {
-            int topic = topics.get(i);
-            if (marks[topic] != mark && subscribes(receiver, topic)) {
-                return true;
-            }
-        }
-        return false;
+        return findLastTopicIndex(freeExtraPartitions[giver], receiver, Integer.MAX_VALUE, false) >= 0
+            || findLastTopicIndex(ownedExtraPartitions[giver], receiver, Integer.MAX_VALUE, false) >= 0;
     }
 
     /**
@@ -744,8 +744,8 @@ public final class BalanceExtraPartitions {
      */
     private void updateCountsForMove(int giver, int topic, int receiver) {
         int[] cohorts = group.cohortsOf(topic);
-        // The search for a receiver counted the giver just before the move. The giver loses the
-        // topic, as it was before the move.
+        // The search for a receiver computed the counts of the giver just before the move. The
+        // giver loses the topic, as it was before the move.
         int[] extraPartitions = extraPartitionsPerCohort(giver);
         int[] fullTopics = fullTopicsPerCohort(giver);
         for (int index = 0; index < cohorts.length; index++) {
@@ -804,8 +804,17 @@ public final class BalanceExtraPartitions {
     }
 
     /**
+     * Returns the number of extra partitions per cohort of the member, see
+     * {@link #extraPartitionsPerCohortOf}. It must be called after {@link #computeCountsIfAbsent}
+     * for the member.
+     */
+    private int[] extraPartitionsPerCohort(int member) {
+        return keepCounts ? extraPartitionsPerCohortOf[member] : countedExtraPartitionsPerCohort;
+    }
+
+    /**
      * Returns the number of full topics per cohort of the member, see
-     * {@link #fullTopicsPerCohortOf}. It must be called after {@link #extraPartitionsPerCohort} for
+     * {@link #fullTopicsPerCohortOf}. It must be called after {@link #computeCountsIfAbsent} for
      * the member.
      */
     private int[] fullTopicsPerCohort(int member) {
@@ -813,12 +822,11 @@ public final class BalanceExtraPartitions {
     }
 
     /**
-     * Returns the number of extra partitions per cohort of the member, see
-     * {@link #extraPartitionsPerCohortOf}. The counts per cohort of the member are computed when
-     * asked for the first time or, when they are not kept, when asked for another member than the
-     * last one.
+     * Computes the counts per cohort of the member, unless they are held. When they are kept, they
+     * are computed the first time a receiver is searched for the member. Otherwise, they replace
+     * those of the last member counted.
      */
-    private int[] extraPartitionsPerCohort(int member) {
+    private void computeCountsIfAbsent(int member) {
         if (keepCounts) {
             if (extraPartitionsPerCohortOf[member] == null) {
                 extraPartitionsPerCohortOf[member] = new int[group.cohortCount()];
@@ -831,23 +839,25 @@ public final class BalanceExtraPartitions {
                     subscribingCohortsOf[member]
                 );
             }
-            return extraPartitionsPerCohortOf[member];
-        }
-        if (member != countedMember) {
+        } else if (member != countedMember) {
             for (int i = 0; i < countedSubscribingCohorts.size(); i++) {
                 countedExtraPartitionsPerCohort[countedSubscribingCohorts.get(i)] = 0;
                 countedFullTopicsPerCohort[countedSubscribingCohorts.get(i)] = 0;
             }
             countedSubscribingCohorts.clear();
-            computeCounts(member, countedExtraPartitionsPerCohort, countedFullTopicsPerCohort, countedSubscribingCohorts);
+            computeCounts(
+                member,
+                countedExtraPartitionsPerCohort,
+                countedFullTopicsPerCohort,
+                countedSubscribingCohorts
+            );
             countedMember = member;
         }
-        return countedExtraPartitionsPerCohort;
     }
 
     /**
      * Returns the cohorts subscribing to a topic of the extra partitions of the member, see
-     * {@link #subscribingCohortsOf}. It must be called after {@link #extraPartitionsPerCohort} for
+     * {@link #subscribingCohortsOf}. It must be called after {@link #computeCountsIfAbsent} for
      * the member.
      */
     private IntList subscribingCohorts(int member) {
@@ -877,6 +887,7 @@ public final class BalanceExtraPartitions {
                 if (extraPartitions[cohort]++ == 0) {
                     cohorts.add(cohort);
                 }
+                // The test of isFull, with the cohort and the counts of the topic at hand.
                 fullTopics[cohort] += membersPerCohort[index] == cohortSizes[cohort] ? 1 : 0;
             }
         }

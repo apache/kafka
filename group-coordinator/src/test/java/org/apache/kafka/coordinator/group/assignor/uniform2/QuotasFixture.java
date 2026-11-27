@@ -59,6 +59,27 @@ public final class QuotasFixture {
         quotas = new Quotas(group);
     }
 
+    private QuotasFixture(IndexedGroup group, CurrentAssignment currentAssignment, Quotas quotas) {
+        this.group = group;
+        this.currentAssignment = currentAssignment;
+        this.quotas = quotas;
+    }
+
+    /**
+     * @return A fixture with the same group and current assignment, and a copy of the quotas, so
+     *         that a step can run on both from the same quotas.
+     */
+    public QuotasFixture copy() {
+        var copy = new Quotas(group);
+        for (int topic = 0; topic < group.topicCount(); topic++) {
+            var members = quotas.membersWithExtraPartition(topic);
+            for (int i = 0; i < members.size(); i++) {
+                copy.giveExtraPartition(members.get(i), topic);
+            }
+        }
+        return new QuotasFixture(group, currentAssignment, copy);
+    }
+
     /**
      * @return The index of the member.
      */
