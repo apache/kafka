@@ -228,6 +228,23 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     }
 
     /**
+     * Returns true if the leave heartbeat should be skipped: only when the member is dynamic
+     * (no group instance ID) and the operation is REMAIN_IN_GROUP. Static members send a leave
+     * heartbeat with epoch -2 for DEFAULT or REMAIN_IN_GROUP so the broker can hold the assignment,
+     * or epoch -1 for LEAVE_GROUP to leave permanently.
+     */
+    @Override
+    protected boolean shouldSkipLeaveHeartbeat() {
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()) {
+            logger.debug("Dynamic member {} closed with REMAIN_IN_GROUP. No leave heartbeat will be sent, " +
+                    "the member will be removed by the coordinator after session timeout.",
+                membershipManager.memberId());
+        }
+        return REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()
+            && membershipManager.groupInstanceId().isEmpty();
+    }
+
+    /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
      * is important to ensure that reconciliation completes successfully.
