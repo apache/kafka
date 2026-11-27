@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -41,6 +42,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -639,6 +641,7 @@ public class ConsumerGroupCommand {
             ).describedGroups();
 
             Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
+            List<String> unresolvedGroupIds = new ArrayList<>();
 
             consumerGroups.forEach((groupId, groupDescription) -> {
                 try {
@@ -656,14 +659,69 @@ public class ConsumerGroupCommand {
                     throw new RuntimeException(ie);
                 } catch (ExecutionException ee) {
                     if (ee.getCause() instanceof GroupIdNotFoundException) {
-                        result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                        unresolvedGroupIds.add(groupId);
                     } else {
                         throw new RuntimeException(ee);
                     }
                 }
             });
 
+            if (!unresolvedGroupIds.isEmpty()) {
+                Set<String> streamsGroupIds = findStreamsGroupIds(unresolvedGroupIds);
+                for (String groupId : unresolvedGroupIds) {
+                    if (streamsGroupIds.contains(groupId)) {
+                        printError("Group '" + groupId + "' is a streams group. " +
+                                "Use kafka-streams-groups.sh to reset its offsets.", Optional.empty());
+                        result.put(groupId, Map.of());
+                    } else {
+                        result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                    }
+                }
+            }
+
             return result;
+        }
+
+        private Set<String> findStreamsGroupIds(List<String> groupIds) {
+            var descriptions = adminClient.describeStreamsGroups(
+                    groupIds,
+                    withTimeoutMs(new DescribeStreamsGroupsOptions())
+            ).describedGroups();
+
+            Set<String> streamsGroupIds = new HashSet<>();
+            Set<String> unsupportedGroupIds = new HashSet<>();
+            try {
+                for (String groupId : groupIds) {
+                    try {
+                        descriptions.get(groupId).get();
+                        streamsGroupIds.add(groupId);
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof UnsupportedVersionException) {
+                            unsupportedGroupIds.add(groupId);
+                        } else if (!(e.getCause() instanceof GroupIdNotFoundException)) {
+                            throw e;
+                        }
+                    }
+                }
+
+                if (!unsupportedGroupIds.isEmpty()) {
+                    // Older brokers may not support the ListGroups type filter.
+                    var listings = adminClient.listGroups(withTimeoutMs(new ListGroupsOptions())).all().get();
+                    for (GroupListing listing : listings) {
+                        if (unsupportedGroupIds.contains(listing.groupId())
+                                && listing.type().orElse(GroupType.UNKNOWN) == GroupType.STREAMS) {
+                            streamsGroupIds.add(listing.groupId());
+                        }
+                    }
+                }
+
+                return streamsGroupIds;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            }
         }
 
         private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId) {
