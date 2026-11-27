@@ -27,7 +27,9 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -272,5 +274,252 @@ public class MaskFieldTest {
     public void testMaskFieldReturnsVersionFromAppInfoParser() {
         final MaskField<SinkRecord> xform = new MaskField.Value<>();
         assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
+    // --- V2 nested field tests ---
+
+    private static MaskField<SinkRecord> transformV2(List<String> fields, String replacement) {
+        final MaskField<SinkRecord> xform = new MaskField.Value<>();
+        Map<String, Object> props = new HashMap<>();
+        props.put("fields", fields);
+        props.put("replacement", replacement);
+        props.put("replace.null.with.default", false);
+        props.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(props);
+        return xform;
+    }
+
+    @Test
+    @DisplayName("V2 schemaless: masks nested field in Map")
+    public void testV2SchemalessNestedMask() {
+        Map<String, Object> inner = new HashMap<>();
+        inner.put("secret", "password123");
+        inner.put("visible", "hello");
+        Map<String, Object> value = new HashMap<>();
+        value.put("outer", inner);
+        value.put("top", "keep");
+
+        SinkRecord record = record(null, value);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) transformV2(
+                List.of("outer.secret"), null).apply(record).value();
+
+        assertEquals("keep", result.get("top"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultInner = (Map<String, Object>) result.get("outer");
+        assertEquals("", resultInner.get("secret"));
+        assertEquals("hello", resultInner.get("visible"));
+    }
+
+    @Test
+    @DisplayName("V2 with schema: masks nested field in Struct")
+    public void testV2WithSchemaNestedMask() {
+        Schema innerSchema = SchemaBuilder.struct()
+                .field("secret", Schema.STRING_SCHEMA)
+                .field("visible", Schema.STRING_SCHEMA)
+                .build();
+        Schema outerSchema = SchemaBuilder.struct()
+                .field("outer", innerSchema)
+                .field("top", Schema.STRING_SCHEMA)
+                .build();
+        Struct innerStruct = new Struct(innerSchema)
+                .put("secret", "password123")
+                .put("visible", "hello");
+        Struct outerStruct = new Struct(outerSchema)
+                .put("outer", innerStruct)
+                .put("top", "keep");
+
+        SinkRecord record = record(outerSchema, outerStruct);
+        Struct result = (Struct) transformV2(List.of("outer.secret"), null).apply(record).value();
+
+        assertEquals("keep", result.get("top"));
+        Struct resultInner = (Struct) result.get("outer");
+        assertEquals("", resultInner.get("secret"));
+        assertEquals("hello", resultInner.get("visible"));
+    }
+
+    @Test
+    @DisplayName("V2 schemaless: masks deeply nested field (three levels)")
+    public void testV2SchemalessDeepNestedMask() {
+        Map<String, Object> c = new HashMap<>();
+        c.put("target", 42);
+        c.put("keep", 99);
+        Map<String, Object> b = new HashMap<>();
+        b.put("c", c);
+        Map<String, Object> a = new HashMap<>();
+        a.put("b", b);
+        Map<String, Object> value = new HashMap<>();
+        value.put("a", a);
+
+        SinkRecord record = record(null, value);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) transformV2(
+                List.of("a.b.c.target"), null).apply(record).value();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> ra = (Map<String, Object>) result.get("a");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rb = (Map<String, Object>) ra.get("b");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rc = (Map<String, Object>) rb.get("c");
+        assertEquals(0, rc.get("target"));
+        assertEquals(99, rc.get("keep"));
+    }
+
+    @Test
+    @DisplayName("V2 schemaless: masks multiple nested fields")
+    public void testV2SchemalessMultipleNestedMasks() {
+        Map<String, Object> inner = new HashMap<>();
+        inner.put("a", "secret1");
+        inner.put("b", "secret2");
+        inner.put("c", "visible");
+        Map<String, Object> value = new HashMap<>();
+        value.put("nested", inner);
+
+        SinkRecord record = record(null, value);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) transformV2(
+                List.of("nested.a", "nested.b"), null).apply(record).value();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultInner = (Map<String, Object>) result.get("nested");
+        assertEquals("", resultInner.get("a"));
+        assertEquals("", resultInner.get("b"));
+        assertEquals("visible", resultInner.get("c"));
+    }
+
+    @Test
+    @DisplayName("V2 with schema: custom replacement on nested field")
+    public void testV2WithSchemaNestedCustomReplacement() {
+        Schema innerSchema = SchemaBuilder.struct()
+                .field("amount", Schema.INT32_SCHEMA)
+                .build();
+        Schema outerSchema = SchemaBuilder.struct()
+                .field("payment", innerSchema)
+                .build();
+        Struct innerStruct = new Struct(innerSchema).put("amount", 500);
+        Struct outerStruct = new Struct(outerSchema).put("payment", innerStruct);
+
+        SinkRecord record = record(outerSchema, outerStruct);
+        Struct result = (Struct) transformV2(List.of("payment.amount"), "0").apply(record).value();
+
+        Struct payment = (Struct) result.get("payment");
+        assertEquals(0, payment.get("amount"));
+    }
+
+    @Test
+    @DisplayName("V1 backward compat: dotted field name is treated as a literal")
+    public void testV1BackwardCompatDottedFieldName() {
+        Map<String, Object> value = new HashMap<>();
+        value.put("outer.inner", "secret");
+        value.put("visible", "hello");
+
+        SinkRecord record = record(null, value);
+        // V1 (default) — "outer.inner" is a literal single key
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) transform(
+                List.of("outer.inner"), null).apply(record).value();
+
+        assertEquals("", result.get("outer.inner"));
+        assertEquals("hello", result.get("visible"));
+    }
+
+    @Test
+    @DisplayName("V2 escaping: backtick-wrapped dotted field masks a literal key")
+    public void testV2BacktickEscapedFieldIsLiteral() {
+        Schema schema = SchemaBuilder.struct()
+                .field("outer.inner", Schema.STRING_SCHEMA)
+                .field("visible", Schema.STRING_SCHEMA)
+                .build();
+        Struct struct = new Struct(schema)
+                .put("outer.inner", "secret")
+                .put("visible", "hello");
+
+        final MaskField<SinkRecord> xform = new MaskField.Value<>();
+        Map<String, Object> props = new HashMap<>();
+        props.put("fields", List.of("`outer.inner`"));
+        props.put("replacement", null);
+        props.put("replace.null.with.default", false);
+        props.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(props);
+
+        Struct result = (Struct) xform.apply(record(schema, struct)).value();
+
+        assertEquals("", result.get("outer.inner"));
+        assertEquals("hello", result.get("visible"));
+    }
+
+    @Test
+    @DisplayName("V2 with schema: masks multiple fields at different nesting levels")
+    public void testV2WithSchemaMultipleNestedMasks() {
+        Schema innerSchema = SchemaBuilder.struct()
+                .field("secret", Schema.STRING_SCHEMA)
+                .field("visible", Schema.STRING_SCHEMA)
+                .build();
+        Schema outerSchema = SchemaBuilder.struct()
+                .field("nested", innerSchema)
+                .field("topSecret", Schema.INT32_SCHEMA)
+                .field("topVisible", Schema.STRING_SCHEMA)
+                .build();
+        Struct innerStruct = new Struct(innerSchema)
+                .put("secret", "password")
+                .put("visible", "hello");
+        Struct outerStruct = new Struct(outerSchema)
+                .put("nested", innerStruct)
+                .put("topSecret", 42)
+                .put("topVisible", "keep");
+
+        SinkRecord record = record(outerSchema, outerStruct);
+        Struct result = (Struct) transformV2(
+                List.of("nested.secret", "topSecret"), null).apply(record).value();
+
+        assertEquals("keep", result.get("topVisible"));
+        assertEquals(0, result.get("topSecret"));
+        Struct resultInner = (Struct) result.get("nested");
+        assertEquals("", resultInner.get("secret"));
+        assertEquals("hello", resultInner.get("visible"));
+    }
+
+    @Test
+    @DisplayName("V2 schemaless: backtick-escaped dotted parent name with nested child (`parent.child`.k2)")
+    public void testV2SchemalessBacktickEscapedNestedParent() {
+        Map<String, Object> inner = new HashMap<>();
+        inner.put("k2", "123");
+        Map<String, Object> value = new HashMap<>();
+        value.put("k1", 123);
+        value.put("parent.child", inner);
+
+        SinkRecord record = record(null, value);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) transformV2(
+                List.of("`parent.child`.k2"), null).apply(record).value();
+
+        assertEquals(123, result.get("k1"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultInner = (Map<String, Object>) result.get("parent.child");
+        assertEquals("", resultInner.get("k2"));
+    }
+
+    @Test
+    @DisplayName("V2 with schema: backtick-escaped dotted parent name with nested child (`parent.child`.k2)")
+    public void testV2WithSchemaBacktickEscapedNestedParent() {
+        Schema innerSchema = SchemaBuilder.struct()
+                .field("k2", Schema.STRING_SCHEMA)
+                .build();
+        Schema outerSchema = SchemaBuilder.struct()
+                .field("k1", Schema.INT32_SCHEMA)
+                .field("parent.child", innerSchema)
+                .build();
+        Struct innerStruct = new Struct(innerSchema).put("k2", "123");
+        Struct outerStruct = new Struct(outerSchema)
+                .put("k1", 123)
+                .put("parent.child", innerStruct);
+
+        SinkRecord record = record(outerSchema, outerStruct);
+        Struct result = (Struct) transformV2(List.of("`parent.child`.k2"), null).apply(record).value();
+
+        assertEquals(123, result.get("k1"));
+        Struct resultInner = (Struct) result.get("parent.child");
+        assertEquals("", resultInner.get("k2"));
     }
 }
