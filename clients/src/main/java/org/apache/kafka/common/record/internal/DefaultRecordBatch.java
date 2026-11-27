@@ -276,24 +276,26 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return Compression.of(compressionType()).build().wrapForInput(buffer, magic(), bufferSupplier);
     }
 
-    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue, int maxRecordBodySize) {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         final InputStream inputStream = recordInputStream(bufferSupplier);
 
-        if (skipKeyValue) {
-            return new StreamRecordIterator(inputStream) {
-                @Override
-                protected Record doReadRecord(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) throws IOException {
-                    return DefaultRecord.readPartiallyFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime, maxRecordBodySize);
-                }
-            };
-        } else {
-            return new StreamRecordIterator(inputStream) {
-                @Override
-                protected Record doReadRecord(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) throws IOException {
-                    return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime, maxRecordBodySize);
-                }
-            };
-        }
+        return new StreamRecordIterator(inputStream) {
+            @Override
+            protected Record doReadRecord(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) throws IOException {
+                return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime, maxRecordBodySize);
+            }
+        };
+    }
+
+    private CloseableIterator<Record> compressedSkipKeyValueIterator(BufferSupplier bufferSupplier) {
+        final InputStream inputStream = recordInputStream(bufferSupplier);
+
+        return new StreamRecordIterator(inputStream) {
+            @Override
+            protected Record doReadRecord(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) throws IOException {
+                return DefaultRecord.readPartiallyFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+            }
+        };
     }
 
     private CloseableIterator<Record> uncompressedIterator() {
@@ -328,7 +330,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, false, Records.SOFT_MAX_ARRAY_LENGTH)) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -338,11 +340,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-        return skipKeyValueIterator(bufferSupplier, Records.SOFT_MAX_ARRAY_LENGTH);
-    }
-
-    @Override
-    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         if (count() == 0) {
             return CloseableIterator.wrap(Collections.emptyIterator());
         }
@@ -357,7 +354,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
         // while we can save memory footprint of not decompressing the full record set ahead of time
-        return compressedIterator(bufferSupplier, true, maxRecordBodySize);
+        return compressedSkipKeyValueIterator(bufferSupplier);
     }
 
     @Override
@@ -368,7 +365,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier, int maxRecordBodySize) {
         if (isCompressed())
-            return compressedIterator(bufferSupplier, false, maxRecordBodySize);
+            return compressedIterator(bufferSupplier, maxRecordBodySize);
         else
             return uncompressedIterator();
     }
