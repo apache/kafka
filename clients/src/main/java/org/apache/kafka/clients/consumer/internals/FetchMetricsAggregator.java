@@ -45,6 +45,11 @@ class FetchMetricsAggregator {
      * and number of records parsed. After all partitions have reported, we write the metric.
      */
     void record(TopicPartition partition, int bytes, int records) {
+        // A partition counts once. A fetch that fails to initialize is reported, but it can stay in the fetch
+        // buffer and be reported again by a later poll or when it is drained.
+        if (!unrecordedPartitions.contains(partition))
+            return;
+
         // Aggregate the metrics at the fetch level
         fetchFetchMetrics.increment(bytes, records);
 
