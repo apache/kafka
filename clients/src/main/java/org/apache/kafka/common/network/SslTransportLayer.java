@@ -73,6 +73,9 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     private static final String TLS13 = "TLSv1.3";
+    // A TLS record header is the content type (1 byte), the protocol version (2) and the length of the record (2)
+    private static final int TLS_RECORD_LENGTH_OFFSET = 3;
+    private static final int TLS_RECORD_HEADER_SIZE = TLS_RECORD_LENGTH_OFFSET + 2;
 
     private final String channelId;
     private final SSLEngine sslEngine;
@@ -585,6 +588,16 @@ public class SslTransportLayer implements TransportLayer {
             }
 
             while (netReadBuffer.position() > 0) {
+                // Once dst is full, the plaintext of the records unwrapped stays in appReadBuffer. Only unwrap a record
+                // that has room there, and leave the others for the next read: providers whose application buffer size
+                // is exactly the 16 KiB maximum record size (BouncyCastle, Conscrypt) would overflow appReadBuffer, and
+                // Conscrypt consumes the record when it does, keeping its plaintext where the next read would not look
+                // for it. Records that have room are still unwrapped, so that a peer's close_notify is seen and a
+                // response to a peer that closed its connection fails right away. A record that does not, and anything
+                // behind it such as a close_notify, is unwrapped by a later read, the same as a record whose unwrap
+                // overflows.
+                if (!dst.hasRemaining() && !appReadBufferHasRoomForNextRecord())
+                    break;
                 netReadBuffer.flip();
                 SSLEngineResult unwrapResult;
                 try {
@@ -617,15 +630,17 @@ public class SslTransportLayer implements TransportLayer {
                     read += readFromAppBuffer(dst);
                 } else if (unwrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
                     int currentApplicationBufferSize = applicationBufferSize();
+                    int capacity = appReadBuffer.capacity();
                     appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentApplicationBufferSize);
-                    if (appReadBuffer.position() >= currentApplicationBufferSize) {
-                        throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
-                                                        ") >= application buffer size (" + currentApplicationBufferSize + ")");
+                    // An empty appReadBuffer of the session's application buffer size must fit any record, so the engine
+                    // misreported that size and unwrapping again would loop forever.
+                    if (appReadBuffer.position() == 0 && appReadBuffer.capacity() == capacity) {
+                        throw new IllegalStateException("Buffer overflow when unwrapping into an empty application buffer of size " +
+                                                        capacity + ", application buffer size (" + currentApplicationBufferSize + ")");
                     }
 
-                    // appReadBuffer will extended upto currentApplicationBufferSize
-                    // we need to read the existing content into dst before we can do unwrap again. If there are no space in dst
-                    // we can break here.
+                    // appReadBuffer either grew to currentApplicationBufferSize, or holds plaintext that dst had no room
+                    // for: read it into dst before unwrapping again, or stop if dst is full.
                     if (dst.hasRemaining())
                         read += readFromAppBuffer(dst);
                     else
@@ -856,6 +871,20 @@ public class SslTransportLayer implements TransportLayer {
      */
     protected Runnable delegatedTask() {
         return sslEngine.getDelegatedTask();
+    }
+
+    /**
+     * Returns whether the room left in appReadBuffer fits the next TLS record in netReadBuffer once unwrapped. An empty
+     * appReadBuffer has room for any record, and a record whose header has not arrived yet is not unwrapped anyway.
+     * Otherwise, netReadBuffer starts on a record boundary, since unwrap consumes whole records and netReadBuffer is
+     * compacted after each one. The record's length also counts its tag and any padding, so a record whose plaintext
+     * would only just fit is left for the next read.
+     */
+    private boolean appReadBufferHasRoomForNextRecord() {
+        if (appReadBuffer.position() == 0 || netReadBuffer.position() < TLS_RECORD_HEADER_SIZE)
+            return true;
+        int recordLength = Short.toUnsignedInt(netReadBuffer.getShort(TLS_RECORD_LENGTH_OFFSET));
+        return recordLength <= appReadBuffer.remaining();
     }
 
     /**

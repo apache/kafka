@@ -37,16 +37,20 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -59,6 +63,8 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.security.Provider;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -90,6 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -1551,37 +1558,11 @@ public class SslTransportLayerTest {
      * @return the number of receives the client completed
      */
     private int receiveFromCloseNotifyPeer(Args args, ByteBuffer response, boolean muteOnReceive) throws Exception {
-        String node = "0";
-        String peerId = "peer";
-        AtomicReference<SSLEngine> peerEngine = new AtomicReference<>();
-        TestSslChannelBuilder peerChannelBuilder = new TestSslChannelBuilder(ConnectionMode.SERVER) {
-            @Override
-            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine)
-                    throws IOException {
-                peerEngine.set(sslEngine);
-                return super.newTransportLayer(id, key, sslEngine);
-            }
-        };
-        peerChannelBuilder.configure(args.sslServerConfigs);
-        try (ServerSocketChannel peerServer = ServerSocketChannel.open();
-             Selector peerSelector = new Selector(100 * 5000, new Metrics(), TIME, "PeerMetricGroup",
-                 peerChannelBuilder, new LogContext())) {
-            peerServer.bind(new InetSocketAddress("localhost", 0));
-            createSelector(args.sslClientConfigs);
-            selector.connect(node, new InetSocketAddress("localhost", peerServer.socket().getLocalPort()),
-                BUFFER_SIZE, BUFFER_SIZE);
-            SocketChannel peerChannel = peerServer.accept();
-            peerChannel.configureBlocking(false);
-            peerSelector.register(peerId, peerChannel);
-            TestUtils.waitForCondition(() -> {
-                selector.poll(10);
-                peerSelector.poll(10);
-                return selector.isChannelReady(node) && peerSelector.isChannelReady(peerId);
-            }, TestUtils.DEFAULT_MAX_WAIT_MS, 1, () -> "TLS handshake did not complete");
-
+        try (TlsPeer peer = new TlsPeer(args.sslClientConfigs, args.sslServerConfigs, BUFFER_SIZE)) {
+            String node = peer.node;
             // Bypass the peer's transport layer so that the response and the close_notify go out in a single write
             // and the TCP connection stays open. The peer selector is not polled again.
-            SSLEngine engine = peerEngine.get();
+            SSLEngine engine = peer.peerEngine;
             ByteBuffer data = peerWrap(engine, response);
             engine.closeOutbound();
             ByteBuffer closeNotify = peerWrap(engine, ByteBuffer.allocate(0));
@@ -1589,7 +1570,7 @@ public class SslTransportLayerTest {
                 .put(data)
                 .put(closeNotify);
             both.flip();
-            peerWrite(peerChannel, both);
+            peerWrite(peer.peerChannel, both);
 
             int completedReceives = 0;
             long disconnectedAfterMs = -1;
@@ -1619,6 +1600,416 @@ public class SslTransportLayerTest {
             assertTrue(disconnectedAfterMs < 5_000, "Disconnect took " + disconnectedAfterMs + " ms");
             return completedReceives;
         }
+    }
+
+    /**
+     * A client Selector, {@link #selector}, connected over TLS to a peer whose SSL engine and socket a test drives
+     * directly once the handshake is done. The peer's own Selector is not polled after the handshake. The client's
+     * socket uses the given receive buffer size, or the default with {@link Selectable#USE_DEFAULT_BUFFER_SIZE}.
+     */
+    private class TlsPeer implements AutoCloseable {
+        final String node = "0";
+        final String peerId = "peer";
+        final ServerSocketChannel peerServer;
+        final Selector peerSelector;
+        final SocketChannel peerChannel;
+        final SSLEngine peerEngine;
+        final SSLEngine clientEngine;
+        final SslTransportLayer clientTransportLayer;
+
+        TlsPeer(Map<String, Object> clientConfigs, Map<String, Object> peerConfigs, int receiveBufferSize)
+                throws Exception {
+            AtomicReference<SSLEngine> peerEngine = new AtomicReference<>();
+            TestSslChannelBuilder peerChannelBuilder = new TestSslChannelBuilder(ConnectionMode.SERVER) {
+                @Override
+                protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine)
+                        throws IOException {
+                    peerEngine.set(sslEngine);
+                    return super.newTransportLayer(id, key, sslEngine);
+                }
+            };
+            peerChannelBuilder.configure(peerConfigs);
+            AtomicReference<SSLEngine> clientEngine = new AtomicReference<>();
+            AtomicReference<SslTransportLayer> clientTransportLayer = new AtomicReference<>();
+            TestSslChannelBuilder clientChannelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT) {
+                @Override
+                protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine)
+                        throws IOException {
+                    clientEngine.set(sslEngine);
+                    TestSslTransportLayer transportLayer = super.newTransportLayer(id, key, sslEngine);
+                    clientTransportLayer.set(transportLayer);
+                    return transportLayer;
+                }
+            };
+            clientChannelBuilder.configure(clientConfigs);
+            selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", clientChannelBuilder, new LogContext());
+            peerServer = ServerSocketChannel.open();
+            peerSelector = new Selector(100 * 5000, new Metrics(), TIME, "PeerMetricGroup", peerChannelBuilder,
+                new LogContext());
+            try {
+                peerServer.bind(new InetSocketAddress("localhost", 0));
+                selector.connect(node, new InetSocketAddress("localhost", peerServer.socket().getLocalPort()),
+                    BUFFER_SIZE, receiveBufferSize);
+                peerChannel = peerServer.accept();
+                peerChannel.configureBlocking(false);
+                peerSelector.register(peerId, peerChannel);
+                TestUtils.waitForCondition(() -> {
+                    selector.poll(10);
+                    peerSelector.poll(10);
+                    return selector.isChannelReady(node) && peerSelector.isChannelReady(peerId);
+                }, TestUtils.DEFAULT_MAX_WAIT_MS, 1, () -> "TLS handshake did not complete");
+            } catch (Throwable e) {
+                try {
+                    close();
+                } catch (Exception closeException) {
+                    e.addSuppressed(closeException);
+                }
+                throw e;
+            }
+            this.peerEngine = peerEngine.get();
+            this.clientEngine = clientEngine.get();
+            this.clientTransportLayer = clientTransportLayer.get();
+        }
+
+        @Override
+        public void close() throws IOException {
+            peerSelector.close();
+            peerServer.close();
+        }
+    }
+
+    /**
+     * Reads records written by a real TLS engine of each provider. A read that fills dst at the end of one record goes on
+     * to unwrap the next ones: BouncyCastle and Conscrypt report an application buffer size of exactly 16 KiB, so a full
+     * record fills appReadBuffer completely, and the read must leave the next record buffered rather than unwrap it into
+     * no room. SunJSSE reports a larger application buffer size.
+     */
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("sslProvidersAndProtocols")
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    public void testReadFullRecordsAfterDstIsFullWithProvider(String sslProvider, String tlsProtocol) throws Exception {
+        byte[] small = TestUtils.randomBytes(100);
+        byte[] full = TestUtils.randomBytes(16384);
+        byte[] last = TestUtils.randomBytes(1);
+        withTlsPeer(sslProvider, tlsProtocol, peer -> {
+            SslTransportLayer transportLayer = writeRecordsFromPeer(peer, false, small, full, last);
+            ByteBuffer dst = ByteBuffer.allocate(small.length);
+            assertEquals(small.length, transportLayer.read(dst));
+            assertArrayEquals(small, dst.array());
+            assertTrue(transportLayer.hasBytesBuffered(), "The full and last records should still be buffered");
+
+            ByteBuffer rest = ByteBuffer.allocate(full.length + last.length);
+            assertEquals(rest.capacity(), readFully(transportLayer, rest));
+            assertArrayEquals(full, Arrays.copyOfRange(rest.array(), 0, full.length));
+            assertArrayEquals(last, Arrays.copyOfRange(rest.array(), full.length, rest.capacity()));
+        });
+    }
+
+    /**
+     * Once dst is full, a record that has room in appReadBuffer after the plaintext dst had no room for is unwrapped by
+     * the same read, without the engine overflowing.
+     */
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("sslProvidersAndProtocols")
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    public void testReadRecordWithRoomAfterDstIsFullWithProvider(String sslProvider, String tlsProtocol) throws Exception {
+        byte[] full = TestUtils.randomBytes(16384);
+        byte[] last = TestUtils.randomBytes(1);
+        withTlsPeer(sslProvider, tlsProtocol, peer -> {
+            SslTransportLayer transportLayer = writeRecordsFromPeer(peer, false, full, last);
+            // Leaves 100 bytes of the full record in appReadBuffer, with room for the last record.
+            ByteBuffer dst = ByteBuffer.allocate(full.length - 100);
+            assertEquals(dst.capacity(), transportLayer.read(dst));
+            assertEquals(0, transportLayer.netReadBuffer().position(), "The last record should have been unwrapped");
+
+            ByteBuffer rest = ByteBuffer.allocate(100 + last.length);
+            assertEquals(rest.capacity(), transportLayer.read(rest));
+            assertArrayEquals(full, concat(dst.array(), Arrays.copyOfRange(rest.array(), 0, 100)));
+            assertArrayEquals(last, Arrays.copyOfRange(rest.array(), 100, rest.capacity()));
+        });
+    }
+
+    /**
+     * A close_notify behind a record that does not have room in appReadBuffer once dst is full is read by a later read,
+     * which reports the end of the stream once the data before it has been read.
+     */
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("sslProvidersAndProtocols")
+    @Timeout(value = 60, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    public void testReadCloseNotifyAfterRecordWithoutRoomWithProvider(String sslProvider, String tlsProtocol) throws Exception {
+        byte[] small = TestUtils.randomBytes(100);
+        byte[] full = TestUtils.randomBytes(16384);
+        withTlsPeer(sslProvider, tlsProtocol, peer -> {
+            SslTransportLayer transportLayer = writeRecordsFromPeer(peer, true, small, full);
+            ByteBuffer dst = ByteBuffer.allocate(small.length);
+            assertEquals(small.length, transportLayer.read(dst));
+            assertArrayEquals(small, dst.array());
+            assertTrue(transportLayer.hasBytesBuffered(), "The full record should still be buffered");
+            if (peer.clientEngine.getSession().getApplicationBufferSize() == 16384)
+                assertFalse(peer.clientEngine.isInboundDone(), "The close_notify should not have been read yet");
+
+            ByteBuffer rest = ByteBuffer.allocate(full.length);
+            assertEquals(full.length, readFully(transportLayer, rest));
+            assertArrayEquals(full, rest.array());
+            assertThrows(EOFException.class, () -> readFully(transportLayer, ByteBuffer.allocate(1)));
+        });
+    }
+
+    @FunctionalInterface
+    private interface TlsPeerTest {
+        void run(TlsPeer peer) throws Exception;
+    }
+
+    /**
+     * Runs the test with a client and a peer that use the given SSL provider and protocol.
+     */
+    private void withTlsPeer(String sslProvider, String tlsProtocol, TlsPeerTest test) throws Exception {
+        List<String> registered = registerSslProvider(sslProvider);
+        try {
+            Args args = new Args(tlsProtocol, false);
+            args.sslServerConfigs.put(SslConfigs.SSL_PROVIDER_CONFIG, sslProvider);
+            args.sslClientConfigs.put(SslConfigs.SSL_PROVIDER_CONFIG, sslProvider);
+            // The default receive buffer holds all the records a test writes, so its first read gets them all.
+            try (TlsPeer peer = new TlsPeer(args.sslClientConfigs, args.sslServerConfigs,
+                    Selectable.USE_DEFAULT_BUFFER_SIZE)) {
+                test.run(peer);
+            }
+        } finally {
+            registered.forEach(Security::removeProvider);
+        }
+    }
+
+    /**
+     * Writes each message as its own records from the peer, then a close_notify if closeOutbound is set, and returns the
+     * client's transport layer once they have all arrived, so that its first read from the socket gets them all.
+     */
+    private static SslTransportLayer writeRecordsFromPeer(TlsPeer peer, boolean closeOutbound, byte[]... messages)
+            throws Exception {
+        SSLEngine peerEngine = peer.peerEngine;
+        ByteBuffer records = ByteBuffer.allocate((messages.length + 2) * peerEngine.getSession().getPacketBufferSize());
+        for (byte[] message : messages) {
+            ByteBuffer src = ByteBuffer.wrap(message);
+            while (src.hasRemaining())
+                assertEquals(SSLEngineResult.Status.OK, peerEngine.wrap(src, records).getStatus());
+        }
+        if (closeOutbound) {
+            peerEngine.closeOutbound();
+            while (!peerEngine.isOutboundDone())
+                peerEngine.wrap(ByteBuffer.allocate(0), records);
+        }
+        records.flip();
+        int size = records.remaining();
+        peerWrite(peer.peerChannel, records);
+
+        SslTransportLayer transportLayer = peer.clientTransportLayer;
+        InputStream clientInput = transportLayer.socketChannel().socket().getInputStream();
+        TestUtils.waitForCondition(() -> clientInput.available() >= size, "The records did not arrive");
+        return transportLayer;
+    }
+
+    private static int readFully(SslTransportLayer transportLayer, ByteBuffer dst) throws IOException {
+        int read = 0;
+        for (int i = 0; dst.hasRemaining(); i++) {
+            assertTrue(i < 100, "Read did not complete");
+            read += transportLayer.read(dst);
+        }
+        return read;
+    }
+
+    private static byte[] concat(byte[] first, byte[] second) {
+        byte[] result = Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, result, first.length, second.length);
+        return result;
+    }
+
+    private static Stream<Arguments> sslProvidersAndProtocols() {
+        return Stream.of("SunJSSE", "BCJSSE", "Conscrypt")
+                .flatMap(provider -> Stream.of(Arguments.of(provider, "TLSv1.2"), Arguments.of(provider, "TLSv1.3")));
+    }
+
+    /**
+     * Registers the provider at the lowest priority, so that it is only used where a test names it, and returns the
+     * names of the providers it added, for the test to remove. BouncyCastle and Conscrypt are only runtime dependencies
+     * of the tests, so they are loaded reflectively. Conscrypt has no native library for some platforms.
+     */
+    private static List<String> registerSslProvider(String sslProvider) throws ReflectiveOperationException {
+        List<Provider> providers = new ArrayList<>();
+        if (sslProvider.equals("BCJSSE")) {
+            providers.add(newProvider("org.bouncycastle.jce.provider.BouncyCastleProvider"));
+            providers.add(newProvider("org.bouncycastle.jsse.provider.BouncyCastleJsseProvider"));
+        } else if (sslProvider.equals("Conscrypt")) {
+            Class<?> conscrypt = Class.forName("org.conscrypt.Conscrypt");
+            boolean available;
+            try {
+                available = (Boolean) conscrypt.getMethod("isAvailable").invoke(null);
+            } catch (InvocationTargetException e) {
+                available = false;
+            }
+            assumeTrue(available, "Conscrypt has no native library for this platform");
+            providers.add((Provider) conscrypt.getMethod("newProvider").invoke(null));
+        }
+        List<String> added = new ArrayList<>();
+        for (Provider provider : providers) {
+            if (Security.getProvider(provider.getName()) == null) {
+                Security.addProvider(provider);
+                added.add(provider.getName());
+            }
+        }
+        return added;
+    }
+
+    private static Provider newProvider(String className) throws ReflectiveOperationException {
+        return (Provider) Class.forName(className).getConstructor().newInstance();
+    }
+
+    /**
+     * Some providers (BouncyCastle, Conscrypt) report an application buffer size of exactly 16 KiB, so a full TLS record
+     * fills appReadBuffer completely. If the engine then overflows on a record whose header says it fits, a read that
+     * filled dst must stop there rather than fail as if appReadBuffer were too small.
+     */
+    @Test
+    public void testReadWithApplicationBufferSizeEqualToMaxRecordSize() throws IOException {
+        int appBufferSize = 16384;
+        int recordSize = 100;
+        int records = 3;
+
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        // Each record is recordSize bytes of ciphertext, its index followed by zeros, so that its header's length is 0 and
+        // it fits in any room left in appReadBuffer, and decrypts to appBufferSize bytes of its index.
+        when(sslEngine.unwrap(any(ByteBuffer.class), any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer src = invocation.getArgument(0);
+            ByteBuffer dst = invocation.getArgument(1);
+            if (src.remaining() < recordSize)
+                return new SSLEngineResult(SSLEngineResult.Status.BUFFER_UNDERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+            if (dst.remaining() < appBufferSize)
+                return new SSLEngineResult(SSLEngineResult.Status.BUFFER_OVERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+            byte index = src.get(src.position());
+            src.position(src.position() + recordSize);
+            for (int i = 0; i < appBufferSize; i++)
+                dst.put(index);
+            return new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, recordSize, appBufferSize);
+        });
+        byte[] netData = new byte[records * recordSize];
+        for (int record = 0; record < records; record++)
+            netData[record * recordSize] = (byte) record;
+        SslTransportLayer sslTransportLayer = newReadyTransportLayer(sslEngine, appBufferSize, netData);
+
+        // The first record fills dst and the second appReadBuffer, then the third overflows and stays buffered.
+        ByteBuffer dst = ByteBuffer.allocate(appBufferSize);
+        assertEquals(appBufferSize, sslTransportLayer.read(dst));
+        assertTrue(sslTransportLayer.hasBytesBuffered());
+
+        ByteBuffer rest = ByteBuffer.allocate((records - 1) * appBufferSize);
+        assertEquals(rest.capacity(), sslTransportLayer.read(rest));
+        assertFalse(sslTransportLayer.hasBytesBuffered());
+
+        for (int i = 0; i < appBufferSize; i++)
+            assertEquals(0, dst.get(i));
+        for (int i = 0; i < rest.capacity(); i++)
+            assertEquals(1 + i / appBufferSize, rest.get(i));
+    }
+
+    /**
+     * An engine that overflows into an empty application buffer of the session's application buffer size has
+     * misreported that size, and unwrapping again can never make progress.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = Timeout.ThreadMode.SEPARATE_THREAD) // fails rather than hangs on a busy loop
+    public void testReadFailsWhenEngineOverflowsEmptyApplicationBuffer() throws IOException {
+        int appBufferSize = 16384;
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        // Fails the read if it keeps unwrapping rather than throwing, before the mock's invocations exhaust the heap.
+        AtomicInteger unwraps = new AtomicInteger();
+        when(sslEngine.unwrap(any(ByteBuffer.class), any(ByteBuffer.class))).then(invocation -> {
+            if (unwraps.incrementAndGet() > 1000)
+                fail("The read keeps unwrapping into an empty application buffer that overflows");
+            return new SSLEngineResult(SSLEngineResult.Status.BUFFER_OVERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+        });
+        SslTransportLayer sslTransportLayer = newReadyTransportLayer(sslEngine, appBufferSize, new byte[100]);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> sslTransportLayer.read(ByteBuffer.allocate(appBufferSize)));
+        assertTrue(e.getMessage().contains("empty application buffer"), e.getMessage());
+    }
+
+    /**
+     * An engine that overflows into an empty appReadBuffer after the session's application buffer size grew is
+     * unwrapped again into appReadBuffer grown to that size.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    public void testReadRetriesWhenEmptyApplicationBufferGrowsOnOverflow() throws IOException {
+        int initialAppBufferSize = 1024;
+        int appBufferSize = 16384;
+        int recordSize = 100;
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        // The record is recordSize bytes of zeros, whose header's length is 0, and decrypts to appBufferSize bytes of 7.
+        when(sslEngine.unwrap(any(ByteBuffer.class), any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer src = invocation.getArgument(0);
+            ByteBuffer dst = invocation.getArgument(1);
+            if (src.remaining() < recordSize)
+                return new SSLEngineResult(SSLEngineResult.Status.BUFFER_UNDERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+            if (dst.remaining() < appBufferSize)
+                return new SSLEngineResult(SSLEngineResult.Status.BUFFER_OVERFLOW, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+            src.position(src.position() + recordSize);
+            for (int i = 0; i < appBufferSize; i++)
+                dst.put((byte) 7);
+            return new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING, recordSize, appBufferSize);
+        });
+        SslTransportLayer sslTransportLayer = newReadyTransportLayer(sslEngine, initialAppBufferSize, appBufferSize,
+                new byte[recordSize]);
+        assertEquals(initialAppBufferSize, sslTransportLayer.appReadBuffer().capacity());
+
+        ByteBuffer dst = ByteBuffer.allocate(appBufferSize);
+        assertEquals(appBufferSize, sslTransportLayer.read(dst));
+        assertEquals(appBufferSize, sslTransportLayer.appReadBuffer().capacity());
+        for (int i = 0; i < appBufferSize; i++)
+            assertEquals(7, dst.get(i));
+    }
+
+    /**
+     * Returns a transport layer past its handshake whose session reports the given application buffer size, and whose
+     * socket delivers netData on the first read and nothing after.
+     */
+    private static SslTransportLayer newReadyTransportLayer(SSLEngine sslEngine, int appBufferSize, byte[] netData)
+            throws IOException {
+        return newReadyTransportLayer(sslEngine, appBufferSize, appBufferSize, netData);
+    }
+
+    /**
+     * Returns a transport layer past its handshake whose session reported initialAppBufferSize as its application buffer
+     * size during the handshake, and appBufferSize after it, and whose socket delivers netData on the first read and
+     * nothing after.
+     */
+    private static SslTransportLayer newReadyTransportLayer(SSLEngine sslEngine, int initialAppBufferSize,
+                                                            int appBufferSize, byte[] netData) throws IOException {
+        SSLSession sslSession = mock(SSLSession.class);
+        when(sslEngine.getSession()).thenReturn(sslSession);
+        when(sslSession.getApplicationBufferSize()).thenReturn(initialAppBufferSize, appBufferSize);
+        when(sslSession.getPacketBufferSize()).thenReturn(appBufferSize + 325);
+        when(sslSession.getProtocol()).thenReturn("TLSv1.3");
+
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        AtomicBoolean delivered = new AtomicBoolean();
+        when(socketChannel.read(any(ByteBuffer.class))).then(invocation -> {
+            if (delivered.getAndSet(true))
+                return 0;
+            ((ByteBuffer) invocation.getArgument(0)).put(netData);
+            return netData.length;
+        });
+
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        sslTransportLayer.startHandshake(); // to initialize the buffers
+        sslTransportLayer.netReadBuffer().clear();
+        doReturn(true).when(sslTransportLayer).ready();
+        return sslTransportLayer;
     }
 
     private static ByteBuffer peerWrap(SSLEngine engine, ByteBuffer src) throws Exception {
