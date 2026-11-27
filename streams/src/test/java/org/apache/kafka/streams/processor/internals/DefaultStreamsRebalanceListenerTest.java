@@ -203,6 +203,8 @@ public class DefaultStreamsRebalanceListenerTest {
             Set.of(new StreamsRebalanceData.TaskId("1", 0)),
             Set.of(new StreamsRebalanceData.TaskId("2", 0)),
             Set.of(new StreamsRebalanceData.TaskId("3", 0)),
+            Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0)),
+            1L,
             false
         );
 
@@ -236,6 +238,8 @@ public class DefaultStreamsRebalanceListenerTest {
             Set.of(new StreamsRebalanceData.TaskId("1", 0)),
             Set.of(new StreamsRebalanceData.TaskId("1", 0), new StreamsRebalanceData.TaskId("2", 0), new StreamsRebalanceData.TaskId("3", 0)),
             Set.of(new StreamsRebalanceData.TaskId("1", 0), new StreamsRebalanceData.TaskId("3", 0), new StreamsRebalanceData.TaskId("4", 0)),
+            Set.of(new TopicPartition("source1", 0)),
+            1L,
             true
         );
 
@@ -262,6 +266,8 @@ public class DefaultStreamsRebalanceListenerTest {
             Set.of(new StreamsRebalanceData.TaskId("1", 0)),
             Set.of(new StreamsRebalanceData.TaskId("2", 0), new StreamsRebalanceData.TaskId("3", 0)),
             Set.of(new StreamsRebalanceData.TaskId("4", 0)),
+            Set.of(new TopicPartition("source1", 0)),
+            1L,
             true
         ));
     }
@@ -276,7 +282,7 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), 1L, false)
         ));
 
         assertEquals(exception, actualException);
@@ -385,6 +391,8 @@ public class DefaultStreamsRebalanceListenerTest {
                 Set.of(new StreamsRebalanceData.TaskId("1", 0)),
                 Set.of(),
                 Set.of(),
+                Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0)),
+                1L,
                 true
             )
         );
@@ -463,7 +471,7 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of));
 
         assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), Set.of(), 1L, false)
         ));
 
         verify(tasksAssignedSensor).record(75L);

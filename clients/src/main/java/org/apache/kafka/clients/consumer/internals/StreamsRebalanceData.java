@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This class holds the data that is needed to participate in the Streams rebalance protocol.
@@ -179,22 +181,32 @@ public class StreamsRebalanceData {
 
         private final Set<TaskId> warmupTasks;
 
+        private final Set<TopicPartition> assignedPartitions;
+
         private final boolean isGroupReady;
+
+        private final long localEpoch;
 
         private Assignment() {
             this.activeTasks = Set.of();
             this.standbyTasks = Set.of();
             this.warmupTasks = Set.of();
+            this.assignedPartitions = Set.of();
+            this.localEpoch = -1L;
             this.isGroupReady = false;
         }
 
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
                           final Set<TaskId> warmupTasks,
+                          final Set<TopicPartition> assignedPartitions,
+                          final long localEpoch,
                           final boolean isGroupReady) {
             this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
             this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
             this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
+            this.assignedPartitions = Set.copyOf(Objects.requireNonNull(assignedPartitions, "assigned partitions cannot be null"));
+            this.localEpoch = localEpoch;
             this.isGroupReady = isGroupReady;
         }
 
@@ -210,8 +222,16 @@ public class StreamsRebalanceData {
             return warmupTasks;
         }
 
+        public Set<TopicPartition> assignedPartitions() {
+            return assignedPartitions;
+        }
+
         public boolean isGroupReady() {
             return isGroupReady;
+        }
+
+        public long localEpoch() {
+            return localEpoch;
         }
 
         @Override
@@ -226,16 +246,18 @@ public class StreamsRebalanceData {
             return Objects.equals(activeTasks, that.activeTasks)
                 && Objects.equals(standbyTasks, that.standbyTasks)
                 && Objects.equals(warmupTasks, that.warmupTasks)
+                && Objects.equals(assignedPartitions, that.assignedPartitions)
+                && localEpoch == that.localEpoch
                 && isGroupReady == that.isGroupReady;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return Objects.hash(activeTasks, standbyTasks, warmupTasks, assignedPartitions, localEpoch, isGroupReady);
         }
 
         public Assignment copy() {
-            return new Assignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return new Assignment(activeTasks, standbyTasks, warmupTasks, assignedPartitions, localEpoch, isGroupReady);
         }
 
         @Override
@@ -244,6 +266,8 @@ public class StreamsRebalanceData {
                 "activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
+                ", assignedPartitions=" + assignedPartitions +
+                ", localEpoch=" + localEpoch +
                 ", isGroupReady=" + isGroupReady +
                 '}';
         }
@@ -256,6 +280,7 @@ public class StreamsRebalanceData {
         private final Map<String, TopicInfo> stateChangelogTopics;
         private final Map<String, TopicInfo> repartitionSourceTopics;
         private final Collection<Set<String>> copartitionGroups;
+        private final Set<String> inputTopics;
 
         public Subtopology(final Set<String> sourceTopics,
                            final Set<String> repartitionSinkTopics,
@@ -276,6 +301,10 @@ public class StreamsRebalanceData {
                     "Co-partition groups cannot be null"
                     )
                 );
+            this.inputTopics = Stream.concat(
+                this.sourceTopics.stream(),
+                this.repartitionSourceTopics.keySet().stream()
+            ).collect(Collectors.toUnmodifiableSet());
         }
 
         public Set<String> sourceTopics() {
@@ -296,6 +325,10 @@ public class StreamsRebalanceData {
 
         public Collection<Set<String>> copartitionGroups() {
             return copartitionGroups;
+        }
+
+        public Set<String> inputTopics() {
+            return inputTopics;
         }
 
         @Override
