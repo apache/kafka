@@ -62,6 +62,7 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -82,6 +83,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -106,6 +108,36 @@ public class SaslServerAuthenticatorTest {
         });
         assertThrows(SaslAuthenticationException.class, authenticator::authenticate);
         verify(transportLayer).read(any(ByteBuffer.class));
+    }
+
+    @Test
+    public void testCreateSaslServerAvoidsReverseDnsLookup() throws IOException {
+        String mechanism = SCRAM_SHA_256.mechanismName();
+        SaslServer saslServer = mock(SaslServer.class);
+        when(saslServer.getMechanismName()).thenReturn(mechanism);
+
+        InetSocketAddress localAddress = mock(InetSocketAddress.class);
+        when(localAddress.getHostString()).thenReturn("127.0.0.1");
+        when(localAddress.getHostName()).thenThrow(new AssertionError("Reverse DNS lookup should not be performed"));
+
+        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
+        when(transportLayer.socketChannel().socket().getLocalSocketAddress()).thenReturn(localAddress);
+        when(transportLayer.write(any(ByteBuffer[].class))).thenReturn(Long.MAX_VALUE);
+
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                Collections.singletonList(mechanism));
+        ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
+
+        try (MockedStatic<Sasl> saslMock = Mockito.mockStatic(Sasl.class)) {
+            saslMock.when(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"), anyString(), anyMap(), any()))
+                    .thenReturn(saslServer);
+
+            SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry);
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            saslMock.verify(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"), eq("127.0.0.1"), anyMap(), any()));
+        }
     }
 
     @Test
@@ -373,6 +405,8 @@ public class SaslServerAuthenticatorTest {
     private TransportLayer mockTransportLayer() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
+        when(transportLayer.socketChannel().socket().getLocalSocketAddress())
+                .thenReturn(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
         when(transportLayer.write(any(ByteBuffer[].class))).thenReturn(Long.MAX_VALUE);
         return transportLayer;
     }
