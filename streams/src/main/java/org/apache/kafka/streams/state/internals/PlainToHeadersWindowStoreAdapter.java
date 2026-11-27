@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
@@ -261,5 +263,72 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     @Override
     public boolean isOpen() {
         return store.isOpen();
+    }
+
+    @Override
+    public ReadOnlyWindowStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new PlainToHeadersWindowReadOnlyView(store.readOnly(isolationLevel));
+    }
+
+    private static final class PlainToHeadersWindowReadOnlyView implements ReadOnlyWindowStore<Bytes, byte[]> {
+
+        private final ReadOnlyWindowStore<Bytes, byte[]> underlying;
+
+        PlainToHeadersWindowReadOnlyView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] fetch(final Bytes key, final long timestamp) {
+            return convertFromPlainToHeaderFormat(underlying.fetch(key, timestamp));
+        }
+
+
+        @Override
+        public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeadersWindow(underlying.fetch(key, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeadersWindow(underlying.backwardFetch(key, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
+                                                               final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
+                                                                       final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.fetchAll(timeFrom, timeTo));
+        }
+
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.backwardFetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+            return MappingKeyValueIteratorAdapter.plainToHeaders(underlying.backwardAll());
+        }
     }
 }

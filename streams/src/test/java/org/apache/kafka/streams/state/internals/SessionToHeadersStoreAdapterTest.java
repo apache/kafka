@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -48,6 +51,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -345,6 +349,22 @@ public class SessionToHeadersStoreAdapterTest {
 
         assertInstanceOf(WithRetentionPeriod.class, store);
         assertEquals(retentionMs, ((WithRetentionPeriod) store).retentionPeriod());
+    }
+
+    @Test
+    public void shouldPropagateReadOnlyToInnerStoreWithFormatConversion() {
+        final ReadOnlySessionStore<Bytes, byte[]> innerView = mock(ReadOnlySessionStore.class);
+        final Bytes key = new Bytes("k".getBytes(StandardCharsets.UTF_8));
+        final byte[] committedPlain = "committed".getBytes(StandardCharsets.UTF_8);
+
+        when(innerStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+        when(innerView.fetchSession(key, 0L, 10L)).thenReturn(committedPlain);
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = adapter.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertNotSame(adapter, view);
+        assertArrayEquals(convertToHeaderFormat(committedPlain), view.fetchSession(key, 0L, 10L));
+        verify(innerStore).readOnly(IsolationLevel.READ_COMMITTED);
     }
 
     // Instant overloads delegate to the long-based overloads; verify conversion still happens.
