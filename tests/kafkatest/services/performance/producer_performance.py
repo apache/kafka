@@ -138,33 +138,53 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         self.logger.debug("ProducerPerformance process ran for %s seconds" % elapsed)
 
         # parse producer output from file
-        last = None
         producer_output = node.account.ssh_capture("cat %s" % ProducerPerformanceService.STDOUT_CAPTURE)
+        total_stat = None
         for line in producer_output:
-            if self.intermediate_stats:
-                try:
-                    self.stats[idx-1].append(self.parse_stats(line))
-                except:
-                    # Sometimes there are extraneous log messages
-                    pass
+            line = line.strip()
+            if not line:
+                continue
 
-            last = line
-        try:
-            self.results[idx-1] = self.parse_stats(last)
-        except:
-            raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
+            try:
+                stats = self.parse_stats(line)
+            except Exception:
+                # Extraneous log messages, metrics, headers, etc.
+                continue
+
+            if 'latency_50th_ms' in stats:
+                total_stat = stats
+            elif self.intermediate_stats:
+                self.stats[idx-1].append(stats)
+
+        if total_stat is not None:
+            self.results[idx-1] = total_stat
+        else:
+            stderr = ""
+            try:
+                stderr_lines = list(node.account.ssh_capture("cat %s" % ProducerPerformanceService.STDERR_CAPTURE))
+                if stderr_lines:
+                    stderr = "\nStderr: %s" % "".join(stderr_lines).strip()
+            except Exception:
+                pass
+            raise Exception("Unable to parse aggregate performance statistics on node %d.%s" % (idx, stderr))
 
     def parse_stats(self, line):
-
         parts = line.split(',')
-        return {
+        if len(parts) < 4:
+            raise ValueError("Invalid stats line: %s" % line)
+
+        res = {
             'records': int(parts[0].split()[0]),
             'records_per_sec': float(parts[1].split()[0]),
             'mbps': float(parts[1].split('(')[1].split()[0]),
             'latency_avg_ms': float(parts[2].split()[0]),
             'latency_max_ms': float(parts[3].split()[0]),
-            'latency_50th_ms': float(parts[4].split()[0]),
-            'latency_95th_ms': float(parts[5].split()[0]),
-            'latency_99th_ms': float(parts[6].split()[0]),
-            'latency_999th_ms': float(parts[7].split()[0]),
         }
+        if len(parts) >= 8:
+            res.update({
+                'latency_50th_ms': float(parts[4].split()[0]),
+                'latency_95th_ms': float(parts[5].split()[0]),
+                'latency_99th_ms': float(parts[6].split()[0]),
+                'latency_999th_ms': float(parts[7].split()[0]),
+            })
+        return res
