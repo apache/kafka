@@ -1987,7 +1987,7 @@ public final class QuorumController implements Controller {
             // Normally, ControllerWriteOperation would automatically check if the controller is
             // active. But since we're doing this outside of the main controller thread, we have to
             // do our own check here, and handle the case where we are inactive.
-            throw ControllerExceptions.newWrongControllerException(latestController());
+            return CompletableFuture.failedFuture(ControllerExceptions.newWrongControllerException(latestController()));
         }
         // The next part takes place in the main controller thread and may involve generating
         // metadata records.

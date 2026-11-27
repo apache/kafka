@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -979,6 +980,26 @@ public class QuorumControllerTest {
                     request).get();
                 assertTrue(reply.epoch() >= 4, "Unexpected broker epoch " + reply.epoch());
             }
+        }
+    }
+
+    @Test
+    public void testProcessBrokerHeartbeatOnStandbyController() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+                build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+            QuorumController standby = controlEnv.controllers().stream().
+                filter(controller -> controller != active).
+                findFirst().
+                orElseThrow();
+            CompletableFuture<BrokerHeartbeatReply> future = standby.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
+                new BrokerHeartbeatRequestData().setBrokerId(0).setBrokerEpoch(1L));
+            assertEquals(NotControllerException.class,
+                assertThrows(ExecutionException.class, future::get).getCause().getClass());
         }
     }
 
