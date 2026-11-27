@@ -44,6 +44,8 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -1739,7 +1741,13 @@ public class UnifiedLog implements AutoCloseable {
                         return fetchEarliestPendingUploadOffset(remoteOffsetReader);
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
+                        long startOffset = logStartOffset;
                         List<LogSegment> segments = logSegments();
+                        int firstSegmentIndex = 0;
+                        for (int i = 1; i < segments.size() && segments.get(i).baseOffset() <= startOffset; i++) {
+                            firstSegmentIndex = i;
+                        }
+                        segments = segments.subList(firstSegmentIndex, segments.size());
                         LogSegment latestTimestampSegment = null;
                         for (LogSegment segment : segments) {
                             if (latestTimestampSegment == null) {
@@ -1747,6 +1755,10 @@ public class UnifiedLog implements AutoCloseable {
                             } else if (segment.maxTimestampSoFar() > latestTimestampSegment.maxTimestampSoFar()) {
                                 latestTimestampSegment = segment;
                             }
+                        }
+                        if (latestTimestampSegment.baseOffset() < startOffset) {
+                            // The cached maximum may belong to a record below the logical start offset.
+                            return new OffsetResultHolder(searchMaxTimestampInLocalLog(segments, startOffset));
                         }
                         // cache the timestamp and offset
                         TimestampOffset maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar();
@@ -1777,6 +1789,54 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     }
                 });
+    }
+
+    private Optional<FileRecords.TimestampAndOffset> searchMaxTimestampInLocalLog(List<LogSegment> segments,
+                                                                                 long startOffset) throws IOException {
+        long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        RecordBatch maxTimestampBatch = null;
+        FileRecords.TimestampAndOffset maxTimestampAndOffset = null;
+        int maxRecordBodySize = config().maxDecompressedMessageBytes();
+        for (LogSegment segment : segments) {
+            TimestampOffset segmentMax = segment.readMaxTimestampAndOffsetSoFar();
+            if (segmentMax.timestamp() <= maxTimestamp) {
+                continue;
+            }
+            boolean fullyRetained = segment.baseOffset() >= startOffset;
+            int position = segment.offsetIndex().lookup(fullyRetained ? segmentMax.offset() : startOffset).position();
+            for (RecordBatch batch : segment.log().batchesFrom(position)) {
+                if (batch.lastOffset() < startOffset || batch.maxTimestamp() <= maxTimestamp) {
+                    continue;
+                }
+                if (batch.baseOffset() >= startOffset) {
+                    // Only decompress the winning fully retained batch, after comparing batch headers.
+                    maxTimestamp = batch.maxTimestamp();
+                    maxTimestampBatch = batch;
+                    if (fullyRetained && maxTimestamp == segmentMax.timestamp()) {
+                        break;
+                    }
+                } else {
+                    // A batch spanning the start offset needs a maximum over its retained records.
+                    try (CloseableIterator<Record> records = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                        while (records.hasNext()) {
+                            Record record = records.next();
+                            if (record.offset() >= startOffset && record.timestamp() > maxTimestamp) {
+                                maxTimestamp = record.timestamp();
+                                maxTimestampBatch = null;
+                                maxTimestampAndOffset = new FileRecords.TimestampAndOffset(maxTimestamp, record.offset(),
+                                        Optional.of(batch.partitionLeaderEpoch()).filter(epoch -> epoch >= 0));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (maxTimestampBatch == null) {
+            return Optional.ofNullable(maxTimestampAndOffset);
+        }
+        RecordBatch batch = maxTimestampBatch;
+        return batch.offsetOfMaxTimestamp(maxRecordBodySize).map(offset -> new FileRecords.TimestampAndOffset(
+                batch.maxTimestamp(), offset, Optional.of(batch.partitionLeaderEpoch()).filter(epoch -> epoch >= 0)));
     }
 
     private OffsetResultHolder fetchEarliestPendingUploadOffset(Optional<AsyncOffsetReader> remoteOffsetReader) {
