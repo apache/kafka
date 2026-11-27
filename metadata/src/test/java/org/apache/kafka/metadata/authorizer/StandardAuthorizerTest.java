@@ -67,6 +67,7 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.acl.AclPermissionType.DENY;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.PREFIXED;
+import static org.apache.kafka.common.resource.ResourceType.CLUSTER_MIRROR;
 import static org.apache.kafka.common.resource.ResourceType.GROUP;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 import static org.apache.kafka.common.security.auth.KafkaPrincipal.USER_TYPE;
@@ -411,6 +412,25 @@ public class StandardAuthorizerTest {
                 newAction(DESCRIBE, TOPIC, "foo"),
                 newAction(WRITE, TOPIC, "bar"),
                 newAction(READ, TOPIC, "baz"))));
+    }
+
+    @Test
+    public void testClusterMirrorAcl() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        StandardAclWithId aclWithId = withId(new StandardAcl(CLUSTER_MIRROR, "a-to-b", LITERAL, "User:bob", "*", CREATE, ALLOW));
+        authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+
+        assertEquals(List.of(ALLOWED, DENIED, DENIED), authorizer.authorize(
+            newRequestContext("bob"),
+            List.of(
+                newAction(CREATE, CLUSTER_MIRROR, "a-to-b"),
+                newAction(CREATE, CLUSTER_MIRROR, "b-to-c"),
+                // an ACL on a cluster mirror does not apply to a topic with the same name
+                newAction(CREATE, TOPIC, "a-to-b"))));
+
+        assertEquals(List.of(DENIED), authorizer.authorize(
+            newRequestContext("alice"),
+            List.of(newAction(CREATE, CLUSTER_MIRROR, "a-to-b"))));
     }
 
     private AuthorizableRequestContext newRequestContext(String principal) throws Exception {

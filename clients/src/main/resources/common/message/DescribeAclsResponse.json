@@ -22,7 +22,8 @@
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 enables flexible versions.
   // Version 3 adds user resource type.
-  "validVersions": "1-3",
+  // Version 4 adds the cluster mirror resource type (KIP-1279).
+  "validVersions": "1-4",
   "flexibleVersions": "2+",
   "headerVersions": {
     "0-1": "0",

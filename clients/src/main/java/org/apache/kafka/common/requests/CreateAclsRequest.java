@@ -102,6 +102,8 @@ public class CreateAclsRequest extends AbstractRequest {
             }
         }
 
+        data.creations().forEach(creation -> RequestUtils.validateAclsResourceType(creation.resourceType(), apiKey(), version()));
+
         final boolean unknown = data.creations().stream().anyMatch(creation ->
             creation.resourcePatternType() == PatternType.UNKNOWN.code()
                 || creation.resourceType() == ResourceType.UNKNOWN.code()

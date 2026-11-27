@@ -66,7 +66,12 @@ public enum ResourceType {
     /**
      * A user principal
      */
-    USER((byte) 7);
+    USER((byte) 7),
+
+    /**
+     * A cluster mirror.
+     */
+    CLUSTER_MIRROR((byte) 8);
 
     private static final HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 

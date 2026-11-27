@@ -58,6 +58,7 @@ public class AclEntry {
             case TRANSACTIONAL_ID -> Set.of(DESCRIBE, WRITE, TWO_PHASE_COMMIT);
             case DELEGATION_TOKEN -> Set.of(DESCRIBE);
             case USER -> Set.of(CREATE_TOKENS, DESCRIBE_TOKENS);
+            case CLUSTER_MIRROR -> Set.of(READ, CREATE, ALTER, DELETE, DESCRIBE, ALTER_CONFIGS, DESCRIBE_CONFIGS);
             default -> throw new IllegalArgumentException("Not a concrete resource type");
         };
     }
@@ -69,6 +70,7 @@ public class AclEntry {
             case CLUSTER -> Errors.CLUSTER_AUTHORIZATION_FAILED;
             case TRANSACTIONAL_ID -> Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED;
             case DELEGATION_TOKEN -> Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED;
+            case CLUSTER_MIRROR -> Errors.CLUSTER_MIRROR_AUTHORIZATION_FAILED;
             default -> throw new IllegalArgumentException("Authorization error type not known");
         };
     }

@@ -40,6 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CreateAclsRequestTest {
     private static final short V0 = 0;
     private static final short V1 = 1;
+    private static final short V3 = 3;
+    private static final short V4 = 4;
 
     private static final AclBinding LITERAL_ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
@@ -50,6 +52,9 @@ public class CreateAclsRequestTest {
     private static final AclBinding UNKNOWN_ACL1 = new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "unknown", PatternType.LITERAL),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
+    private static final AclBinding CLUSTER_MIRROR_ACL1 = new AclBinding(new ResourcePattern(ResourceType.CLUSTER_MIRROR, "mirror", PatternType.LITERAL),
+        new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
     @Test
     public void shouldThrowOnV0IfNotLiteral() {
         assertThrows(UnsupportedVersionException.class, () -> new CreateAclsRequest(data(PREFIXED_ACL1), V0));
@@ -58,6 +63,18 @@ public class CreateAclsRequestTest {
     @Test
     public void shouldThrowOnIfUnknown() {
         assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V1));
+    }
+
+    @Test
+    public void shouldThrowOnV3IfClusterMirror() {
+        assertThrows(UnsupportedVersionException.class, () -> new CreateAclsRequest(data(LITERAL_ACL1, CLUSTER_MIRROR_ACL1), V3));
+    }
+
+    @Test
+    public void shouldRoundTripClusterMirrorV4() {
+        final CreateAclsRequest original = new CreateAclsRequest(data(CLUSTER_MIRROR_ACL1), V4);
+        final CreateAclsRequest result = CreateAclsRequest.parse(original.serialize(), V4);
+        assertRequestEquals(original, result);
     }
 
     @Test

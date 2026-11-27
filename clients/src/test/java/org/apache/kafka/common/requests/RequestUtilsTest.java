@@ -25,13 +25,26 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.resource.ResourceType;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+import java.util.EnumSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RequestUtilsTest {
+    // Resource types supported by every CreateAcls, DescribeAcls and DeleteAcls version. USER was added in version 3
+    // (KIP-373) but has never been validated.
+    private static final Set<ResourceType> BASELINE_ACLS_RESOURCE_TYPES = EnumSet.of(ResourceType.UNKNOWN, ResourceType.ANY,
+        ResourceType.TOPIC, ResourceType.GROUP, ResourceType.CLUSTER, ResourceType.TRANSACTIONAL_ID, ResourceType.DELEGATION_TOKEN,
+        ResourceType.USER);
+
     @Test
     public void testIsFatalException() {
         assertTrue(RequestUtils.isFatalException(new AuthenticationException("")));
@@ -44,5 +57,20 @@ public class RequestUtilsTest {
 
         // retriable exceptions
         assertFalse(RequestUtils.isFatalException(new DisconnectException("")));
+    }
+
+    // Catches a new ResourceType added without deciding which CreateAcls, DescribeAcls and DeleteAcls version
+    // supports it, which would otherwise be sent to brokers that do not understand it.
+    @ParameterizedTest
+    @EnumSource(ResourceType.class)
+    public void testEveryResourceTypeIsBaselineOrHasMinAclsVersion(ResourceType resourceType) {
+        Short minVersion = RequestUtils.MIN_ACLS_VERSIONS.get(resourceType.code());
+        assertTrue(BASELINE_ACLS_RESOURCE_TYPES.contains(resourceType) || minVersion != null,
+            resourceType + " is neither a baseline ACL resource type nor in RequestUtils.MIN_ACLS_VERSIONS");
+        if (minVersion != null) {
+            for (ApiKeys apiKey : new ApiKeys[] {ApiKeys.CREATE_ACLS, ApiKeys.DESCRIBE_ACLS, ApiKeys.DELETE_ACLS}) {
+                assertTrue(apiKey.isVersionSupported(minVersion), apiKey + " does not support version " + minVersion);
+            }
+        }
     }
 }
