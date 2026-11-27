@@ -1,0 +1,2 @@
+# Preserve generated result files byte-for-byte, including empty TSV columns.
+results/** -whitespace

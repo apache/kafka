@@ -1,0 +1,7 @@
+/.build/
+/output/
+/github-usage/output/
+/github-usage/fresh-output/
+/github-usage/snapshots/
+!/results/
+!/results/**
