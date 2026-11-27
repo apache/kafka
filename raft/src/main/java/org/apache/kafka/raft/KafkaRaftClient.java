@@ -3429,7 +3429,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             backoffMs = requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
         }
-        return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
+        // Not bounded by the fetch timeout: only voters act on its expiry, and pollFollowerAsVoter
+        // applies that bound itself. Observers stay followers after it expires, so bounding the
+        // backoff by the expired (zero) fetch timeout would busy-poll until a leader responds.
+        return backoffMs;
     }
 
     private long maybeSendFetchOrFetchSnapshot(FollowerState state, long currentTimeMs) {
@@ -3514,7 +3517,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (quorum.isVoter()) {
             return pollUnattachedAsVoter(state, currentTimeMs);
         } else {
-            return pollUnattachedCommon(state, currentTimeMs);
+            // Not bounded by the election timeout: observers never act on its expiry, and an
+            // observer that starts up as unattached keeps the finite timeout it initialized with,
+            // so bounding by the expired (zero) timeout would busy-poll until a leader responds.
+            return maybeSendFetchToAnyBootstrap(currentTimeMs);
         }
     }
 
@@ -3528,13 +3534,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToProspective(currentTimeMs);
             return 0L;
         } else {
-            return pollUnattachedCommon(state, currentTimeMs);
+            long fetchBackoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
+            return Math.min(fetchBackoffMs, state.remainingElectionTimeMs(currentTimeMs));
         }
-    }
-
-    private long pollUnattachedCommon(UnattachedState state, long currentTimeMs) {
-        long fetchBackoffMs = maybeSendFetchToAnyBootstrap(currentTimeMs);
-        return Math.min(fetchBackoffMs, state.remainingElectionTimeMs(currentTimeMs));
     }
 
     private long pollCurrentState(long currentTimeMs) {
