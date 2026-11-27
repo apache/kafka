@@ -849,6 +849,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     rebalanceTimeoutMs: Int = -1,
     serverAssignor: String = null,
     subscribedTopicNames: List[String] = null,
+    subscribedTopicRegex: String = null,
     topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null,
     expectedError: Errors = Errors.NONE,
     version: Short = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
@@ -862,6 +863,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setRackId(rackId)
         .setRebalanceTimeoutMs(rebalanceTimeoutMs)
         .setSubscribedTopicNames(subscribedTopicNames.asJava)
+        .setSubscribedTopicRegex(subscribedTopicRegex)
         .setServerAssignor(serverAssignor)
         .setTopicPartitions(topicPartitions.asJava)
     ).build(version)
