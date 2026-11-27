@@ -1030,7 +1030,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Static member 1 restarts with the consumer protocol and the same subscription.
     val newMemberId1 = Uuid.randomUuid.toString
-    var response = consumerGroupHeartbeat(
+    val response = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = newMemberId1,
       instanceId = instanceId1,
@@ -1039,21 +1039,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
-
-    // When assignor offload is enabled, the new assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      TestUtils.waitUntilTrue(() => {
-        response = consumerGroupHeartbeat(
-          groupId = groupId,
-          memberId = newMemberId1,
-          memberEpoch = response.memberEpoch,
-          instanceId = instanceId1,
-          expectedError = Errors.NONE
-        )
-        response.memberEpoch > 1
-      }, msg = s"Did not receive new assignment. Last response $response.")
-    }
+    assertEquals(2, response.memberEpoch)
 
     // The pending join request of the replaced classic member is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
@@ -1137,7 +1123,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The joining request with a consumer group member 2 with a regex that resolves to no topics is
     // accepted.
     val memberId2 = Uuid.randomUuid.toString
-    var response = consumerGroupHeartbeat(
+    val response = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId2,
       rebalanceTimeoutMs = 5 * 60 * 1000,
@@ -1145,20 +1131,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, response.memberEpoch)
-
-    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      TestUtils.waitUntilTrue(() => {
-        response = consumerGroupHeartbeat(
-          groupId = groupId,
-          memberId = memberId2,
-          memberEpoch = response.memberEpoch,
-          expectedError = Errors.NONE
-        )
-        response.memberEpoch > 1
-      }, msg = s"Did not receive initial assignment. Last response $response.")
-    }
+    assertEquals(2, response.memberEpoch)
 
     // The pending join request of the classic member is asked to rejoin.
     assertEquals(Errors.REBALANCE_IN_PROGRESS.code, Await.result(joinFuture1, Duration.Inf).errorCode)
@@ -2119,13 +2092,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
     assertEquals(1, generationId1)
 
-    // The expected generation of the classic group in the target state.
-    val generationId = state match {
-      case ClassicGroupState.PREPARING_REBALANCE => 1
-      case ClassicGroupState.COMPLETING_REBALANCE => 2 // The generation is bumped after all members rejoin, before they sync.
-      case ClassicGroupState.STABLE => 2
-      case _ => throw new IllegalArgumentException(s"Unexpected state $state")
-    }
     // The expected group epoch of the upgraded group, before the new member joins and bumps it again.
     val groupEpoch = state match {
       case ClassicGroupState.PREPARING_REBALANCE => 2 // Bumped by the upgrade of a rebalancing group.
@@ -2197,7 +2163,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // The joining request with a consumer group member 3 is accepted.
     val memberId3 = Uuid.randomUuid.toString
-    var response = consumerGroupHeartbeat(
+    val response = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId3,
       rebalanceTimeoutMs = 5 * 60 * 1000,
@@ -2205,20 +2171,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       topicPartitions = List.empty,
       expectedError = Errors.NONE
     )
-    assertEquals(if (isConsumerAssignorOffloadEnabled) generationId else groupEpoch + 1, response.memberEpoch)
-
-    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      TestUtils.waitUntilTrue(() => {
-        response = consumerGroupHeartbeat(
-          groupId = groupId,
-          memberId = memberId3,
-          memberEpoch = response.memberEpoch,
-          expectedError = Errors.NONE
-        )
-        response.memberEpoch > generationId
-      }, msg = s"Did not receive initial assignment. Last response $response.")
-    }
+    assertEquals(groupEpoch + 1, response.memberEpoch)
 
     // The classic members with pending requests are asked to rejoin.
     if (state == ClassicGroupState.PREPARING_REBALANCE) {
