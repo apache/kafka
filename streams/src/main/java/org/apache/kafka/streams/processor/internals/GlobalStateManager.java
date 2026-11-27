@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
 
+import java.util.Optional;
 import java.util.Set;
 
 public interface GlobalStateManager extends StateManager {
@@ -25,10 +26,13 @@ public interface GlobalStateManager extends StateManager {
     void setGlobalProcessorContext(final InternalProcessorContext<?, ?> processorContext);
 
     /**
+     * Bootstraps all global state stores. Returns the set of registered store names on success,
+     * or {@link Optional#empty()} if bootstrap was interrupted by a shutdown request.
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    Set<String> initialize();
+    Optional<Set<String>> initialize();
 
     long approximateNumUncommittedBytes();
 

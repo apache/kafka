@@ -29,8 +29,10 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
@@ -79,9 +81,14 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
      */
     @Override
     public Map<TopicPartition, Long> initialize() {
-        final Set<String> storeNames = stateMgr.initialize();
+        final Optional<Set<String>> storeNames = stateMgr.initialize();
+        if (storeNames.isEmpty()) {
+            // bootstrap was interrupted by shutdown; skip topology/processor init to avoid
+            // opening user resources via Processor#init() during a shutdown.
+            return Collections.emptyMap();
+        }
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
-        for (final String storeName : storeNames) {
+        for (final String storeName : storeNames.get()) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode<?, ?> source = topology.source(sourceTopic);
             deserializers.put(

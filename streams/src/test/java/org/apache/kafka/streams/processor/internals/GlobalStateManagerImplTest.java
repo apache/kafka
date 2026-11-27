@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
@@ -63,6 +64,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
@@ -163,7 +165,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -232,8 +235,8 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
-        final Set<String> storeNames = stateManager.initialize();
-        assertEquals(Set.of(storeName1, storeName2, storeName3, storeName4, storeName5), storeNames);
+        final Optional<Set<String>> storeNames = stateManager.initialize();
+        assertEquals(Optional.of(Set.of(storeName1, storeName2, storeName3, storeName4, storeName5)), storeNames);
     }
 
     @Test
@@ -401,7 +404,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         stateManager.setGlobalProcessorContext(processorContext);
         processorContext.setStateManger(stateManager);
@@ -717,7 +721,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -760,7 +765,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -801,7 +807,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -849,7 +856,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -883,7 +891,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -926,7 +935,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -967,7 +977,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1015,7 +1026,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1049,7 +1061,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1092,7 +1105,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1133,7 +1147,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1176,7 +1191,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1217,7 +1233,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig
+            streamsConfig,
+            () -> false
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1289,7 +1306,8 @@ public class GlobalStateManagerImplTest {
             consumer,
             downgradeStateDir,
             stateRestoreListener,
-            downgradeConfig
+            downgradeConfig,
+            () -> false
         );
 
         final InternalMockProcessorContext downgradeContext =
@@ -1325,6 +1343,131 @@ public class GlobalStateManagerImplTest {
         final File legacyGlobalFile = new File(stateDirectory.globalStateDir(),
             LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME);
         assertFalse(legacyGlobalFile.exists());
+    }
+
+    @Test
+    public void shouldAbortRestoreWhenSupplierFlipsToShutdown() {
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfig,
+            inErrorState::get
+        );
+        processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
+
+        initializeConsumer(6, 1, t1);
+        initializeConsumer(0, 0, t2, t3, t4, t5);
+
+        inErrorState.set(true);
+
+        stateManager.initialize();
+
+        // Nothing should have been restored
+        assertEquals(0L, stateRestoreListener.totalNumRestored);
+    }
+
+    @Test
+    public void shouldExitCleanlyOnWakeupDuringBootstrapWhenShuttingDown() {
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
+        final AtomicInteger pollCount = new AtomicInteger(0);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                pollCount.incrementAndGet();
+                inErrorState.set(true);
+                throw new WakeupException();
+            }
+        };
+        initializeConsumer(6, 1, t1);
+        initializeConsumer(0, 0, t2, t3, t4, t5);
+
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfig,
+            inErrorState::get
+        );
+        processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
+
+        assertEquals(Optional.empty(), stateManager.initialize());
+
+        assertEquals(1, pollCount.get());
+        assertTrue(inErrorState.get());
+    }
+
+    @Test
+    public void shouldPropagateWakeupDuringBootstrapWhenNotShuttingDown() {
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                throw new WakeupException();
+            }
+        };
+        initializeConsumer(6, 1, t1);
+        initializeConsumer(0, 0, t2, t3, t4, t5);
+
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfig,
+            inErrorState::get
+        );
+        processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
+
+        assertThrows(WakeupException.class, () -> stateManager.initialize());
+    }
+
+    @Test
+    public void shouldExitCleanlyOnWakeupDuringReprocessingWhenShuttingDown() {
+        setUpReprocessing();
+
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
+        final AtomicInteger pollCount = new AtomicInteger(0);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                pollCount.incrementAndGet();
+                inErrorState.set(true);
+                throw new WakeupException();
+            }
+        };
+        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(6, 1, t5);
+
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfig,
+            inErrorState::get
+        );
+        processorContext.setStateManger(stateManager);
+        stateManager.setGlobalProcessorContext(processorContext);
+
+        assertEquals(Optional.empty(), stateManager.initialize());
+
+        assertEquals(1, pollCount.get());
+        assertTrue(inErrorState.get());
     }
 
     private void writeCorruptCheckpoint() throws IOException {
