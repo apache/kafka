@@ -33,6 +33,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.security.Principal;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -73,6 +75,9 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     private static final String TLS13 = "TLSv1.3";
+    // The largest plaintext of a TLS record (RFC 8446, section 5.1). A write batch wraps the bytes that it holds
+    // when it has this many, so they leave in full records.
+    private static final int MAX_RECORD_PLAINTEXT_SIZE = 16384;
 
     private final String channelId;
     private final SSLEngine sslEngine;
@@ -90,6 +95,10 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
+    private boolean batching;
+    // The bytes that a write took without wrapping them, in the order in which they have to be sent.
+    private final List<ByteBuffer> unwrappedBuffers = new ArrayList<>();
+    private long unwrappedBytes;
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine,
                                            ChannelMetadataRegistry metadataRegistry) throws IOException {
@@ -213,6 +222,8 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = null;
             netWriteBuffer = null;
             appReadBuffer = null;
+            unwrappedBuffers.clear();
+            unwrappedBytes = 0;
             if (fileChannelBuffer != null) {
                 ByteBufferUnmapper.unmap("fileChannelBuffer", fileChannelBuffer);
                 fileChannelBuffer = null;
@@ -221,11 +232,26 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-     * returns true if there are any pending contents in netWriteBuffer
+     * returns true if there are any pending contents in netWriteBuffer or bytes that are not wrapped yet. Inside a
+     * write batch nothing is pending: the batch writes what it holds when it ends.
      */
     @Override
     public boolean hasPendingWrites() {
-        return netWriteBuffer.hasRemaining();
+        return !batching && (netWriteBuffer.hasRemaining() || unwrappedBytes > 0);
+    }
+
+    /**
+     * From now on a write keeps its bytes until they fill a TLS record, so that small writes share one record.
+     */
+    @Override
+    public void startWriteBatch() {
+        batching = true;
+    }
+
+    @Override
+    public void endWriteBatch() throws IOException {
+        batching = false;
+        wrapUnwrapped(1);
     }
 
     /**
@@ -721,37 +747,7 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public int write(ByteBuffer src) throws IOException {
-        if (state == State.CLOSING)
-            throw closingException();
-        if (!ready())
-            return 0;
-
-        int written = 0;
-        while (flush(netWriteBuffer) && src.hasRemaining()) {
-            netWriteBuffer.clear();
-            SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
-            netWriteBuffer.flip();
-
-            // reject renegotiation if TLS < 1.3, key updates for TLS 1.3 are allowed
-            if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING &&
-                    wrapResult.getStatus() == Status.OK &&
-                    !sslEngine.getSession().getProtocol().equals(TLS13)) {
-                throw renegotiationException();
-            }
-
-            if (wrapResult.getStatus() == Status.OK) {
-                written += wrapResult.bytesConsumed();
-            } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
-                // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again
-                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, netWriteBufferSize());
-                netWriteBuffer.position(netWriteBuffer.limit());
-            } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-                throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
-            } else if (wrapResult.getStatus() == Status.CLOSED) {
-                throw new EOFException();
-            }
-        }
-        return written;
+        return (int) write(new ByteBuffer[] {src}, 0, 1);
     }
 
     /**
@@ -767,24 +763,81 @@ public class SslTransportLayer implements TransportLayer {
     public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
         if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
             throw new IndexOutOfBoundsException();
-        int totalWritten = 0;
-        int i = offset;
-        while (i < offset + length) {
-            if (srcs[i].hasRemaining() || hasPendingWrites()) {
-                int written = write(srcs[i]);
-                if (written > 0) {
-                    totalWritten += written;
-                }
-            }
-            if (!srcs[i].hasRemaining() && !hasPendingWrites()) {
-                i++;
-            } else {
-                // if we are unable to write the current buffer to socketChannel we should break,
-                // as we might have reached max socket send buffer size.
-                break;
+        if (state == State.CLOSING)
+            throw closingException();
+        if (!ready())
+            return 0;
+
+        // The bytes of the earlier writes go first. If the socket does not take them, it takes nothing more.
+        if (!wrapUnwrapped(batching ? MAX_RECORD_PLAINTEXT_SIZE : 1))
+            return 0;
+
+        long remaining = 0;
+        for (int i = offset; i < offset + length; i++)
+            remaining += srcs[i].remaining();
+        if (!batching)
+            return wrap(srcs, offset, length, remaining, 1);
+
+        for (int i = offset; i < offset + length; i++) {
+            if (srcs[i].hasRemaining()) {
+                unwrappedBuffers.add(srcs[i].duplicate());
+                srcs[i].position(srcs[i].limit());
             }
         }
-        return totalWritten;
+        unwrappedBytes += remaining;
+        wrapUnwrapped(MAX_RECORD_PLAINTEXT_SIZE);
+        return remaining;
+    }
+
+    /**
+     * Wraps the bytes that the writes took without wrapping them and writes the TLS records to the socket, until
+     * fewer than minBytes of these bytes are left.
+     *
+     * @return false if the socket is full, so that no more bytes can be taken
+     */
+    private boolean wrapUnwrapped(int minBytes) throws IOException {
+        if (unwrappedBytes < minBytes)
+            return flush(netWriteBuffer);
+
+        ByteBuffer[] srcs = unwrappedBuffers.toArray(new ByteBuffer[0]);
+        unwrappedBytes -= wrap(srcs, 0, srcs.length, unwrappedBytes, minBytes);
+        unwrappedBuffers.removeIf(buffer -> !buffer.hasRemaining());
+        return !netWriteBuffer.hasRemaining();
+    }
+
+    /**
+     * Wraps the bytes of the buffers and writes the TLS records to the socket, until fewer than minBytes of the
+     * remaining bytes are left or the socket is full. One TLS record takes the bytes of as many buffers as fit into it.
+     *
+     * @return the number of bytes that were wrapped
+     */
+    private long wrap(ByteBuffer[] srcs, int offset, int length, long remaining, int minBytes) throws IOException {
+        long wrapped = 0;
+        while (flush(netWriteBuffer) && remaining - wrapped >= minBytes) {
+            netWriteBuffer.clear();
+            SSLEngineResult wrapResult = sslEngine.wrap(srcs, offset, length, netWriteBuffer);
+            netWriteBuffer.flip();
+
+            // reject renegotiation if TLS < 1.3, key updates for TLS 1.3 are allowed
+            if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING &&
+                    wrapResult.getStatus() == Status.OK &&
+                    !sslEngine.getSession().getProtocol().equals(TLS13)) {
+                throw renegotiationException();
+            }
+
+            if (wrapResult.getStatus() == Status.OK) {
+                wrapped += wrapResult.bytesConsumed();
+            } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
+                // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again
+                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, netWriteBufferSize());
+                netWriteBuffer.position(netWriteBuffer.limit());
+            } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+                throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
+            } else if (wrapResult.getStatus() == Status.CLOSED) {
+                throw new EOFException();
+            }
+        }
+        return wrapped;
     }
 
     /**
@@ -1031,7 +1084,8 @@ public class SslTransportLayer implements TransportLayer {
         if (state != State.READY)
             return 0;
 
-        if (!flush(netWriteBuffer))
+        int minBytesToWrap = batching ? MAX_RECORD_PLAINTEXT_SIZE : 1;
+        if (!wrapUnwrapped(minBytesToWrap))
             return 0;
 
         long channelSize;
@@ -1054,43 +1108,44 @@ public class SslTransportLayer implements TransportLayer {
             // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not
             // useful here.
             fileChannelBuffer = ByteBuffer.allocateDirect(transferSize);
-            // The loop below drains any remaining bytes from the buffer before reading from disk, so we ensure there
-            // are no remaining bytes in the empty buffer
-            fileChannelBuffer.position(fileChannelBuffer.limit());
         }
 
-        int totalBytesWritten = 0;
-        long pos = position;
-        while (totalBytesWritten < totalBytesToWrite) {
-            if (!fileChannelBuffer.hasRemaining()) {
-                fileChannelBuffer.clear();
-                int bytesRemaining = totalBytesToWrite - totalBytesWritten;
-                if (bytesRemaining < fileChannelBuffer.limit())
-                    fileChannelBuffer.limit(bytesRemaining);
-                int bytesRead;
-                try {
-                    bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                } catch (IOException e) {
-                    throw FileReadException.ofReadFailure(pos, e);
-                } finally {
-                    // Holds exactly what was read, nothing if the read failed or reached the end of the file:
-                    // otherwise the next call would send the previous read as the contents of this position.
-                    fileChannelBuffer.flip();
-                }
-                if (bytesRead <= 0)
-                    break;
-            }
-            int networkBytesWritten = write(fileChannelBuffer);
-            totalBytesWritten += networkBytesWritten;
-            // In the case of a partial write we only return the written bytes to the caller. As a result, the
-            // `position` passed in the next `transferFrom` call won't include the bytes remaining in
-            // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
-            // we invoke `fileChannel.read`.
-            if (fileChannelBuffer.hasRemaining())
+        int totalBytesRead = 0;
+        while (totalBytesRead < totalBytesToWrite) {
+            // The file is read into the room behind the bytes that are not wrapped yet. Without room they are
+            // wrapped first.
+            if (!fileChannelBuffer.hasRemaining() && !wrapUnwrapped(1))
                 break;
-            pos += networkBytesWritten;
+            if (unwrappedBuffers.isEmpty())
+                fileChannelBuffer.clear();
+
+            ByteBuffer read = fileChannelBuffer.slice();
+            int bytesRemaining = totalBytesToWrite - totalBytesRead;
+            if (bytesRemaining < read.limit())
+                read.limit(bytesRemaining);
+            long pos = position + totalBytesRead;
+            int bytesRead;
+            try {
+                bytesRead = fileChannel.read(read, pos);
+            } catch (IOException e) {
+                throw FileReadException.ofReadFailure(pos, e);
+            }
+            if (bytesRead <= 0)
+                break;
+            read.flip();
+            fileChannelBuffer.position(fileChannelBuffer.position() + bytesRead);
+            totalBytesRead += bytesRead;
+            write(read);
+            // What the write did not take because the socket is full is kept like the bytes of a batch, so the
+            // caller does not have to read it again.
+            if (read.hasRemaining()) {
+                unwrappedBuffers.add(read);
+                unwrappedBytes += read.remaining();
+            }
+            if (!wrapUnwrapped(minBytesToWrap))
+                break;
         }
-        return totalBytesWritten;
+        return totalBytesRead;
     }
 
     /**

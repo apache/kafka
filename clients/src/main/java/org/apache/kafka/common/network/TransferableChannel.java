@@ -61,4 +61,19 @@ public interface TransferableChannel extends GatheringByteChannel {
     default boolean distinguishesFileReadFailures() {
         return false;
     }
+
+    /**
+     * Starts a batch of writes that belong together, like the parts of one send. A channel that writes each of them
+     * to the socket on its own may hold them until {@link #endWriteBatch()} and write them together. Inside a batch
+     * the channel has no pending writes, see {@link #hasPendingWrites()}.
+     */
+    default void startWriteBatch() {
+    }
+
+    /**
+     * Ends the batch that {@link #startWriteBatch()} started and writes what it holds to the socket. What the socket
+     * does not take is a pending write. A batch with a failed write is not ended, its channel has to be closed.
+     */
+    default void endWriteBatch() throws IOException {
+    }
 }
