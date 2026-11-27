@@ -515,24 +515,27 @@ public class LogTestUtils {
     }
 
     public static LogManager createLogManager(List<File> logDirs,
+                                              BrokerTopicStats brokerTopicStats,
                                               LogConfig defaultConfig,
                                               ConfigRepository configRepository,
                                               MockTime time,
                                               int recoveryThreadsPerDataDir,
                                               long initialTaskDelayMs) throws IOException {
-        return createLogManager(logDirs, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), false, initialTaskDelayMs);
+        return createLogManager(logDirs, brokerTopicStats, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), false, initialTaskDelayMs);
     }
 
     public static LogManager createLogManager(List<File> logDirs,
+                                              BrokerTopicStats brokerTopicStats,
                                               LogConfig defaultConfig,
                                               ConfigRepository configRepository,
                                               MockTime time,
                                               int recoveryThreadsPerDataDir,
                                               boolean remoteStorageSystemEnable) throws IOException {
-        return createLogManager(logDirs, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), remoteStorageSystemEnable, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
+        return createLogManager(logDirs, brokerTopicStats, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), remoteStorageSystemEnable, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
     }
 
     public static LogManager createLogManager(List<File> logDirs,
+                                              BrokerTopicStats brokerTopicStats,
                                               LogConfig defaultConfig,
                                               ConfigRepository configRepository,
                                               CleanerConfig cleanerConfig,
@@ -556,7 +559,7 @@ public class LogTestUtils {
                 new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 time.scheduler,
-                new BrokerTopicStats(),
+                brokerTopicStats,
                 new LogDirFailureChannel(logDirs.size()),
                 time,
                 remoteStorageSystemEnable,
