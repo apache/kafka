@@ -141,6 +141,7 @@ public class LeaderElectionCommand {
                 throw new RuntimeException(e);
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             System.out.println("Error while making request");
             throw new RuntimeException(e);
         }

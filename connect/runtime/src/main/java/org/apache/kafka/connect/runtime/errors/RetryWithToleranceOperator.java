@@ -310,7 +310,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         try {
             stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            // ignore
+            Thread.currentThread().interrupt();
         }
     }
 

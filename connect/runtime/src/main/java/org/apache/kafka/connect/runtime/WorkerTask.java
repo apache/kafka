@@ -172,6 +172,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         try {
             return shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
